@@ -18,10 +18,10 @@ graph TD
         ThermalNode[Thermal Sensor Node]
         SocketClient[TCP Socket Client]
         
-        YOLO -->|Fire Candidate| ThermalNode
-        ThermalNode -->|Double Verification Event| SocketClient
-        ROS2 -->|Telemetry: Scan/Imu/Odom/Battery| SocketClient
-        SocketClient -->|Manual Drive: cmd_vel| ROS2
+        YOLO -->|"Fire Candidate"| ThermalNode
+        ThermalNode -->|"Double Verification Event"| SocketClient
+        ROS2 -->|"Telemetry: Scan/Imu/Odom/Battery"| SocketClient
+        SocketClient -->|"Manual Drive: cmd_vel"| ROS2
     end
 
     subgraph "Fixed CCTV System"
@@ -32,20 +32,20 @@ graph TD
         Spring[Spring Main Server]
         SocketServer[Embedded TCP Socket Server]
         SQLite[(SQLite - Event & Alert DB)]
-        Redis[(Redis - Robot Cache)]
+        InMemory["In-Memory Cache (ConcurrentHashMap)"]
         
-        SocketClient <-->|TCP Socket (JSON Lines / Video Stream)| SocketServer
+        SocketClient <-->|"TCP Socket (JSON Lines / Video Stream)"| SocketServer
         SocketServer -->|Read/Write| SQLite
-        SocketServer -->|Cache State| Redis
-        CCTV -->|1. HTTP REST: 1st Fire Event| Spring
+        SocketServer -->|Cache State| InMemory
+        CCTV -->|"1. HTTP REST: 1st Fire Event"| Spring
     end
 
     subgraph "Web Client (Dashboard / Sim)"
         WebClient[Web Dashboard]
         ThreeJS[Three.js 2D Sim]
         
-        Spring <-->|WebSocket: Telemetry & Alerts| WebClient
-        WebClient -->|2. WebSocket STOMP: WASD Drive| Spring
+        Spring <-->|"WebSocket: Telemetry & Alerts"| WebClient
+        WebClient -->|"2. WebSocket STOMP: WASD Drive"| Spring
         WebClient --> ThreeJS
     end
 
@@ -55,7 +55,7 @@ graph TD
     classDef cctv fill:#e1d5e7,stroke:#333,stroke-width:2px;
 
     class ROS2,YOLO,ThermalNode,SocketClient robot;
-    class Spring,SocketServer,SQLite,Redis backend;
+    class Spring,SocketServer,SQLite,InMemory backend;
     class WebClient,ThreeJS web;
     class CCTV cctv;
 ```
@@ -73,7 +73,7 @@ graph TD
    * **TCP 소켓 서버 내장**: 로봇(젯슨)으로부터 직접 TCP 소켓 연결을 수신하고 명령 및 상태를 실시간 송수신합니다.
    * **CCTV 연동 및 자동 출동**: CCTV로부터 1차 화재 이벤트를 수신하면, 즉시 로봇의 순찰 모드를 긴급 출동 상태로 전환시키고 해당 좌표로 출동 명령(`DISPATCH`)을 소켓으로 전송합니다.
    * **수동 제어 릴레이**: 웹 브라우저에서 들어오는 실시간 WASD 웹소켓(STOMP) 제어 명령을 로봇의 TCP 소켓 패킷으로 변환하여 실시간 중계합니다.
-   * **상태 캐싱 및 실시간 푸시**: 로봇의 실시간 상태와 실시간 영상(릴레이)을 웹소켓으로 대시보드에 브로드캐스팅합니다.
+   * **상태 캐싱 및 실시간 푸시**: 로봇의 실시간 상태를 자바 내장 메모리(**ConcurrentHashMap**)에 캐싱하여 관리 효율을 높이고, 실시간 영상(릴레이)과 상태 데이터를 웹소켓으로 대시보드에 브로드캐스팅합니다.
    * **데이터 저장**: 이벤트 로그와 알림 이력을 SQLite에 저장합니다.
 
 ---

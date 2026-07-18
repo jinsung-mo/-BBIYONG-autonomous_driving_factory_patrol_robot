@@ -50,7 +50,7 @@
 모든 제어 및 조회 API는 인가 헤더(`Authorization: Bearer <JWT>`)가 필요합니다.
 
 #### [GET] `/api/robots`
-* **설명**: 관리자에게 배정된 로봇의 실시간 상태 요약 목록을 조회합니다. (Redis 캐시에서 읽음)
+* **설명**: 관리자에게 배정된 로봇의 실시간 상태 요약 목록을 조회합니다. (Spring Boot In-Memory 캐시에서 읽음)
 * **Response Body (200 OK)**:
 ```json
 [
