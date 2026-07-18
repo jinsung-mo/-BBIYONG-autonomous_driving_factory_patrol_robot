@@ -57,7 +57,7 @@
   {
     "robotId": "orinka_01",
     "name": "순찰로봇 오린카 1호기",
-    "status": "PATROL",
+    "status": "AUTO_PATROL",
     "battery": 92.5,
     "lastConnected": "2026-07-18T19:35:00Z",
     "location": {
@@ -69,14 +69,33 @@
 ]
 ```
 
+#### [POST] `/api/robots/{robotId}/mode`
+* **설명**: 웹 대시보드에서 로봇의 주행 모드를 **자율 순찰** 또는 **원격 수동 조종** 모드로 전환합니다.
+* **Request Body**:
+```json
+{
+  "mode": "MANUAL_CONTROL"
+}
+```
+* `mode` 값: `AUTO_PATROL`(자율 순찰), `MANUAL_CONTROL`(원격 수동 조종)
+* **Response Body (200 OK)**:
+```json
+{
+  "robotId": "orinka_01",
+  "currentMode": "MANUAL_CONTROL",
+  "status": "UPDATED",
+  "timestamp": "2026-07-18T19:38:00Z"
+}
+```
+
 #### [POST] `/api/robots/{robotId}/dispatch`
-* **설명**: 관리자가 지도상의 특정 좌표를 지정하여 로봇을 강제 출동시킵니다.
+* **설명**: 관리자가 지도상의 특정 좌표를 지정하여 로봇을 강제 출동시킵니다. (CCTV 감지 지역 등으로 2차 확인 유도)
 * **Request Body**:
 ```json
 {
   "x": 15.45,
   "y": 8.12,
-  "reason": "웹 관제자 긴급 출동 지시"
+  "reason": "CCTV 1차 화재 감지에 따른 2차 근접 확인 지시"
 }
 ```
 * **Response Body (200 OK)**:
@@ -85,12 +104,12 @@
   "robotId": "orinka_01",
   "command": "DISPATCH",
   "status": "SENT",
-  "timestamp": "2026-07-18T19:38:00Z"
+  "timestamp": "2026-07-18T19:38:05Z"
 }
 ```
 
 #### [POST] `/api/robots/{robotId}/resume`
-* **설명**: 상황 종료 후 로봇에게 순찰 복귀를 명령합니다.
+* **설명**: 2차 확인 상황 종료 후 로봇에게 자율순찰 복귀를 명령합니다. (로봇은 가장 가까운 순찰 스팟으로 돌아가 순찰을 재개합니다.)
 * **Request Body**: None (또는 `{}`)
 * **Response Body (200 OK)**:
 ```json
@@ -98,7 +117,7 @@
   "robotId": "orinka_01",
   "command": "RESUME",
   "status": "SENT",
-  "timestamp": "2026-07-18T19:38:05Z"
+  "timestamp": "2026-07-18T19:38:10Z"
 }
 ```
 
@@ -185,6 +204,36 @@
 
 ---
 
+### 1.5 CCTV 연동 API
+
+#### [POST] `/api/cctv/events`
+* **설명**: 공장 천장 등에 고정 설치된 CCTV가 Vision AI 분석을 통해 1차적으로 연기/화재를 탐지했을 때, 백엔드 서버에 알림 이벤트를 발행하는 용도입니다. 백엔드는 이 이벤트를 수집하자마자 순찰 로봇(오린카)에게 해당 좌표로 긴급 출동 명령(`DISPATCH`)을 내립니다.
+* **Request Header**: `Content-Type: application/json`
+* **Request Body**:
+```json
+{
+  "cctvId": "cctv_04",
+  "eventType": "FIRE",
+  "location": {
+    "x": 15.45,
+    "y": 8.12
+  },
+  "confidence": 0.88,
+  "timestamp": "2026-07-18T19:37:00Z"
+}
+```
+* **Response Body (202 Accepted)**:
+```json
+{
+  "status": "DISPATCHED",
+  "assignedRobotId": "orinka_01",
+  "message": "로봇에 2차 화재 근접 확인 출동 지시를 하달했습니다.",
+  "timestamp": "2026-07-18T19:37:02Z"
+}
+```
+
+---
+
 ## 2. Web Frontend ↔ Spring Boot WebSocket 명세
 
 실시간 대시보드 갱신 및 경보 푸시를 담당하며, STOMP 프로토콜을 사용합니다.
@@ -195,12 +244,12 @@
 ### 2.2 Pub/Sub 토픽 및 페이로드
 
 #### 1) 로봇 실시간 텔레메트리 구독 (`SUB /topic/robots`)
-* **설명**: 웹 클라이언트가 지도상 로봇 위치 및 상태 변경을 실시간 추적합니다.
+* **설명**: 웹 클라이언트가 지도상 로봇 위치, 모드 상태 변경을 실시간 추적합니다.
 * **Payload**:
 ```json
 {
   "robotId": "orinka_01",
-  "status": "PATROL",
+  "status": "AUTO_PATROL",
   "battery": 88.2,
   "location": {
     "x": 3.42,
@@ -210,21 +259,37 @@
   "timestamp": "2026-07-18T19:40:02Z"
 }
 ```
+* `status` 값: `AUTO_PATROL`(자율 순찰), `MANUAL_CONTROL`(원격 조종), `DISPATCH`(긴급 출동), `VERIFY`(근접 확인)
 
 #### 2) 실시간 경보 푸시 구독 (`SUB /topic/alerts`)
-* **설명**: 화재 발생 또는 설비 과열 경보 등 발생 시 브라우저에 경보 모달을 띄우기 위해 사용합니다.
+* **설명**: CCTV 및 로봇에 의해 탐지된 화재/과열 경보 등 발생 시 브라우저에 실시간 경보 모달을 띄우기 위해 사용합니다.
 * **Payload**:
 ```json
 {
   "alertId": 1,
   "type": "FIRE",
   "level": "CRITICAL",
+  "source": "CCTV",
   "robotId": "orinka_01",
-  "location": { "x": 15.0, "y": 8.2 },
-  "message": "화재가 발생했습니다! (신뢰도: 94%, 온도: 58.4°C)",
+  "location": { "x": 15.45, "y": 8.12 },
+  "message": "CCTV(cctv_04)에 의해 1차 화재가 감지되었습니다. 로봇이 출동합니다.",
   "timestamp": "2026-07-18T19:40:03Z"
 }
 ```
+* `source` 값: `CCTV` 또는 `ROBOT`
+
+#### 3) 로봇 원격 방향 조종 (WASD) 발행 (`PUB /app/robot/{robotId}/manual-drive`)
+* **설명**: 웹 관제 화면에서 수동 조종 모드(`MANUAL_CONTROL`)를 활성화한 상태에서 관리자가 키보드 WASD 키를 누를 때마다 이 엔드포인트로 이동 명령(선속도/각속도 값)을 쏘아 보냅니다. 백엔드는 이 값을 즉시 로봇의 TCP 소켓으로 릴레이합니다.
+* **Payload**:
+```json
+{
+  "linear": 0.5,
+  "angular": -0.2
+}
+```
+* `linear`: 전진/후진 속도 (m/s) — 전진 (+), 후진 (-)
+* `angular`: 회전 각속도 (rad/s) — 좌회전 (+), 우회전 (-)
+* 정지 명령 시에는 두 값을 모두 `0.0`으로 전송합니다.
 
 ---
 
@@ -238,8 +303,9 @@
 
 #### 1) 주기적 텔레메트리 패킷 (개행 필수)
 ```json
-{"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 92.5, "status": "PATROL"}
+{"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 92.5, "status": "AUTO_PATROL"}
 ```
+* `status` 값: `AUTO_PATROL`, `MANUAL_CONTROL`, `DISPATCH`, `VERIFY`
 
 #### 2) 이중 판정 화재 이벤트 패킷 (개행 필수)
 ```json
@@ -262,6 +328,19 @@
 ```json
 {"command": "RESUME"}
 ```
+
+#### 3) 모드 설정 패킷 (개행 필수)
+```json
+{"command": "SET_MODE", "mode": "MANUAL_CONTROL"}
+```
+* `mode` 값: `AUTO_PATROL` 또는 `MANUAL_CONTROL`
+
+#### 4) 수동 조종 방향 패킷 (개행 필수)
+```json
+{"command": "DRIVE", "linear": 0.5, "angular": -0.2}
+```
+* `linear`: 전진/후진 속도 (m/s)
+* `angular`: 회전 각속도 (rad/s)
 
 ---
 
