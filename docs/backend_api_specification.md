@@ -228,66 +228,20 @@
 
 ---
 
-## 3. Gateway (FastAPI) ↔ Spring Boot WebSocket 통신
+## 3. 로봇 ↔ Spring Boot 직접 TCP 소켓 통신 (JSON Lines)
 
-FastAPI 게이트웨이 서버가 로봇(TCP)으로 받은 로우 데이터를 Spring Boot 메인서버로 취합/전송하기 위해 백엔드 간 WebSocket을 유지합니다.
+1단계 MVP 아키텍처에 따라 로봇(Client)과 Spring Boot 메인 서버(Server) 간에 수립되는 TCP 소켓 프로토콜입니다. 각 JSON 메시지는 `\n`(개행 문자)로 구분(JSON Lines)하여 실시간 전송합니다.
 
-* **연결 엔드포인트**: `ws://localhost:8080/ws-gateway`
+* **Spring Boot 기본 대기 포트(Port)**: `9000` (설정 파일로 조정 가능)
 
-### 3.1 게이트웨이 $\rightarrow$ 메인 서버 데이터 전송 (Pub)
-
-#### 1) 로봇 원격 측정 갱신 (`PUB /app/gateway/telemetry`)
-```json
-{
-  "robotId": "orinka_01",
-  "x": 3.42,
-  "y": 5.12,
-  "yaw": -1.21,
-  "battery": 88.2,
-  "status": "PATROL"
-}
-```
-
-#### 2) 이벤트 업로드 (`PUB /app/gateway/event`)
-```json
-{
-  "robotId": "orinka_01",
-  "eventType": "FIRE",
-  "confidence": 0.94,
-  "temperature": 58.4,
-  "x": 15.0,
-  "y": 8.2
-}
-```
-
-### 3.2 메인 서버 $\rightarrow$ 게이트웨이 명령 전송 (Sub)
-
-#### 1) 로봇 제어 명령 구독 (`SUB /topic/gateway/commands`)
-* **설명**: 메인 서버가 웹 클라이언트로부터 받은 수동 제어 지시를 게이트웨이에 전송합니다.
-* **Payload**:
-```json
-{
-  "robotId": "orinka_01",
-  "command": "DISPATCH",
-  "targetX": 15.0,
-  "targetY": 8.2
-}
-```
-
----
-
-## 4. 로봇 ↔ Gateway (FastAPI) TCP 소켓 통신 (JSON Lines)
-
-기능명세서 `FN-C02`에 정의된 로봇(Client)과 Raspberry Pi FastAPI(Server) 간의 TCP 소켓 프로토콜입니다. 각 JSON 메시지는 `\n`(개행 문자)로 구분됩니다.
-
-### 4.1 로봇 $\rightarrow$ 게이트웨이 (Robot Upstream)
+### 3.1 로봇 $\rightarrow$ Spring Boot (Upstream)
 
 #### 1) 주기적 텔레메트리 패킷 (개행 필수)
 ```json
 {"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 92.5, "status": "PATROL"}
 ```
 
-#### 2) 이중 판정 이벤트 패킷 (개행 필수)
+#### 2) 이중 판정 화재 이벤트 패킷 (개행 필수)
 ```json
 {"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "location": {"x": 15.0, "y": 8.2}}
 ```
@@ -297,7 +251,7 @@ FastAPI 게이트웨이 서버가 로봇(TCP)으로 받은 로우 데이터를 S
 {"source": "robot", "type": "EVENT_OVERHEAT", "robot_id": "orinka_01", "equipment_id": "panel_01", "temperature": 53.2, "location": {"x": 8.5, "y": 3.1}}
 ```
 
-### 4.2 게이트웨이 $\rightarrow$ 로봇 (Robot Downstream)
+### 3.2 Spring Boot $\rightarrow$ 로봇 (Downstream)
 
 #### 1) 출동 명령 패킷 (개행 필수)
 ```json
@@ -308,3 +262,19 @@ FastAPI 게이트웨이 서버가 로봇(TCP)으로 받은 로우 데이터를 S
 ```json
 {"command": "RESUME"}
 ```
+
+---
+
+## 4. [고도화 단계] Gateway (FastAPI) ↔ Spring Boot 연동 명세 (선택사항)
+
+MVP 개발 완료 이후, 비디오 스트리밍 분산 처리 및 포트폴리오 다각화를 위해 **2단계 게이트웨이 아키텍처**로 확장할 경우 사용되는 백엔드 간 연동 규격입니다. (1단계 개발 시에는 생략됩니다.)
+
+* **WebSocket 연결 엔드포인트**: `ws://localhost:8080/ws-gateway`
+
+### 4.1 게이트웨이 $\rightarrow$ 메인 서버 데이터 전송 (Pub)
+* `PUB /app/gateway/telemetry`: 로봇 실시간 텔레메트리 갱신
+* `PUB /app/gateway/event`: 실시간 화재/과열 이벤트 릴레이
+
+### 4.2 메인 서버 $\rightarrow$ 게이트웨이 명령 전송 (Sub)
+* `SUB /topic/gateway/commands`: 웹 대시보드에서 수동으로 내린 제어 명령을 게이트웨이로 전달
+

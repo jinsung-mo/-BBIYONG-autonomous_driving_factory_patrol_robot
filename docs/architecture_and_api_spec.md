@@ -8,7 +8,7 @@
 
 삐용(BBIYONG) 프로젝트는 **이벤트 기반 아키텍처(Event-Driven Architecture)**와 **FSM(유한상태머신) 기반 로봇 제어**를 결합하여 설계되었습니다.
 
-### 1.1 아키텍처 다이어그램
+### 1.1 아키텍처 다이어그램 (1단계: MVP 개발 단일 아키텍처)
 
 ```mermaid
 graph TD
@@ -23,23 +23,15 @@ graph TD
         ROS2 -->|Telemetry: Scan/Imu/Odom/Battery| SocketClient
     end
 
-    subgraph "Gateway (Raspberry Pi 5)"
-        FastAPI[FastAPI Gateway]
-        Mosquitto[Mosquitto MQTT Broker]
-        VideoRelay[Video Relay Server]
-        
-        SocketClient <-->|TCP Socket (JSON Lines)| FastAPI
-        SocketClient -->|MQTT Telemetry| Mosquitto
-    end
-
-    subgraph "Backend Server (Spring Boot)"
+    subgraph "Backend Server (Spring Boot / Raspberry Pi 5)"
         Spring[Spring Main Server]
+        SocketServer[Embedded TCP Socket Server]
         SQLite[(SQLite - Event & Alert DB)]
         Redis[(Redis - Robot Cache)]
         
-        FastAPI <-->|WebSocket| Spring
-        Spring -->|Read/Write| SQLite
-        Spring -->|Cache State| Redis
+        SocketClient <-->|TCP Socket (JSON Lines)| SocketServer
+        SocketServer -->|Read/Write| SQLite
+        SocketServer -->|Cache State| Redis
     end
 
     subgraph "Web Client (Dashboard / Sim)"
@@ -47,18 +39,15 @@ graph TD
         ThreeJS[Three.js 2D Sim]
         
         Spring <-->|WebSocket / REST| WebClient
-        FastAPI -->|HLS/MJPEG Stream| WebClient
         WebClient --> ThreeJS
     end
 
     classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px;
-    classDef gateway fill:#d5f4e6,stroke:#333,stroke-width:2px;
     classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px;
     classDef web fill:#f9f7d9,stroke:#333,stroke-width:2px;
 
     class ROS2,YOLO,ThermalNode,SocketClient robot;
-    class FastAPI,Mosquitto,VideoRelay gateway;
-    class Spring,SQLite,Redis backend;
+    class Spring,SocketServer,SQLite,Redis backend;
     class WebClient,ThreeJS web;
 ```
 
@@ -68,14 +57,11 @@ graph TD
    * **주행**: LiDAR 센서를 활용해 2D 지도를 작성(SLAM Toolbox)하고, `robot_localization`을 통한 EKF 센서 융합(오도메트리+IMU)으로 자율주행 순찰(Nav2) 및 장애물 회피를 처리합니다.
    * **탐지**: 일반 카메라 영상으로 YOLO 추론을 수행하여 화재 후보를 탐지하고, 열화상 데이터와 대조(이중 판정)하여 비화재 오탐(빛 반사 등)을 원천 차단합니다.
    * **상태**: 순찰 $\leftrightarrow$ 긴급 $\leftrightarrow$ 복귀 상태를 ROS2 FSM 노드로 관리하며, 동작 취소/이동 명령을 처리합니다.
-2. **게이트웨이 (Raspberry Pi 5)**:
-   * 오린카와는 **TCP 소켓(JSON Lines)**으로 통신하며 명령 및 상태를 실시간 송수신합니다.
-   * Spring 메인 서버와는 **WebSocket**을 사용해 로봇 상태와 이중 판정된 긴급 이벤트를 릴레이합니다.
-   * 일반 카메라의 실시간 영상을 웹 클라이언트로 스트리밍(Video Relay)합니다.
-3. **메인 백엔드 (Spring Boot)**:
-   * 로봇의 최종 상태를 **Redis**에 캐싱하고 웹 클라이언트에 **WebSocket**으로 실시간 푸시합니다.
-   * 탐지된 이벤트 로그를 **SQLite**에 적재하고 이력을 제공하는 REST API를 제공합니다.
-   * 사용자 인증 및 담당 로봇 배정에 따른 권한 제어를 수행합니다.
+2. **메인 백엔드 (Spring Boot / Raspberry Pi 5)**:
+   * **TCP 소켓 서버 내장**: 로봇(젯슨)으로부터 직접 TCP 소켓 연결을 수신하고 명령 및 상태를 실시간 송수신합니다. (중간 게이트웨이 걷어내어 복잡도 최소화)
+   * **상태 캐싱 및 실시간 푸시**: 로봇의 실시간 상태를 **Redis**에 캐싱하고, 웹 클라이언트(관제 대시보드)에 **WebSocket(STOMP)**으로 실시간 브로드캐스팅합니다.
+   * **이벤트 로그 저장**: 탐지된 이벤트 로그를 **SQLite**에 적재하고 이력을 조회할 수 있는 REST API를 제공합니다.
+   * **인증 및 접근 권한**: 사용자 인증 및 담당 로봇 배정에 따른 권한 제어를 수행합니다.
 
 ---
 
@@ -232,3 +218,26 @@ Jira API를 연동하여 위의 티켓들을 터미널 명령어 하나로 **Jir
 
 > [!NOTE]
 > 스크립트를 실행하기 전 `pip install jira`를 실행해야 합니다.
+
+---
+
+## 5. 점진적 아키텍처 확장 로드맵 (포트폴리오 고도화 전략)
+
+본 프로젝트는 4주 개발 일정을 고려해 **1단계: Spring Boot 단일 백엔드 아키텍처**로 구현을 시작하여 신속하게 MVP를 완성합니다. 이후 추가적인 성능 고도화 및 이종 백엔드 기술 경험(포트폴리오 강화)을 위해 **2단계: FastAPI 게이트웨이 분리 아키텍처**로 진화하는 로드맵을 설계했습니다.
+
+```mermaid
+graph TD
+    subgraph "Phase 1: MVP (Fast Development)"
+        Robot1[Robot] <-->|Direct TCP Socket| SpringBoot1[Spring Boot + SQLite]
+    end
+    
+    subgraph "Phase 2: Scale-out & Hybrid Tech (Portfolio)"
+        Robot2[Robot] <-->|TCP Socket / Media Relay| FastAPI[FastAPI Gateway (Python)]
+        FastAPI <-->|WebSocket / gRPC| SpringBoot2[Spring Boot + SQLite]
+    end
+```
+
+### 2단계 확장 시 이점 (포트폴리오 가치)
+1. **비디오 스트리밍 오버헤드 분리**: OpenCV/Media 가공 능력이 뛰어난 파이썬 기반 FastAPI 게이트웨이를 독립시킴으로써, 자바/Spring Boot 메인 서버는 비즈니스 로직과 웹소켓 알림 처리에만 전념하도록 CPU 연산 부하를 차단합니다.
+2. **이종 백엔드(Hybrid Backend) 협업 경험**: 대규모 분산환경에서 사용되는 Gateway 패턴을 직접 설계하고 구현하여, 자바와 파이썬이라는 이종 플랫폼 간의 네트워크 통신(gRPC 또는 WebSocket) 정합성 처리 경험을 증명합니다.
+
