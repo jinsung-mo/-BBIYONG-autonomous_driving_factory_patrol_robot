@@ -1,0 +1,310 @@
+# 삐용 (BBIYONG) - 백엔드 개발자용 상세 API 명세서
+
+이 문서는 백엔드(Spring Boot / FastAPI Gateway) 개발자가 DTO 클래스 정의, 컨트롤러 작성, 소켓/웹소켓 핸들러 구현에 바로 적용할 수 있도록 설계된 상세 API 및 통신 프로토콜 명세서입니다.
+
+---
+
+## 1. Web Frontend ↔ Spring Boot REST API 명세
+
+모든 HTTP 요청/응답은 `application/json` 포맷을 사용하며, 예외 발생 시 에러 응답 포맷을 통일합니다.
+
+### 1.0 공통 에러 응답 포맷 (Error Response)
+```json
+{
+  "timestamp": "2026-07-18T19:40:00Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "유효하지 않은 입력값입니다.",
+  "path": "/api/robots/orinka_01/dispatch"
+}
+```
+
+---
+
+### 1.1 관리자 인증 API
+
+#### [POST] `/api/auth/login`
+* **설명**: 관리자가 ID/PW로 로그인하고 JWT 토큰을 발급받습니다.
+* **Request Header**: `Content-Type: application/json`
+* **Request Body**:
+```json
+{
+  "username": "admin01",
+  "password": "password123!"
+}
+```
+* **Response Body (200 OK)**:
+```json
+{
+  "tokenType": "Bearer",
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": 86400,
+  "role": "ROLE_ADMIN"
+}
+```
+
+---
+
+### 1.2 로봇 조회 및 제어 API
+
+모든 제어 및 조회 API는 인가 헤더(`Authorization: Bearer <JWT>`)가 필요합니다.
+
+#### [GET] `/api/robots`
+* **설명**: 관리자에게 배정된 로봇의 실시간 상태 요약 목록을 조회합니다. (Redis 캐시에서 읽음)
+* **Response Body (200 OK)**:
+```json
+[
+  {
+    "robotId": "orinka_01",
+    "name": "순찰로봇 오린카 1호기",
+    "status": "PATROL",
+    "battery": 92.5,
+    "lastConnected": "2026-07-18T19:35:00Z",
+    "location": {
+      "x": 1.25,
+      "y": 3.40,
+      "yaw": 0.78
+    }
+  }
+]
+```
+
+#### [POST] `/api/robots/{robotId}/dispatch`
+* **설명**: 관리자가 지도상의 특정 좌표를 지정하여 로봇을 강제 출동시킵니다.
+* **Request Body**:
+```json
+{
+  "x": 15.45,
+  "y": 8.12,
+  "reason": "웹 관제자 긴급 출동 지시"
+}
+```
+* **Response Body (200 OK)**:
+```json
+{
+  "robotId": "orinka_01",
+  "command": "DISPATCH",
+  "status": "SENT",
+  "timestamp": "2026-07-18T19:38:00Z"
+}
+```
+
+#### [POST] `/api/robots/{robotId}/resume`
+* **설명**: 상황 종료 후 로봇에게 순찰 복귀를 명령합니다.
+* **Request Body**: None (또는 `{}`)
+* **Response Body (200 OK)**:
+```json
+{
+  "robotId": "orinka_01",
+  "command": "RESUME",
+  "status": "SENT",
+  "timestamp": "2026-07-18T19:38:05Z"
+}
+```
+
+---
+
+### 1.3 설비 관리 API
+
+#### [GET] `/api/equipments`
+* **설명**: 공장 내부의 감시 대상 설비 목록과 설정 온도를 조회합니다.
+* **Response Body (200 OK)**:
+```json
+[
+  {
+    "equipmentId": "panel_01",
+    "name": "A동 중앙 메인 제어반",
+    "thresholdTemperature": 50.0,
+    "location": {
+      "x": 8.50,
+      "y": 3.10
+    }
+  },
+  {
+    "equipmentId": "panel_02",
+    "name": "B동 용접설비 동력 분전함",
+    "thresholdTemperature": 55.0,
+    "location": {
+      "x": 12.80,
+      "y": 14.20
+    }
+  }
+]
+```
+
+#### [PUT] `/api/equipments/{equipmentId}`
+* **설명**: 특정 설비의 과열 경보 발생 임계 온도를 수정합니다.
+* **Request Body**:
+```json
+{
+  "thresholdTemperature": 52.5
+}
+```
+* **Response Body (200 OK)**:
+```json
+{
+  "equipmentId": "panel_01",
+  "thresholdTemperature": 52.5,
+  "updatedAt": "2026-07-18T19:39:00Z"
+}
+```
+
+---
+
+### 1.4 이벤트 로그 API
+
+#### [GET] `/api/events`
+* **설명**: 화재 및 장비 과열 감지, 로봇 이상 이벤트 이력을 조회합니다. (SQLite에서 페이징 조회)
+* **Query Parameters**:
+  * `page` (default: 0)
+  * `size` (default: 10)
+  * `type` (optional: `FIRE`, `OVERHEAT`, `SYSTEM`)
+* **Response Body (200 OK)**:
+```json
+{
+  "content": [
+    {
+      "eventId": 1,
+      "type": "FIRE",
+      "robotId": "orinka_01",
+      "location": { "x": 15.0, "y": 8.2 },
+      "confidence": 0.94,
+      "temperature": 58.4,
+      "timestamp": "2026-07-18T19:30:12Z",
+      "status": "UNRESOLVED"
+    }
+  ],
+  "pageable": {
+    "pageNumber": 0,
+    "pageSize": 10
+  },
+  "totalPages": 1,
+  "totalElements": 1
+}
+```
+
+---
+
+## 2. Web Frontend ↔ Spring Boot WebSocket 명세
+
+실시간 대시보드 갱신 및 경보 푸시를 담당하며, STOMP 프로토콜을 사용합니다.
+
+### 2.1 연결 엔드포인트
+* **WebSocket URL**: `ws://localhost:8080/ws-관제` (STOMP Connection)
+
+### 2.2 Pub/Sub 토픽 및 페이로드
+
+#### 1) 로봇 실시간 텔레메트리 구독 (`SUB /topic/robots`)
+* **설명**: 웹 클라이언트가 지도상 로봇 위치 및 상태 변경을 실시간 추적합니다.
+* **Payload**:
+```json
+{
+  "robotId": "orinka_01",
+  "status": "PATROL",
+  "battery": 88.2,
+  "location": {
+    "x": 3.42,
+    "y": 5.12,
+    "yaw": -1.21
+  },
+  "timestamp": "2026-07-18T19:40:02Z"
+}
+```
+
+#### 2) 실시간 경보 푸시 구독 (`SUB /topic/alerts`)
+* **설명**: 화재 발생 또는 설비 과열 경보 등 발생 시 브라우저에 경보 모달을 띄우기 위해 사용합니다.
+* **Payload**:
+```json
+{
+  "alertId": 1,
+  "type": "FIRE",
+  "level": "CRITICAL",
+  "robotId": "orinka_01",
+  "location": { "x": 15.0, "y": 8.2 },
+  "message": "화재가 발생했습니다! (신뢰도: 94%, 온도: 58.4°C)",
+  "timestamp": "2026-07-18T19:40:03Z"
+}
+```
+
+---
+
+## 3. Gateway (FastAPI) ↔ Spring Boot WebSocket 통신
+
+FastAPI 게이트웨이 서버가 로봇(TCP)으로 받은 로우 데이터를 Spring Boot 메인서버로 취합/전송하기 위해 백엔드 간 WebSocket을 유지합니다.
+
+* **연결 엔드포인트**: `ws://localhost:8080/ws-gateway`
+
+### 3.1 게이트웨이 $\rightarrow$ 메인 서버 데이터 전송 (Pub)
+
+#### 1) 로봇 원격 측정 갱신 (`PUB /app/gateway/telemetry`)
+```json
+{
+  "robotId": "orinka_01",
+  "x": 3.42,
+  "y": 5.12,
+  "yaw": -1.21,
+  "battery": 88.2,
+  "status": "PATROL"
+}
+```
+
+#### 2) 이벤트 업로드 (`PUB /app/gateway/event`)
+```json
+{
+  "robotId": "orinka_01",
+  "eventType": "FIRE",
+  "confidence": 0.94,
+  "temperature": 58.4,
+  "x": 15.0,
+  "y": 8.2
+}
+```
+
+### 3.2 메인 서버 $\rightarrow$ 게이트웨이 명령 전송 (Sub)
+
+#### 1) 로봇 제어 명령 구독 (`SUB /topic/gateway/commands`)
+* **설명**: 메인 서버가 웹 클라이언트로부터 받은 수동 제어 지시를 게이트웨이에 전송합니다.
+* **Payload**:
+```json
+{
+  "robotId": "orinka_01",
+  "command": "DISPATCH",
+  "targetX": 15.0,
+  "targetY": 8.2
+}
+```
+
+---
+
+## 4. 로봇 ↔ Gateway (FastAPI) TCP 소켓 통신 (JSON Lines)
+
+기능명세서 `FN-C02`에 정의된 로봇(Client)과 Raspberry Pi FastAPI(Server) 간의 TCP 소켓 프로토콜입니다. 각 JSON 메시지는 `\n`(개행 문자)로 구분됩니다.
+
+### 4.1 로봇 $\rightarrow$ 게이트웨이 (Robot Upstream)
+
+#### 1) 주기적 텔레메트리 패킷 (개행 필수)
+```json
+{"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 92.5, "status": "PATROL"}
+```
+
+#### 2) 이중 판정 이벤트 패킷 (개행 필수)
+```json
+{"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "location": {"x": 15.0, "y": 8.2}}
+```
+
+#### 3) 장비 과열 이벤트 패킷 (개행 필수)
+```json
+{"source": "robot", "type": "EVENT_OVERHEAT", "robot_id": "orinka_01", "equipment_id": "panel_01", "temperature": 53.2, "location": {"x": 8.5, "y": 3.1}}
+```
+
+### 4.2 게이트웨이 $\rightarrow$ 로봇 (Robot Downstream)
+
+#### 1) 출동 명령 패킷 (개행 필수)
+```json
+{"command": "DISPATCH", "target_location": {"x": 15.0, "y": 8.2}}
+```
+
+#### 2) 복귀 명령 패킷 (개행 필수)
+```json
+{"command": "RESUME"}
+```
