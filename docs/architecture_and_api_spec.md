@@ -153,12 +153,12 @@ graph TD
 ```mermaid
 graph TD
     subgraph "Phase 1: MVP (Fast Development)"
-        Robot1[Robot] <-->|Direct TCP Socket| SpringBoot1[Spring Boot + SQLite]
+        Robot1[Robot] <-->|"Direct TCP Socket"| SpringBoot1[Spring Boot + SQLite]
     end
     
     subgraph "Phase 2: Scale-out & Hybrid Tech (Portfolio)"
-        Robot2[Robot] <-->|TCP Socket / Media Relay| FastAPI[FastAPI Gateway (Python)]
-        FastAPI <-->|WebSocket / gRPC| SpringBoot2[Spring Boot + SQLite]
+        Robot2[Robot] <-->|"TCP Socket / Media Relay"| FastAPI[FastAPI Gateway (Python)]
+        FastAPI <-->|"WebSocket / gRPC"| SpringBoot2[Spring Boot + SQLite]
     end
 ```
 
