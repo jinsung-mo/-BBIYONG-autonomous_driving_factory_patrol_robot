@@ -11,7 +11,7 @@
 ### 1.1 아키텍처 다이어그램 (1단계: MVP 개발 단일 아키텍처)
 
 ```mermaid
-graph TD
+flowchart TD
     subgraph "Robot (Jetson Orin Nano)"
         ROS2[ROS2 Humble / Nav2]
         YOLO[YOLOv11 Detector]
@@ -49,10 +49,10 @@ graph TD
         WebClient --> ThreeJS
     end
 
-    classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px;
-    classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px;
-    classDef web fill:#f9f7d9,stroke:#333,stroke-width:2px;
-    classDef cctv fill:#e1d5e7,stroke:#333,stroke-width:2px;
+    classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px,color:#333;
+    classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px,color:#333;
+    classDef web fill:#f9f7d9,stroke:#333,stroke-width:2px,color:#333;
+    classDef cctv fill:#e1d5e7,stroke:#333,stroke-width:2px,color:#333;
 
     class ROS2,YOLO,ThermalNode,SocketClient robot;
     class Spring,SocketServer,SQLite,InMemory backend;
@@ -151,7 +151,7 @@ graph TD
 본 프로젝트는 4주 개발 일정을 고려해 **1단계: Spring Boot 단일 백엔드 아키텍처**로 구현을 시작하여 신속하게 MVP를 완성합니다. 이후 추가적인 성능 고도화 및 이종 백엔드 기술 경험(포트폴리오 강화)을 위해 **2단계: FastAPI 게이트웨이 분리 아키텍처**로 진화하는 로드맵을 설계했습니다.
 
 ```mermaid
-graph TD
+flowchart TD
     subgraph "Phase 1: MVP (Fast Development)"
         Robot1[Robot] <-->|"Direct TCP Socket"| SpringBoot1[Spring Boot + SQLite]
     end
@@ -160,6 +160,14 @@ graph TD
         Robot2[Robot] <-->|"TCP Socket / Media Relay"| FastAPI[FastAPI Gateway (Python)]
         FastAPI <-->|"WebSocket / gRPC"| SpringBoot2[Spring Boot + SQLite]
     end
+
+    classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px,color:#333;
+    classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px,color:#333;
+    classDef gateway fill:#e1d5e7,stroke:#333,stroke-width:2px,color:#333;
+
+    class Robot1,Robot2 robot;
+    class SpringBoot1,SpringBoot2 backend;
+    class FastAPI gateway;
 ```
 
 ### 2단계 확장 시 이점 (포트폴리오 가치)
