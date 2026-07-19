@@ -18,10 +18,10 @@ flowchart TD
         ThermalNode[Thermal Sensor Node]
         SocketClient[TCP Socket Client]
         
-        YOLO -->|"Fire Candidate"| ThermalNode
-        ThermalNode -->|"Double Verification Event"| SocketClient
-        ROS2 -->|"Telemetry: Scan/Imu/Odom/Battery"| SocketClient
-        SocketClient -->|"Manual Drive: cmd_vel"| ROS2
+        YOLO -->|Fire Candidate| ThermalNode
+        ThermalNode -->|Double Verification Event| SocketClient
+        ROS2 -->|Telemetry: Scan/Imu/Odom/Battery| SocketClient
+        SocketClient -->|Manual Drive: cmd_vel| ROS2
     end
 
     subgraph "Fixed CCTV System"
@@ -31,33 +31,33 @@ flowchart TD
     subgraph "Backend Server (Spring Boot / Raspberry Pi 5)"
         Spring[Spring Main Server]
         SocketServer[Embedded TCP Socket Server]
-        SQLite[(SQLite - Event & Alert DB)]
-        InMemory["In-Memory Cache (ConcurrentHashMap)"]
+        SQLite[SQLite - Event & Alert DB]
+        InMemory[In-Memory Cache ConcurrentHashMap]
         
-        SocketClient <-->|"TCP Socket (JSON Lines / Video Stream)"| SocketServer
+        SocketClient <-->|TCP Socket JSON Lines / Video Stream| SocketServer
         SocketServer -->|Read/Write| SQLite
         SocketServer -->|Cache State| InMemory
-        CCTV -->|"1. HTTP REST: 1st Fire Event"| Spring
+        CCTV -->|1. HTTP REST: 1st Fire Event| Spring
     end
 
     subgraph "Web Client (Dashboard / Sim)"
         WebClient[Web Dashboard]
         ThreeJS[Three.js 2D Sim]
         
-        Spring <-->|"WebSocket: Telemetry & Alerts"| WebClient
-        WebClient -->|"2. WebSocket STOMP: WASD Drive"| Spring
+        Spring <-->|WebSocket: Telemetry & Alerts| WebClient
+        WebClient -->|2. WebSocket STOMP: WASD Drive| Spring
         WebClient --> ThreeJS
     end
 
-    classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px,color:#333;
-    classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px,color:#333;
-    classDef web fill:#f9f7d9,stroke:#333,stroke-width:2px,color:#333;
-    classDef cctv fill:#e1d5e7,stroke:#333,stroke-width:2px,color:#333;
+    classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px,color:#333
+    classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px,color:#333
+    classDef web fill:#f9f7d9,stroke:#333,stroke-width:2px,color:#333
+    classDef cctv fill:#e1d5e7,stroke:#333,stroke-width:2px,color:#333
 
-    class ROS2,YOLO,ThermalNode,SocketClient robot;
-    class Spring,SocketServer,SQLite,InMemory backend;
-    class WebClient,ThreeJS web;
-    class CCTV cctv;
+    class ROS2,YOLO,ThermalNode,SocketClient robot
+    class Spring,SocketServer,SQLite,InMemory backend
+    class WebClient,ThreeJS web
+    class CCTV cctv
 ```
 
 ### 1.2 컴포넌트별 주요 역할
@@ -153,21 +153,26 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph "Phase 1: MVP (Fast Development)"
-        Robot1[Robot] <-->|"Direct TCP Socket"| SpringBoot1[Spring Boot + SQLite]
+        Robot1[Robot]
+        SpringBoot1[Spring Boot + SQLite]
+        Robot1 <-->|Direct TCP Socket| SpringBoot1
     end
     
     subgraph "Phase 2: Scale-out & Hybrid Tech (Portfolio)"
-        Robot2[Robot] <-->|"TCP Socket / Media Relay"| FastAPI[FastAPI Gateway (Python)]
-        FastAPI <-->|"WebSocket / gRPC"| SpringBoot2[Spring Boot + SQLite]
+        Robot2[Robot]
+        FastAPI[FastAPI Gateway Python]
+        SpringBoot2[Spring Boot + SQLite]
+        Robot2 <-->|TCP Socket / Media Relay| FastAPI
+        FastAPI <-->|WebSocket / gRPC| SpringBoot2
     end
 
-    classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px,color:#333;
-    classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px,color:#333;
-    classDef gateway fill:#e1d5e7,stroke:#333,stroke-width:2px,color:#333;
+    classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px,color:#333
+    classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px,color:#333
+    classDef gateway fill:#e1d5e7,stroke:#333,stroke-width:2px,color:#333
 
-    class Robot1,Robot2 robot;
-    class SpringBoot1,SpringBoot2 backend;
-    class FastAPI gateway;
+    class Robot1,Robot2 robot
+    class SpringBoot1,SpringBoot2 backend
+    class FastAPI gateway
 ```
 
 ### 2단계 확장 시 이점 (포트폴리오 가치)
