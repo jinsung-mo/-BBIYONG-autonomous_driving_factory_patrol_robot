@@ -151,7 +151,7 @@ flowchart TD
 본 프로젝트는 4주 개발 일정을 고려해 **1단계: Spring Boot 단일 백엔드 아키텍처**로 구현을 시작하여 신속하게 MVP를 완성합니다. 이후 추가적인 성능 고도화 및 이종 백엔드 기술 경험(포트폴리오 강화)을 위해 **2단계: FastAPI 게이트웨이 분리 아키텍처**로 진화하는 로드맵을 설계했습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph "Phase 1: MVP (Fast Development)"
         Robot1[Robot]
         SpringBoot1[Spring Boot + SQLite]
