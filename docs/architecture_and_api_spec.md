@@ -166,6 +166,8 @@ flowchart LR
         FastAPI <-->|WebSocket / gRPC| SpringBoot2
     end
 
+    SpringBoot1 -.->|Architecture Expansion| FastAPI
+
     classDef robot fill:#ffcccc,stroke:#333,stroke-width:2px,color:#333
     classDef backend fill:#d1e8ff,stroke:#333,stroke-width:2px,color:#333
     classDef gateway fill:#e1d5e7,stroke:#333,stroke-width:2px,color:#333
