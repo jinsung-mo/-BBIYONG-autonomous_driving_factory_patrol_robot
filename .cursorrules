@@ -27,3 +27,8 @@ Please read and follow the workspace rules defined in this repository:
    - Always target the part-specific main branch (e.g. `be_system/main`) when submitting Merge Requests.
 
 Always inspect `.ai_jira_config.json` or `.gemini_jira_config.json` for Jira API configurations and base URLs.
+
+3. **Ticket-First Workflow Automation (No Ticket, No Work)**:
+   - Before writing any code, modifying any files, or creating branches, you MUST first create a corresponding Jira ticket.
+   - Flow: Design issue ➔ Create Jira ticket via API ➔ Report issue key to user ➔ Create local branch `[prefix]/[JiraTicketId]-[task-name]` ➔ Start coding.
+   - Do not perform coding modifications without a ticket ID!
