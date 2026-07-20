@@ -23,6 +23,8 @@
    * 기한은 항상 해당 주 금요일(금요일이 지난 주말인 경우 다음 주 금요일)로 마감일(`"duedate": "YYYY-MM-DD"`)을 자동 계산하여 설정합니다.
 4. **레이블 (Labels)**: 
    * 파트(예: `FE`, `BE`, `AI`, `Chore`, `Feature` 등)에 맞는 태그들을 `"labels": ["FE", "Chore"]` 형태의 문자열 리스트로 매핑합니다.
+5. **담당자 (Assignee)**: 
+   * 설정 파일의 `jira_email` 정보를 이용해 지라 유저 검색 API(`GET /rest/api/2/user/search?query=...`)를 호출하여 사용자의 `accountId`를 찾은 후, 생성하는 모든 티켓의 담당자(`"assignee": {"accountId": "..."}`)로 자동 매핑합니다.
 
 ## 4. Jira 티켓 구조 및 위계 (Epic-Story-Task 3단계 구조)
 * 지라 티켓 설계 및 생성 시 **`Epic ➔ Story ➔ Task`**의 3단계 위계를 철저히 준수합니다.

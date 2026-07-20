@@ -9,6 +9,7 @@ Please read and follow the workspace rules defined in this repository:
    - For Tasks, represent detailed action items of 1-2 days (e.g. 로그인 API 구현).
    - Compute due dates as the coming Friday.
    - Automatically determine labels and priority.
+   - Search for the user's `accountId` via email in configuration, and assign all created issues to the user (`"assignee": {"accountId": "..."}`).
    - Strictly follow the description template (without emoticons). Use asterisk (*) instead of hyphen (-) to prevent Jira Wiki Markup formatting bugs:
      ```markdown
      ### 개요 (Context)

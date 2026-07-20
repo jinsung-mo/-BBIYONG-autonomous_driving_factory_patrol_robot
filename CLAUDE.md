@@ -12,6 +12,7 @@ When performing work in this repository, you MUST follow these specific conventi
 * **Story**: High-level domain features (e.g. `회원 관리`, `로봇 제어`).
 * **Task**: Individual developer tasks of 1-2 days (e.g. `로그인 API 구현`).
 * **Due Date**: Automatically set to the upcoming Friday.
+* **Assignee**: Automatically search for user's `accountId` using their configuration email, and assign all created issues to them.
 * **Format**: All issue descriptions must strictly follow this template (emoticons removed). Use asterisks (*) for checkbox lists to prevent rendering bugs:
   ```markdown
   ### 개요 (Context)
