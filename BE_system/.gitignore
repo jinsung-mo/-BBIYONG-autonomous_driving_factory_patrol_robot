@@ -35,8 +35,3 @@ out/
 
 ### VS Code ###
 .vscode/
-
-/data/
-*.db
-*.db-shm
-*.db-wal
