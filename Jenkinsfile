@@ -10,7 +10,7 @@ pipeline {
         stage('Test') {
             steps {
                 dir('BE_system') {
-                    sh './gradlew test --no-daemon'
+                    sh 'sh ./gradlew test --no-daemon'
                 }
             }
         }
