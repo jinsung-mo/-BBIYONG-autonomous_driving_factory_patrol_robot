@@ -9,15 +9,16 @@ Please read and follow the workspace rules defined in this repository:
    - For Tasks, represent detailed action items of 1-2 days (e.g. 로그인 API 구현).
    - Compute due dates as the coming Friday.
    - Automatically determine labels and priority.
-   - Strictly follow the description template (without emoticons):
+   - Strictly follow the description template (without emoticons). Use asterisk (*) instead of hyphen (-) to prevent Jira Wiki Markup formatting bugs:
      ```markdown
      ### 개요 (Context)
-     - ...
+     ...
      ### 작업 상세 내용 (To-Do)
-     - [ ] ...
+     * [ ] ...
      ### 완료 기준 (Definition of Done)
-     - [ ] ...
+     * [ ] ...
      ```
+     (Note: When calling the Jira REST API v2 directly, convert '### ' to 'h3. ' and '- [ ]' to '* [ ]' to avoid rendering bugs where '#' is parsed as a numbered list item 1. a. i.)
 
 2. **Git Collaboration Rules**: Refer to `.agents/rules/git-rules.md`
    - Main branch structure: `fe/main`, `be_system/main`, `be_robot/main`, `ai/main` for development; `main` for production releases.
