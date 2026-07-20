@@ -7,6 +7,14 @@ pipeline {
     }
 
     stages {
+        stage('Test') {
+            steps {
+                dir('BE_system') {
+                    sh './gradlew test --no-daemon'
+                }
+            }
+        }
+
         stage('Deploy') {
             steps {
                 dir('BE_system') {
