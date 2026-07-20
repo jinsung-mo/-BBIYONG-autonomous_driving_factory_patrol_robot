@@ -32,3 +32,7 @@ When performing work in this repository, you MUST follow these specific conventi
 * **MR flow**: Always target the part main branch (e.g. `be_system/main`) rather than release `main`.
 
 For more details on team automation, refer to [AI.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/AI.md).
+
+### 3. Ticket-First Workflow Automation (No Ticket, No Work)
+* Before writing any code, modifying files, or creating branches for a task, you MUST automatically create the Jira ticket via API first.
+* Report the ticket key to the user, then checkout the branch `[prefix]/[JiraTicketId]-[task-name]`, and finally perform the coding/writing. Do not code without a ticket key.
