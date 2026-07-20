@@ -12,16 +12,16 @@ When performing work in this repository, you MUST follow these specific conventi
 * **Story**: High-level domain features (e.g. `회원 관리`, `로봇 제어`).
 * **Task**: Individual developer tasks of 1-2 days (e.g. `로그인 API 구현`).
 * **Due Date**: Automatically set to the upcoming Friday.
-* **Format**: All issue descriptions must strictly follow this template (emoticons removed). Use asterisks (*) for checkbox lists to prevent rendering bugs:
+* **Format**: All issue descriptions must strictly follow this template (emoticons and checkboxes removed):
   ```markdown
   ### 개요 (Context)
-  ...
+  - 
   ### 작업 상세 내용 (To-Do)
-  * [ ] ...
+  - 
   ### 완료 기준 (Definition of Done)
-  * [ ] ...
+  - 
   ```
-  (Note: When programmatically using Jira REST API v2, convert '### ' headers to 'h3. ' and '- [ ]' to '* [ ]' to avoid rendering bugs where '#' is parsed as numbered list items 1. a. i.)
+  (Note: When programmatically using Jira REST API v2, convert '### ' headers to 'h3. ' and '- ' to '* ' to avoid rendering bugs where '#' is parsed as numbered list items 1. a. i.)
 * **Configuration**: Read `.ai_jira_config.json` or `.gemini_jira_config.json` in the root folder for URL, email, api token, and project key.
 
 ### 2. Git & Branching Conventions
