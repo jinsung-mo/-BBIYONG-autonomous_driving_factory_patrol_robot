@@ -21,11 +21,11 @@ WORKDIR /app
 RUN useradd --system --create-home spring
 
 COPY --from=build /workspace/build/libs/*.jar app.jar
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN mkdir -p /app/data && chown -R spring:spring /app
-
-USER spring
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
