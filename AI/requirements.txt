@@ -1,3 +1,4 @@
 # Install the CUDA-enabled PyTorch wheel first; see README.md.
 ultralytics==8.4.102
 PyYAML==6.0.3
+requests==2.34.2
