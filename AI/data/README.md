@@ -9,11 +9,12 @@ not tracked by Git.
 - Mirror version observed: `2025-01-27T12:37:37.047Z`
 - Reported archive size: `3,118,334,483` bytes
 - Dataset license: CC0 1.0 Universal
-- Classes in BBIYONG output: `0: fire`, `1: smoke`
+- Classes (preserved from D-Fire): `0: smoke`, `1: fire`
 
 Run `scripts/download_dfire.py`, then `scripts/prepare_dataset.py` as documented
 in the parent README. The download script writes a local manifest containing the
-actual archive size and SHA-256 digest.
+actual archive size and SHA-256 digest. Dataset preparation writes a separate
+manifest that records every opt-in label correction made in the derived copy.
 
 When publishing results, cite:
 
@@ -21,4 +22,3 @@ When publishing results, cite:
 > Vilela Barbosa. An automatic fire detection system based on deep convolutional
 > neural networks for low-power, resource-constrained devices. Neural Computing
 > and Applications, 2022.
-

@@ -139,10 +139,12 @@ def validate_dataset(yaml_path: Path) -> ValidationReport:
                 continue
             referenced_labels.add(label_path.resolve())
             split_stats.labels += 1
+            has_boxes = False
             for line_number, raw_line in enumerate(label_path.read_text(encoding="utf-8").splitlines(), 1):
                 line = raw_line.strip()
                 if not line:
                     continue
+                has_boxes = True
                 fields = line.split()
                 if len(fields) != 5:
                     errors.append(f"{label_path}:{line_number}: expected 5 fields, got {len(fields)}")
@@ -161,6 +163,8 @@ def validate_dataset(yaml_path: Path) -> ValidationReport:
                     errors.append(f"{label_path}:{line_number}: width and height must be positive")
                 split_stats.boxes += 1
                 split_stats.class_boxes[class_id] = split_stats.class_boxes.get(class_id, 0) + 1
+            if not has_boxes:
+                split_stats.negatives += 1
 
         if label_dir.exists():
             orphaned = [
@@ -169,7 +173,9 @@ def validate_dataset(yaml_path: Path) -> ValidationReport:
             if orphaned:
                 warnings.append(f"{split}: {len(orphaned)} label files have no matching image")
         if split_stats.negatives:
-            warnings.append(f"{split}: {split_stats.negatives} images have no label file and are treated as negatives")
+            warnings.append(
+                f"{split}: {split_stats.negatives} images have no boxes and are treated as negatives"
+            )
 
     return ValidationReport(names=names, splits=stats, warnings=warnings, errors=errors)
 
@@ -179,11 +185,10 @@ def print_report(report: ValidationReport) -> None:
     for split, stats in report.splits.items():
         per_class = ", ".join(f"{key}:{value}" for key, value in sorted(stats.class_boxes.items())) or "none"
         print(
-            f"{split}: images={stats.images}, labeled={stats.labels}, negatives={stats.negatives}, "
+            f"{split}: images={stats.images}, label_files={stats.labels}, negatives={stats.negatives}, "
             f"boxes={stats.boxes}, class_boxes={per_class}"
         )
     for warning in report.warnings:
         print(f"WARNING: {warning}")
     for error in report.errors:
         print(f"ERROR: {error}")
-

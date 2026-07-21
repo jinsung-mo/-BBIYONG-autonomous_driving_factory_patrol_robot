@@ -1,13 +1,16 @@
 # BBIYONG AI - Fire and Smoke Detection
 
-Training workspace for Jira story `S15P11E101-15`. It downloads, prepares, and
+Training workspace for Jira story `S15P11E101-227`. It downloads, prepares, and
 validates the primary D-Fire dataset, trains the candidate models, and keeps
 generated data, weights, and run artifacts outside Git.
+
+The phased baseline, domain-adaptation, evaluation, Jetson deployment, and
+agent handoff plan is documented in [TRAINING_PLAN.md](TRAINING_PLAN.md).
 
 ## Training contract
 
 - Task: object detection
-- Classes: `0: fire`, `1: smoke`
+- Classes (D-Fire native order): `0: smoke`, `1: fire`
 - Candidate checkpoints: `yolo11n.pt`, `yolo11s.pt`, `yolo26n.pt`
 - Primary selection metric: validation `mAP50-95`
 - Deployment target: Jetson Orin Nano through ONNX and TensorRT
@@ -36,10 +39,18 @@ compatible command from the official PyTorch installer.
 ## 1. Download and prepare D-Fire
 
 Download the versioned public mirror. The command supports resuming an
-interrupted `.part` download and records the final SHA-256 digest.
+interrupted `.part` download and records the final SHA-256 digest. Run it from
+the `AI` directory:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\download_dfire.py
+```
+
+The default outputs are:
+
+```text
+data/downloads/dfire.zip
+data/downloads/dfire.manifest.json
 ```
 
 Normalize the downloaded archive into the BBIYONG layout:
@@ -47,12 +58,24 @@ Normalize the downloaded archive into the BBIYONG layout:
 ```powershell
 .\.venv\Scripts\python.exe scripts\prepare_dataset.py `
   --source data\downloads\dfire.zip `
-  --destination data\fire_smoke
+  --destination data\fire_smoke `
+  --sanitize-labels
 ```
 
-Preparation verifies/remaps the source class order to the canonical BBIYONG
-order `fire`, `smoke`. It writes `data/fire_smoke/data.yaml` with a machine-local
-absolute path.
+Preparation verifies and preserves the D-Fire source class IDs without
+rewriting label files:
+
+- `0`: `smoke`
+- `1`: `fire`
+
+The known mirror contains a small number of invalid zero-area and out-of-range
+boxes. `--sanitize-labels` drops zero-area boxes and clips out-of-range boxes to
+the image boundary in the derived dataset. Every change is recorded in
+`data/fire_smoke/preparation_manifest.json`; the downloaded archive remains
+unchanged. The generated `data/fire_smoke/data.yaml` uses the source class
+mapping and contains a machine-local absolute dataset path. In YOLO format, the
+integer at the start of every annotation row indexes this `names` mapping, so
+changing the order without rewriting every annotation would change its meaning.
 
 Validate again at any time:
 
@@ -60,9 +83,23 @@ Validate again at any time:
 .\.venv\Scripts\python.exe scripts\validate_dataset.py data\fire_smoke\data.yaml
 ```
 
-Validation fails on malformed/out-of-range boxes, missing required splits,
-or identical image bytes crossing split boundaries. Images without label files
-are allowed and reported as negatives.
+Validation fails on malformed/out-of-range boxes, missing required splits, or
+identical image bytes crossing split boundaries.
+
+### Negative images
+
+D-Fire includes background images containing neither smoke nor fire. Dataset
+preparation copies every supported image, including images without a matching
+label file. Ultralytics treats an image with no label file as a valid negative
+sample containing zero objects; it does not require a dummy `background`
+class. Empty label files also represent zero-object samples. The validator
+counts and reports both forms as `negatives`.
+
+Keep negative images in the train and validation splits. They are necessary for
+measuring and reducing false detections from clouds, fog, steam, lights,
+reflections, and similar visual patterns.
+
+Format reference: [Ultralytics object-detection dataset guide](https://docs.ultralytics.com/datasets/detect/).
 
 Expected normalized layout:
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -24,6 +25,8 @@ class DatasetValidationTests(unittest.TestCase):
             label_dir.mkdir(parents=True)
             (image_dir / f"{split}.jpg").write_bytes(f"fake-{split}".encode())
             (label_dir / f"{split}.txt").write_text("0 0.5 0.5 0.2 0.3\n", encoding="utf-8")
+            (image_dir / f"{split}-empty.jpg").write_bytes(f"empty-{split}".encode())
+            (label_dir / f"{split}-empty.txt").write_text("", encoding="utf-8")
         yaml_path = root / "data.yaml"
         yaml_path.write_text(
             yaml.safe_dump(
@@ -31,7 +34,7 @@ class DatasetValidationTests(unittest.TestCase):
                     "path": str(root),
                     "train": "images/train",
                     "val": "images/val",
-                    "names": {0: "fire", 1: "smoke"},
+                    "names": {0: "smoke", 1: "fire"},
                 },
                 sort_keys=False,
             ),
@@ -44,6 +47,7 @@ class DatasetValidationTests(unittest.TestCase):
             report = validate_dataset(self.make_dataset(Path(temp_dir)))
             self.assertTrue(report.ok, report.errors)
             self.assertEqual(report.splits["train"].boxes, 1)
+            self.assertEqual(report.splits["train"].negatives, 1)
 
     def test_rejects_out_of_range_coordinates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -77,6 +81,9 @@ class DatasetValidationTests(unittest.TestCase):
                 label_dir.mkdir(parents=True)
                 (image_dir / f"{split}.jpg").write_bytes(f"image-{split}".encode())
                 (label_dir / f"{split}.txt").write_text("1 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+                (image_dir / f"{split}-negative.jpg").write_bytes(
+                    f"negative-{split}".encode()
+                )
             (source / "data.yaml").write_text(
                 yaml.safe_dump(
                     {
@@ -93,8 +100,52 @@ class DatasetValidationTests(unittest.TestCase):
             report = validate_dataset(output_yaml)
 
             self.assertTrue(report.ok, report.errors)
-            self.assertEqual(report.splits["train"].images, 1)
-            self.assertEqual(report.splits["val"].class_boxes[0], 1)
+            self.assertEqual(report.splits["train"].images, 2)
+            self.assertEqual(report.splits["train"].negatives, 1)
+            self.assertEqual(report.names, ["smoke", "fire"])
+            self.assertEqual(report.splits["val"].class_boxes[1], 1)
+
+    def test_sanitizes_invalid_source_boxes_with_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            for split, label in (
+                ("train", "0 0.5 0.5 0.0 0.2\n"),
+                ("valid", "1 0.5 0.5 1.1 0.5\n"),
+            ):
+                image_dir = source / split / "images"
+                label_dir = source / split / "labels"
+                image_dir.mkdir(parents=True)
+                label_dir.mkdir(parents=True)
+                (image_dir / f"{split}.jpg").write_bytes(f"sanitize-{split}".encode())
+                (label_dir / f"{split}.txt").write_text(label, encoding="utf-8")
+            (source / "data.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "train": "../train/images",
+                        "val": "../valid/images",
+                        "names": ["smoke", "fire"],
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            destination = root / "prepared"
+            output_yaml = prepare(source, destination, force=False, sanitize_labels=True)
+            report = validate_dataset(output_yaml)
+            manifest = json.loads(
+                (destination / "preparation_manifest.json").read_text(encoding="utf-8")
+            )
+
+            self.assertTrue(report.ok, report.errors)
+            self.assertEqual(report.splits["train"].negatives, 1)
+            self.assertEqual(report.splits["val"].boxes, 1)
+            self.assertEqual(manifest["correction_count"], 2)
+            self.assertEqual(
+                [item["action"] for item in manifest["corrections"]],
+                ["drop_zero_area", "clip_to_image"],
+            )
 
 
 if __name__ == "__main__":
