@@ -19,7 +19,7 @@ import java.util.concurrent.Executors;
 @Component
 public class TcpServer {
 
-    private final int port;
+    private int port;
     private final TcpSessionManager sessionManager;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
@@ -38,17 +38,26 @@ public class TcpServer {
         this.eventPublisher = eventPublisher;
     }
 
+    public int getPort() {
+        return this.port;
+    }
+
     @EventListener(ApplicationReadyEvent.class)
     public void start() {
-        running = true;
-        executorService.submit(this::listen);
-        log.info("Embedded TCP Server starting on port: {}", port);
+        try {
+            this.serverSocket = new ServerSocket(port);
+            this.port = serverSocket.getLocalPort();
+            log.info("Embedded TCP Server is listening on port: {}", port);
+            running = true;
+            executorService.submit(this::listen);
+        } catch (IOException e) {
+            log.error("Failed to start Embedded TCP Server on port {}: {}", port, e.getMessage());
+            throw new RuntimeException("Failed to bind TCP server socket", e);
+        }
     }
 
     private void listen() {
         try {
-            this.serverSocket = new ServerSocket(port);
-            log.info("Embedded TCP Server is listening on port: {}", port);
             while (running) {
                 Socket socket = serverSocket.accept();
                 TcpClientHandler handler = new TcpClientHandler(socket, sessionManager, objectMapper, eventPublisher);

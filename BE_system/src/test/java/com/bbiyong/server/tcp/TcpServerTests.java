@@ -23,31 +23,33 @@ import org.springframework.beans.factory.annotation.Value;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@org.springframework.context.annotation.Import(TcpServerTests.TestEventListener.class)
+@org.springframework.context.annotation.Import(TcpServerTests.TestEventListenerConfig.class)
 @DirtiesContext
 public class TcpServerTests {
 
     @Autowired
     private TcpSessionManager sessionManager;
 
-    @Value("${bbiyong.tcp.port:9000}")
-    private int tcpPort;
+    @Autowired
+    private TcpServer tcpServer;
 
     private static final BlockingQueue<RobotTelemetryEvent> telemetryEvents = new LinkedBlockingQueue<>();
 
     @org.springframework.boot.test.context.TestConfiguration
-    public static class TestEventListener {
-        @EventListener
-        public void handleTelemetry(RobotTelemetryEvent event) {
-            System.out.println("=== TEST EVENT LISTENER RECEIVED TELEMETRY EVENT: " + event.getPacket() + " ===");
-            telemetryEvents.offer(event);
+    public static class TestEventListenerConfig {
+        @org.springframework.context.annotation.Bean
+        public org.springframework.context.ApplicationListener<RobotTelemetryEvent> telemetryListener() {
+            return event -> {
+                System.out.println("=== TEST EVENT LISTENER RECEIVED TELEMETRY EVENT: " + event.getPacket() + " ===");
+                telemetryEvents.offer(event);
+            };
         }
     }
 
     @Test
     public void testTcpConnectionAndTelemetry() throws Exception {
         // Connect to the TCP Server on configured port
-        Socket clientSocket = new Socket("localhost", tcpPort);
+        Socket clientSocket = new Socket("localhost", tcpServer.getPort());
         
         BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream(), StandardCharsets.UTF_8));
         BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
