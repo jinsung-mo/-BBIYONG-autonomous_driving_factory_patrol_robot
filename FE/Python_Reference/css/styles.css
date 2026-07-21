@@ -1,0 +1,43 @@
+/* 1. Global & Variables */
+:root {
+    --ink: #1c2128; --sub: #68727f; --line: #e3e7ee; --bg: #f2f4f8; --card: #ffffff;
+    --red: #e2483d; --redbg: #fdeceb; --blue: #2f6fd0; --bluebg: #eaf1fb; --green: #1f9d6c;
+    /* Dark Theme Variables */
+    --dk-bg: #0b0d11; --dk-panel: #14171d; --dk-panel2: #1a1e26; --dk-line: #262b34;
+    --dk-ink: #e6e9ef; --dk-sub: #8b93a3; --dk-green: #3ddc97; --dk-amber: #f5a623; --dk-red: #ff5648;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 13px; }
+
+/* 2. Layout Framework */
+.page { display: none; height: calc(100vh - 55px); overflow: hidden; padding: 15px; }
+.page.on { display: block; }
+
+/* 3. Navigation */
+#nav { display: flex; align-items: center; gap: 14px; padding: 10px 18px; background: #101319; color: #e6e9ef; height: 55px; }
+.logo { font-size: 16px; font-weight: 800; }
+.logo b { color: #ff6a5f; }
+.tabs button { padding: 7px 16px; border-radius: 8px; border: 1px solid #2a3040; background: transparent; color: #aeb6c4; cursor: pointer; }
+.tabs button.on { background: #232a38; color: #fff; border-color: #3a445a; }
+
+/* 4. CCTV Page Layout */
+.dashboard-grid-a { display: grid; grid-template-columns: 1fr 350px 300px; gap: 15px; height: 100%; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 15px; }
+
+/* 5. Robot Page Layout */
+#pgB { background: var(--dk-bg); color: var(--dk-ink); }
+.b-grid { display: grid; grid-template-columns: 300px 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 15px; height: 100%; }
+.panel { background: var(--dk-panel); border: 1px solid var(--dk-line); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; }
+
+/* 6. WASD Keyboard Design */
+.keyboard-wasd-layout { display: flex; flex-direction: column; align-items: center; gap: 5px; margin: 15px 0; }
+.wasd-row { display: flex; gap: 5px; }
+.btn-key { width: 60px; height: 60px; border-radius: 8px; border: 2px solid var(--dk-line); background: var(--dk-panel2); color: var(--dk-sub); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+.btn-key:hover, .btn-key.active { border-color: var(--dk-green); color: var(--dk-green); box-shadow: 0 0 10px rgba(61, 220, 151, 0.4); }
+.key-char { font-size: 20px; font-weight: 800; }
+.key-desc { font-size: 10px; }
+
+/* Utility */
+.mono { font-family: Consolas, monospace; }
+.pulse-green { color: var(--green); }
