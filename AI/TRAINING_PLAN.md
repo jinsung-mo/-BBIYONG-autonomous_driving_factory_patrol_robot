@@ -103,7 +103,9 @@ architecture:
 - Seed: `42`.
 - Deterministic mode: enabled.
 - Augmentation policy.
+- Learning-rate schedule, optimizer policy, and warmup.
 - Evaluation code and confidence-threshold selection method.
+- Before-training and final `best.pt` comparison on one fixed split and loader.
 - Hardware and software environment.
 
 Use one explicit batch size that fits all three models. Do not use `batch=-1`
@@ -232,6 +234,11 @@ Current command shape:
   --batch 8 `
   --device 0 `
   --seed 42 `
+  --optimizer auto `
+  --lr-schedule cosine `
+  --warmup-epochs 3 `
+  --comparison-split test `
+  --augment-preset fire-smoke `
   --name baseline-yolo11n
 ```
 
@@ -247,13 +254,17 @@ Exit gate:
 
 Evaluation procedure:
 
-1. Use validation data to sweep confidence thresholds separately for smoke and
+1. The training wrapper may evaluate the initialized two-class model and the
+   final `best.pt` on the same frozen D-Fire test loader for a paired
+   before/after report. This report must not feed training, checkpoint
+   selection, or hyperparameter decisions.
+2. Use validation data to sweep confidence thresholds separately for smoke and
    fire if the runtime permits per-class thresholds.
-2. Select and lock the operating thresholds using the agreed safety objective.
-3. Evaluate `best.pt` once on the frozen D-Fire test split.
-4. Produce per-class metrics, confusion matrices, false positives on negatives,
+3. Select and lock the operating thresholds using the agreed safety objective.
+4. Evaluate the locked candidate on the frozen D-Fire test split.
+5. Produce per-class metrics, confusion matrices, false positives on negatives,
    and a curated failure gallery.
-5. Compare models using the same evaluation implementation and thresholds
+6. Compare models using the same evaluation implementation and thresholds
    selected by the same rule.
 
 Required comparison table:

@@ -129,8 +129,49 @@ Start with one model:
   --model yolo11n.pt `
   --epochs 100 `
   --batch 8 `
-  --device 0
+  --device 0 `
+  --optimizer auto `
+  --lr-schedule cosine `
+  --warmup-epochs 3 `
+  --comparison-split test `
+  --augment-preset fire-smoke
 ```
+
+The default learning-rate policy uses a three-epoch warmup followed by cosine
+decay to `1%` of the initial rate. `optimizer=auto` lets the pinned Ultralytics
+version select its optimizer and starting rate from the run size; keep epochs
+and the common batch size identical across model-comparison runs. Use an
+explicit optimizer such as `MuSGD` when `--lr0` must be applied literally.
+
+The `fire-smoke` augmentation preset applies small rotations/translations,
+moderate scale and color variation, horizontal flips, reduced mosaic, light
+MixUp, and no vertical flips. Available alternatives are `ultralytics` and
+`none`. Freeze one preset for all three baseline models; changing it creates a
+new experiment rather than a continuation of an existing run.
+
+Before the first optimizer step, the wrapper evaluates the initialized
+two-class model on the frozen test split. At training completion it reloads
+`best.pt` and evaluates it with the same test data and loading settings, then
+prints the before/after losses and metrics together. Normal epoch validation,
+early stopping, and `best.pt` selection still use only the validation split.
+The temporary test-loader worker pool is closed after each comparison pass so
+it does not consume system memory throughout training.
+Each run writes:
+
+```text
+before_training.json
+before_after_evaluation.json
+before_after_evaluation.csv
+loss_before_after.png
+```
+
+This is intentionally evaluated after adapting the pretrained model to the
+two-class `smoke`, `fire` head. Evaluating raw COCO class IDs against D-Fire
+would not be meaningful. Do not use test results to tune augmentation,
+learning rate, stopping, or confidence thresholds; doing so would leak the
+holdout into model development. Use `--comparison-split val` for exploratory
+runs where test-set access is inappropriate. The extra baseline evaluation can
+be disabled for a quick memory-only pilot with `--no-eval-before-train`.
 
 Train all project candidates sequentially:
 
@@ -142,12 +183,59 @@ Runs are written under `artifacts/runs/<model-name>/`. Compare each run's
 `results.csv`, confusion matrix, class metrics, inference latency, and failure
 examples. Do not choose a model from training loss alone.
 
+Ultralytics displays live batch progress in the training terminal. At the end
+of every epoch, the training wrapper also prints percentage, elapsed time, ETA,
+losses, precision, recall, and mAP. Each run stores the latest snapshot in
+`progress.json` and append-only history in `progress.jsonl`.
+
+Follow epoch progress from a second PowerShell terminal:
+
+```powershell
+Get-Content .\artifacts\runs\baseline-yolo11n\progress.jsonl -Wait
+```
+
+Read the latest machine-readable snapshot:
+
+```powershell
+Get-Content .\artifacts\runs\baseline-yolo11n\progress.json
+```
+
 Resume an interrupted run with its last checkpoint:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\train.py `
   --resume artifacts\runs\yolo11n\weights\last.pt
 ```
+
+## 4. Test a model with the laptop camera
+
+Run a checkpoint on camera index `0`:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\camera_inference.py `
+  --model yolo11n.pt `
+  --camera 0 `
+  --device auto
+```
+
+Use `Q` or `Esc` to exit and `S` to save an annotated screenshot under
+`artifacts/camera/`. If the camera does not open on Windows, retry with
+`--backend dshow` or `--backend msmf`, or try another camera index.
+
+The official `yolo11n.pt`, `yolo11s.pt`, and `yolo26n.pt` checkpoints use COCO
+classes. They test camera and inference operation but do not detect the project
+classes. After training, pass the run's `best.pt` instead:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\camera_inference.py `
+  --model artifacts\runs\yolo11n\weights\best.pt `
+  --camera 0 `
+  --device 0 `
+  --conf 0.25
+```
+
+The script reads class names from the checkpoint and confirms the expected
+fine-tuned mapping `0: smoke`, `1: fire` when present.
 
 ## Reproducibility notes
 
