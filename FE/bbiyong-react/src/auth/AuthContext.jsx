@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react'
-import { addUser, clearSession, findUser, getSession, setSession, updateUser } from './authStore.js'
+import { clearSession, getSession, setSession } from './authStore.js'
 
 const AuthContext = createContext(null)
 
@@ -9,41 +9,37 @@ export function useAuth() {
   return ctx
 }
 
-// 비밀번호를 제외한 공개 유저 정보
-const publicUser = (u) => (u ? { email: u.email, name: u.name, role: u.role } : null)
+function toUser(session) {
+  if (!session?.username || !session?.accessToken) return null
+  return { email: session.username, name: session.username, role: session.role }
+}
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const s = getSession()
-    return s ? publicUser(findUser(s.email)) : null
-  })
+  const [user, setUser] = useState(() => toUser(getSession()))
 
-  const login = (email, password) => {
-    const u = findUser(email)
-    if (!u || u.password !== password) throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
-    setSession(u.email); setUser(publicUser(u))
-  }
+  const login = async (username, password) => {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
 
-  const signup = ({ email, password, name }) => {
-    const u = addUser({ email, password, name })
-    setSession(u.email); setUser(publicUser(u))
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.')
+      throw new Error('로그인 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+    }
+
+    const result = await response.json()
+    const session = { username, accessToken: result.accessToken, role: result.role }
+    setSession(session)
+    setUser(toUser(session))
   }
 
   const logout = () => { clearSession(); setUser(null) }
-
-  const changePassword = (current, next) => {
-    const s = getSession(); const u = findUser(s?.email)
-    if (!u || u.password !== current) throw new Error('현재 비밀번호가 올바르지 않습니다.')
-    updateUser(u.email, { password: next })
-  }
-
-  const updateProfile = (patch) => {
-    const s = getSession(); const u = updateUser(s.email, patch)
-    setUser(publicUser(u))
-  }
+  const unsupported = () => { throw new Error('이 기능은 아직 지원하지 않습니다.') }
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, changePassword, updateProfile }}>
+    <AuthContext.Provider value={{ user, login, logout, signup: unsupported, changePassword: unsupported, updateProfile: unsupported }}>
       {children}
     </AuthContext.Provider>
   )
