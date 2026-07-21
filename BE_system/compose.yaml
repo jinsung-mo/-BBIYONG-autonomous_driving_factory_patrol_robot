@@ -9,3 +9,12 @@ services:
     volumes:
       - /opt/bbiyong/data:/app/data
     restart: unless-stopped
+
+  web:
+    build:
+      context: ../FE/bbiyong-react
+      dockerfile: Dockerfile
+    container_name: bbiyong-web
+    ports:
+      - "127.0.0.1:8082:80"
+    restart: unless-stopped
