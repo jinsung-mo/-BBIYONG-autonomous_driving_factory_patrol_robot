@@ -1,0 +1,20 @@
+{
+  "name": "bbiyong-react",
+  "private": true,
+  "version": "1.0.0",
+  "description": "삐용 통합 관제 시스템 (CCTV · 순찰 로봇) — React 포팅 버전",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}
