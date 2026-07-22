@@ -25,9 +25,12 @@ public class RobotWebSocketSessionManager {
         if (robotId == null || robotId.trim().isEmpty() || session == null) {
             return;
         }
-        robotSessions.put(robotId, session);
-        sessionIdToRobotId.put(session.getId(), robotId);
-        log.info("Registered WSS session [{}] for robot [{}]", session.getId(), robotId);
+        WebSocketSession existing = robotSessions.get(robotId);
+        if (existing == null || !existing.getId().equals(session.getId())) {
+            robotSessions.put(robotId, session);
+            sessionIdToRobotId.put(session.getId(), robotId);
+            log.info("Registered new WSS session [{}] for robot [{}]", session.getId(), robotId);
+        }
     }
 
     public void unregisterBySessionId(String sessionId) {
