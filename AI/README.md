@@ -183,6 +183,28 @@ Runs are written under `artifacts/runs/<model-name>/`. Compare each run's
 `results.csv`, confusion matrix, class metrics, inference latency, and failure
 examples. Do not choose a model from training loss alone.
 
+After all three runs finish, evaluate their `best.pt` checkpoints on the same
+frozen split and produce a single JSON, CSV, and chart comparison:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_models.py `
+  --models `
+    yolo11n=artifacts\runs\<experiment>\yolo11n\weights\best.pt `
+    yolo11s=artifacts\runs\<experiment>\yolo11s\weights\best.pt `
+    yolo26n=artifacts\runs\<experiment>\yolo26n\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --split test `
+  --device 0 `
+  --output artifacts\evaluations\<experiment>
+```
+
+The output directory must be new so an accepted evaluation cannot be
+overwritten. Each model receives its own Ultralytics plots directory, while
+`comparison.json`, `comparison.csv`, and `comparison.png` summarize aggregate
+and per-class precision, recall, mAP, checkpoint identity, parameter count,
+and timing. Use `--split val` during model development; reserve `test` for the
+frozen final comparison.
+
 Ultralytics displays live batch progress in the training terminal. At the end
 of every epoch, the training wrapper also prints percentage, elapsed time, ETA,
 losses, precision, recall, and mAP. Each run stores the latest snapshot in
