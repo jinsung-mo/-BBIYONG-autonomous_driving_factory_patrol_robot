@@ -293,15 +293,15 @@
 
 ---
 
-## 3. 로봇 ↔ Spring Boot 직접 TCP 소켓 통신 (JSON Lines)
+## 3. 로봇 ↔ Spring Boot WebSocket Secure (WSS) 통신 명세
 
-1단계 MVP 아키텍처에 따라 로봇(Client)과 Spring Boot 메인 서버(Server) 간에 수립되는 TCP 소켓 프로토콜입니다. 각 JSON 메시지는 `\n`(개행 문자)로 구분(JSON Lines)하여 실시간 전송합니다.
+AWS 인프라 보안 및 방화벽 규정을 준수하기 위해 Nginx 리버스 프록시(HTTPS 443 포트)를 거쳐 수립되는 로봇(Client)과 Spring Boot 메인 서버(Server) 간의 WSS 프로토콜입니다. 데이터는 WebSocket Text Frame 형태의 JSON 객체로 실시간 송수신합니다.
 
-* **Spring Boot 기본 대기 포트(Port)**: `9000` (설정 파일로 조정 가능)
+* **Nginx 리버스 프록시 진입 엔드포인트**: `wss://<domain>/ws/robot` (내부적으로 Spring Boot `:8080/ws/robot`으로 포워딩)
 
 ### 3.1 로봇 $\rightarrow$ Spring Boot (Upstream)
 
-#### 1) 주기적 텔레메트리 패킷 (개행 필수)
+#### 1) 주기적 텔레메트리 패킷
 ```json
 {"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 92.5, "status": "AUTO_PATROL"}
 ```
