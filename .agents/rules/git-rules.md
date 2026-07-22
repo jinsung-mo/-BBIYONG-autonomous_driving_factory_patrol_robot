@@ -2,16 +2,20 @@
 
 이 프로젝트에서는 브랜치 생성, 커밋 메시지 작성 및 머지 요청 시 아래 규칙을 무조건 준수하여 자동으로 처리합니다.
 
-## 1. 브랜치 명명 컨벤션 및 4단계 브랜치 위계 구조
-팀 E101은 체계적인 버전 관리(Version Management) 및 스프린트별 릴리스 버저닝을 위해 **`main ➔ dev ➔ 파트별 main ➔ 기능 개발 브랜치`**의 4단계 구조를 사용합니다.
+## 1. 브랜치 명명 컨벤션 및 파트별 dev/main 위계 구조
+팀 E101은 파트별 독립 개발 및 체계적인 버전 관리를 위해 **`main ➔ 파트별 main ➔ 파트별 dev ➔ 기능 개발 브랜치`**의 4단계 구조를 사용합니다.
 
-* **최상위 정식 배포 메인 브랜치 (`main`)**: 최종 정식 배포 및 프로덕션 릴리스 전용 브랜치 (보호됨)
-* **통합 개발 브랜치 (`dev`)**: 파트별 통합 및 버전 관리 전용 브랜치 (보호됨)
-* **파트별 공통 메인 브랜치**:
+* **최상위 정식 배포 메인 브랜치 (`main`)**: 프로젝트 최종 정식 배포 및 프로덕션 릴리스 전용 브랜치 (보호됨)
+* **파트별 메인 브랜치 (Part Main)**:
   * `fe/main` (프론트엔드 파트 메인)
   * `be_system/main` (시스템 백엔드 파트 메인)
   * `be_robot/main` (로봇 백엔드 파트 메인)
   * `ai/main` (AI 파트 메인)
+* **파트별 통합 개발 브랜치 (Part Dev - Version Control)**:
+  * `fe/dev` (프론트엔드 파트 개발 및 버전 통합)
+  * `be_system/dev` (시스템 백엔드 파트 개발 및 버전 통합)
+  * `be_robot/dev` (로봇 파트 개발 및 버전 통합)
+  * `ai/dev` (AI 파트 개발 및 버전 통합)
 * **기능 개발 브랜치 생성 규칙**: `[접두사]/[Jira티켓번호]-[간단한작업명]`
   * *예시*: **`feat/S15P11E101-144-login`**, **`fix/S15P11E101-145-socket-error`**
 
@@ -31,18 +35,18 @@
 * **`test`**: 테스트 코드 작성 및 기능 검증 작업
 
 ## 3. 실무 개발 및 단계별 머지(Merge) 워크플로우
-1. **로컬 작업 시작**: 본인 파트의 공통 메인 브랜치(`be_system/main` 등)를 최신화한 후 기능 브랜치를 분기합니다.
+1. **로컬 작업 시작**: 본인 파트의 통합 개발 브랜치(`be_system/dev` 등)를 최신화한 후 기능 브랜치를 분기합니다.
    ```bash
-   git checkout be_system/main
-   git pull origin be_system/main
+   git checkout be_system/dev
+   git pull origin be_system/dev
    git checkout -b feat/S15P11E101-144-login
    ```
-2. **파트별 머지 (1단계 MR)**:
-   - Source: `feat/S15P11E101-144-login` ➔ Target: **`be_system/main`** (파트 메인)
-3. **통합 개발 브랜치 머지 (2단계 MR - 버전 관리)**:
-   - 각 파트의 `*/main` 브랜치 변경점을 **`dev`** 브랜치로 머지하여 버전 통합 및 통합 테스트 수행
+2. **파트 dev 머지 (1단계 MR - 기능 완료)**:
+   - Source: `feat/S15P11E101-144-login` ➔ Target: **`be_system/dev`** (파트 통합 개발 브랜치)
+3. **파트 main 머지 (2단계 MR - 파트 버전 확정)**:
+   - 파트원들의 기능들이 `be_system/dev`에 모이면 리뷰 후 **`be_system/main`**으로 병합하여 안정화 버전을 확정합니다.
 4. **최종 정식 배포 (3단계 MR - Release)**:
-   - 스프린트 완료 및 배포 시점에 **`dev`** 브랜치를 **`main`** 브랜치로 병합하고 정식 릴리스 버전을 태깅합니다.
+   - 각 파트의 `*/main` 브랜치들을 최상위 **`main`** 브랜치로 최종 병합하여 정식 릴리스합니다.
 
 ## 4. 작업 완료 후 브랜치 자동 정리 규칙 (Branch Cleanup Rule)
 * **MR 머지 시 원격 브랜치 삭제**: GitLab MR 생성 시 *"Delete source branch when merge request is accepted"* 옵션을 기본 체크하여 병합 성공 즉시 원격 임시 브랜치를 자동 삭제합니다.
