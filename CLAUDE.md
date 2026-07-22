@@ -7,10 +7,10 @@ This is the E101 BBIYONG (삐용) repository, containing FE, BE system, BE robot
 When performing work in this repository, you MUST follow these specific conventions.
 
 ### 1. Jira Automation Conventions (Epic ➔ Story ➔ Task)
-* **Structure**: Epic ➔ Story ➔ Task. **Do NOT use Jira Sub-tasks.**
+* **Structure**: Epic ➔ Story ➔ Task 3-tier hierarchy. **Do NOT use Jira Sub-tasks.**
+* **Story**: High-level domain features linked under an **Epic**.
+* **Task**: Individual developer tasks of 1-2 days linked under a **Story**.
 * **Title Format**: `[Type][Module] Summary` (e.g. `[Feat][BE] 회원가입 API 구현`, `[Fix][FE] 버튼 클릭 이벤트 미동작 수정`, `[Docs][BE] 관제 서버 API 명세서 작성`).
-* **Story**: High-level domain features (e.g. `회원 관리`, `로봇 제어`).
-* **Task**: Individual developer tasks of 1-2 days (e.g. `로그인 API 구현`).
 * **Due Date**: Automatically set to the upcoming Friday.
 * **Format**: All issue descriptions must strictly follow this template (emoticons removed):
   ```markdown
