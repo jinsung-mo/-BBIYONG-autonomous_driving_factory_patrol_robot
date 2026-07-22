@@ -11,7 +11,7 @@ agent handoff plan is documented in [TRAINING_PLAN.md](TRAINING_PLAN.md).
 
 - Task: object detection
 - Classes (D-Fire native order): `0: smoke`, `1: fire`
-- Candidate checkpoints: `yolo11n.pt`, `yolo11s.pt`, `yolo26n.pt`
+- Candidate checkpoints: `yolo11n.pt`, `yolo11s.pt`, `yolo26n.pt`, `yolo26s.pt`
 - Primary selection metric: validation `mAP50-95`
 - Deployment target: Jetson Orin Nano through ONNX and TensorRT
 - Primary dataset: D-Fire, using its published train/validation/test split
