@@ -21,14 +21,36 @@ When performing work in this repository, you MUST follow these specific conventi
   3. **완료 기준 (Definition of Done)**
      - ...
   ```
+# CLAUDE.md - Project Conventions for Claude
+
+## Project Context
+This is the E101 BBIYONG (삐용) repository, containing FE, BE system, BE robot, and AI components.
+
+## AI Assistant Rules & Conventions
+When performing work in this repository, you MUST follow these specific conventions.
+
+### 1. Jira Automation Conventions (Epic ➔ Story ➔ Task)
+* **Structure**: Epic ➔ Story ➔ Task 3-tier hierarchy. **Do NOT use Jira Sub-tasks.**
+* **Story**: High-level domain features linked under an **Epic**.
+* **Task**: Individual developer tasks of 1-2 days linked under a **Story**.
+* **Title Format**: `[Type][Module] Summary` (e.g. `[Feat][BE] 회원가입 API 구현`, `[Fix][FE] 버튼 클릭 이벤트 미동작 수정`, `[Docs][BE] 관제 서버 API 명세서 작성`).
+* **Due Date**: Automatically set to the upcoming Friday.
+* **Format**: All issue descriptions must strictly follow this template (emoticons removed):
+  ```markdown
+  1. **개요 (Context)**
+     - ...
+  2. **작업 상세 내용 (To-Do)**
+     - ...
+  3. **완료 기준 (Definition of Done)**
+     - ...
+  ```
 * **Configuration**: Read `.ai_jira_config.json` or `.gemini_jira_config.json` in the root folder for URL, email, api token, and project key.
 
 ### 2. Git & Branching Conventions
-* **Development Target Branches**: `fe/main`, `be_system/main`, `be_robot/main`, `ai/main`
-* **Production Release Branch**: `main`
+* **Hierarchy**: `main` (Production Release) ➔ `dev` (Version Control & Integration) ➔ `fe/main`, `be_system/main`, `be_robot/main`, `ai/main` (Part Mains) ➔ `feat/S15P11E101-XXX-name` (Feature Branches).
 * **Branch Names**: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-144-login`)
 * **Commit Messages**: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-144] feat: [BE] 회원가입 API 구현`)
+* **MR flow**: Always target the part main branch (e.g. `be_system/main`) for feature branches, then merge part mains to `dev` for version control integration.
 * **Branch Cleanup**: After pushing code and completing MR creation, switch back to the target main branch (`be_system/main` etc.), delete the temporary local feature branch (`git branch -D [branch-name]`), and prune remote branches (`git fetch -p`) to keep the repo clean.
-* **MR flow**: Always target the part main branch (e.g. `be_system/main`) rather than release `main`.
 
 For more details on team automation, refer to [AI.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/AI.md).
