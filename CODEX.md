@@ -12,7 +12,8 @@ This repository (E101 BBIYONG / 삐용) follows strict automation rules for Jira
   * **Task**: Individual developer task (1-2 days) linked under a **Story**.
   * **Do NOT use Jira Sub-tasks.**
 * **Title Format**: `[Type][Module] Summary` (e.g. `[Feat][BE] Spring Boot WSS 핸들러 구현`, `[Fix][FE] 대시보드 소켓 오류 수정`).
-* **Due Date**: Automatically set to the upcoming Friday.
+* **Due Date**: Set to upcoming Friday of current week for Story & Task, and 2026-08-07 for Epic.
+* **Assignee**: Automatically set to current user (`accountId` fetched from `GET /rest/api/2/myself`).
 * **Description Template**:
   ```markdown
   1. **개요 (Context)**
@@ -36,6 +37,7 @@ This repository (E101 BBIYONG / 삐용) follows strict automation rules for Jira
 * **Commit Message Format**: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-281] feat: [BE] Spring Boot WSS 핸들러 구현`)
 * **MR Flow**: Always target the part main branch (e.g. `be_system/main`), NOT the release `main` branch.
 * **Branch Cleanup Rule**: After pushing code and completing MR creation, switch back to the target main branch (`be_system/main` etc.), delete the temporary local feature branch (`git branch -D [branch-name]`), and prune remote branches (`git fetch -p`) to keep local and remote repositories clean.
+* **Mandatory MR Description Output**: Whenever pushing code or guiding MR creation, the AI agent MUST automatically generate and output a fully populated MR description markdown block (with Jira Ticket URL, Context, To-Do items, Definition of Done, and Reviewer Notes, WITHOUT checkboxes) in the final response.
 
 ---
 
