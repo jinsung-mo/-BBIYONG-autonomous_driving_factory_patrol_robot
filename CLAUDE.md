@@ -28,6 +28,7 @@ When performing work in this repository, you MUST follow these specific conventi
 * **Production Release Branch**: `main`
 * **Branch Names**: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-144-login`)
 * **Commit Messages**: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-144] feat: [BE] 회원가입 API 구현`)
+* **Branch Cleanup**: After pushing code and completing MR creation, switch back to the target main branch (`be_system/main` etc.), delete the temporary local feature branch (`git branch -D [branch-name]`), and prune remote branches (`git fetch -p`) to keep the repo clean.
 * **MR flow**: Always target the part main branch (e.g. `be_system/main`) rather than release `main`.
 
 For more details on team automation, refer to [AI.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/AI.md).

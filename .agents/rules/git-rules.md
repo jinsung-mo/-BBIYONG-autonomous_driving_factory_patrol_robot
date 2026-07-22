@@ -40,6 +40,10 @@
   - 웹페이지에 연동된 템플릿의 체크리스트를 채우고 파트원 승인을 얻어 병합합니다.
 * **최종 배포 통합**: 스프린트가 끝나거나 배포 시점에 각 파트의 `*/main` 브랜치들을 최종 상위 브랜치인 **`main`** 브랜치로 최종 병합합니다.
 
+## 4. 작업 완료 후 브랜치 자동 정리 규칙 (Branch Cleanup Rule)
+* **MR 머지 시 원격 브랜치 삭제**: GitLab MR 생성 시 *"Delete source branch when merge request is accepted"* 옵션을 기본 체크하여 병합 성공 즉시 원격 임시 브랜치를 자동 삭제합니다.
+* **푸시/머지 완료 후 로컬 브랜치 삭제**: 푸시 및 MR 생성을 완료하고 파트 메인 브랜치(`be_system/main` 등)로 복귀한 후, 사용을 마친 로컬 임시 브랜치는 `git branch -D [branch-name]` 명령어로 자동 삭제하고 `git fetch -p`를 수행하여 로컬/원격 브랜치 목록을 항상 깨끗하게 유지합니다.
+
 ## 4. GitLab Merge Request 본문 관련 티켓 자동화 (Jira Link Auto-Fill)
 * AI 에이전트는 사용자를 도와 GitLab Merge Request(MR)의 본문을 작성하거나 스크립트를 빌드할 때, **현재 작업 중인 Git 브랜치명**에서 지라 티켓 번호(예: `S15P11E101-144`)를 자동으로 추출해야 합니다.
 * 추출한 티켓 번호를 이용하여 지라 링크(`[S15P11E101-144](https://ssafy.atlassian.net/browse/S15P11E101-144)`)를 조립한 뒤, MR 본문 템플릿의 **`### 관련 Jira 티켓`** 섹션 바로 아래에 자동으로 채워 넣어야 합니다.
