@@ -35,5 +35,13 @@ pipeline {
                 archiveArtifacts artifacts: 'FE/bbiyong-react/dist/**', fingerprint: true
             }
         }
+
+        stage('Deploy dashboard') {
+            steps {
+                dir('FE/bbiyong-react') {
+                    sh 'docker compose up -d --build web'
+                }
+            }
+        }
     }
 }
