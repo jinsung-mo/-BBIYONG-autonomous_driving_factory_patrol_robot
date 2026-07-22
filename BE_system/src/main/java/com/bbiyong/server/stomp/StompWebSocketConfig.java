@@ -20,8 +20,13 @@ public class StompWebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Web Observation Dashboard STOMP WSS endpoint (supporting both Korean and ASCII paths)
+        // Raw WebSocket endpoint for browser / mobile clients
         registry.addEndpoint("/ws-관제", "/ws/control")
-                .setAllowedOrigins("*");
+                .setAllowedOriginPatterns("*");
+
+        // SockJS fallback endpoint for web browser compatibility
+        registry.addEndpoint("/ws-관제", "/ws/control")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
     }
 }
