@@ -31,11 +31,10 @@ This repository (E101 BBIYONG / 삐용) follows strict automation rules for Jira
 
 ## 2. Git & Branching Conventions
 
-* **Development Target Branches**: `fe/main`, `be_system/main`, `be_robot/main`, `ai/main`
-* **Production Release Branch**: `main`
+* **Hierarchy**: `main` (Production Release) ➔ `dev` (Version Control & Integration) ➔ `fe/main`, `be_system/main`, `be_robot/main`, `ai/main` (Part Mains) ➔ `feat/S15P11E101-XXX-name` (Feature Branches).
 * **Branch Name Format**: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-281-wss-handler`)
 * **Commit Message Format**: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-281] feat: [BE] Spring Boot WSS 핸들러 구현`)
-* **MR Flow**: Always target the part main branch (e.g. `be_system/main`), NOT the release `main` branch.
+* **MR Flow**: Target part main branch (e.g. `be_system/main`) for feature branches, then merge part mains to `dev` for version control integration.
 * **Branch Cleanup Rule**: After pushing code and completing MR creation, switch back to the target main branch (`be_system/main` etc.), delete the temporary local feature branch (`git branch -D [branch-name]`), and prune remote branches (`git fetch -p`) to keep local and remote repositories clean.
 * **Mandatory MR Description Output**: Whenever pushing code or guiding MR creation, the AI agent MUST automatically generate and output a fully populated MR description markdown block (with Jira Ticket URL, Context, To-Do items, Definition of Done, and Reviewer Notes, WITHOUT checkboxes) in the final response.
 

@@ -2,13 +2,16 @@
 
 이 프로젝트에서는 브랜치 생성, 커밋 메시지 작성 및 머지 요청 시 아래 규칙을 무조건 준수하여 자동으로 처리합니다.
 
-## 1. 브랜치 명명 컨벤션 (Branch Name)
-* **파트별 공통 메인 브랜치 (보호됨)**: 
-  * `fe/main` (프론트엔드)
-  * `be_system/main` (시스템 백엔드)
-  * `be_robot/main` (로봇 백엔드)
-  * `ai/main` (AI 파트)
-  * `main` (통합 배포 메인 브랜치)
+## 1. 브랜치 명명 컨벤션 및 4단계 브랜치 위계 구조
+팀 E101은 체계적인 버전 관리(Version Management) 및 스프린트별 릴리스 버저닝을 위해 **`main ➔ dev ➔ 파트별 main ➔ 기능 개발 브랜치`**의 4단계 구조를 사용합니다.
+
+* **최상위 정식 배포 메인 브랜치 (`main`)**: 최종 정식 배포 및 프로덕션 릴리스 전용 브랜치 (보호됨)
+* **통합 개발 브랜치 (`dev`)**: 파트별 통합 및 버전 관리 전용 브랜치 (보호됨)
+* **파트별 공통 메인 브랜치**:
+  * `fe/main` (프론트엔드 파트 메인)
+  * `be_system/main` (시스템 백엔드 파트 메인)
+  * `be_robot/main` (로봇 백엔드 파트 메인)
+  * `ai/main` (AI 파트 메인)
 * **기능 개발 브랜치 생성 규칙**: `[접두사]/[Jira티켓번호]-[간단한작업명]`
   * *예시*: **`feat/S15P11E101-144-login`**, **`fix/S15P11E101-145-socket-error`**
 
@@ -27,18 +30,19 @@
 * **`chore`**: 의존성 라이브러리 추가, 빌드 설정 및 단순 인프라 설정 수정
 * **`test`**: 테스트 코드 작성 및 기능 검증 작업
 
-## 3. 실무 개발 및 머지(Merge) 워크플로우
-* **로컬 작업 시작**: 반드시 본인 파트의 공통 메인 브랜치를 최신화한 후 분기합니다.
-  ```bash
-  git checkout be_system/main
-  git pull origin be_system/main
-  git checkout -b feat/S15P11E101-144-login
-  ```
-* **Merge Request (Target 브랜치 주의)**:
-  - Source: `feat/S15P11E101-144-login`
-  - Target: **`be_system/main`** (최종 `main`이 아닌, 본인 파트의 브랜치로 머지합니다!)
-  - 웹페이지에 연동된 템플릿의 체크리스트를 채우고 파트원 승인을 얻어 병합합니다.
-* **최종 배포 통합**: 스프린트가 끝나거나 배포 시점에 각 파트의 `*/main` 브랜치들을 최종 상위 브랜치인 **`main`** 브랜치로 최종 병합합니다.
+## 3. 실무 개발 및 단계별 머지(Merge) 워크플로우
+1. **로컬 작업 시작**: 본인 파트의 공통 메인 브랜치(`be_system/main` 등)를 최신화한 후 기능 브랜치를 분기합니다.
+   ```bash
+   git checkout be_system/main
+   git pull origin be_system/main
+   git checkout -b feat/S15P11E101-144-login
+   ```
+2. **파트별 머지 (1단계 MR)**:
+   - Source: `feat/S15P11E101-144-login` ➔ Target: **`be_system/main`** (파트 메인)
+3. **통합 개발 브랜치 머지 (2단계 MR - 버전 관리)**:
+   - 각 파트의 `*/main` 브랜치 변경점을 **`dev`** 브랜치로 머지하여 버전 통합 및 통합 테스트 수행
+4. **최종 정식 배포 (3단계 MR - Release)**:
+   - 스프린트 완료 및 배포 시점에 **`dev`** 브랜치를 **`main`** 브랜치로 병합하고 정식 릴리스 버전을 태깅합니다.
 
 ## 4. 작업 완료 후 브랜치 자동 정리 규칙 (Branch Cleanup Rule)
 * **MR 머지 시 원격 브랜치 삭제**: GitLab MR 생성 시 *"Delete source branch when merge request is accepted"* 옵션을 기본 체크하여 병합 성공 즉시 원격 임시 브랜치를 자동 삭제합니다.
