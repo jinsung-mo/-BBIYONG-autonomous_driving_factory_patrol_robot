@@ -24,13 +24,18 @@
 4. **레이블 (Labels)**: 
    * 파트(예: `FE`, `BE`, `AI`, `Chore`, `Feature` 등)에 맞는 태그들을 `"labels": ["FE", "Chore"]` 형태의 문자열 리스트로 매핑합니다.
 
-## 4. Jira 티켓 구조 및 위계 (lv2 Epic - lv1 Story - lv0 Task 3단계 구조)
-* 지라 티켓 설계 및 생성 시 **`Epic (lv2) ➔ Story (lv1) ➔ Task (lv0)`**의 3단계 위계를 철저히 준수합니다.
-* **lv2 - 에픽 (Epic)**: 최상위 위계. 기존에 존재하는 에픽을 찾아 연결합니다.
-* **lv1 - 스토리 (Story)**: 중간 위계. 사용자 관점의 큰 서비스/기능 단위로 작성하며, 반드시 상위 Epic(lv2)과 연결됩니다.
-* **lv0 - 태스크 (Task)**: 최하위 위계. 실제 구현 및 상세 개발 태스크 단위로 작게 쪼개어 작성하며(1~2일 내 완료 가능 수준), **반드시 상위 Story(lv1)에 연결**되어야 합니다.
-* **스토리 없는 태스크 생성 금지 및 상위 스토리 자동 생성**:
-  * Task(lv0) 생성 시 매핑할 상위 Story(lv1)가 존재하지 않으면, **반드시 해당 Task를 포괄하는 상위 Story(lv1)를 먼저 생성(또는 발급)한 후 그 Story 하위에 Task를 연결**합니다. Task가 Story를 거치지 않고 Epic에 직접 연결되면 안 됩니다.
+## 4. Jira 티켓 구조 및 위계 (Epic ➔ Story / Task)
+
+> ⚠️ **이 프로젝트 Jira 인스턴스의 실제 위계 (반드시 숙지)**
+> 이 Jira는 **에픽(Epic)만 HierarchyLevel 1**이고, **스토리(Story)·작업(Task)·버그(Bug)는 모두 HierarchyLevel 0(동일 레벨, 형제 관계)** 입니다.
+> 따라서 **Task의 `parent`(상위 업무) 필드에는 오직 Epic만 지정할 수 있으며, Story를 Task의 상위로 지정하는 것은 불가능**합니다(API가 `유효한 상위 업무를 선택하세요` 에러 반환). 별도의 커스텀 계층을 Jira 관리자가 추가하지 않는 한, "스토리 하위에 태스크" 구조는 만들 수 없습니다.
+
+* **에픽 (Epic)**: 최상위 위계. 기존에 존재하는 에픽을 찾아 연결합니다.
+* **스토리 (Story)**: 사용자 관점의 큰 서비스/기능 단위. `parent` 필드를 **상위 Epic**으로 설정합니다.
+* **태스크 (Task)**: 1~2일 내 완료 가능한 상세 개발 단위. `parent` 필드를 **상위 Epic**으로 설정합니다. (Story가 아님)
+* **Task ↔ Story 연관 방법**: Task를 논리적으로 특정 Story에 묶으려면 **이슈 링크(Issue Link, 타입 `Relates`)** 를 사용합니다. `parent = Story`는 절대 시도하지 않습니다.
+  * (참고) 이슈 링크 생성: `POST {jira_url}/rest/api/2/issueLink` — `{"type":{"name":"Relates"},"inwardIssue":{"key":"태스크키"},"outwardIssue":{"key":"스토리키"}}`
+* **스토리 그룹핑 유지**: Task는 여전히 논리적으로 하나의 Story에 속해야 합니다. 매핑할 Story가 없으면 **먼저 Story를 생성(parent = Epic)한 뒤, Task를 생성(parent = Epic)하고 그 Story에 `Relates` 링크로 연결**합니다.
 * **하위 작업 (Sub-task) 사용 금지**: 복잡성을 방지하고 일관된 흐름을 유지하기 위해 Jira의 '하위 작업(Sub-task)' 티켓 타입은 절대로 사용하지 않습니다. 모든 하위 개발 항목은 개별 `Task` 타입으로 생성합니다.
 
 ## 5. Jira 티켓 제목(Summary) 규칙

@@ -40,13 +40,15 @@ if (-not $mcpConfig.PSObject.Properties['mcpServers']) {
 }
 
 # 4. Jira MCP 설정 생성
+# jira_url(예: https://ssafy.atlassian.net)에서 사이트 이름(예: ssafy) 추출
+$siteName = ([Uri]$projectConfig.jira_url).Host -replace '\.atlassian\.net$', ''
 $jiraServerConfig = [PSCustomObject]@{
     command = "npx"
-    args = @("-y", "@modelcontextprotocol/server-jira")
+    args = @("-y", "@aashari/mcp-server-atlassian-jira")
     env = [PSCustomObject]@{
-        JIRA_API_TOKEN = $projectConfig.jira_api_token
-        JIRA_EMAIL = $projectConfig.jira_email
-        JIRA_URL = $projectConfig.jira_url
+        ATLASSIAN_SITE_NAME  = $siteName
+        ATLASSIAN_USER_EMAIL = $projectConfig.jira_email
+        ATLASSIAN_API_TOKEN  = $projectConfig.jira_api_token
     }
 }
 
