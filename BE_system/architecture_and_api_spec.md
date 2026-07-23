@@ -108,6 +108,49 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 
 ---
 
+### 1.4 로봇 순찰 영상 저장 및 아카이브 설계 (Video Recording & Archive) — 설계안
+
+> 기존 명세는 실시간 영상 **릴레이(전송)** 만 정의했고, 영상 **저장(녹화/아카이브)** 은 정의되지 않았다. 본 절에서 저장 정책·저장소·책임 주체를 정의한다. (팀 리뷰 후 확정)
+
+#### 1.4.1 설계 원칙
+1. **원본 영상은 RDBMS(MySQL)에 저장하지 않는다.** 대용량 바이너리는 파일시스템/오브젝트 스토리지에 저장하고, DB에는 **메타데이터(경로·시각·연관 이벤트)** 만 기록한다.
+2. **Spring Boot 메인 서버는 영상 바이너리를 처리하지 않는다.** 영상 CPU/대역폭 부하를 분리(1.3절 및 3장 로드맵과 일관). 녹화·업로드는 **로봇(Jetson) 또는 FastAPI 미디어 게이트웨이**가 담당한다.
+3. **이벤트 기반 클립 저장을 우선한다.** 상시 녹화 대신 화재/과열 감지 전후 N초 클립을 우선 보관(증거 가치·저장 비용 최적). 상시 녹화는 옵션으로 확장한다.
+
+#### 1.4.2 저장소 전략
+| 단계 | 영상 실물(Binary) | 메타데이터 |
+| :--- | :--- | :--- |
+| **MVP (Phase 1)** | 서버 로컬 파일시스템 (`/data/videos/...`) | MySQL `video_clips` 테이블 |
+| **고도화 (Phase 2)** | AWS S3 버킷 | MySQL `video_clips` (S3 URL/Key 저장) |
+
+#### 1.4.3 책임 주체 및 데이터 흐름
+
+```mermaid
+flowchart TD
+    Cam[로봇 카메라 / 스트림] -->|녹화| Recorder[녹화 주체<br/>로봇 or FastAPI 게이트웨이]
+    Recorder -->|1. 영상 파일 업로드| Storage[(스토리지<br/>파일시스템 / S3)]
+    Recorder -->|2. POST /api/videos<br/>메타데이터 등록| Spring[Spring Boot]
+    Spring -->|3. 메타데이터 저장<br/>event_logs FK 연관| DB[(MySQL<br/>video_clips)]
+
+    Web[웹 대시보드] -->|4. GET /api/videos,<br/>GET /api/events/&#123;id&#125;/video| Spring
+    Spring -->|5. 재생 URL 반환| Web
+    Web -.->|6. 재생 URL로 직접 스트리밍| Storage
+
+    classDef backend fill:#d1e8ff,stroke:#333,color:#333
+    classDef store fill:#e1d5e7,stroke:#333,color:#333
+    class Spring backend
+    class Storage,DB store
+```
+
+* **녹화 주체**: 로봇(Jetson)이 자체 녹화 후 업로드하거나, FastAPI 게이트웨이가 스트림을 수신하여 녹화한다. **Spring Boot는 녹화를 담당하지 않는다.**
+* **메타데이터 등록**: 파일 업로드 완료 후 녹화 주체가 `POST /api/videos`를 호출한다. Spring Boot는 메타데이터를 저장하고 관련 이벤트(`event_logs`)와 FK로 연관한다.
+* **재생**: 대시보드는 조회 API로 받은 재생 URL을 이용해 **스토리지에서 직접 스트리밍**한다(Spring Boot를 경유하지 않음).
+
+#### 1.4.4 실시간 라이브 스트리밍(참고 — 저장과 별개 경로)
+실시간 라이브 뷰는 저장 경로와 분리한다. MVP는 **MJPEG(HTTP)**, 고도화는 **WebRTC / FastAPI 게이트웨이**로 처리한다. **Spring Boot 제어 채널(STOMP/WSS)로는 영상 프레임을 전송하지 않는다.**
+
+---
+
 ## 2. 초기 API 및 통신 프로토콜 명세
 
 ### 2.1 오린카 $\leftrightarrow$ Spring Boot (WebSocket Secure - WSS JSON Protocol)

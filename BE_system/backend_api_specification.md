@@ -234,6 +234,115 @@
 
 ---
 
+### 1.6 영상 아카이브 API (Video Archive) — 설계안
+
+로봇 순찰 영상의 **저장(녹화/아카이브)** 을 위한 API입니다. 설계 원칙은 아키텍처 문서 `architecture_and_api_spec.md` 1.4절을 따릅니다.
+
+* **원본 영상은 DB에 저장하지 않으며**, 파일시스템(MVP) 또는 S3(고도화)에 저장하고 본 API는 **메타데이터만** 다룹니다.
+* 녹화·업로드는 **로봇 또는 FastAPI 게이트웨이**가 담당하며, 업로드 완료 후 `POST /api/videos`로 메타데이터를 등록합니다.
+
+#### 데이터 모델: `video_clips` 테이블
+
+```sql
+CREATE TABLE video_clips (
+    id               BIGINT       NOT NULL AUTO_INCREMENT,
+    robot_id         VARCHAR(64)  NOT NULL,               -- 촬영 로봇 ID
+    event_id         BIGINT       NULL,                   -- 연관 이벤트(event_logs) FK, nullable
+    clip_type        VARCHAR(32)  NOT NULL,               -- EVENT / PATROL / MANUAL
+    storage_type     VARCHAR(16)  NOT NULL,               -- FILESYSTEM / S3
+    file_path        VARCHAR(512) NOT NULL,               -- 파일 경로 또는 S3 Key/URL
+    thumbnail_path   VARCHAR(512) NULL,                   -- 썸네일 경로(선택)
+    duration_sec     INT          NULL,                   -- 영상 길이(초)
+    file_size_bytes  BIGINT       NULL,
+    started_at       DATETIME     NOT NULL,               -- 촬영 시작 시각
+    ended_at         DATETIME     NULL,                   -- 촬영 종료 시각
+    created_at       DATETIME     NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_video_event FOREIGN KEY (event_id) REFERENCES event_logs (event_id)
+);
+```
+* `clip_type`: `EVENT`(화재/과열 감지 클립), `PATROL`(순찰 상시 녹화), `MANUAL`(수동 조종 중 녹화)
+* `storage_type`: `FILESYSTEM`(MVP), `S3`(고도화)
+
+#### [POST] `/api/videos`
+* **설명**: 녹화 주체(로봇/게이트웨이)가 영상 파일 업로드 완료 후, 해당 클립의 메타데이터를 등록합니다. (서버 간 내부 호출 — 별도 내부 인증 키/토큰 권장)
+* **Request Body**:
+```json
+{
+  "robotId": "orinka_01",
+  "eventId": 1,
+  "clipType": "EVENT",
+  "storageType": "S3",
+  "filePath": "s3://bbiyong-videos/orinka_01/2026-07-18/evt_1.mp4",
+  "thumbnailPath": "s3://bbiyong-videos/orinka_01/2026-07-18/evt_1.jpg",
+  "durationSec": 30,
+  "fileSizeBytes": 5242880,
+  "startedAt": "2026-07-18T19:30:00Z",
+  "endedAt": "2026-07-18T19:30:30Z"
+}
+```
+* **Response Body (201 Created)**:
+```json
+{
+  "id": 12,
+  "robotId": "orinka_01",
+  "eventId": 1,
+  "status": "REGISTERED",
+  "createdAt": "2026-07-18T19:30:35Z"
+}
+```
+
+#### [GET] `/api/videos`
+* **설명**: 저장된 영상 클립 목록을 필터·페이징하여 조회합니다.
+* **Query Parameters**:
+  * `robotId` (optional)
+  * `clipType` (optional: `EVENT`, `PATROL`, `MANUAL`)
+  * `from`, `to` (optional: ISO-8601, `started_at` 기준 범위)
+  * `page` (default: 0), `size` (default: 10)
+* **Response Body (200 OK)**:
+```json
+{
+  "content": [
+    {
+      "id": 12,
+      "robotId": "orinka_01",
+      "eventId": 1,
+      "clipType": "EVENT",
+      "durationSec": 30,
+      "thumbnailUrl": "https://cdn.bbiyong.io/videos/orinka_01/2026-07-18/evt_1.jpg",
+      "startedAt": "2026-07-18T19:30:00Z"
+    }
+  ],
+  "pageable": { "pageNumber": 0, "pageSize": 10 },
+  "totalPages": 1,
+  "totalElements": 1
+}
+```
+
+#### [GET] `/api/videos/{id}`
+* **설명**: 특정 영상 클립의 상세 정보와 **재생 URL**을 조회합니다. (S3의 경우 서명된 임시 URL(Presigned URL)을 발급하여 반환하는 방식을 권장)
+* **Response Body (200 OK)**:
+```json
+{
+  "id": 12,
+  "robotId": "orinka_01",
+  "eventId": 1,
+  "clipType": "EVENT",
+  "durationSec": 30,
+  "fileSizeBytes": 5242880,
+  "playbackUrl": "https://cdn.bbiyong.io/videos/orinka_01/2026-07-18/evt_1.mp4?token=...",
+  "thumbnailUrl": "https://cdn.bbiyong.io/videos/orinka_01/2026-07-18/evt_1.jpg",
+  "startedAt": "2026-07-18T19:30:00Z",
+  "endedAt": "2026-07-18T19:30:30Z"
+}
+```
+
+#### [GET] `/api/events/{eventId}/video`
+* **설명**: 특정 화재/과열 이벤트에 연관된 영상 클립을 조회합니다. (대시보드 경보 상세 화면에서 "현장 영상 보기"에 사용)
+* **Response Body (200 OK)**: `GET /api/videos/{id}`와 동일한 형태. 연관 영상이 없으면 `404 Not Found`.
+
+---
+
 ## 2. Web Frontend ↔ Spring Boot WebSocket 명세
 
 실시간 대시보드 갱신 및 경보 푸시를 담당하며, STOMP 프로토콜을 사용합니다.
