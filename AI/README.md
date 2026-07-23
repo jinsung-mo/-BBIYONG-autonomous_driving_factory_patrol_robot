@@ -259,6 +259,74 @@ classes. After training, pass the run's `best.pt` instead:
 The script reads class names from the checkpoint and confirms the expected
 fine-tuned mapping `0: smoke`, `1: fire` when present.
 
+## 5. Tune and use the YOLO11n post-processing pipeline
+
+Tune class-specific confidence thresholds on the validation split. Smoke uses
+F2 and fire uses F1.5 by default so missed detections cost more than false
+positives during image-level threshold selection:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\tune_postprocessing.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --device 0 `
+  --batch 16 `
+  --smoke-beta 2.0 `
+  --fire-beta 1.5 `
+  --output artifacts\postprocessing\yolo11n-validation
+```
+
+The tuner performs inference once at a permissive candidate threshold, sweeps
+fixed operating thresholds separately for smoke and fire, and writes
+`threshold_sweep.csv` plus `postprocess_config.json`. It accepts only `val` as
+the tuning split to prevent accidental test-set leakage.
+
+Use the generated configuration with live YOLO11n inference:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\camera_inference.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --postprocess-config artifacts\postprocessing\yolo11n-validation\postprocess_config.json `
+  --camera 0 `
+  --device 0 `
+  --half
+```
+
+The runtime uses the lower class-specific hold thresholds after activation and
+requires three positive frames in a five-frame window before raising an alarm.
+It clears an alarm after three consecutive misses. This temporal policy rejects
+isolated false positives while allowing permissive image thresholds for recall.
+Tune the window, hit count, clearing delay, and optional spatial IoU using
+representative validation videos before accepting them for deployment. Evaluate
+the locked configuration once on held-out test images and factory videos.
+
+### Optional YOLO11n to YOLO11s cascade
+
+Use YOLO11n on every frame and invoke YOLO11s only for ambiguous YOLO11n
+detections or every fifth frame. Agreeing same-class boxes are confidence-
+weighted and fused; unsupported ambiguous boxes are removed. High-confidence
+YOLO11s-only boxes can recover primary-model misses. The fused detections still
+pass through the temporal policy above:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\camera_inference.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --verifier-model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --postprocess-config artifacts\postprocessing\yolo11n-validation-20260723\postprocess_config.json `
+  --verify-low 0.15 `
+  --verify-high 0.60 `
+  --agreement-iou 0.30 `
+  --verifier-only-conf 0.50 `
+  --verifier-interval 5 `
+  --camera 0 `
+  --device 0 `
+  --half
+```
+
+The preview reports when the verifier runs, its running invocation percentage,
+and the combined inference time. The cascade values are initial operating
+defaults; sweep them on validation images and videos before final acceptance.
+
 ## Reproducibility notes
 
 - Keep the downloaded D-Fire archive immutable; generate a new derived version
