@@ -57,8 +57,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--half", action="store_true", help="Use FP16 inference on CUDA")
     parser.add_argument("--verify-low", type=float, default=0.15)
     parser.add_argument("--verify-high", type=float, default=0.60)
-    parser.add_argument("--agreement-iou", type=float, default=0.30)
-    parser.add_argument("--verifier-only-conf", type=float, default=0.50)
+    parser.add_argument("--primary-conf", type=float, default=0.25)
+    parser.add_argument("--agreement-iou", type=float, default=0.50)
+    parser.add_argument("--verifier-only-conf", type=float, default=0.75)
+    parser.add_argument("--final-nms-iou", type=float, default=0.50)
     parser.add_argument("--verifier-interval", type=int, default=5)
     parser.add_argument("--display-width", type=int, default=960)
     parser.add_argument("--display-height", type=int, default=720)
@@ -252,8 +254,10 @@ def main() -> int:
         cascade_config = CascadeConfig(
             verify_low=args.verify_low,
             verify_high=args.verify_high,
+            primary_confidence=args.primary_conf,
             agreement_iou=args.agreement_iou,
             verifier_only_confidence=args.verifier_only_conf,
+            final_nms_iou=args.final_nms_iou,
             verifier_interval=args.verifier_interval,
         )
         cascade_config.validate()
