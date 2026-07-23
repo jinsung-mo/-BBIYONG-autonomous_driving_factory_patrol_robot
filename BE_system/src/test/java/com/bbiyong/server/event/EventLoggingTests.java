@@ -2,9 +2,9 @@ package com.bbiyong.server.event;
 
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.event.repository.EventLogRepository;
-import com.bbiyong.server.tcp.dto.RobotPacket;
-import com.bbiyong.server.tcp.event.RobotFireEvent;
-import com.bbiyong.server.tcp.event.RobotOverheatEvent;
+import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.event.RobotFireEvent;
+import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

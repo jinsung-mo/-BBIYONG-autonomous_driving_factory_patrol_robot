@@ -1,8 +1,8 @@
 package com.bbiyong.server.robot;
 
 import com.bbiyong.server.robot.dto.RobotResponse;
-import com.bbiyong.server.tcp.dto.RobotPacket;
-import com.bbiyong.server.tcp.event.RobotTelemetryEvent;
+import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
