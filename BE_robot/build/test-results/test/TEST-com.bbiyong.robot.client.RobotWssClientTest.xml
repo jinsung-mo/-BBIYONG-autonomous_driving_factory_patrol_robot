@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.bbiyong.robot.client.RobotWssClientTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-07-22T05:48:48.325Z" hostname="DESKTOP-UB20P0O" time="0.197">
-  <properties/>
-  <testcase name="로봇 텔레메트리 DTO JSON 직렬화 규격 검증" classname="com.bbiyong.robot.client.RobotWssClientTest" time="0.078"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

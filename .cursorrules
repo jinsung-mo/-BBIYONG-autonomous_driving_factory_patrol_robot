@@ -9,20 +9,28 @@ Please read and follow the workspace rules defined in this repository:
    - For Tasks, represent detailed action items of 1-2 days (e.g. 로그인 API 구현).
    - Compute due dates as the coming Friday.
    - Automatically determine labels and priority.
-   - Strictly follow the description template (without emoticons):
+   - Search for the user's `accountId` via email in configuration, and assign all created issues to the user (`"assignee": {"accountId": "..."}`).
+   - Strictly follow the description template (without emoticons). Use asterisk (*) instead of hyphen (-) to prevent Jira Wiki Markup formatting bugs:
      ```markdown
      ### 개요 (Context)
-     - ...
+     - 
      ### 작업 상세 내용 (To-Do)
-     - [ ] ...
+     - 
      ### 완료 기준 (Definition of Done)
-     - [ ] ...
+     - 
      ```
+     (Note: When calling the Jira REST API v2 directly, convert '### ' to 'h3. ' and '- ' to '* ' to avoid rendering bugs where '#' is parsed as a numbered list item 1. a. i.)
 
 2. **Git Collaboration Rules**: Refer to `.agents/rules/git-rules.md`
    - Main branch structure: `fe/main`, `be_system/main`, `be_robot/main`, `ai/main` for development; `main` for production releases.
    - Branch names: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-144-login`).
    - Commit messages: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-144] feat: [BE] 회원가입 API 구현`).
    - Always target the part-specific main branch (e.g. `be_system/main`) when submitting Merge Requests.
+   - Automatically extract the Jira Issue Key (e.g. `S15P11E101-144`) from the active branch name, format it as a link `[S15P11E101-144](https://ssafy.atlassian.net/browse/S15P11E101-144)`, and write it under `### 관련 Jira 티켓` when assisting the user with GitLab MR creation.
 
 Always inspect `.ai_jira_config.json` or `.gemini_jira_config.json` for Jira API configurations and base URLs.
+
+3. **Ticket-First Workflow Automation (No Ticket, No Work)**:
+   - Before writing any code, modifying any files, or creating branches, you MUST first create a corresponding Jira ticket.
+   - Flow: Design issue ➔ Create Jira ticket via API ➔ Report issue key to user ➔ Create local branch `[prefix]/[JiraTicketId]-[task-name]` ➔ Start coding.
+   - Do not perform coding modifications without a ticket ID!
