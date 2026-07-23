@@ -36,6 +36,18 @@ Please read and follow the workspace rules defined in this repository:
 Always inspect `.ai_jira_config.json` or `.gemini_jira_config.json` for Jira API configurations and base URLs.
 
 3. **Ticket-First Workflow Automation (No Ticket, No Work)**:
-   - Before writing any code, modifying any files, or creating branches, you MUST first create a corresponding Jira ticket.
-   - Flow: Design issue ➔ Create Jira ticket via API ➔ Report issue key to user ➔ Create local branch `[prefix]/[JiraTicketId]-[task-name]` ➔ Start coding.
-   - Do not perform coding modifications without a ticket ID!
+   - ⚠️ **CRITICAL**: Before writing ANY code or starting ANY work, you MUST create Jira tickets first.
+   - **Workflow**:
+     1. User requests feature/task → Analyze requirements
+     2. **Check if matching Story exists**:
+        - If NO matching Story → **Create Story first** (parent = Epic)
+        - If Story exists → Proceed to step 3
+     3. Create Task (linked to Story via "Relates to")
+     4. Report Jira ticket key to user (e.g., "Created S15P11E101-XXX")
+     5. Create Git branch `[prefix]/[JiraTicketId]-[task-name]`
+     6. Start coding
+   - **Example**: User wants "로봇 제어 WebSocket 구현"
+     - Check: Does "로봇 제어" Story exist?
+     - NO → Create Story "[Feat][BE] 로봇 제어" (parent=Epic), then Task "[Feat][BE] WebSocket 핸들러 구현" (Relates to Story)
+     - YES → Create Task only, link to existing Story
+   - **Never start coding without a Jira ticket ID!**

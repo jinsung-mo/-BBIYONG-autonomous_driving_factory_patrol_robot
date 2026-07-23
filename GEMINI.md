@@ -103,13 +103,34 @@ Co-Authored-By: Gemini <noreply@google.com>
 
 ## 3. Ticket-First Workflow (No Ticket, No Work)
 
-**IMPORTANT**: Before writing any code, you MUST:
-1. Create a corresponding Jira ticket via API
-2. Report issue key to user
-3. Create local branch `[prefix]/[JiraTicketId]-[task-name]`
-4. Start coding
+**⚠️ CRITICAL RULE**: Before writing ANY code or starting ANY work, you MUST create Jira tickets first.
 
-**Never modify code without a ticket ID!**
+**Workflow:**
+1. **User requests a feature/task** → Analyze requirements
+2. **Check if matching Story exists**:
+   - If NO matching Story exists → **Create Story first** (parent = Epic)
+   - If Story exists → Proceed to step 3
+3. **Create Task** (linked to Story via "Relates to")
+4. **Report Jira ticket key to user** (e.g., "Created S15P11E101-XXX")
+5. **Create Git branch** `[prefix]/[JiraTicketId]-[task-name]`
+6. **Start coding**
+
+**Example:**
+```
+User: "로봇 제어 WebSocket 기능 구현해줘"
+
+AI checks: Is there a "로봇 제어" Story?
+- NO → Create Story first:
+  - Story: "[Feat][BE] 로봇 제어" (parent = Epic)
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to Story)
+- YES → Create Task only:
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to existing Story)
+
+Report: "Created S15P11E101-123 (Story) and S15P11E101-124 (Task)"
+Branch: feat/S15P11E101-124-websocket-handler
+```
+
+**Never start coding without a Jira ticket ID!**
 
 ---
 

@@ -30,6 +30,37 @@ When performing work in this repository, you MUST follow these specific conventi
   ```
 * **Configuration**: Read `.ai_jira_config.json` or `.gemini_jira_config.json` in the root folder for URL, email, api token, and project key.
 
+### 1-1. Ticket-First Workflow (No Ticket, No Work)
+
+**⚠️ CRITICAL RULE**: Before writing ANY code or starting ANY work, you MUST create Jira tickets first.
+
+**Workflow:**
+1. **User requests a feature/task** → Analyze requirements
+2. **Check if matching Story exists**:
+   - If NO matching Story exists → **Create Story first** (parent = Epic)
+   - If Story exists → Proceed to step 3
+3. **Create Task** (linked to Story via "Relates to")
+4. **Report Jira ticket key to user** (e.g., "Created S15P11E101-XXX")
+5. **Create Git branch** `[prefix]/[JiraTicketId]-[task-name]`
+6. **Start coding**
+
+**Example:**
+```
+User: "로봇 제어 WebSocket 기능 구현해줘"
+
+AI checks: Is there a "로봇 제어" Story?
+- NO → Create Story first:
+  - Story: "[Feat][BE] 로봇 제어" (parent = Epic)
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to Story)
+- YES → Create Task only:
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to existing Story)
+
+Report: "Created S15P11E101-123 (Story) and S15P11E101-124 (Task)"
+Branch: feat/S15P11E101-124-websocket-handler
+```
+
+**Never start coding without a Jira ticket ID!**
+
 ### 2. Git & Branching Conventions
 * **Development Target Branches**: `fe/main`, `be_system/main`, `be_robot/main`, `ai/main`
 * **Production Release Branch**: `main`
