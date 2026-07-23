@@ -1,7 +1,7 @@
 package com.bbiyong.server.stomp;
 
-import com.bbiyong.server.tcp.dto.RobotPacket;
-import com.bbiyong.server.tcp.event.RobotTelemetryEvent;
+import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
