@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Safe operator entrypoint. Launch commands use exec so Ctrl+C reaches ROS directly.
+set -euo pipefail
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+WORKSPACE_DIR="${BBIYONG_WS:-$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)}"
+YDLIDAR_WORKSPACE="${YDLIDAR_WS:-$HOME/ydlidar_ros2_ws}"
+RF2O_WORKSPACE="${RF2O_WS:-$HOME/rf2o_ws}"
+
+die() { echo "bbiyong: $*" >&2; exit 2; }
+require_file() { [[ -f "$1" ]] || die "file not found: $1"; }
+source_workspace() {
+  require_file /opt/ros/humble/setup.bash
+  require_file "$YDLIDAR_WORKSPACE/install/setup.bash"
+  require_file "$RF2O_WORKSPACE/install/setup.bash"
+  require_file "$WORKSPACE_DIR/install/setup.bash"
+  # ROS setup scripts reference optional variables that are unset under nounset.
+  # Keep errexit enabled so a missing or failing workspace still stops the operator command.
+  set +u
+  # shellcheck disable=SC1091
+  source /opt/ros/humble/setup.bash
+  # shellcheck disable=SC1090
+  source "$YDLIDAR_WORKSPACE/install/setup.bash"
+  # shellcheck disable=SC1090
+  source "$RF2O_WORKSPACE/install/setup.bash"
+  # shellcheck disable=SC1090
+  source "$WORKSPACE_DIR/install/setup.bash"
+  set -u
+}
+usage() {
+  cat <<'EOF'
+Usage:
+  bbiyong mapping
+  bbiyong save-map <output-prefix>
+  bbiyong localize <map.yaml>
+  bbiyong navigate <map.yaml> <vehicle.yaml> <nav2.yaml> [--remote]
+  bbiyong control <vehicle.yaml> [--remote]
+  bbiyong explore <vehicle.yaml> <nav2.yaml> <map-output-prefix> [--remote]
+  bbiyong status
+
+Set BBIYONG_WSS_URL (and optional BBIYONG_ROBOT_ID) when using --remote.
+EOF
+}
+
+[[ $# -ge 1 ]] || { usage; exit 2; }
+command="$1"
+shift
+source_workspace
+
+case "$command" in
+  mapping)
+    [[ $# -eq 0 ]] || die "mapping takes no arguments"
+    exec ros2 launch bbiyong_bringup mapping.launch.py odom_source:=rf2o allow_unmeasured_lidar:=true
+    ;;
+  save-map)
+    [[ $# -eq 1 ]] || die "save-map requires an output prefix"
+    mkdir -p "$(dirname "$1")"
+    exec ros2 run bbiyong_bringup save_map "$1"
+    ;;
+  localize)
+    [[ $# -eq 1 ]] || die "localize requires map.yaml"
+    require_file "$1"
+    exec ros2 launch bbiyong_bringup localization.launch.py map:="$1" odom_source:=rf2o allow_unmeasured_lidar:=true
+    ;;
+  navigate)
+    [[ $# -eq 3 || $# -eq 4 ]] || die "navigate requires map.yaml vehicle.yaml nav2.yaml and optional --remote"
+    require_file "$1"; require_file "$2"; require_file "$3"
+    if [[ "${4:-}" == "--remote" ]]; then
+      [[ -n "${BBIYONG_WSS_URL:-}" ]] || die "set BBIYONG_WSS_URL before --remote"
+      exec ros2 launch bbiyong_bringup navigation.launch.py map:="$1" vehicle_config:="$2" nav2_params:="$3" odom_source:=wheel start_remote_control:=true wss_url:="$BBIYONG_WSS_URL" robot_id:="${BBIYONG_ROBOT_ID:-orinka_01}"
+    fi
+    [[ $# -eq 3 ]] || die "unknown navigate option: $4"
+    exec ros2 launch bbiyong_bringup navigation.launch.py map:="$1" vehicle_config:="$2" nav2_params:="$3" odom_source:=wheel
+    ;;
+  control)
+    [[ $# -eq 1 || $# -eq 2 ]] || die "control requires vehicle.yaml and optional --remote"
+    require_file "$1"
+    if [[ "${2:-}" == "--remote" ]]; then
+      [[ -n "${BBIYONG_WSS_URL:-}" ]] || die "set BBIYONG_WSS_URL before --remote"
+      exec ros2 launch bbiyong_bringup control.launch.py vehicle_config:="$1" start_remote_control:=true wss_url:="$BBIYONG_WSS_URL"
+    fi
+    [[ $# -eq 1 ]] || die "unknown control option: $2"
+    exec ros2 launch bbiyong_bringup control.launch.py vehicle_config:="$1"
+    ;;
+  explore)
+    [[ $# -eq 3 || $# -eq 4 ]] || die "explore requires vehicle.yaml nav2.yaml map-output-prefix and optional --remote"
+    require_file "$1"; require_file "$2"
+    mkdir -p "$(dirname "$3")"
+    if [[ "${4:-}" == "--remote" ]]; then
+      [[ -n "${BBIYONG_WSS_URL:-}" ]] || die "set BBIYONG_WSS_URL before --remote"
+      exec ros2 launch bbiyong_bringup exploration.launch.py vehicle_config:="$1" nav2_params:="$2" odom_source:=wheel map_output:="$3" start_remote_control:=true wss_url:="$BBIYONG_WSS_URL" robot_id:="${BBIYONG_ROBOT_ID:-orinka_01}"
+    fi
+    [[ $# -eq 3 ]] || die "unknown explore option: $4"
+    exec ros2 launch bbiyong_bringup exploration.launch.py vehicle_config:="$1" nav2_params:="$2" odom_source:=wheel map_output:="$3"
+    ;;
+  status)
+    [[ $# -eq 0 ]] || die "status takes no arguments"
+    ros2 node list
+    ros2 topic list | grep -E '^/(scan|odom|map|cmd_vel|bbiyong)' || true
+    ;;
+  *) usage; exit 2 ;;
+esac
