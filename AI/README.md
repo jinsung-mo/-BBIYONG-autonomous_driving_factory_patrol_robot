@@ -303,10 +303,12 @@ the locked configuration once on held-out test images and factory videos.
 ### Optional YOLO11n to YOLO11s cascade
 
 Use YOLO11n on every frame and invoke YOLO11s only for ambiguous YOLO11n
-detections or every fifth frame. Agreeing same-class boxes are confidence-
-weighted and fused; unsupported ambiguous boxes are removed. High-confidence
-YOLO11s-only boxes can recover primary-model misses. The fused detections still
-pass through the temporal policy above:
+detections or every fifth frame. Normal YOLO11n detections remain unchanged;
+lower-confidence proposals require same-class verifier agreement. Matching
+verifier boxes are consumed, verifier-only recovery uses a stricter threshold,
+and final class-aware NMS removes cross-model duplicates. Agreement confidence
+uses a geometric mean because the related checkpoints are not independent.
+The fused detections still pass through the temporal policy above:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\camera_inference.py `
@@ -315,8 +317,10 @@ pass through the temporal policy above:
   --postprocess-config artifacts\postprocessing\yolo11n-validation-20260723\postprocess_config.json `
   --verify-low 0.15 `
   --verify-high 0.60 `
-  --agreement-iou 0.30 `
-  --verifier-only-conf 0.50 `
+  --primary-conf 0.25 `
+  --agreement-iou 0.50 `
+  --verifier-only-conf 0.75 `
+  --final-nms-iou 0.50 `
   --verifier-interval 5 `
   --camera 0 `
   --device 0 `
@@ -363,6 +367,10 @@ precision, recall, F1, mAP50, mAP50-95, inference latency, and verifier usage:
   --split test `
   --device 0 `
   --batch 16 `
+  --primary-conf 0.25 `
+  --agreement-iou 0.50 `
+  --verifier-only-conf 0.75 `
+  --final-nms-iou 0.50 `
   --verifier-interval 5 `
   --output artifacts\evaluations\cascade-vs-yolo11n-test-20260723
 ```
