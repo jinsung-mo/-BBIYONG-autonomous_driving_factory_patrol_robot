@@ -64,4 +64,6 @@
   * 미리보기: `python scripts/auto_tagger.py --dry-run`
   * 태깅: `python scripts/auto_tagger.py --type patch|minor|major`
   * 스크립트 없이 직접: `git tag -a v1.2.0 -m "메시지" && git push origin v1.2.0`
-* **(선택) CI 자동화**: 필요해지면 커밋 push→`--type patch`, 일일 스케줄→`--type minor`, main 병합→`--type major` 로 파이프라인에 연결할 수 있습니다. **필수는 아닙니다.**
+* **CI 자동화 (`.gitlab-ci.yml`)**: GitLab CI 로 태깅이 자동화되어 있습니다 — **main push→major, 스케줄→minor, `*/dev` push→patch**. (feature/MR/tag 는 미실행, 빈 태그는 skip)
+  * **사전 설정 필수**: ① 활성 GitLab Runner, ② CI/CD 변수 `TAG_PUSH_TOKEN`(`write_repository` 권한 토큰, Masked), ③ 일일 minor 는 *Settings > CI/CD > Pipeline schedules* 에 등록(예: `0 18 * * *`, target=통합 브랜치).
+  * 위 설정 전까지는 자동 태깅이 동작하지 않으며, 그동안은 스크립트 **수동 실행**으로 사용합니다.
