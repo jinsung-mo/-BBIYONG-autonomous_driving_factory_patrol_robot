@@ -30,7 +30,7 @@ source_workspace() {
 usage() {
   cat <<'EOF'
 Usage:
-  bbiyong mapping
+  bbiyong mapping [--remote]
   bbiyong save-map <output-prefix>
   bbiyong localize <map.yaml>
   bbiyong navigate <map.yaml> <vehicle.yaml> <nav2.yaml> [--remote]
@@ -49,7 +49,12 @@ source_workspace
 
 case "$command" in
   mapping)
-    [[ $# -eq 0 ]] || die "mapping takes no arguments"
+    [[ $# -eq 0 || $# -eq 1 ]] || die "mapping takes optional --remote"
+    if [[ "${1:-}" == "--remote" ]]; then
+      [[ -n "${BBIYONG_WSS_URL:-}" ]] || die "set BBIYONG_WSS_URL before --remote"
+      exec ros2 launch bbiyong_bringup mapping.launch.py odom_source:=rf2o allow_unmeasured_lidar:=true start_remote_control:=true wss_url:="$BBIYONG_WSS_URL" robot_id:="${BBIYONG_ROBOT_ID:-orinka_01}"
+    fi
+    [[ $# -eq 0 ]] || die "unknown mapping option: $1"
     exec ros2 launch bbiyong_bringup mapping.launch.py odom_source:=rf2o allow_unmeasured_lidar:=true
     ;;
   save-map)

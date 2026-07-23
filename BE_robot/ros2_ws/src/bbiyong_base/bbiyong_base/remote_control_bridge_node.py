@@ -1,11 +1,14 @@
 """Fail-safe WSS-to-ROS manual-control bridge."""
 
 import json
+from math import cos, sin
+from pathlib import Path
 from queue import Empty, Queue
+import subprocess
 from threading import Event, Lock, Thread
 
 import rclpy
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import PoseStamped, Twist
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
 
@@ -22,6 +25,7 @@ class RemoteControlBridge(Node):
         self.declare_parameter("reconnect_sec", 3.0)
         self.declare_parameter("connect_timeout_sec", 5.0)
         self.declare_parameter("authorization_header", "")
+        self.declare_parameter("map_output_dir", "~/maps")
         self.wss_url = str(self.get_parameter("wss_url").value)
         self.robot_id = str(self.get_parameter("robot_id").value)
         self.max_linear = float(self.get_parameter("max_linear_mps").value)
@@ -29,6 +33,7 @@ class RemoteControlBridge(Node):
         self.reconnect_sec = float(self.get_parameter("reconnect_sec").value)
         self.connect_timeout_sec = float(self.get_parameter("connect_timeout_sec").value)
         self.authorization_header = str(self.get_parameter("authorization_header").value)
+        self.map_output_dir = Path(str(self.get_parameter("map_output_dir").value)).expanduser().resolve()
         if not self.wss_url.startswith(("ws://", "wss://")):
             raise ValueError("wss_url must start with ws:// or wss://")
         if not self.robot_id.strip() or min(self.max_linear, self.max_angular, self.reconnect_sec, self.connect_timeout_sec) <= 0.0:
@@ -37,6 +42,7 @@ class RemoteControlBridge(Node):
         self.manual_pub = self.create_publisher(Twist, "/cmd_vel/manual", 10)
         self.mode_pub = self.create_publisher(String, "/bbiyong/control_mode", 10)
         self.estop_pub = self.create_publisher(Bool, "/bbiyong/estop", 10)
+        self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 10)
         self.actions: Queue[RemoteActions] = Queue()
         self.stop_event = Event()
         self._socket_lock = Lock()
@@ -66,6 +72,23 @@ class RemoteControlBridge(Node):
             self.mode_pub.publish(String(data=actions.mode))
         if actions.estop is not None:
             self.estop_pub.publish(Bool(data=actions.estop))
+        if actions.goal is not None:
+            x, y, yaw = actions.goal
+            goal = PoseStamped()
+            goal.header.frame_id = "map"
+            goal.header.stamp = self.get_clock().now().to_msg()
+            goal.pose.position.x = x
+            goal.pose.position.y = y
+            goal.pose.orientation.z = sin(yaw / 2.0)
+            goal.pose.orientation.w = cos(yaw / 2.0)
+            self.goal_pub.publish(goal)
+        if actions.map_name is not None:
+            self.map_output_dir.mkdir(parents=True, exist_ok=True)
+            output = self.map_output_dir / actions.map_name
+            subprocess.Popen(
+                ["ros2", "run", "nav2_map_server", "map_saver_cli", "-f", str(output)],
+                start_new_session=True,
+            )
 
     def _connect_loop(self) -> None:
         try:

@@ -30,6 +30,18 @@ class RemoteControlProtocolTest(unittest.TestCase):
         actions = failsafe_actions()
         self.assertEqual((actions.linear, actions.angular, actions.mode, actions.estop), (0.0, 0.0, "disabled", True))
 
+    def test_safe_map_name_and_finite_goal_are_parsed(self) -> None:
+        self.assertEqual(
+            parse_remote_command('{"command":"SAVE_MAP","name":"floor_1"}', 0.2, 0.4).map_name,
+            "floor_1",
+        )
+        self.assertEqual(
+            parse_remote_command('{"command":"NAVIGATE","x":1,"y":2,"yaw":0.5}', 0.2, 0.4).goal,
+            (1.0, 2.0, 0.5),
+        )
+        with self.assertRaises(ValueError):
+            parse_remote_command('{"command":"SAVE_MAP","name":"../bad"}', 0.2, 0.4)
+
 
 if __name__ == "__main__":
     unittest.main()

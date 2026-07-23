@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 import json
 from math import isfinite
+import re
+
+MAP_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 
 
 @dataclass(frozen=True)
@@ -11,6 +14,8 @@ class RemoteActions:
     angular: float | None = None
     mode: str | None = None
     estop: bool | None = None
+    map_name: str | None = None
+    goal: tuple[float, float, float] | None = None
 
 
 def failsafe_actions() -> RemoteActions:
@@ -63,4 +68,15 @@ def parse_remote_command(payload: str, max_linear: float, max_angular: float) ->
         if message.get("active", True) is not True:
             raise ValueError("remote ESTOP may only be activated")
         return RemoteActions(estop=True)
+    if command == "SAVE_MAP":
+        name = message.get("name")
+        if not isinstance(name, str) or not MAP_NAME.fullmatch(name):
+            raise ValueError("map name must be a safe basename")
+        return RemoteActions(map_name=name)
+    if command == "NAVIGATE":
+        return RemoteActions(goal=(
+            _finite_number(message.get("x"), "x"),
+            _finite_number(message.get("y"), "y"),
+            _finite_number(message.get("yaw"), "yaw"),
+        ))
     raise ValueError(f"unsupported command: {command}")

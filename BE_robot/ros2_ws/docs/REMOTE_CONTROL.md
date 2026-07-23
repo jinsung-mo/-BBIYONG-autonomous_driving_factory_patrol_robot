@@ -33,6 +33,8 @@ export BBIYONG_WSS_URL='wss://i15e101.p.ssafy.io/ws/robot'
 bbiyong control ~/bbiyong_ros2_ws/config/vehicle.yaml --remote
 ```
 
+매핑 중 원격 SAVE_MAP을 쓰려면 `bbiyong mapping --remote`로 시작한다. 웹의 지도 저장은 이 mapping 세션이 실행 중일 때만 유효하며, 이름은 영문·숫자·`_`·`-`만 허용된다.
+
 `navigate`와 `explore`도 같은 control launch를 포함하므로, 별도 `bbiyong control`을 동시에 실행하지 않는다. 원격 수동 제어를 함께 켜려면 다음처럼 마지막에 `--remote`를 붙인다.
 
 ```bash
@@ -58,4 +60,6 @@ Ackermann 차량은 제자리 회전이 불가능하다. `linear=0, angular!=0`�
 3. `hardware_enabled: false` 상태에서 WSS와 ROS 명령만 검증한다.
 4. 사람이 즉시 물리 ESTOP을 누를 수 있을 때만 저속으로 `hardware_enabled: true`를 시험한다.
 
-미완료 항목: 실제 모터/PWM 드라이버, encoder odometry publisher, WSS 인증·권한·REGISTER 메시지의 서버 측 명시적 처리, 웹 조작기 소스는 이 저장소에 없다.
+미완료 항목: 실제 모터/PWM 드라이버, encoder odometry publisher, WSS 인증·권한·REGISTER 메시지의 서버 측 명시적 처리, 정적 웹 콘솔의 공개 Nginx/FE route 연결.
+
+`BE_system/src/main/resources/static/robot-console.html`은 개발용 정적 콘솔이다. 현재 운영 Nginx의 `/`는 FE 컨테이너로 전달하므로, 이 파일은 server route를 추가하거나 FE 배포 산출물에 포함하기 전까지 공개 URL로 보장되지 않는다.
