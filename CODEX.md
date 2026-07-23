@@ -7,12 +7,12 @@ This repository (E101 BBIYONG / 삐용) follows strict automation rules for Jira
 ## 1. Jira Automation Conventions (Epic ➔ Story ➔ Task 3-Tier Hierarchy)
 
 * **Structure**: `Epic ➔ Story ➔ Task` 3-tier hierarchy.
-  * **Epic**: Top-level domain epic.
-  * **Story**: Feature-level domain story linked under an **Epic**.
-  * **Task**: Individual developer task (1-2 days) linked under a **Story**.
+  * **Epic**: Top-level domain epic (already created, no new Epics will be added).
+  * **Story**: Feature-level domain story as a child of Epic (Story's `parent` = Epic).
+  * **Task**: Individual developer task (1-2 days) linked to Story via "Relates to" relationship (NOT parent-child).
   * **Do NOT use Jira Sub-tasks.**
 * **Title Format**: `[Type][Module] Summary` (e.g. `[Feat][BE] Spring Boot WSS 핸들러 구현`, `[Fix][FE] 대시보드 소켓 오류 수정`).
-* **Due Date**: Set to upcoming Friday of current week for Story & Task, and 2026-08-07 for Epic.
+* **Due Date**: Set to upcoming Friday of current week for Story & Task. Epic dates are already set (no new Epics will be created).
 * **Assignee**: Automatically set to current user (`accountId` fetched from `GET /rest/api/2/myself`).
 * **Description Template**:
   ```markdown
@@ -35,7 +35,7 @@ This repository (E101 BBIYONG / 삐용) follows strict automation rules for Jira
 * **Branch Name Format**: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-281-wss-handler`)
 * **Commit Message Format**: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-281] feat: [BE] Spring Boot WSS 핸들러 구현`)
 * **MR Flow**: Target part dev branch (e.g. `be_system/dev`) for feature branches, then merge part dev to part main (`be_system/main`), then merge part main to `main` for release.
-* **Branch Cleanup Rule**: After pushing code and completing MR creation, switch back to the target dev branch (`be_system/dev` etc.), delete the temporary local feature branch (`git branch -D [branch-name]`), and prune remote branches (`git fetch -p`) to keep local and remote repositories clean.
+* **Branch Cleanup Rule**: After MR is merged, always delete the feature branch locally (`git branch -D [branch-name]`) and remotely (GitLab UI or `git push origin --delete [branch-name]`).
 * **Mandatory MR Description Output**: Whenever pushing code or guiding MR creation, the AI agent MUST automatically generate and output a fully populated MR description markdown block (with Jira Ticket URL, Context, To-Do items, Definition of Done, and Reviewer Notes, WITHOUT checkboxes) in the final response.
 
 ---

@@ -12,17 +12,17 @@ This is the E101 BBIYONG (삐용) repository, containing FE, BE system, BE robot
 ## 1. Jira Automation Conventions (Epic ➔ Story ➔ Task)
 
 ### Hierarchy Structure
-* **Structure**: Epic ➔ (Story | Task). **Do NOT use Jira Sub-tasks.**
-* **⚠️ Important**: In this Jira instance, Epic is HierarchyLevel 1; **Story, Task, and Bug are ALL HierarchyLevel 0 (siblings)**
-  - A Task's `parent` field can ONLY point to an Epic, NOT a Story
-  - The API rejects `parent = Story` with error `유효한 상위 업무를 선택하세요`
+* **Structure**: `Epic ➔ Story ➔ Task` 3-tier hierarchy. **Do NOT use Jira Sub-tasks.**
+  * **Epic**: Top-level domain epic (already created, no new Epics will be added)
+  * **Story**: Feature-level story as a child of Epic
+  * **Task**: Individual developer task (1-2 days) linked to Story via "Relates to" relationship
 
 ### Parenting Rules
-* Set the `parent` field of BOTH Story and Task to their **Epic**
-* To associate a Task with a Story, add an **issue link** of type `Relates` between them (never use `parent = Story`)
-* **Mandatory Story grouping**: Every Task should still belong to a logical Story
-  - If no matching Story exists when creating a Task, first create the Story (parent = Epic)
-  - Then create the Task (parent = Epic) and link it to that Story via a `Relates` issue link
+* Story's `parent` = Epic (parent-child relationship)
+* Task is linked to Story via **"Relates to"** issue link (NOT parent-child)
+* **Mandatory Story grouping**: Every Task must be associated with a Story via "Relates to" link
+  - If no matching Story exists when creating a Task, first create the Story (as child of Epic)
+  - Then create the Task and link it to the Story via "Relates to" issue link
 
 ### Ticket Format
 * **Title Format**: `[Type][Module] Summary`
@@ -65,6 +65,7 @@ Read `.ai_jira_config.json` or `.gemini_jira_config.json` in the root folder for
 ### Merge Request Flow
 * Always target the part-specific main branch (e.g., `be_system/main`) when submitting Merge Requests
 * **Never target the production `main` branch directly**
+* **Branch Cleanup Rule**: After MR is merged, always delete the feature branch locally (`git branch -D [branch-name]`) and remotely (GitLab UI or `git push origin --delete [branch-name]`)
 
 ### Mandatory MR Description Output
 Whenever pushing code or guiding MR creation, you MUST automatically generate and output a fully populated MR description markdown block with:
