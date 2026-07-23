@@ -10,7 +10,14 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from evaluate_models import extract_metrics, normalize_names, parse_model_specs, write_csv  # noqa: E402
+from evaluate_models import (  # noqa: E402
+    extract_metrics,
+    metrics_match,
+    normalize_names,
+    parse_model_specs,
+    summarize_repeats,
+    write_csv,
+)
 
 
 class FakeBoxMetrics:
@@ -53,10 +60,45 @@ class EvaluateModelsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "comparison.csv"
             write_csv([record], path)
-            rows = list(csv.DictReader(path.open(encoding="utf-8")))
+            with path.open(encoding="utf-8") as stream:
+                rows = list(csv.DictReader(stream))
         self.assertEqual(len(rows), 3)
         self.assertEqual(rows[0]["scope"], "all")
         self.assertEqual(rows[1]["class_name"], "smoke")
+
+    def test_summarizes_repeated_evaluations(self) -> None:
+        repeats = []
+        for repeat, offset in enumerate((0.0, 0.2), start=1):
+            repeats.append(
+                {
+                    "repeat": repeat,
+                    "aggregate": {
+                        "precision": 0.8 + offset,
+                        "recall": 0.7 + offset,
+                        "map50": 0.6 + offset,
+                        "map50_95": 0.5 + offset,
+                    },
+                    "per_class": [
+                        {
+                            "class_id": 0,
+                            "class_name": "smoke",
+                            "precision": 0.8 + offset,
+                            "recall": 0.7 + offset,
+                            "map50": 0.6 + offset,
+                            "map50_95": 0.5 + offset,
+                        }
+                    ],
+                    "speed_ms": {"inference": 2.0 + offset},
+                    "plots_directory": f"repeat-{repeat}",
+                }
+            )
+        summary = summarize_repeats(repeats)
+        self.assertEqual(summary["repeat_count"], 2)
+        self.assertAlmostEqual(summary["aggregate"]["map50_95"], 0.6)
+        self.assertAlmostEqual(summary["aggregate_std"]["map50_95"], 0.1)
+        self.assertAlmostEqual(summary["speed_ms"]["inference"], 2.1)
+        self.assertFalse(metrics_match(repeats))
+        self.assertTrue(metrics_match([repeats[0], repeats[0]]))
 
 
 if __name__ == "__main__":

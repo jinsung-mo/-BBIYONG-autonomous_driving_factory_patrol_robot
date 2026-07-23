@@ -14,7 +14,7 @@ from training_progress import attach_progress_callbacks
 
 AI_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROJECT = AI_ROOT / "artifacts" / "runs"
-SUPPORTED_MODELS = ("yolo11n.pt", "yolo11s.pt", "yolo26n.pt")
+SUPPORTED_MODELS = ("yolo11n.pt", "yolo11s.pt", "yolo26n.pt", "yolo26s.pt")
 AUGMENTATION_PRESETS = {
     "fire-smoke": {
         "degrees": 5.0,
