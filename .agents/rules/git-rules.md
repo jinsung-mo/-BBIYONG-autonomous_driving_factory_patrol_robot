@@ -52,3 +52,11 @@
   3. **작업 상세 내용 (To-Do)**: 실제 구현된 소스 코드 변경점 및 파일 목록 체크리스트 (`- [x] ...`)
   4. **완료 기준 및 테스트 결과 (Definition of Done)**: 성공한 빌드 및 테스트 결과 요약 (`- [x] ...`)
   5. **리뷰어에게 전달할 특이사항**: 파트원 코드 리뷰 시 주의 깊게 봐야 할 포인트 기술
+
+## 6. 버저닝 및 Git Tag 자동화 규칙 (Automated Version Tagging)
+* **버전 자동 태깅 스크립트**: 프로젝트 내 `scripts/auto_tagger.py` 스크립트를 사용하여 4단계 브랜치 구조 및 SemVer 규칙에 맞게 버전을 자동 계산하고 Git Tag를 생성하여 푸시합니다.
+* **브랜치별 태그 자동 계산 규칙**:
+  * `main` 브랜치 ➔ Major 버전 자동 UP (`v1.0.0` ➔ `v2.0.0`)
+  * `*/main` 브랜치 (`be_system/main` 등) ➔ Minor 버전 자동 UP (`v1.1.0` ➔ `v1.2.0`)
+  * `*/dev` 브랜치 (`be_system/dev` 등) ➔ Patch 버전 자동 UP (`v1.1.1` ➔ `v1.1.2`)
+* **실행 예시**: `python scripts/auto_tagger.py` (또는 CI/CD 파이프라인 연동)
