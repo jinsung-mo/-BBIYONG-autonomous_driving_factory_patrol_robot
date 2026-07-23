@@ -3,21 +3,23 @@
 Please read and follow the workspace rules defined in this repository:
 
 1. **Jira Automation Rules**: Refer to `.agents/rules/jira-rules.md`
-   - Use the 3-level hierarchy: lv2 = Epic ➔ lv1 = Story ➔ lv0 = Task. Do NOT use Sub-tasks.
-   - Every Task (lv0) MUST belong to a parent Story (lv1). If no parent Story exists when creating a Task, create the parent Story (lv1) under the Epic (lv2) first and link the Task to it.
+   - Hierarchy: `Epic ➔ (Story | Task)`. Do NOT use Sub-tasks.
+   - ⚠️ In THIS Jira instance, Epic is HierarchyLevel 1 while Story, Task, and Bug are all HierarchyLevel 0 (siblings). A Task's `parent` can ONLY be an Epic — a Story cannot be a Task's parent (the API rejects `parent = Story`).
+   - Set the `parent` of BOTH Story and Task to their Epic. To associate a Task with a Story, add a `Relates` issue link between them (never `parent = Story`).
+   - Every Task should still belong to a logical Story: if none exists, create the Story (parent = Epic) first, then create the Task (parent = Epic) and link it to that Story via a `Relates` issue link.
    - Format ticket titles as `[Type][Module] Summary` (e.g. `[Feat][BE] 회원가입 API 구현`, `[Fix][FE] 버튼 클릭 이벤트 미동작 수정`).
    - For Stories, represent large service/domain blocks (e.g. 회원 관리).
    - For Tasks, represent detailed action items of 1-2 days (e.g. 로그인 API 구현).
    - Compute due dates as the coming Friday.
    - Automatically determine labels and priority.
-   - Strictly follow the description template (without emoticons):
+   - Strictly follow the description template (without emoticons) — MUST match `jira-rules.md` / `CLAUDE.md` exactly:
      ```markdown
-     ### 개요 (Context)
-     - ...
-     ### 작업 상세 내용 (To-Do)
-     - [ ] ...
-     ### 완료 기준 (Definition of Done)
-     - [ ] ...
+     1. **개요 (Context)**
+        - ...
+     2. **작업 상세 내용 (To-Do)**
+        - ...
+     3. **완료 기준 (Definition of Done)**
+        - ...
      ```
 
 2. **Git Collaboration Rules**: Refer to `.agents/rules/git-rules.md`

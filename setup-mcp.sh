@@ -44,13 +44,16 @@ if os.path.exists(mcp_config_path) and os.path.getsize(mcp_config_path) > 0:
 if 'mcpServers' not in mcp_cfg:
     mcp_cfg['mcpServers'] = {}
 
+# jira_url(예: https://ssafy.atlassian.net)에서 사이트 이름(예: ssafy) 추출
+site_name = proj_cfg.get('jira_url', '').replace('https://', '').replace('http://', '').split('.atlassian.net')[0].strip('/')
+
 mcp_cfg['mcpServers']['jira'] = {
     'command': 'npx',
-    'args': ['-y', '@modelcontextprotocol/server-jira'],
+    'args': ['-y', '@aashari/mcp-server-atlassian-jira'],
     'env': {
-        'JIRA_API_TOKEN': proj_cfg.get('jira_api_token', ''),
-        'JIRA_EMAIL': proj_cfg.get('jira_email', ''),
-        'JIRA_URL': proj_cfg.get('jira_url', '')
+        'ATLASSIAN_SITE_NAME': site_name,
+        'ATLASSIAN_USER_EMAIL': proj_cfg.get('jira_email', ''),
+        'ATLASSIAN_API_TOKEN': proj_cfg.get('jira_api_token', '')
     }
 }
 
