@@ -3,10 +3,11 @@
 Please read and follow the workspace rules defined in this repository:
 
 1. **Jira Automation Rules**: Refer to `.agents/rules/jira-rules.md`
-   - Hierarchy: `Epic ➔ (Story | Task)`. Do NOT use Sub-tasks.
-   - ⚠️ In THIS Jira instance, Epic is HierarchyLevel 1 while Story, Task, and Bug are all HierarchyLevel 0 (siblings). A Task's `parent` can ONLY be an Epic — a Story cannot be a Task's parent (the API rejects `parent = Story`).
-   - Set the `parent` of BOTH Story and Task to their Epic. To associate a Task with a Story, add a `Relates` issue link between them (never `parent = Story`).
-   - Every Task should still belong to a logical Story: if none exists, create the Story (parent = Epic) first, then create the Task (parent = Epic) and link it to that Story via a `Relates` issue link.
+   - Hierarchy: `Epic ➔ Story ➔ Task` 3-tier hierarchy. Do NOT use Sub-tasks.
+   - **Epic**: Top-level domain epic (already created, no new Epics will be added)
+   - **Story**: Feature-level story as a child of Epic (Story's `parent` = Epic)
+   - **Task**: Individual developer task (1-2 days) linked to Story via "Relates to" relationship (NOT parent-child)
+   - Every Task must be associated with a Story via "Relates to" link. If no matching Story exists, create the Story first (as child of Epic), then create the Task and link it to the Story.
    - Format ticket titles as `[Type][Module] Summary` (e.g. `[Feat][BE] 회원가입 API 구현`, `[Fix][FE] 버튼 클릭 이벤트 미동작 수정`).
    - For Stories, represent large service/domain blocks (e.g. 회원 관리).
    - For Tasks, represent detailed action items of 1-2 days (e.g. 로그인 API 구현).
@@ -29,11 +30,24 @@ Please read and follow the workspace rules defined in this repository:
    - Branch names: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-144-login`).
    - Commit messages: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-144] feat: [BE] 회원가입 API 구현`).
    - Always target the part-specific main branch (e.g. `be_system/main`) when submitting Merge Requests.
-   - Automatically extract the Jira Issue Key (e.g. `S15P11E101-144`) from the active branch name, format it as a link `[S15P11E101-144](https://ssafy.atlassian.net/browse/S15P11E101-144)`, and write it under `### 관련 Jira 티켓` when assisting the user with GitLab MR creation.
+   - **Branch Cleanup Rule**: After MR is merged, always delete the feature branch locally (`git branch -D [branch-name]`) and remotely (GitLab UI or `git push origin --delete [branch-name]`).
+   - Automatically extract the Jira Issue Key (e.g. `S15P11E101-144`) from the active branch name, format it as a link `[S15P11E101-144](https://ssafy.atlassian.net/browse/S15P11E101-144)`, and write it under `## 관련 Jira 티켓` when assisting the user with GitLab MR creation.
 
 Always inspect `.ai_jira_config.json` or `.gemini_jira_config.json` for Jira API configurations and base URLs.
 
 3. **Ticket-First Workflow Automation (No Ticket, No Work)**:
-   - Before writing any code, modifying any files, or creating branches, you MUST first create a corresponding Jira ticket.
-   - Flow: Design issue ➔ Create Jira ticket via API ➔ Report issue key to user ➔ Create local branch `[prefix]/[JiraTicketId]-[task-name]` ➔ Start coding.
-   - Do not perform coding modifications without a ticket ID!
+   - ⚠️ **CRITICAL**: Before writing ANY code or starting ANY work, you MUST create Jira tickets first.
+   - **Workflow**:
+     1. User requests feature/task → Analyze requirements
+     2. **Check if matching Story exists**:
+        - If NO matching Story → **Create Story first** (parent = Epic)
+        - If Story exists → Proceed to step 3
+     3. Create Task (linked to Story via "Relates to")
+     4. Report Jira ticket key to user (e.g., "Created S15P11E101-XXX")
+     5. Create Git branch `[prefix]/[JiraTicketId]-[task-name]`
+     6. Start coding
+   - **Example**: User wants "로봇 제어 WebSocket 구현"
+     - Check: Does "로봇 제어" Story exist?
+     - NO → Create Story "[Feat][BE] 로봇 제어" (parent=Epic), then Task "[Feat][BE] WebSocket 핸들러 구현" (Relates to Story)
+     - YES → Create Task only, link to existing Story
+   - **Never start coding without a Jira ticket ID!**

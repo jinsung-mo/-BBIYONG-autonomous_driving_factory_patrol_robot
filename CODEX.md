@@ -7,12 +7,12 @@ This repository (E101 BBIYONG / 삐용) follows strict automation rules for Jira
 ## 1. Jira Automation Conventions (Epic ➔ Story ➔ Task 3-Tier Hierarchy)
 
 * **Structure**: `Epic ➔ Story ➔ Task` 3-tier hierarchy.
-  * **Epic**: Top-level domain epic.
-  * **Story**: Feature-level domain story linked under an **Epic**.
-  * **Task**: Individual developer task (1-2 days) linked under a **Story**.
+  * **Epic**: Top-level domain epic (already created, no new Epics will be added).
+  * **Story**: Feature-level domain story as a child of Epic (Story's `parent` = Epic).
+  * **Task**: Individual developer task (1-2 days) linked to Story via "Relates to" relationship (NOT parent-child).
   * **Do NOT use Jira Sub-tasks.**
 * **Title Format**: `[Type][Module] Summary` (e.g. `[Feat][BE] Spring Boot WSS 핸들러 구현`, `[Fix][FE] 대시보드 소켓 오류 수정`).
-* **Due Date**: Set to upcoming Friday of current week for Story & Task, and 2026-08-07 for Epic.
+* **Due Date**: Set to upcoming Friday of current week for Story & Task. Epic dates are already set (no new Epics will be created).
 * **Assignee**: Automatically set to current user (`accountId` fetched from `GET /rest/api/2/myself`).
 * **Description Template**:
   ```markdown
@@ -29,13 +29,46 @@ This repository (E101 BBIYONG / 삐용) follows strict automation rules for Jira
 
 ---
 
+## 1-1. Ticket-First Workflow (No Ticket, No Work)
+
+**⚠️ CRITICAL RULE**: Before writing ANY code or starting ANY work, you MUST create Jira tickets first.
+
+**Workflow:**
+1. **User requests a feature/task** → Analyze requirements
+2. **Check if matching Story exists**:
+   - If NO matching Story exists → **Create Story first** (parent = Epic)
+   - If Story exists → Proceed to step 3
+3. **Create Task** (linked to Story via "Relates to")
+4. **Report Jira ticket key to user** (e.g., "Created S15P11E101-XXX")
+5. **Create Git branch** `[prefix]/[JiraTicketId]-[task-name]`
+6. **Start coding**
+
+**Example:**
+```
+User: "로봇 제어 WebSocket 기능 구현해줘"
+
+AI checks: Is there a "로봇 제어" Story?
+- NO → Create Story first:
+  - Story: "[Feat][BE] 로봇 제어" (parent = Epic)
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to Story)
+- YES → Create Task only:
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to existing Story)
+
+Report: "Created S15P11E101-123 (Story) and S15P11E101-124 (Task)"
+Branch: feat/S15P11E101-124-websocket-handler
+```
+
+**Never start coding without a Jira ticket ID!**
+
+---
+
 ## 2. Git & Branching Conventions
 
 * **Hierarchy**: `main` (Production Release) ➔ `fe/main`, `be_system/main`, `be_robot/main`, `ai/main` (Part Mains) ➔ `fe/dev`, `be_system/dev`, `be_robot/dev`, `ai/dev` (Part Devs) ➔ `feat/S15P11E101-XXX-name` (Feature Branches).
 * **Branch Name Format**: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-281-wss-handler`)
 * **Commit Message Format**: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-281] feat: [BE] Spring Boot WSS 핸들러 구현`)
 * **MR Flow**: Target part dev branch (e.g. `be_system/dev`) for feature branches, then merge part dev to part main (`be_system/main`), then merge part main to `main` for release.
-* **Branch Cleanup Rule**: After pushing code and completing MR creation, switch back to the target dev branch (`be_system/dev` etc.), delete the temporary local feature branch (`git branch -D [branch-name]`), and prune remote branches (`git fetch -p`) to keep local and remote repositories clean.
+* **Branch Cleanup Rule**: After MR is merged, always delete the feature branch locally (`git branch -D [branch-name]`) and remotely (GitLab UI or `git push origin --delete [branch-name]`).
 * **Mandatory MR Description Output**: Whenever pushing code or guiding MR creation, the AI agent MUST automatically generate and output a fully populated MR description markdown block (with Jira Ticket URL, Context, To-Do items, Definition of Done, and Reviewer Notes, WITHOUT checkboxes) in the final response.
 
 ---
