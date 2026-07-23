@@ -53,10 +53,15 @@
   4. **완료 기준 및 테스트 결과 (Definition of Done)**: 성공한 빌드 및 테스트 결과 요약 (`- [x] ...`)
   5. **리뷰어에게 전달할 특이사항**: 파트원 코드 리뷰 시 주의 깊게 봐야 할 포인트 기술
 
-## 6. 버저닝 및 Git Tag 자동화 규칙 (Automated Version Tagging)
-* **버전 자동 태깅 스크립트**: 프로젝트 내 `scripts/auto_tagger.py` 스크립트를 사용하여 4단계 브랜치 구조 및 SemVer 규칙에 맞게 버전을 자동 계산하고 Git Tag를 생성하여 푸시합니다.
-* **브랜치별 태그 자동 계산 규칙**:
-  * `main` 브랜치 ➔ Major 버전 자동 UP (`v1.0.0` ➔ `v2.0.0`)
-  * `*/main` 브랜치 (`be_system/main` 등) ➔ Minor 버전 자동 UP (`v1.1.0` ➔ `v1.2.0`)
-  * `*/dev` 브랜치 (`be_system/dev` 등) ➔ Patch 버전 자동 UP (`v1.1.1` ➔ `v1.1.2`)
-* **실행 예시**: `python scripts/auto_tagger.py` (또는 CI/CD 파이프라인 연동)
+## 6. 버저닝 및 Git Tag 규칙 (Version Tagging)
+* **방식**: 버전은 **Git Tag(SemVer `vMAJOR.MINOR.PATCH`)** 로 간단하게 관리합니다. 릴리스 시점에 `scripts/auto_tagger.py` 를 **수동 실행**하면 다음 버전을 자동 계산·태깅·푸시해 줍니다. (별도 CI/스케줄러 불필요)
+* **버전 단계 정의**:
+  * **PATCH (마지막 버전)** — 자잘한 수정 단위: `--type patch` (`v1.2.0` ➔ `v1.2.1`)
+  * **MINOR (중간 버전)** — 기능 묶음 완성/일 단위: `--type minor` (`v1.2.3` ➔ `v1.3.0`)
+  * **MAJOR (최종 버전)** — main 릴리스 병합: `--type major` (`v1.3.0` ➔ `v2.0.0`, 브랜치=main 이면 auto 로도 감지)
+* **변경 없음 처리**: 최신 태그 이후 **새 커밋이 없으면 태그를 만들지 않고 건너뜁니다**(빈 버전 방지). 며칠간 업데이트가 없으면 그냥 skip 되고, 새 커밋 후 실행할 때 태그가 찍힙니다. (강제 태깅은 `--force`)
+* **실행 예시**:
+  * 미리보기: `python scripts/auto_tagger.py --dry-run`
+  * 태깅: `python scripts/auto_tagger.py --type patch|minor|major`
+  * 스크립트 없이 직접: `git tag -a v1.2.0 -m "메시지" && git push origin v1.2.0`
+* **(선택) CI 자동화**: 필요해지면 커밋 push→`--type patch`, 일일 스케줄→`--type minor`, main 병합→`--type major` 로 파이프라인에 연결할 수 있습니다. **필수는 아닙니다.**
