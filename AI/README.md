@@ -327,6 +327,53 @@ The preview reports when the verifier runs, its running invocation percentage,
 and the combined inference time. The cascade values are initial operating
 defaults; sweep them on validation images and videos before final acceptance.
 
+### Test the cascade on a video
+
+Run both trained checkpoints on a video with a live detection overlay and a
+side-panel log. A tuned post-processing configuration can be supplied with
+`--postprocess-config`; without one, the player uses the command-line confidence
+and NMS values with the standard temporal policy:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\video_inference.py `
+  --source data\fire_test1.mp4 `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --verifier-model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --device auto
+```
+
+Use `Space` or `P` to pause/resume, `A`/`D` to skip backward/forward five
+seconds, `J`/`L` to skip 30 seconds, comma/period to step one frame while
+paused, `R` to restart, `S` to save the annotated view, and `Q` or `Esc` to
+exit. Drag the **Position** bar with the mouse to seek to any point in the
+video. The panel beside the video shows inference time, cascade verifier use,
+alarms, detections, and recent frame logs.
+
+### Compare YOLO11n and the cascade on labeled images
+
+Evaluate standalone YOLO11n predictions and fused cascade predictions against
+the same labeled test images. The report includes overall and per-class
+precision, recall, F1, mAP50, mAP50-95, inference latency, and verifier usage:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_cascade.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --verifier-model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --split test `
+  --device 0 `
+  --batch 16 `
+  --verifier-interval 5 `
+  --output artifacts\evaluations\cascade-vs-yolo11n-test-20260723
+```
+
+Use `--split val` while tuning cascade thresholds and reserve `--split test`
+for the locked final comparison. Images are independent, so temporal alarm
+state is not applied. With `--verifier-interval 5`, periodic verification uses
+sorted image order to mirror the runtime rate; use `--verifier-interval 1` to
+measure the every-image verifier upper bound. Add `--limit 100` for a quick
+smoke test. Each output directory must be new.
+
 ## Reproducibility notes
 
 - Keep the downloaded D-Fire archive immutable; generate a new derived version
