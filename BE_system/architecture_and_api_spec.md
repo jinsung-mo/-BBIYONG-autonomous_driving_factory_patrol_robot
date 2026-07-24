@@ -32,7 +32,7 @@ flowchart TD
         Nginx[Nginx Reverse Proxy / SSL Termination]
     end
 
-    subgraph "Backend Server (Spring Boot / Raspberry Pi 5)"
+    subgraph "Backend Server (Spring Boot / AWS EC2)"
         Spring[Spring Main Server :8080]
         WssEndpoint[Robot WebSocket Handler /ws/robot]
         SQLite[SQLite - Event & Alert DB]
@@ -83,7 +83,7 @@ flowchart TD
 3. **Nginx 게이트웨이 & 리버스 프록시 (Ingress Layer)**:
    * 단일 SSL/TLS 인증서 종단점(Termination) 역할을 수행하여 443(HTTPS/WSS) 포트 통신을 전담 처리합니다.
    * 웹 정적 아티팩트(React), 백엔드 REST API(`/api/*`), 웹 관제 웹소켓(`/ws-관제`), 로봇 WSS(`/ws/robot`) 요청을 적절한 내부 포트로 리버스 프록시 라우팅합니다.
-4. **메인 백엔드 (Spring Boot / Raspberry Pi 5)**:
+4. **메인 백엔드 (Spring Boot / AWS EC2)**:
    * **로봇 WSS 핸들러 내장**: Nginx로부터 전달받은 WSS 소켓 연결(`/ws/robot`)을 수신하고 명령 및 상태 데이터를 실시간 양방향 송수신합니다.
    * **CCTV 연동 및 자동 출동**: CCTV로부터 1차 화재 이벤트를 수신하면, 즉시 로봇의 순찰 모드를 긴급 출동 상태로 전환시키고 해당 좌표로 출동 명령(`DISPATCH`)을 WSS 소켓으로 전송합니다.
    * **수동 제어 릴레이**: 웹 브라우저에서 들어오는 실시간 WASD 웹소켓(STOMP) 제어 명령을 로봇의 WSS 소켓 패킷으로 변환하여 실시간 중계합니다.
