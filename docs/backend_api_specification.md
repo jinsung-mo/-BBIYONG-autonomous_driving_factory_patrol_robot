@@ -15,7 +15,7 @@
   "status": 400,
   "error": "Bad Request",
   "message": "유효하지 않은 입력값입니다.",
-  "path": "/api/robots/orinka_01/mapping"
+  "path": "/api/auth/login"
 }
 ```
 
@@ -70,8 +70,7 @@
 
 모든 제어 및 조회 API는 인가 헤더(`Authorization: Bearer <JWT>`)가 필요합니다.
 
-> **MVP 범위**: `GET /api/robots`, `POST /api/robots/{id}/mode`, `POST /api/robots/{id}/resume` 만 구현합니다.
-> `mapping`·`goto`는 명세만 정의하고 구현은 후속(Deferred)입니다.
+> **제어는 REST가 아니라 STOMP**: 로봇 실시간 제어(모드/주행/ESTOP/맵저장/좌표이동)는 STOMP `/app/control/*` 로 전달되어 로봇 WSS로 중계된다([2.2](#22-pubsub-토픽-및-페이로드) 및 [3.2](#32-spring-boot-rightarrow-로봇-downstream)). REST는 인증과 조회(read)만 담당한다.
 
 #### [MVP][GET] `/api/robots`
 * **설명**: 관리자에게 배정된 로봇의 실시간 상태 요약 목록을 조회합니다. (Spring Boot In-Memory 캐시에서 읽음)
@@ -87,50 +86,12 @@
     "estop": "RELEASED",
     "commLatencyMs": 43,
     "inferenceFps": 8.0,
-    "ambientTemp": 24.8,
-    "humidity": 39.0,
     "lastConnected": "2026-07-18T19:35:00Z",
     "location": { "x": 1.25, "y": 3.40, "yaw": 0.78 }
   }
 ]
 ```
-
-#### [MVP][POST] `/api/robots/{robotId}/mode`
-* **설명**: 웹 대시보드에서 로봇의 주행 모드를 **자율 순찰** 또는 **원격 수동 조종** 모드로 전환합니다. 백엔드는 WSS `SET_MODE` 명령으로 중계합니다.
-* **Request Body**:
-```json
-{
-  "mode": "MANUAL_CONTROL"
-}
-```
-* `mode` 값: `AUTO_PATROL`(자율 순찰), `MANUAL_CONTROL`(원격 수동 조종)
-* **Response Body (200 OK)**:
-```json
-{
-  "robotId": "orinka_01",
-  "currentMode": "MANUAL_CONTROL",
-  "status": "UPDATED",
-  "timestamp": "2026-07-18T19:38:00Z"
-}
-```
-
-#### [MVP][POST] `/api/robots/{robotId}/resume`
-* **설명**: 로봇을 자율 순찰(`AUTO_PATROL`)로 복귀시킵니다. 백엔드는 WSS `RESUME` 명령으로 중계하며, 로봇은 가장 가까운 순찰 지점으로 이동해 순찰을 재개합니다.
-* **Request Body**: None (또는 `{}`)
-* **Response Body (200 OK)**:
-```json
-{
-  "robotId": "orinka_01",
-  "currentMode": "AUTO_PATROL",
-  "status": "SENT",
-  "timestamp": "2026-07-18T19:38:10Z"
-}
-```
-
-#### [후속/Deferred][POST] `/api/robots/{robotId}/mapping`, `/api/robots/{robotId}/goto`
-* **설명**: `mapping`은 온디맨드 2D 도면 매핑을 시작/종료(→ WSS `START_MAPPING`/`STOP_MAPPING`)하고, `goto`는 특정 설비 지점으로 이동(→ WSS `GOTO_WAYPOINT`)합니다. **MVP 이후 구현 예정**이며 명세 정의만 둡니다.
-* **`mapping` Request**: `{"action": "START"}` / `{"action": "STOP"}`
-* **`goto` Request**: `{"waypointId": "panel_A"}`
+* `status`(보고 상태)는 로봇이 보고하는 상위 FSM 상태이며, 제어 명령 `mode`(`autonomy`/`manual`/`disabled`)와는 별개 축이다.
 
 ---
 
@@ -236,8 +197,6 @@
   "estop": "RELEASED",
   "commLatencyMs": 43,
   "inferenceFps": 8.0,
-  "ambientTemp": 24.8,
-  "humidity": 39.0,
   "location": {
     "x": 3.42,
     "y": 5.12,
@@ -247,7 +206,7 @@
 }
 ```
 * `status` 값: `AUTO_PATROL`(자율 순찰), `APPROACH`(화재 후보 위치 자율 접근), `VERIFY`(근접 교차검증), `MANUAL_CONTROL`(원격 조종), `MAPPING`(2D 도면 매핑 중, 후속)
-* 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`, `inferenceFps`, `ambientTemp`(℃), `humidity`(%)
+* 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`, `inferenceFps` (온습도 센서 미사용으로 주변 온도·습도 제외)
 
 #### 2) 실시간 경보 푸시 구독 (`SUB /topic/alerts`)
 * **설명**: 순찰 로봇이 화재 후보를 근접 교차검증(YOLO 객체탐지 + 열화상)하여 **화재로 확정한 시점**에 발행되는 경보입니다. 브라우저에 실시간 경보 모달을 띄우기 위해 사용합니다. (접근/검증 진행 단계는 경보가 아닌 `/topic/robots` 상태로만 반영됩니다.)
@@ -284,8 +243,8 @@
 ```
 * `channel` 값: `FRONT`(RGB·YOLO 오버레이) 또는 `THERMAL`(열화상, `maxTemp` 포함)
 
-#### 4) 2D 도면 매핑 점유 격자 구독 (`SUB /topic/map`) *(후속/Deferred)*
-* **설명**: 로봇이 `MAPPING` 모드에서 스트리밍하는 SLAM 점유 격자(occupancy grid)를 백엔드가 실시간 중계합니다. 관제 대시보드는 이를 Three.js로 렌더링하여 도면 생성 과정을 시각화합니다. **MVP 이후 구현**입니다.
+#### 4) 2D 도면 매핑 점유 격자 구독 (`SUB /topic/map`) *(미확정/Deferred)*
+* **설명**: ⚠️ 현재 로봇 명령 계약에는 `SAVE_MAP`(맵 저장)만 있고 맵 상향 스트리밍은 없다. 로봇의 맵 스트리밍 능력이 확인되면 백엔드가 아래 형태의 점유 격자를 `/topic/map` 으로 중계하여 대시보드(Three.js)가 렌더링한다. (능력 확인 전까지 미확정)
 * **Payload**:
 ```json
 {
@@ -300,18 +259,18 @@
 ```
 * `data`: row-major 점유 배열 — `-1`(미탐색), `0`(자유공간), `100`(점유/장애물)
 
-#### 5) 로봇 원격 방향 조종 (WASD) 발행 (`PUB /app/robot/{robotId}/manual-drive`)
-* **설명**: 웹 관제 화면에서 수동 조종 모드(`MANUAL_CONTROL`)를 활성화한 상태에서 관리자가 키보드 WASD 키를 누를 때마다 이 엔드포인트로 이동 명령(선속도/각속도 값)을 쏘아 보냅니다. 백엔드는 이 값을 즉시 로봇의 WSS 소켓으로 릴레이합니다.
-* **Payload**:
-```json
-{
-  "linear": 0.5,
-  "angular": -0.2
-}
-```
-* `linear`: 전진/후진 속도 (m/s) — 전진 (+), 후진 (-)
-* `angular`: 회전 각속도 (rad/s) — 좌회전 (+), 우회전 (-)
-* 정지 명령 시에는 두 값을 모두 `0.0`으로 전송합니다.
+#### 5) 로봇 제어 발행 (`PUB /app/control/*`)
+* **설명**: 웹 관제 화면의 제어 조작을 백엔드로 발행하면, 백엔드가 payload를 검증(`validate`)한 뒤 대상 로봇 WSS 세션으로 명령을 중계합니다. `robot_id`는 payload에 포함하며 생략 시 기본값 `orinka_01`을 사용합니다. 명령 어휘는 로봇 계약([3.2](#32-spring-boot-rightarrow-로봇-downstream))을 그대로 따릅니다.
+
+| 목적지 | command | Payload 예시 |
+| :--- | :--- | :--- |
+| `/app/control/drive` | `DRIVE` | `{"robot_id":"orinka_01","command":"DRIVE","linear":0.5,"angular":-0.2}` |
+| `/app/control/mode` | `SET_MODE` / `ESTOP` | `{"robot_id":"orinka_01","command":"SET_MODE","mode":"autonomy"}` |
+| `/app/control/operation` *(후속)* | `SAVE_MAP` / `NAVIGATE` | `{"robot_id":"orinka_01","command":"SAVE_MAP","name":"factory_01"}` |
+
+* `DRIVE`: `linear`(전진/후진 m/s), `angular`(회전 rad/s). 정지 시 둘 다 `0.0`. `manual` 모드에서 유효.
+* `SET_MODE mode`: `autonomy`(자율 순찰) / `manual`(수동 조종) / `disabled`(정지). **순찰 복귀 = `SET_MODE autonomy`**.
+* `ESTOP`: 활성화만 허용(fail-safe, 항상 `active=true`로 중계).
 
 ---
 
@@ -325,10 +284,10 @@ AWS 인프라 보안 및 방화벽 규정을 준수하기 위해 Nginx 리버스
 
 #### 1) 주기적 텔레메트리 패킷
 ```json
-{"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 71.0, "status": "AUTO_PATROL", "speed": 0.6, "estop": "RELEASED", "commLatencyMs": 43, "inferenceFps": 8.0, "ambientTemp": 24.8, "humidity": 39.0}
+{"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 71.0, "status": "AUTO_PATROL", "speed": 0.6, "estop": "RELEASED", "commLatencyMs": 43, "inferenceFps": 8.0}
 ```
-* `status` 값: `AUTO_PATROL`, `APPROACH`, `VERIFY`, `MANUAL_CONTROL`, `MAPPING`(후속)
-* 확장 필드: `speed`, `estop`, `commLatencyMs`, `inferenceFps`, `ambientTemp`, `humidity`
+* `status`(로봇 보고 상위 FSM 상태): `AUTO_PATROL`, `APPROACH`, `VERIFY`, `MANUAL_CONTROL`, `MAPPING`(후속) — ⚠️ 제어 명령 `mode`(`autonomy`/`manual`/`disabled`)와는 별개 축이며, 정확한 status 문자열은 로봇 상향 텔레메트리 구현과 함께 확정
+* 확장 필드: `speed`, `estop`, `commLatencyMs`, `inferenceFps` (온습도 센서 미사용)
 
 #### 1-1) 듀얼 카메라 영상 프레임 패킷
 * **설명**: 전방 RGB와 열화상 프레임을 JPEG→base64로 인코딩하여 각각 전송합니다. 백엔드는 STOMP `/topic/video/{robotId}`로 중계합니다. `channel`로 두 스트림을 구분하며, `THERMAL`은 `maxTemp`를 포함합니다.
@@ -355,37 +314,31 @@ AWS 인프라 보안 및 방화벽 규정을 준수하기 위해 Nginx 리버스
 
 ### 3.2 Spring Boot $\rightarrow$ 로봇 (Downstream)
 
-> **MVP 범위**: `SET_MODE`, `DRIVE`, `RESUME` 만 구현합니다. 나머지 명령은 명세 정의만 두고 후속 구현합니다.
+> **로봇 명령 계약(ground truth)**: 아래는 로봇 `remote_control_protocol.py` 가 파싱하는 명령이다. BE STOMP 컨트롤러(`RobotControlStompController`)는 이 계약과 일치하도록 검증·중계한다.
+> **MVP 범위**: `SET_MODE`(자율/수동 전환·순찰 복귀), `DRIVE`(WASD) 만 관제 UI에 연결한다.
 
 #### [MVP] 1) 모드 설정 패킷 (개행 필수)
 ```json
-{"command": "SET_MODE", "mode": "MANUAL_CONTROL"}
+{"command": "SET_MODE", "mode": "manual"}
 ```
-* `mode` 값: `AUTO_PATROL` 또는 `MANUAL_CONTROL`
+* `mode` 값: `autonomy`(자율 순찰) / `manual`(수동 조종) / `disabled`(정지). **순찰 복귀 = `SET_MODE mode=autonomy`** (별도 RESUME 명령 없음)
 
 #### [MVP] 2) 수동 조종 방향 패킷 (개행 필수)
 ```json
 {"command": "DRIVE", "linear": 0.5, "angular": -0.2}
 ```
-* `linear`: 전진/후진 속도 (m/s)
-* `angular`: 회전 각속도 (rad/s)
+* `linear`: 전진/후진 속도 (m/s), `angular`: 회전 각속도 (rad/s). 로봇이 `max_linear`/`max_angular`로 클램핑. `manual` 모드에서 유효.
 
-#### [MVP] 3) 순찰 복귀 패킷 (개행 필수)
-* **설명**: 로봇을 자율 순찰(`AUTO_PATROL`)로 복귀시킵니다.
-```json
-{"command": "RESUME"}
-```
+#### [후속/Deferred] 3) 그 외 로봇 지원 명령 (개행 필수)
+* 로봇 프로토콜에 정의되어 있으나 관제 UI 연결은 MVP 이후.
 
-#### [후속/Deferred] 4) 그 외 제어 패킷 (개행 필수)
-* MVP 이후 구현 예정. 명세 정의만 둡니다.
-
-| command | 설명 | 페이로드 예시 |
+| command | 페이로드 | 설명 |
 | :--- | :--- | :--- |
-| `ESTOP` / `RESET` | 긴급 정지 / 해제 | `{"command": "ESTOP"}` |
-| `GOTO_WAYPOINT` | 특정 설비 지점 이동 | `{"command": "GOTO_WAYPOINT", "waypointId": "panel_A"}` |
-| `HEADLIGHT` / `WARN_BROADCAST` | 전조등 / 경고 방송 on-off | `{"command": "HEADLIGHT", "on": true}` |
-| `VOLUME` | 방송 볼륨 | `{"command": "VOLUME", "level": 100}` |
-| `START_MAPPING` / `STOP_MAPPING` | 온디맨드 매핑 시작/종료 | `{"command": "START_MAPPING"}` |
+| `ESTOP` | `{"command": "ESTOP", "active": true}` | 긴급 정지 (활성화만 허용, fail-safe) |
+| `NAVIGATE` | `{"command": "NAVIGATE", "x": 15.0, "y": 8.2, "yaw": 0.0}` | 지정 좌표 이동 (프로토타입 "지점 이동") |
+| `SAVE_MAP` | `{"command": "SAVE_MAP", "name": "factory_01"}` | 현재 SLAM 맵 저장 (safe basename) |
+
+* 프로토타입 UI의 전조등·경고 방송·볼륨은 현재 로봇 프로토콜 미지원 → 로봇 펌웨어 확장 후 정의.
 
 ---
 
