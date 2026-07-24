@@ -79,13 +79,32 @@ flowchart LR
 
 * 순찰~검증(`APPROACH`, `VERIFY`) 단계는 로봇의 상태(`status`)로만 관제센터에 실시간 반영되며, **실제 경보(alert)는 교차검증으로 화재가 확정된 시점에만 1회 발송**됩니다(오탐 노이즈 방지).
 
+### 1.1.2 평상시 순찰 모델 (2단계 우선순위)
+
+로봇은 **사전에 완성된 2D 도면(맵)** 을 기반으로 자율주행하며, 다음 2단계 우선순위로 순찰합니다.
+
+```mermaid
+flowchart LR
+    P1[① 우선 구역 순찰<br/>분전반 A · B · C 등 설비 지점 저속 순회] -->|우선 구역 1회전 완료| P2[② 미탐색 공간 탐색<br/>Frontier 기반 미방문 영역 순회]
+    P2 -->|주기 도래| P1
+```
+
+* **① 우선 구역 순찰**: 등록된 설비(분전반 등) waypoint를 우선 방문하여 과열/화재를 집중 감시합니다.
+* **② 미탐색 탐색(Frontier)**: 우선 구역 순회 후, 아직 방문하지 않은 공간을 프론티어 방식으로 순회하여 커버리지를 확보합니다.
+* 관제센터는 이 순찰(자율) 모드와 수동 조종 모드를 실시간 전환할 수 있으며, 특정 설비 지점으로의 직접 이동(`GOTO_WAYPOINT`)을 지시할 수 있습니다.
+
+> **MVP 구현 범위 (로봇 제어)**: 이번 MVP에서는 **자동 순찰(`AUTO_PATROL`) · 수동 조종 WASD(`MANUAL_CONTROL`/`DRIVE`) · 순찰 복귀(`RESUME`)** 만 구현합니다.
+> 긴급정지(`ESTOP`)·리셋(`RESET`)·지점 이동(`GOTO_WAYPOINT`)·전조등(`HEADLIGHT`)·경고 방송(`WARN_BROADCAST`)·볼륨(`VOLUME`)·온디맨드 매핑(`START/STOP_MAPPING`)은 **명세상 정의만 하고 구현은 후속(Deferred)** 으로 둡니다.
+
 ### 1.2 컴포넌트별 주요 역할
 
 1. **오린카 (Jetson Orin Nano)**:
-   * **주행**: LiDAR 센서를 활용해 2D 지도를 작성(SLAM Toolbox)하고, `robot_localization`을 통한 EKF 센서 융합(오도메트리+IMU)으로 자율주행 순찰(Nav2) 및 장애물 회피를 처리합니다.
-   * **자율 화재 탐지 (완결형)**: 순찰 중 일반 카메라 영상으로 YOLO 추론을 수행하여 화재 후보를 탐지하면, 스스로 해당 위치 근처로 이동(`APPROACH`)한 뒤 근접 상태에서 YOLO 객체탐지와 열화상(Thermal) 데이터를 대조(교차검증, `VERIFY`)합니다. 화재로 확정된 경우에만 백엔드로 확정 경보(`EVENT_FIRE`)를 전송하여 비화재 오탐(빛 반사 등)을 원천 차단합니다.
-   * **온디맨드 2D 도면 매핑**: 관제센터의 매핑 시작 명령(`START_MAPPING`)을 수신하면 `MAPPING` 모드로 진입하여 SLAM 기반 2D 지도를 생성하고, 생성 중인 점유 격자(occupancy grid) 데이터를 WSS로 실시간 스트리밍합니다. 종료 명령(`STOP_MAPPING`) 시 자율 순찰로 복귀합니다.
-   * **상태 및 수동 조종**: 자율 순찰(`AUTO_PATROL`) ↔ 수동 조종(`MANUAL_CONTROL`) 등 FSM 전환을 지원합니다. 수동 조종 모드 시 백엔드로부터 WSS 채널로 전달된 WASD 제어 명령을 `/cmd_vel` 토픽으로 변환하여 구동하고, 실시간 비디오 프레임을 릴레이합니다.
+   * **주행**: LiDAR 센서를 활용해 2D 지도를 작성(SLAM Toolbox)하고, `robot_localization`을 통한 EKF 센서 융합(오도메트리+IMU)으로 자율주행 순찰(Nav2) 및 장애물 회피를 처리합니다. 순찰은 완성된 2D 도면을 기반으로 [1.1.2](#112-평상시-순찰-모델-2단계-우선순위)의 우선 구역 → 미탐색 탐색 2단계로 수행합니다.
+   * **자율 화재 탐지 (완결형)**: 순찰 중 RGB 카메라 영상으로 YOLO 추론을 수행하여 화재 후보를 탐지하면, 스스로 해당 위치 근처로 이동(`APPROACH`)한 뒤 근접 상태에서 YOLO 객체탐지와 열화상(Thermal) 데이터를 대조(교차검증, `VERIFY`)합니다. 화재로 확정된 경우에만 백엔드로 확정 경보(`EVENT_FIRE`)를 전송하여 비화재 오탐(빛 반사 등)을 원천 차단합니다.
+   * **듀얼 영상 릴레이**: 전방 RGB 카메라(YOLO 오버레이)와 동일 방향 열화상(Thermal) 카메라 프레임을 각각 JPEG로 인코딩·base64 텍스트 프레임으로 WSS 스트리밍합니다. 백엔드는 이를 STOMP로 중계하여 관제 대시보드에 RGB/열화상을 나란히 표시합니다.
+   * **확장 텔레메트리**: 위치·배터리·상태 외에 속도(m/s), E-STOP 상태, 통신 지연(ms), 추론 FPS, 주변 온도, 습도를 주기적으로 전송합니다.
+   * **상태 및 수동 조종**: 자율 순찰(`AUTO_PATROL`) ↔ 수동 조종(`MANUAL_CONTROL`) FSM 전환을 지원합니다. 수동 조종 모드 시 백엔드로부터 WSS 채널로 전달된 WASD 제어 명령을 `/cmd_vel` 토픽으로 변환하여 구동합니다.
+   * **온디맨드 2D 도면 매핑 (후속/Deferred)**: 관제센터의 매핑 시작 명령(`START_MAPPING`)을 수신하면 `MAPPING` 모드로 진입하여 SLAM 기반 2D 지도를 생성하고 점유 격자(occupancy grid)를 WSS로 스트리밍합니다. *(MVP 이후 구현 예정)*
 2. **Nginx 게이트웨이 & 리버스 프록시 (Ingress Layer)**:
    * 단일 SSL/TLS 인증서 종단점(Termination) 역할을 수행하여 443(HTTPS/WSS) 포트 통신을 전담 처리합니다.
    * 웹 정적 아티팩트(React), 백엔드 REST API(`/api/*`), 웹 관제 웹소켓(`/ws-관제`), 로봇 WSS(`/ws/robot`) 요청을 적절한 내부 포트로 리버스 프록시 라우팅합니다.
@@ -131,10 +150,34 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
   "location": { "x": 12.34, "y": 5.67, "yaw": 1.57 },
   "battery": 88.5,
   "status": "AUTO_PATROL",
+  "speed": 0.6,
+  "estop": "RELEASED",
+  "commLatencyMs": 43,
+  "inferenceFps": 8.0,
+  "ambientTemp": 24.8,
+  "humidity": 39.0,
   "timestamp": 1781778100
 }
 ```
-* `status` 항목: `AUTO_PATROL`(자율 순찰), `APPROACH`(화재 후보 위치 자율 접근), `VERIFY`(근접 교차검증), `MANUAL_CONTROL`(직접 조종), `MAPPING`(2D 도면 매핑 중)
+* `status` 항목: `AUTO_PATROL`(자율 순찰), `APPROACH`(화재 후보 위치 자율 접근), `VERIFY`(근접 교차검증), `MANUAL_CONTROL`(직접 조종), `MAPPING`(2D 도면 매핑 중, 후속)
+* 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`(통신 왕복 지연), `inferenceFps`(YOLO 추론 FPS), `ambientTemp`(주변 온도 ℃), `humidity`(습도 %)
+
+#### 1-1) 듀얼 카메라 영상 프레임 (Robot $\rightarrow$ Spring Boot)
+* **설명**: 전방 RGB와 열화상 프레임을 각각 JPEG→base64로 인코딩하여 전송합니다. 백엔드는 STOMP `/topic/video/{robotId}` 로 중계하며, 대시보드가 RGB/열화상을 나란히 렌더링합니다. `channel`로 두 스트림을 구분합니다.
+```json
+{
+  "source": "robot",
+  "type": "VIDEO_FRAME",
+  "robot_id": "orinka_01",
+  "channel": "FRONT",
+  "format": "jpeg",
+  "data": "<base64-encoded JPEG>",
+  "maxTemp": null,
+  "seq": 1024,
+  "timestamp": 1781778101
+}
+```
+* `channel` 항목: `FRONT`(RGB·YOLO 오버레이) 또는 `THERMAL`(열화상). `THERMAL`인 경우 `maxTemp`(최대 온도 ℃)를 함께 전송합니다.
 
 #### 2) 교차검증 화재 이벤트 전송 (Robot $\rightarrow$ Spring Boot)
 * **설명**: 로봇이 `APPROACH` → `VERIFY`(YOLO 객체탐지 + 열화상)를 거쳐 **화재로 확정한 시점에만** 1회 전송합니다. 후보 감지/접근 단계는 경보가 아닌 `STATE_UPDATE`(status)로만 반영됩니다.
@@ -142,8 +185,8 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 {"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "location": {"x": 15.0, "y": 8.2}, "timestamp": 1781778200}
 ```
 
-#### 3) 2D 도면 매핑 점유 격자 스트리밍 (Robot $\rightarrow$ Spring Boot)
-* **설명**: `MAPPING` 모드에서 SLAM으로 생성 중인 점유 격자(occupancy grid)를 주기적으로 스트리밍합니다. 백엔드는 이를 STOMP `/topic/map` 으로 대시보드(Three.js)에 중계하여 매핑 진행 상황을 실시간 렌더링합니다.
+#### [후속/Deferred] 3) 2D 도면 매핑 점유 격자 스트리밍 (Robot $\rightarrow$ Spring Boot)
+* **설명**: `MAPPING` 모드에서 SLAM으로 생성 중인 점유 격자(occupancy grid)를 주기적으로 스트리밍합니다. 백엔드는 이를 STOMP `/topic/map` 으로 대시보드(Three.js)에 중계하여 매핑 진행 상황을 실시간 렌더링합니다. *(MVP 이후 구현)*
 ```json
 {
   "source": "robot",
@@ -158,47 +201,66 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 }
 ```
 
-#### 4) 로봇 구동 모드 제어 명령 (Spring Boot $\rightarrow$ Robot)
+##### [MVP] 4) 로봇 구동 모드 제어 명령 (Spring Boot $\rightarrow$ Robot)
 ```json
 {"command": "SET_MODE", "mode": "MANUAL_CONTROL"}
 ```
 * `mode` 항목: `AUTO_PATROL` 또는 `MANUAL_CONTROL`
 
-#### 5) 2D 도면 매핑 시작/종료 명령 (Spring Boot $\rightarrow$ Robot)
-* **설명**: 관제센터의 매핑 버튼 조작(`POST /api/robots/{id}/mapping`)을 로봇 WSS 명령으로 변환하여 전달합니다. `START_MAPPING` 수신 시 `MAPPING` 모드로 진입해 점유 격자 스트리밍을 시작하고, `STOP_MAPPING` 수신 시 자율 순찰(`AUTO_PATROL`)로 복귀합니다.
-```json
-{"command": "START_MAPPING"}
-```
-
-#### 6) 수동 조종 방향 명령 (Spring Boot $\rightarrow$ Robot)
+##### [MVP] 5) 수동 조종 방향 명령 (Spring Boot $\rightarrow$ Robot)
 * **설명**: 웹 관제센터에서 입력한 WASD 키값을 선속도/각속도 값(ROS 2 Twist 메시지 변환용)으로 매핑하여 로봇에 직접 릴레이합니다.
 ```json
 {"command": "DRIVE", "linear": 0.5, "angular": -0.1}
 ```
 
+##### [MVP] 6) 순찰 복귀 명령 (Spring Boot $\rightarrow$ Robot)
+* **설명**: 수동 조종/일시 정지 상태에서 로봇을 자율 순찰(`AUTO_PATROL`)로 복귀시킵니다. 로봇은 가장 가까운 순찰 지점으로 이동해 순찰을 재개합니다.
+```json
+{"command": "RESUME"}
+```
+
+##### [후속/Deferred] 7) 그 외 제어 명령 (Spring Boot $\rightarrow$ Robot)
+* MVP 이후 구현 예정. 명세 정의만 둡니다.
+
+| command | 설명 | 페이로드 예시 |
+| :--- | :--- | :--- |
+| `ESTOP` | 긴급 정지 (모터 차단) | `{"command": "ESTOP"}` |
+| `RESET` | E-STOP 해제/초기화 | `{"command": "RESET"}` |
+| `GOTO_WAYPOINT` | 특정 설비 지점으로 직접 이동 | `{"command": "GOTO_WAYPOINT", "waypointId": "panel_A"}` |
+| `HEADLIGHT` | 전조등 on/off | `{"command": "HEADLIGHT", "on": true}` |
+| `WARN_BROADCAST` | 경고 방송 on/off | `{"command": "WARN_BROADCAST", "on": true}` |
+| `VOLUME` | 방송 볼륨 조절 | `{"command": "VOLUME", "level": 100}` |
+| `START_MAPPING` / `STOP_MAPPING` | 온디맨드 2D 도면 매핑 시작/종료 (→ `MAPPING` 모드, occupancy grid 스트리밍) | `{"command": "START_MAPPING"}` |
+
 ---
 
 ### 2.2 메인 서버 (Spring Boot) REST API 명세 (Web Client 용)
 
-| HTTP Method | API Path | 설명 | Request Body / Query | Response Body |
-| :--- | :--- | :--- | :--- | :--- |
-| **POST** | `/api/auth/login` | 관리자 로그인 | `{"username": "...", "password": "..."}` | `{"token": "JWT_TOKEN", "role": "ADMIN"}` |
-| **GET** | `/api/robots` | 관리 권한이 있는 로봇 목록 조회 | None | `[{"robot_id": "orinka_01", "status": "AUTO_PATROL"}]` |
-| **POST** | `/api/robots/{id}/mode` | 로봇 순찰 모드 변경 (자율순찰/수동조종) | `{"mode": "MANUAL_CONTROL"}` | `{"status": "SUCCESS", "currentMode": "MANUAL_CONTROL"}` |
-| **POST** | `/api/robots/{id}/mapping` | 관제센터 2D 도면 매핑 시작/종료 (버튼 트리거 → WSS `START_MAPPING`/`STOP_MAPPING` 중계) | `{"action": "START"}` / `{"action": "STOP"}` | `{"status": "SUCCESS", "currentMode": "MAPPING"}` |
-| **GET** | `/api/events` | 이상 탐지 이벤트 이력 조회 (SQLite) | `?page=0&size=10` | `{"content": [{"event_id": 1, "type": "FIRE", ...}]}` |
-| **PUT** | `/api/equipments/{id}` | 특정 설비의 경보 임계 온도 설정 | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
+| 구분 | HTTP Method | API Path | 설명 | Request Body / Query | Response Body |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| MVP | **POST** | `/api/auth/signup` | 관리자 회원가입 (이메일 기반) | `{"email": "safety@bbiyong.io", "password": "...", "name": "..."}` | `{"status": "SUCCESS", "email": "safety@bbiyong.io"}` |
+| MVP | **POST** | `/api/auth/login` | 관리자 로그인 (이메일 기반) | `{"email": "safety@bbiyong.io", "password": "..."}` | `{"tokenType": "Bearer", "accessToken": "JWT", "role": "ROLE_ADMIN"}` |
+| MVP | **GET** | `/api/robots` | 로봇 목록/상태 요약 조회 | None | `[{"robotId": "orinka_01", "status": "AUTO_PATROL", "battery": 71}]` |
+| MVP | **POST** | `/api/robots/{id}/mode` | 로봇 모드 변경 (자율순찰/수동조종) → WSS `SET_MODE` 중계 | `{"mode": "MANUAL_CONTROL"}` | `{"status": "SUCCESS", "currentMode": "MANUAL_CONTROL"}` |
+| MVP | **POST** | `/api/robots/{id}/resume` | 순찰 복귀 → WSS `RESUME` 중계 | None | `{"status": "SUCCESS", "currentMode": "AUTO_PATROL"}` |
+| MVP | **GET** | `/api/events` | 이상 탐지 이벤트 이력 조회 (SQLite) | `?page=0&size=10` | `{"content": [{"eventId": 1, "type": "FIRE", ...}]}` |
+| 후속 | **PUT** | `/api/equipments/{id}` | 설비(분전반) 경보 임계 온도 설정 | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
+| 후속 | **POST** | `/api/robots/{id}/mapping` | 온디맨드 2D 매핑 시작/종료 → WSS `START/STOP_MAPPING` 중계 | `{"action": "START"}` | `{"status": "SUCCESS", "currentMode": "MAPPING"}` |
+| 후속 | **POST** | `/api/robots/{id}/goto` | 특정 설비 지점 이동 → WSS `GOTO_WAYPOINT` 중계 | `{"waypointId": "panel_A"}` | `{"status": "SUCCESS"}` |
+
+> **인증 주의**: 회원가입/로그인은 이메일 기반이며, 로그인 성공 시 JWT를 발급합니다. 이후 모든 로봇 제어/조회 API는 `Authorization: Bearer <JWT>` 헤더를 요구합니다.
 
 ---
 
 ### 2.3 실시간 웹소켓(WebSocket) 토픽 구조 (Spring Boot $\leftrightarrow$ Web Client)
 
 * **구독 토픽 (Sub)**:
-  * `/topic/robots`: 실시간 로봇 위치, 모드(`status`: `AUTO_PATROL`/`APPROACH`/`VERIFY`/`MANUAL_CONTROL`/`MAPPING`), 배터리 상태 갱신
-  * `/topic/alerts`: 로봇이 교차검증으로 확정한 화재 경보 실시간 푸시
-  * `/topic/map`: `MAPPING` 모드 중 로봇이 스트리밍하는 2D 점유 격자(occupancy grid) 실시간 중계 (Three.js 렌더링용)
+  * `/topic/robots`: 실시간 로봇 텔레메트리(위치, `status`, 배터리, 속도, E-STOP, 통신 지연, 추론 FPS, 주변 온도, 습도) 갱신
+  * `/topic/alerts`: 로봇이 교차검증으로 확정한 화재 경보 실시간 푸시(`source: ROBOT`)
+  * `/topic/video/{robotId}`: 로봇 듀얼 카메라 프레임 중계 — `channel`(`FRONT`/`THERMAL`)로 구분되는 base64 JPEG 프레임
+  * `/topic/map` *(후속)*: `MAPPING` 모드 중 로봇이 스트리밍하는 2D 점유 격자(occupancy grid) 실시간 중계 (Three.js 렌더링용)
 * **발행 토픽 (Pub)**:
-  * `/app/robot/{id}/manual-drive`: 웹 관제화면 WASD 키 입력을 수동 주행 명령으로 변환하여 발행
+  * `/app/robot/{id}/manual-drive`: 웹 관제화면 WASD 키 입력을 수동 주행 명령으로 변환하여 발행 (`MANUAL_CONTROL` 모드에서만 유효)
 ```json
 {
   "linear": 0.5,
