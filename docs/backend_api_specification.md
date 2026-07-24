@@ -86,8 +86,6 @@
     "estop": "RELEASED",
     "commLatencyMs": 43,
     "inferenceFps": 8.0,
-    "ambientTemp": 24.8,
-    "humidity": 39.0,
     "lastConnected": "2026-07-18T19:35:00Z",
     "location": { "x": 1.25, "y": 3.40, "yaw": 0.78 }
   }
@@ -199,8 +197,6 @@
   "estop": "RELEASED",
   "commLatencyMs": 43,
   "inferenceFps": 8.0,
-  "ambientTemp": 24.8,
-  "humidity": 39.0,
   "location": {
     "x": 3.42,
     "y": 5.12,
@@ -210,7 +206,7 @@
 }
 ```
 * `status` 값: `AUTO_PATROL`(자율 순찰), `APPROACH`(화재 후보 위치 자율 접근), `VERIFY`(근접 교차검증), `MANUAL_CONTROL`(원격 조종), `MAPPING`(2D 도면 매핑 중, 후속)
-* 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`, `inferenceFps`, `ambientTemp`(℃), `humidity`(%)
+* 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`, `inferenceFps` (온습도 센서 미사용으로 주변 온도·습도 제외)
 
 #### 2) 실시간 경보 푸시 구독 (`SUB /topic/alerts`)
 * **설명**: 순찰 로봇이 화재 후보를 근접 교차검증(YOLO 객체탐지 + 열화상)하여 **화재로 확정한 시점**에 발행되는 경보입니다. 브라우저에 실시간 경보 모달을 띄우기 위해 사용합니다. (접근/검증 진행 단계는 경보가 아닌 `/topic/robots` 상태로만 반영됩니다.)
@@ -288,10 +284,10 @@ AWS 인프라 보안 및 방화벽 규정을 준수하기 위해 Nginx 리버스
 
 #### 1) 주기적 텔레메트리 패킷
 ```json
-{"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 71.0, "status": "AUTO_PATROL", "speed": 0.6, "estop": "RELEASED", "commLatencyMs": 43, "inferenceFps": 8.0, "ambientTemp": 24.8, "humidity": 39.0}
+{"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 71.0, "status": "AUTO_PATROL", "speed": 0.6, "estop": "RELEASED", "commLatencyMs": 43, "inferenceFps": 8.0}
 ```
 * `status`(로봇 보고 상위 FSM 상태): `AUTO_PATROL`, `APPROACH`, `VERIFY`, `MANUAL_CONTROL`, `MAPPING`(후속) — ⚠️ 제어 명령 `mode`(`autonomy`/`manual`/`disabled`)와는 별개 축이며, 정확한 status 문자열은 로봇 상향 텔레메트리 구현과 함께 확정
-* 확장 필드: `speed`, `estop`, `commLatencyMs`, `inferenceFps`, `ambientTemp`, `humidity`
+* 확장 필드: `speed`, `estop`, `commLatencyMs`, `inferenceFps` (온습도 센서 미사용)
 
 #### 1-1) 듀얼 카메라 영상 프레임 패킷
 * **설명**: 전방 RGB와 열화상 프레임을 JPEG→base64로 인코딩하여 각각 전송합니다. 백엔드는 STOMP `/topic/video/{robotId}`로 중계합니다. `channel`로 두 스트림을 구분하며, `THERMAL`은 `maxTemp`를 포함합니다.

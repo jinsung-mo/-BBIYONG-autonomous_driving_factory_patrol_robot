@@ -102,7 +102,7 @@ flowchart LR
    * **주행**: LiDAR 센서를 활용해 2D 지도를 작성(SLAM Toolbox)하고, `robot_localization`을 통한 EKF 센서 융합(오도메트리+IMU)으로 자율주행 순찰(Nav2) 및 장애물 회피를 처리합니다. 순찰은 완성된 2D 도면을 기반으로 [1.1.2](#112-평상시-순찰-모델-2단계-우선순위)의 우선 구역 → 미탐색 탐색 2단계로 수행합니다.
    * **자율 화재 탐지 (완결형)**: 순찰 중 RGB 카메라 영상으로 YOLO 추론을 수행하여 화재 후보를 탐지하면, 스스로 해당 위치 근처로 이동(`APPROACH`)한 뒤 근접 상태에서 YOLO 객체탐지와 열화상(Thermal) 데이터를 대조(교차검증, `VERIFY`)합니다. 화재로 확정된 경우에만 백엔드로 확정 경보(`EVENT_FIRE`)를 전송하여 비화재 오탐(빛 반사 등)을 원천 차단합니다.
    * **듀얼 영상 릴레이**: 전방 RGB 카메라(YOLO 오버레이)와 동일 방향 열화상(Thermal) 카메라 프레임을 각각 JPEG로 인코딩·base64 텍스트 프레임으로 WSS 스트리밍합니다. 백엔드는 이를 STOMP로 중계하여 관제 대시보드에 RGB/열화상을 나란히 표시합니다.
-   * **확장 텔레메트리**: 위치·배터리·상태 외에 속도(m/s), E-STOP 상태, 통신 지연(ms), 추론 FPS, 주변 온도, 습도를 주기적으로 전송합니다.
+   * **확장 텔레메트리**: 위치·배터리·상태 외에 속도(m/s), E-STOP 상태, 통신 지연(ms), 추론 FPS를 주기적으로 전송합니다. (온습도 센서는 미사용)
    * **상태 및 수동 조종**: `SET_MODE` 명령으로 `autonomy`(자율 순찰) ↔ `manual`(수동 조종) ↔ `disabled`(정지) 를 전환합니다. `manual` 모드 시 백엔드로부터 WSS로 전달된 `DRIVE`(WASD 변환) 명령을 `/cmd_vel`(Twist)로 변환하여 구동합니다.
    * **맵 저장 (후속/Deferred)**: `SAVE_MAP` 명령으로 현재 SLAM 맵을 저장합니다. (관제 UI 연결 및 맵 상향 스트리밍은 후속)
 2. **Nginx 게이트웨이 & 리버스 프록시 (Ingress Layer)**:
@@ -154,14 +154,13 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
   "estop": "RELEASED",
   "commLatencyMs": 43,
   "inferenceFps": 8.0,
-  "ambientTemp": 24.8,
-  "humidity": 39.0,
   "timestamp": 1781778100
 }
 ```
 * `status` 항목(로봇이 보고하는 상위 FSM 상태): `AUTO_PATROL`(자율 순찰), `APPROACH`(화재 후보 위치 자율 접근), `VERIFY`(근접 교차검증), `MANUAL_CONTROL`(직접 조종), `MAPPING`(후속)
 * ⚠️ **명령 `mode`(`autonomy`/`manual`/`disabled`)와 보고 `status`는 별개 축**이다. 명령 mode는 로봇 계약([2.1 4)](#mvp-4-로봇-구동-모드-제어-명령-spring-boot-rightarrow-robot))을 따르고, 상위 `status` 값의 정확한 문자열은 로봇 상향 텔레메트리 구현과 함께 확정한다.
-* 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`(통신 왕복 지연), `inferenceFps`(YOLO 추론 FPS), `ambientTemp`(주변 온도 ℃), `humidity`(습도 %)
+* 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`(통신 왕복 지연), `inferenceFps`(YOLO 추론 FPS)
+* ℹ️ 온습도(주변 온도·습도)는 온습도 센서 미사용으로 텔레메트리에서 제외한다.
 
 #### 1-1) 듀얼 카메라 영상 프레임 (Robot $\rightarrow$ Spring Boot)
 * **설명**: 전방 RGB와 열화상 프레임을 각각 JPEG→base64로 인코딩하여 전송합니다. 백엔드는 STOMP `/topic/video/{robotId}` 로 중계하며, 대시보드가 RGB/열화상을 나란히 렌더링합니다. `channel`로 두 스트림을 구분합니다.
@@ -250,7 +249,7 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 
 * **엔드포인트**: `/ws-관제`(및 `/ws/control`, SockJS 지원), app prefix `/app`, broker prefix `/topic`
 * **구독 토픽 (Sub, `/topic`)**:
-  * `/topic/robots`: 실시간 로봇 텔레메트리(위치, `status`, 배터리, 속도, E-STOP, 통신 지연, 추론 FPS, 주변 온도, 습도) 갱신
+  * `/topic/robots`: 실시간 로봇 텔레메트리(위치, `status`, 배터리, 속도, E-STOP, 통신 지연, 추론 FPS) 갱신
   * `/topic/alerts`: 로봇이 교차검증으로 확정한 화재 경보 실시간 푸시(`source: ROBOT`)
   * `/topic/video/{robotId}`: 로봇 듀얼 카메라 프레임 중계 — `channel`(`FRONT`/`THERMAL`)로 구분되는 base64 JPEG 프레임
   * `/topic/map` *(미확정/후속)*: 로봇 맵 스트리밍 능력 확인 시 2D 점유 격자 중계
