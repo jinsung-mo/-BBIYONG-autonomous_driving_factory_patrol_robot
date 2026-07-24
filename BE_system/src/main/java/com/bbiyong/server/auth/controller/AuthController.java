@@ -2,8 +2,11 @@ package com.bbiyong.server.auth.controller;
 
 import com.bbiyong.server.auth.dto.LoginRequest;
 import com.bbiyong.server.auth.dto.LoginResponse;
+import com.bbiyong.server.auth.dto.SignupRequest;
+import com.bbiyong.server.auth.dto.SignupResponse;
 import com.bbiyong.server.auth.service.AuthService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,6 +21,11 @@ public class AuthController {
 
 	public AuthController(AuthService authService) {
 		this.authService = authService;
+	}
+
+	@PostMapping("/signup")
+	public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
+		return ResponseEntity.status(HttpStatus.CREATED).body(authService.signup(request));
 	}
 
 	@PostMapping("/login")

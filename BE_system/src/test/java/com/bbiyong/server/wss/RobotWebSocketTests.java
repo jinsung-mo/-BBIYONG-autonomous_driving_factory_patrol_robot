@@ -85,4 +85,27 @@ public class RobotWebSocketTests {
         Thread.sleep(300);
         assertThat(sessionManager.isConnected("orinka_wss_test")).isFalse();
     }
+
+    @Test
+    @DisplayName("WSS - REGISTER 패킷 수신 시 경고 없이 세션 등록")
+    void testRobotRegisterPacket() throws Exception {
+        String wsUrl = "ws://localhost:" + port + "/ws/robot";
+        StandardWebSocketClient client = new StandardWebSocketClient();
+
+        WebSocketSession session = client.execute(new TextWebSocketHandler() {
+        }, wsUrl).get(5, TimeUnit.SECONDS);
+
+        assertThat(session.isOpen()).isTrue();
+
+        session.sendMessage(new TextMessage("""
+            {"type": "REGISTER", "robot_id": "orinka_register_test"}
+            """));
+        Thread.sleep(500);
+
+        assertThat(sessionManager.isConnected("orinka_register_test")).isTrue();
+
+        session.close();
+        Thread.sleep(300);
+        assertThat(sessionManager.isConnected("orinka_register_test")).isFalse();
+    }
 }

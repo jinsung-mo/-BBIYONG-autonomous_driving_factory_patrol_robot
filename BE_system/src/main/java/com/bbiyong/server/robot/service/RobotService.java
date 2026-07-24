@@ -31,6 +31,10 @@ public class RobotService {
                         state.getName(),
                         state.getStatus(),
                         state.getBattery(),
+                        state.getSpeed(),
+                        state.getEstop(),
+                        state.getCommLatencyMs(),
+                        state.getInferenceFps(),
                         state.getLastConnected(),
                         state.getLocation()
                 ))
@@ -54,6 +58,10 @@ public class RobotService {
 
         state.setStatus(packet.getStatus());
         state.setBattery(packet.getBattery());
+        state.setSpeed(packet.getSpeed());
+        state.setEstop(packet.getEstop());
+        state.setCommLatencyMs(packet.getCommLatencyMs());
+        state.setInferenceFps(packet.getInferenceFps());
         state.setLastConnected(Instant.now());
 
         if (packet.getLocation() != null) {
