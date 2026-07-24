@@ -382,6 +382,59 @@ sorted image order to mirror the runtime rate; use `--verifier-interval 1` to
 measure the every-image verifier upper bound. Add `--limit 100` for a quick
 smoke test. Each output directory must be new.
 
+### Measure YOLO11n and YOLO11s complementarity
+
+Before building another ensemble, measure whether YOLO11s detects enough
+validation targets that YOLO11n misses. This analysis is intentionally limited
+to the validation split so its result can guide fusion design without leaking
+held-out test labels:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\analyze_model_complementarity.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --other-model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --device 0 `
+  --batch 16 `
+  --output artifacts\evaluations\model-complementarity-val-<date>
+```
+
+The JSON and CSV reports separate shared, YOLO11n-only, YOLO11s-only, and
+jointly missed targets at the locked score and IoU thresholds. Oracle recall is
+an upper bound: it assumes perfect selection between both models and is not a
+deployable ensemble metric. A meaningful unique-recovery rate justifies testing
+a corrected fusion on validation data; acceptance still requires measured
+precision, recall, mAP, latency, and final held-out testing.
+
+### Evaluate four-view hybrid test-time augmentation voting
+
+Repeating an unchanged image does not add evidence because inference is
+deterministic. This evaluator runs YOLO11s at 640 on the original, horizontally
+flipped, gamma-darkened, and gamma-brightened image. A lower-confidence,
+class-matched box passes when at least three views agree spatially. A strong
+single-view detection can pass directly using class-specific thresholds:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_tta_consensus.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --device 0 `
+  --batch 16 `
+  --min-votes 3 `
+  --agreement-iou 0.50 `
+  --dark-gamma 1.20 `
+  --bright-gamma 0.80 `
+  --high-conf-smoke 0.65 `
+  --high-conf-fire 0.60 `
+  --output artifacts\evaluations\yolo11s-tta-consensus-val-<date>
+```
+
+Tune the evaluator on `--split val`, then run the locked configuration once on
+`--split test`. It compares the consensus with the ordinary YOLO11s pass at the
+same score threshold. Treat the additional inference cost as part of the
+acceptance decision; for live video, temporal voting across real frames is
+normally more efficient than four augmented passes per frame.
+
 ## Reproducibility notes
 
 - Keep the downloaded D-Fire archive immutable; generate a new derived version
