@@ -15,7 +15,7 @@
   "status": 400,
   "error": "Bad Request",
   "message": "유효하지 않은 입력값입니다.",
-  "path": "/api/robots/orinka_01/dispatch"
+  "path": "/api/robots/orinka_01/mapping"
 }
 ```
 
@@ -88,36 +88,22 @@
 }
 ```
 
-#### [POST] `/api/robots/{robotId}/dispatch`
-* **설명**: 관리자가 지도상의 특정 좌표를 지정하여 로봇을 강제 출동시킵니다. (CCTV 감지 지역 등으로 2차 확인 유도)
+#### [POST] `/api/robots/{robotId}/mapping`
+* **설명**: 관제센터에서 2D 도면 매핑 기능 버튼을 누르면 호출됩니다. 백엔드는 이 요청을 로봇 WSS 명령(`START_MAPPING`/`STOP_MAPPING`)으로 변환하여 전달합니다. `START` 수신 시 로봇은 `MAPPING` 모드로 진입해 SLAM 기반 2D 점유 격자(occupancy grid)를 생성·스트리밍하고, `STOP` 수신 시 자율 순찰(`AUTO_PATROL`)로 복귀합니다.
 * **Request Body**:
 ```json
 {
-  "x": 15.45,
-  "y": 8.12,
-  "reason": "CCTV 1차 화재 감지에 따른 2차 근접 확인 지시"
+  "action": "START"
 }
 ```
+* `action` 값: `START`(매핑 시작) 또는 `STOP`(매핑 종료 및 순찰 복귀)
 * **Response Body (200 OK)**:
 ```json
 {
   "robotId": "orinka_01",
-  "command": "DISPATCH",
+  "currentMode": "MAPPING",
   "status": "SENT",
   "timestamp": "2026-07-18T19:38:05Z"
-}
-```
-
-#### [POST] `/api/robots/{robotId}/resume`
-* **설명**: 2차 확인 상황 종료 후 로봇에게 자율순찰 복귀를 명령합니다. (로봇은 가장 가까운 순찰 스팟으로 돌아가 순찰을 재개합니다.)
-* **Request Body**: None (또는 `{}`)
-* **Response Body (200 OK)**:
-```json
-{
-  "robotId": "orinka_01",
-  "command": "RESUME",
-  "status": "SENT",
-  "timestamp": "2026-07-18T19:38:10Z"
 }
 ```
 
@@ -204,36 +190,6 @@
 
 ---
 
-### 1.5 CCTV 연동 API
-
-#### [POST] `/api/cctv/events`
-* **설명**: 공장 천장 등에 고정 설치된 CCTV가 Vision AI 분석을 통해 1차적으로 연기/화재를 탐지했을 때, 백엔드 서버에 알림 이벤트를 발행하는 용도입니다. 백엔드는 이 이벤트를 수집하자마자 순찰 로봇(오린카)에게 해당 좌표로 긴급 출동 명령(`DISPATCH`)을 내립니다.
-* **Request Header**: `Content-Type: application/json`
-* **Request Body**:
-```json
-{
-  "cctvId": "cctv_04",
-  "eventType": "FIRE",
-  "location": {
-    "x": 15.45,
-    "y": 8.12
-  },
-  "confidence": 0.88,
-  "timestamp": "2026-07-18T19:37:00Z"
-}
-```
-* **Response Body (202 Accepted)**:
-```json
-{
-  "status": "DISPATCHED",
-  "assignedRobotId": "orinka_01",
-  "message": "로봇에 2차 화재 근접 확인 출동 지시를 하달했습니다.",
-  "timestamp": "2026-07-18T19:37:02Z"
-}
-```
-
----
-
 ## 2. Web Frontend ↔ Spring Boot WebSocket 명세
 
 실시간 대시보드 갱신 및 경보 푸시를 담당하며, STOMP 프로토콜을 사용합니다.
@@ -259,27 +215,45 @@
   "timestamp": "2026-07-18T19:40:02Z"
 }
 ```
-* `status` 값: `AUTO_PATROL`(자율 순찰), `MANUAL_CONTROL`(원격 조종), `DISPATCH`(긴급 출동), `VERIFY`(근접 확인)
+* `status` 값: `AUTO_PATROL`(자율 순찰), `APPROACH`(화재 후보 위치 자율 접근), `VERIFY`(근접 교차검증), `MANUAL_CONTROL`(원격 조종), `MAPPING`(2D 도면 매핑 중)
 
 #### 2) 실시간 경보 푸시 구독 (`SUB /topic/alerts`)
-* **설명**: CCTV 및 로봇에 의해 탐지된 화재/과열 경보 등 발생 시 브라우저에 실시간 경보 모달을 띄우기 위해 사용합니다.
+* **설명**: 순찰 로봇이 화재 후보를 근접 교차검증(YOLO 객체탐지 + 열화상)하여 **화재로 확정한 시점**에 발행되는 경보입니다. 브라우저에 실시간 경보 모달을 띄우기 위해 사용합니다. (접근/검증 진행 단계는 경보가 아닌 `/topic/robots` 상태로만 반영됩니다.)
 * **Payload**:
 ```json
 {
   "alertId": 1,
   "type": "FIRE",
   "level": "CRITICAL",
-  "source": "CCTV",
+  "source": "ROBOT",
   "robotId": "orinka_01",
+  "confidence": 0.94,
+  "temperature": 58.4,
   "location": { "x": 15.45, "y": 8.12 },
-  "message": "CCTV(cctv_04)에 의해 1차 화재가 감지되었습니다. 로봇이 출동합니다.",
+  "message": "순찰 로봇(orinka_01)이 근접 교차검증으로 화재를 확정했습니다.",
   "timestamp": "2026-07-18T19:40:03Z"
 }
 ```
-* `source` 값: `CCTV` 또는 `ROBOT`
+* `source` 값: `ROBOT` (과열 경보 등 향후 확장 시 값 추가)
 
-#### 3) 로봇 원격 방향 조종 (WASD) 발행 (`PUB /app/robot/{robotId}/manual-drive`)
-* **설명**: 웹 관제 화면에서 수동 조종 모드(`MANUAL_CONTROL`)를 활성화한 상태에서 관리자가 키보드 WASD 키를 누를 때마다 이 엔드포인트로 이동 명령(선속도/각속도 값)을 쏘아 보냅니다. 백엔드는 이 값을 즉시 로봇의 TCP 소켓으로 릴레이합니다.
+#### 3) 2D 도면 매핑 점유 격자 구독 (`SUB /topic/map`)
+* **설명**: 로봇이 `MAPPING` 모드에서 스트리밍하는 SLAM 점유 격자(occupancy grid)를 백엔드가 실시간 중계합니다. 관제 대시보드는 이를 Three.js로 렌더링하여 도면 생성 과정을 시각화합니다.
+* **Payload**:
+```json
+{
+  "robotId": "orinka_01",
+  "resolution": 0.05,
+  "width": 200,
+  "height": 200,
+  "origin": { "x": -5.0, "y": -5.0 },
+  "data": [-1, 0, 0, 100],
+  "timestamp": "2026-07-18T19:40:05Z"
+}
+```
+* `data`: row-major 점유 배열 — `-1`(미탐색), `0`(자유공간), `100`(점유/장애물)
+
+#### 4) 로봇 원격 방향 조종 (WASD) 발행 (`PUB /app/robot/{robotId}/manual-drive`)
+* **설명**: 웹 관제 화면에서 수동 조종 모드(`MANUAL_CONTROL`)를 활성화한 상태에서 관리자가 키보드 WASD 키를 누를 때마다 이 엔드포인트로 이동 명령(선속도/각속도 값)을 쏘아 보냅니다. 백엔드는 이 값을 즉시 로봇의 WSS 소켓으로 릴레이합니다.
 * **Payload**:
 ```json
 {
@@ -305,9 +279,10 @@ AWS 인프라 보안 및 방화벽 규정을 준수하기 위해 Nginx 리버스
 ```json
 {"source": "robot", "type": "TELEMETRY", "robot_id": "orinka_01", "location": {"x": 1.25, "y": 3.40, "yaw": 0.78}, "battery": 92.5, "status": "AUTO_PATROL"}
 ```
-* `status` 값: `AUTO_PATROL`, `MANUAL_CONTROL`, `DISPATCH`, `VERIFY`
+* `status` 값: `AUTO_PATROL`, `APPROACH`, `VERIFY`, `MANUAL_CONTROL`, `MAPPING`
 
-#### 2) 이중 판정 화재 이벤트 패킷 (개행 필수)
+#### 2) 교차검증 화재 이벤트 패킷 (개행 필수)
+* **설명**: 순찰 중 YOLO 화재 후보 감지 → 자율 접근(`APPROACH`) → 근접 교차검증(`VERIFY`, YOLO + 열화상)을 거쳐 **화재로 확정된 경우에만** 전송됩니다. 접근/검증 진행 단계는 `TELEMETRY`의 `status`로만 반영됩니다.
 ```json
 {"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "location": {"x": 15.0, "y": 8.2}}
 ```
@@ -317,25 +292,27 @@ AWS 인프라 보안 및 방화벽 규정을 준수하기 위해 Nginx 리버스
 {"source": "robot", "type": "EVENT_OVERHEAT", "robot_id": "orinka_01", "equipment_id": "panel_01", "temperature": 53.2, "location": {"x": 8.5, "y": 3.1}}
 ```
 
+#### 4) 2D 도면 매핑 점유 격자 패킷 (`MAPPING` 모드, 개행 필수)
+* **설명**: `MAPPING` 모드에서 SLAM으로 생성 중인 점유 격자를 주기적으로 스트리밍합니다. 백엔드는 이를 STOMP `/topic/map`으로 중계합니다.
+```json
+{"source": "robot", "type": "MAP_UPDATE", "robot_id": "orinka_01", "resolution": 0.05, "width": 200, "height": 200, "origin": {"x": -5.0, "y": -5.0}, "data": [-1, 0, 0, 100]}
+```
+
 ### 3.2 Spring Boot $\rightarrow$ 로봇 (Downstream)
 
-#### 1) 출동 명령 패킷 (개행 필수)
-```json
-{"command": "DISPATCH", "target_location": {"x": 15.0, "y": 8.2}}
-```
-
-#### 2) 복귀 명령 패킷 (개행 필수)
-```json
-{"command": "RESUME"}
-```
-
-#### 3) 모드 설정 패킷 (개행 필수)
+#### 1) 모드 설정 패킷 (개행 필수)
 ```json
 {"command": "SET_MODE", "mode": "MANUAL_CONTROL"}
 ```
 * `mode` 값: `AUTO_PATROL` 또는 `MANUAL_CONTROL`
 
-#### 4) 수동 조종 방향 패킷 (개행 필수)
+#### 2) 2D 도면 매핑 시작/종료 패킷 (개행 필수)
+* **설명**: 관제센터 매핑 버튼(`POST /api/robots/{id}/mapping`)을 변환한 명령입니다. `START_MAPPING` 수신 시 `MAPPING` 모드로 진입하고, `STOP_MAPPING` 수신 시 자율 순찰로 복귀합니다.
+```json
+{"command": "START_MAPPING"}
+```
+
+#### 3) 수동 조종 방향 패킷 (개행 필수)
 ```json
 {"command": "DRIVE", "linear": 0.5, "angular": -0.2}
 ```
