@@ -4,6 +4,7 @@ import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
+import com.bbiyong.server.wss.event.RobotVideoEvent;
 import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -61,6 +62,9 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                 case "TELEMETRY":
                 case "STATE_UPDATE":
                     eventPublisher.publishEvent(new RobotTelemetryEvent(this, packet));
+                    break;
+                case "VIDEO_FRAME":
+                    eventPublisher.publishEvent(new RobotVideoEvent(this, packet));
                     break;
                 case "EVENT_FIRE":
                     log.info("Fire event received via WSS from [{}]: confidence={}, temp={}",

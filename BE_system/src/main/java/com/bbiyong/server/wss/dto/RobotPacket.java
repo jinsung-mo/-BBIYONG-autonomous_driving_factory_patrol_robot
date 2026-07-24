@@ -18,7 +18,14 @@ public class RobotPacket {
     private String status; // AUTO_PATROL, MANUAL_CONTROL, DISPATCH, VERIFY
     private Double confidence;
     private Double temperature;
-    
+
+    // 듀얼 카메라 영상 프레임 (VIDEO_FRAME) - S15P11E101-354
+    private String channel;   // FRONT(RGB) | THERMAL
+    private String format;    // jpeg
+    private String data;      // base64-encoded JPEG
+    private Double maxTemp;   // THERMAL 채널의 최대 온도(℃)
+    private Long seq;         // 프레임 시퀀스
+
     @JsonProperty("equipment_id")
     private String equipmentId;
 
