@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>삐용 통합 시뮬레이션 — 2D 맵핑 → 순찰 로봇</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a0c10;overflow:hidden;
+    font-family:"Segoe UI",Roboto,"Malgun Gothic",sans-serif;}
+  iframe{position:fixed;inset:0;width:100vw;height:100vh;border:0;background:#0a0c10;
+    display:none;}
+  iframe.show{display:block;}
+
+  /* 뷰 전환 버튼 (뷰별로 빈 위치에 배치) */
+  #switchBar{position:fixed;top:14px;z-index:100;display:none;}
+  #switchBtn{background:rgba(14,18,24,.9);color:#e7ecf3;border:1px solid #2a3342;
+    border-radius:999px;padding:10px 20px;font-weight:800;font-size:13px;cursor:pointer;
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 6px 22px rgba(0,0,0,.4);}
+  #switchBtn:hover{border-color:#3ddc97;color:#3ddc97;}
+
+  /* 전환 페이드 */
+  #fade{position:fixed;inset:0;background:#0a0c10;z-index:200;opacity:1;
+    pointer-events:none;transition:opacity .5s;display:flex;align-items:center;justify-content:center;}
+  #fade.off{opacity:0;}
+  #fade .msg{color:#8a94a6;font-size:14px;font-weight:600;letter-spacing:.3px;}
+</style>
+</head>
+<body>
+  <!-- 1단계: 2D SLAM 맵핑 (처음 표시) -->
+  <iframe id="map" class="show" src="BBIYONG_2D_mapping_slam.html" title="2D 맵핑"></iframe>
+  <!-- 2단계: 삐용 순찰 로봇 시뮬레이션 (맵핑 완료 시 지연 로드) -->
+  <iframe id="sim" title="순찰 시뮬레이션"></iframe>
+
+  <div id="switchBar"><button id="switchBtn"></button></div>
+  <div id="fade"><div class="msg">삐용 통합 시뮬레이션 로딩 중…</div></div>
+
+<script>
+(function(){
+  "use strict";
+  const SIM_SRC = 'BBIYONG_simulation_v3_patrol_fire_heat.html';
+  const mapF = document.getElementById('map');
+  const simF = document.getElementById('sim');
+  const bar  = document.getElementById('switchBar');
+  const btn  = document.getElementById('switchBtn');
+  const fade = document.getElementById('fade');
+
+  let view = 'map';       // 'map' | 'sim'
+  let simLoaded = false;
+  let mappingDone = false;
+  let switching = false;
+
+  // 최초 로드: 2D 맵핑 표시
+  window.addEventListener('load', ()=>{ setTimeout(()=> fade.classList.add('off'), 300); });
+
+  function updateBtn(){
+    if(!mappingDone){ bar.style.display='none'; return; }
+    bar.style.display='block';
+    if(view==='sim'){                 // 3D 순찰 화면 — 좌상단(빈 자리)
+      bar.style.left='16px'; bar.style.transform='none';
+      btn.textContent='2D 맵핑 지도 보기';
+    }else{                            // 2D 맵 화면 — 상단 중앙(빈 자리)
+      bar.style.left='50%'; bar.style.transform='translateX(-50%)';
+      btn.textContent='순찰 시뮬레이션으로';
+    }
+  }
+
+  function swap(v){
+    if(v==='map'){ mapF.classList.add('show'); simF.classList.remove('show'); }
+    else{ simF.classList.add('show'); mapF.classList.remove('show'); }
+    view=v; updateBtn();
+    setTimeout(()=>{ fade.classList.add('off'); switching=false; }, 140);
+  }
+
+  function showView(v){
+    if(switching || v===view) return;
+    switching=true;
+    fade.querySelector('.msg').textContent = (v==='sim') ? '순찰 시뮬레이션으로 전환 중…' : '2D 맵핑 지도로 전환 중…';
+    fade.classList.remove('off'); // 페이드 인
+    setTimeout(()=>{
+      if(v==='sim' && !simLoaded){
+        simLoaded=true;
+        simF.addEventListener('load', ()=> swap('sim'), {once:true});
+        simF.src = SIM_SRC;         // 최초 전환 시점에 로드 → 신선하게 시작
+      }else{
+        swap(v);
+      }
+    }, 500);
+  }
+
+  btn.addEventListener('click', ()=> showView(view==='sim' ? 'map' : 'sim'));
+
+  // 2D 맵핑 완료 신호 → 순찰 시뮬레이션으로 자동 전환
+  window.addEventListener('message', (e)=>{
+    if(!e.data || e.data.type!=='bbiyong-mapping-done') return;
+    if(mappingDone) return;         // 최초 1회만 자동 전환
+    mappingDone=true;
+    setTimeout(()=> showView('sim'), 3200); // 완료 토스트를 잠시 보여준 뒤 전환
+  });
+})();
+</script>
+</body>
+</html>
