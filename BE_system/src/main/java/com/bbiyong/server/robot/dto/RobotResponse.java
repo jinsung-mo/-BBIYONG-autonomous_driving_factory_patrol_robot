@@ -19,8 +19,6 @@ public class RobotResponse {
     private String estop;
     private Integer commLatencyMs;
     private Double inferenceFps;
-    private Double ambientTemp;
-    private Double humidity;
     private Instant lastConnected;
     private Location location;
 }

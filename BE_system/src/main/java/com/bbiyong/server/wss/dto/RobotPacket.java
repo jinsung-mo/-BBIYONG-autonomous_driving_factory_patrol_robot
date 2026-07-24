@@ -25,8 +25,6 @@ public class RobotPacket {
     private String estop;            // RELEASED | ENGAGED
     private Integer commLatencyMs;   // 통신 왕복 지연(ms)
     private Double inferenceFps;     // YOLO 추론 FPS
-    private Double ambientTemp;      // 주변 온도(℃)
-    private Double humidity;         // 습도(%)
 
     @JsonProperty("equipment_id")
     private String equipmentId;

@@ -35,8 +35,6 @@ public class RobotService {
                         state.getEstop(),
                         state.getCommLatencyMs(),
                         state.getInferenceFps(),
-                        state.getAmbientTemp(),
-                        state.getHumidity(),
                         state.getLastConnected(),
                         state.getLocation()
                 ))
@@ -64,8 +62,6 @@ public class RobotService {
         state.setEstop(packet.getEstop());
         state.setCommLatencyMs(packet.getCommLatencyMs());
         state.setInferenceFps(packet.getInferenceFps());
-        state.setAmbientTemp(packet.getAmbientTemp());
-        state.setHumidity(packet.getHumidity());
         state.setLastConnected(Instant.now());
 
         if (packet.getLocation() != null) {
