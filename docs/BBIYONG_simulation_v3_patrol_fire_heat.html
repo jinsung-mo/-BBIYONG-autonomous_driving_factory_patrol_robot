@@ -92,6 +92,7 @@
   <span class="k"><span class="sw" style="background:#e24b4a"></span>화재 (CCTV 구역)</span>
   <span class="k"><span class="sw" style="background:#7d8695"></span>전기 분전반·판넬 (과열 감시 대상)</span>
   <span class="k"><span class="sw" style="background:#e08c14"></span>열화상 점검 스캔</span>
+  <span class="k"><span class="sw" style="background:#39d0ff"></span>라이다 SLAM 2D 매핑</span>
 </div>
 
 <div id="err" style="position:fixed;left:12px;bottom:12px;right:12px;z-index:9999;display:none;background:#7a1f1f;color:#fff;font:13px/1.5 sans-serif;padding:12px 14px;border-radius:10px;white-space:pre-wrap;"></div>
@@ -138,7 +139,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   function cz(r){ return (r - (ROWS-1)/2) * CELL; }
 
   const COL = { robotBody:0x37c08e, path:0x22b98a, patrol:0x3f8fe0, fire:0xe24b4a,
-    cctv:0xE0A93B, panel:0x7d8695, scan:0xe08c14, alert:0xef9f27 };
+    cctv:0xE0A93B, panel:0x7d8695, scan:0xe08c14, alert:0xef9f27, lidar:0x39d0ff };
   const THEME = {
     dark:  { bg:0x0e1014, fog:0x0e1014, floor:0x22262d, wall:0x3d4450, grid:0x3a4250, amb:0.6, key:1.0 },
     light: { bg:0xeef1f5, fog:0xeef1f5, floor:0xdfe3e9, wall:0xb6bcc6, grid:0xc7ccd4, amb:0.9, key:1.05 }
@@ -147,6 +148,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   let renderer, scene, camL, camR, camP;
   let robot, fireGroup, cctv, pathLine, pathDots, patrolLine, ringFire, ringHeat, detectLine, scanBeam;
+  let lidarBeam, discGroup;              // 라이다 광선 · 발견한 점유격자(2D 모델링) 마커
+  const discovered = new Set();          // 이미 매핑된 벽 셀 "c,r"
   const themed = { floors:[], walls:[], grids:[], amb:null, key:null };
 
   // 상태: patrol | scan | heatDetect | heatAlarm | heatVerify | detect | command | dispatch | verify | resume
@@ -185,6 +188,30 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       for(let j=1;j<p.length;j++) out.push(p[j]);
     }
     out.pop(); return out;
+  }
+  // 웨이포인트들을 A* 로 이어붙여 단위 스텝(인접 셀) 경로로 만든다.
+  function chainPath(wps){
+    let out=[{c:wps[0].c,r:wps[0].r}];
+    for(let i=1;i<wps.length;i++){
+      const p=astar(out[out.length-1], wps[i]);
+      for(let j=1;j<p.length;j++) out.push(p[j]);
+    }
+    return out;
+  }
+  // 상시 순찰 경로 — 두 단계를 순환 반복한다:
+  //   ① 외곽 벽을 따라 한 바퀴 (분전반 A·B·C 가 이 벽면에 부착돼 자연히 점검됨)
+  //   ② 모든 자유 셀을 지그재그(보스트로페돈)로 훑는 사각지대 전수 탐색
+  // 이 배열 하나를 cyclic 하게 반복하면 [외곽 순찰 → 전수 탐색 → 외곽 순찰 → …] 이 무한 반복된다.
+  function buildPatrolRoute(){
+    const perimeter=[{c:0,r:0},{c:COLS-1,r:0},{c:COLS-1,r:ROWS-1},{c:0,r:ROWS-1},{c:0,r:0}];
+    const sweep=[];
+    for(let r=0;r<ROWS;r++){
+      if(r%2===0){ for(let c=0;c<COLS;c++) if(MAP[r][c]===0) sweep.push({c,r}); }
+      else { for(let c=COLS-1;c>=0;c--) if(MAP[r][c]===0) sweep.push({c,r}); }
+    }
+    const cells=chainPath([...perimeter, ...sweep, {c:0,r:0}]);
+    cells.pop(); // 끝의 (0,0) 제거 — 순환 시 첫 셀 (0,0) 과 자연히 이어진다
+    return cells;
   }
   function nearestCell(pos){
     let c=Math.round(pos.x/CELL + (COLS-1)/2), r=Math.round(pos.z/CELL + (ROWS-1)/2);
@@ -374,7 +401,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     scene.add(robot);
 
     // 순찰 루프
-    patrolCells=chainLoop(PATROL_WPS);
+    patrolCells=buildPatrolRoute();
     const ppts=patrolCells.map(p=>new THREE.Vector3(cx(p.c),0.15,cz(p.r)));
     ppts.push(ppts[0].clone());
     patrolLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(ppts),
@@ -390,6 +417,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     scanBeam=new THREE.LineSegments(new THREE.BufferGeometry(),
       new THREE.LineBasicMaterial({color:COL.scan, transparent:true, opacity:0.9}));
     scanBeam.visible=false; scene.add(scanBeam);
+
+    // 라이다 SLAM — 360° 광선 다발 + 발견한 벽을 채워나가는 2D 점유격자 마커
+    lidarBeam=new THREE.LineSegments(new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({color:COL.lidar, transparent:true, opacity:0.55}));
+    scene.add(lidarBeam);
+    discGroup=new THREE.Group(); scene.add(discGroup);
   }
 
   function panelCorners(p){
@@ -421,6 +454,43 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     });
   }
   function hideEmgPath(){ pathLine.visible=false; while(pathDots.children.length) pathDots.remove(pathDots.children[0]); }
+
+  // ---------- 라이다 2D 모델링(SLAM 매핑) ----------
+  const LIDAR_RANGE=Math.max(W,D)*1.1, LIDAR_RAYS=96, LIDAR_STEP=0.35, LIDAR_Y=0.95;
+  // 새로 감지된 벽 셀을 점유격자(2D 지도)에 한 칸씩 채워 넣는다.
+  function markWall(c,r){
+    const k=c+","+r;
+    if(discovered.has(k)) return;
+    discovered.add(k);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(CELL*0.92,0.5,CELL*0.92),
+      new THREE.MeshBasicMaterial({color:COL.lidar, transparent:true, opacity:0.34}));
+    m.position.set(cx(c),0.3,cz(r)); discGroup.add(m);
+  }
+  // 로봇 위치에서 360° 광선을 쏘아 격자를 레이마칭 —
+  // 첫 벽 셀 또는 실내 경계에서 멈추며, 맞은 벽은 지도에 기록한다.
+  function castLidar(){
+    const ox=robot.position.x, oz=robot.position.z, pts=[];
+    for(let i=0;i<LIDAR_RAYS;i++){
+      const a=(i/LIDAR_RAYS)*Math.PI*2, dx=Math.cos(a), dz=Math.sin(a);
+      let hx=ox+dx*LIDAR_RANGE, hz=oz+dz*LIDAR_RANGE;
+      for(let d=LIDAR_STEP; d<=LIDAR_RANGE; d+=LIDAR_STEP){
+        const px=ox+dx*d, pz=oz+dz*d;
+        const c=Math.round(px/CELL+(COLS-1)/2), r=Math.round(pz/CELL+(ROWS-1)/2);
+        if(c<0||r<0||c>=COLS||r>=ROWS){ hx=px; hz=pz; break; }         // 실내 경계
+        if(MAP[r][c]===1){ hx=px; hz=pz; markWall(c,r); break; }        // 벽 감지
+      }
+      pts.push(new THREE.Vector3(ox,LIDAR_Y,oz), new THREE.Vector3(hx,LIDAR_Y,hz));
+    }
+    lidarBeam.geometry.dispose();
+    lidarBeam.geometry=new THREE.BufferGeometry().setFromPoints(pts);
+  }
+  function clearLidar(){
+    discovered.clear();
+    while(discGroup.children.length){
+      const m=discGroup.children[0]; discGroup.remove(m);
+      m.geometry.dispose(); m.material.dispose();
+    }
+  }
 
   // ---------- 상태·자막 ----------
   const PILL = {
@@ -649,7 +719,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     t=0; phaseT=0; patrolT=0; incT=0; autoStage=0; scenario=null; scanning=null;
     seg=0; prog=0; route=[]; seg2Reset();
     fireGroup.visible=false; ringFire.visible=false; ringHeat.visible=false;
-    detectLine.visible=false; scanBeam.visible=false; hideEmgPath();
+    detectLine.visible=false; scanBeam.visible=false; hideEmgPath(); clearLidar();
     PANELS.forEach(p=>{ p.temp=p.base; p.overheat=false; p.cooldown=60; });
     robot.position.set(cx(patrolCells[0].c),0,cz(patrolCells[0].r));
     robot.rotation.y=Math.atan2(cx(patrolCells[1].c)-cx(patrolCells[0].c), cz(patrolCells[1].r)-cz(patrolCells[0].r));
@@ -692,6 +762,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     requestAnimationFrame(animate);
     t++; phaseT++;
     update();
+    castLidar();                                                    // 라이다 상시 스캔 → 2D 지도 갱신
+    lidarBeam.material.opacity=0.4+Math.abs(Math.sin(t*0.12))*0.35;  // 스캔 펄스
     if(fireGroup.visible){
       fireGroup.children.forEach((f,i)=>{ if(f.scale) f.scale.y=0.8+Math.sin(t*0.2+i)*0.25; });
       ringFire.material.opacity=0.5+Math.sin(t*0.15)*0.3;
