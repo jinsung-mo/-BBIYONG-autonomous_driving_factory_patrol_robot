@@ -58,6 +58,10 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
             }
 
             switch (packet.getType()) {
+                case "REGISTER":
+                    // 로봇 접속 시 세션 등록용 인사 패킷 (등록은 위에서 이미 수행)
+                    log.info("Robot [{}] registered via WSS session [{}]", robotId, session.getId());
+                    break;
                 case "TELEMETRY":
                 case "STATE_UPDATE":
                     eventPublisher.publishEvent(new RobotTelemetryEvent(this, packet));
