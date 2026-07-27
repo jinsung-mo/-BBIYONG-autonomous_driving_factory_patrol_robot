@@ -37,8 +37,8 @@ dependencies {
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	runtimeOnly 'org.xerial:sqlite-jdbc:3.53.1.0'
 
-	// 인증(MVP): BCrypt 해시(전체 Security 필터 체인 미도입) + JWT 발급
-	implementation 'org.springframework.security:spring-security-crypto'
+	// 인증/인가(MVP): Spring Security 필터 체인 + BCrypt 해시 + JWT 발급/검증
+	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'

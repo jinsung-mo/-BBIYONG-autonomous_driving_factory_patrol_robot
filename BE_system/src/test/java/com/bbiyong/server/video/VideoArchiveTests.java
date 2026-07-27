@@ -1,5 +1,6 @@
 package com.bbiyong.server.video;
 
+import com.bbiyong.server.auth.jwt.JwtTokenProvider;
 import com.bbiyong.server.video.dto.VideoResponses;
 import com.bbiyong.server.video.repository.VideoClipRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,8 +33,16 @@ class VideoArchiveTests {
     @Autowired
     private VideoClipRepository videoClipRepository;
 
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
     @BeforeEach
     void clean() {
+        String token = jwtTokenProvider.generate("admin@bbiyong.io", "ROLE_ADMIN");
+        restTemplate.getRestTemplate().getInterceptors().add((req, body, exec) -> {
+            req.getHeaders().setBearerAuth(token);
+            return exec.execute(req, body);
+        });
         videoClipRepository.deleteAllInBatch();
     }
 
