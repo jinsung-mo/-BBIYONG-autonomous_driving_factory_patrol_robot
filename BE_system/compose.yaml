@@ -12,6 +12,8 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/bbiyong
       - SPRING_DATASOURCE_USERNAME=user
       - SPRING_DATASOURCE_PASSWORD=password
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver
+      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQLDialect
     depends_on:
       - mysql
     restart: unless-stopped

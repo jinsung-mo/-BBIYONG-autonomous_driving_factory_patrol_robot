@@ -34,6 +34,7 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.hibernate.orm:hibernate-community-dialects'
+	runtimeOnly 'com.mysql:mysql-connector-j'
 	runtimeOnly 'org.xerial:sqlite-jdbc:3.53.1.0'
 
 	// 인증(MVP): BCrypt 해시(전체 Security 필터 체인 미도입) + JWT 발급
