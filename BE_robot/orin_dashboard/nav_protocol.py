@@ -1,9 +1,43 @@
 """Versioned, dependency-free map encoding used by the dashboard bridge."""
 
+import math
+
 SCHEMA_VERSION = "1.0"
 UNKNOWN = -1
 FREE = 0
 OCCUPIED = 100
+
+
+def robot_view(pose):
+    """Return the affine map->robot transform for a heading-up viewport.
+
+    The six values are the first two rows of a 2D homogeneous matrix:
+    ``[a, b, tx, c, d, ty]``. A map point is converted with
+    ``x' = a*x + b*y + tx`` and ``y' = c*x + d*y + ty``.
+    """
+    if not pose or pose.get("frame") != "map":
+        return None
+    yaw = float(pose["yaw"])
+    cosine = math.cos(yaw)
+    sine = math.sin(yaw)
+    x = float(pose["x"])
+    y = float(pose["y"])
+    return {
+        "frame": "base_link",
+        "source_frame": "map",
+        "heading": "up",
+        "map_to_view": [
+            cosine,
+            sine,
+            -cosine * x - sine * y,
+            -sine,
+            cosine,
+            sine * x - cosine * y,
+        ],
+        "pose_stamp": pose.get("stamp"),
+        "pose_age": pose.get("age"),
+        "stale": bool(pose.get("stale", True)),
+    }
 
 
 def classify_cells(values):
