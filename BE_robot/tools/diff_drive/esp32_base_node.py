@@ -20,14 +20,31 @@
 import math
 import threading
 import time
+from collections import deque
 
 import rclpy
 import serial
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Twist, TransformStamped, Quaternion
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan
+from rclpy.duration import Duration
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
+from rclpy.qos import (
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+    qos_profile_sensor_data,
+)
+from rclpy.time import Time
+from tf2_ros import (
+    Buffer,
+    StaticTransformBroadcaster,
+    TransformBroadcaster,
+    TransformListener,
+)
+
+from esp32_timing import McuTimeSynchronizer, parse_encoder_telemetry
 
 
 def yaw_to_quat(yaw):
@@ -57,6 +74,9 @@ class Esp32Base(Node):
         self.declare_parameter("max_angular_rps", 1.2)
         self.declare_parameter("cmd_timeout_sec", 0.5)
         self.declare_parameter("publish_rate_hz", 30.0)
+        self.declare_parameter("telemetry_gap_threshold_ms", 250)
+        self.declare_parameter("diagnostics_rate_hz", 1.0)
+        self.declare_parameter("scan_topic", "/scan")
         self.declare_parameter("odom_frame", "odom")
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("laser_frame", "laser_frame")
@@ -78,6 +98,10 @@ class Esp32Base(Node):
         self.cmd_timeout = float(g("cmd_timeout_sec"))
         self.odom_frame = g("odom_frame")
         self.base_frame = g("base_frame")
+        command_rate_hz = float(g("publish_rate_hz"))
+        diagnostics_rate_hz = float(g("diagnostics_rate_hz"))
+        if command_rate_hz <= 0.0 or diagnostics_rate_hz <= 0.0:
+            raise ValueError("publish_rate_hz and diagnostics_rate_hz must be positive")
 
         # ── 상태 ────────────────────────────────────────────────────
         self.x = self.y = self.th = 0.0
@@ -85,8 +109,24 @@ class Esp32Base(Node):
         self.tgt_l = self.tgt_r = 0.0
         self.last_cmd_t = 0.0
         self.prev_lc = self.prev_rc = None
-        self.prev_t = None
         self.lock = threading.Lock()
+        self.mcu_clock = McuTimeSynchronizer()
+        self.telemetry_gap_threshold_ms = int(g("telemetry_gap_threshold_ms"))
+        if self.telemetry_gap_threshold_ms <= 0:
+            raise ValueError("telemetry_gap_threshold_ms must be positive")
+        self.telemetry_received = 0
+        self.odom_published = 0
+        self.malformed_telemetry = 0
+        self.nonmonotonic_timestamps = 0
+        self.mcu_resets = 0
+        self.mcu_rollovers = 0
+        self.telemetry_gaps = 0
+        self.last_arrival_ns = None
+        self.last_odom_stamp_ns = None
+        self.transport_latency_ms = deque(maxlen=500)
+        self.scan_count = 0
+        self.scan_tf_available = 0
+        self.last_scan_tf_age_ms = None
 
         # ── 시리얼 ──────────────────────────────────────────────────
         self.ser = serial.Serial(g("port"), int(g("baud")), timeout=0.2)
@@ -99,7 +139,16 @@ class Esp32Base(Node):
                          history=HistoryPolicy.KEEP_LAST, depth=10)
         self.create_subscription(Twist, "/cmd_vel", self.on_cmd, qos)
         self.pub_odom = self.create_publisher(Odometry, "/odom", qos)
+        self.pub_diag = self.create_publisher(DiagnosticArray, "/diagnostics", 10)
         self.tf = TransformBroadcaster(self)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
+        self.create_subscription(
+            LaserScan,
+            g("scan_topic"),
+            self.on_scan,
+            qos_profile_sensor_data,
+        )
 
         # 🔴 self 에 붙여 살려둬야 한다. 지역변수로 두면 __init__ 종료 시
         #    GC되고, latch(transient_local)된 정적 TF도 같이 사라진다.
@@ -118,7 +167,10 @@ class Esp32Base(Node):
 
         self.reader = threading.Thread(target=self.serial_loop, daemon=True)
         self.reader.start()
-        self.create_timer(1.0 / float(g("publish_rate_hz")), self.tick)
+        # Command/watchdog output stays periodic. Odometry is emitted only when
+        # encoder telemetry arrives, using the MCU acquisition timestamp.
+        self.create_timer(1.0 / command_rate_hz, self.command_tick)
+        self.create_timer(1.0 / diagnostics_rate_hz, self.publish_diagnostics)
 
     # ── /cmd_vel → 바퀴 목표속도 ────────────────────────────────────
     def on_cmd(self, msg):
@@ -140,25 +192,59 @@ class Esp32Base(Node):
                 continue
             if not raw.startswith("T,"):
                 continue
-            p = raw.split(",")
-            if len(p) != 11:
-                continue
             try:
-                lc, rc = int(p[9]), int(p[10])
+                sample = parse_encoder_telemetry(raw)
             except ValueError:
+                with self.lock:
+                    self.malformed_telemetry += 1
                 continue
-            now = time.time()
+
+            arrival_ns = self.get_clock().now().nanoseconds
             with self.lock:
-                if self.prev_lc is None:
-                    self.prev_lc, self.prev_rc, self.prev_t = lc, rc, now
+                self.telemetry_received += 1
+                timing = self.mcu_clock.update(sample.acquisition_ms, arrival_ns)
+                self.last_arrival_ns = arrival_ns
+                if not timing.accepted:
+                    self.nonmonotonic_timestamps += 1
                     continue
-                dl = (lc - self.prev_lc) * self.mm_per_count / 1000.0
-                dr = (rc - self.prev_rc) * self.mm_per_count / 1000.0
-                dt = now - self.prev_t
-                self.prev_lc, self.prev_rc, self.prev_t = lc, rc, now
-                if dt <= 0.0:
-                    continue
-                self.integrate(dl, dr, dt)
+                self.transport_latency_ms.append(
+                    timing.transport_latency_ns / 1_000_000.0
+                )
+                if timing.rollover:
+                    self.mcu_rollovers += 1
+                if timing.reset:
+                    self.mcu_resets += 1
+                    self.prev_lc = sample.left_count
+                    self.prev_rc = sample.right_count
+                    pose = self.x, self.y, self.th, 0.0, 0.0
+                elif self.prev_lc is None:
+                    self.prev_lc = sample.left_count
+                    self.prev_rc = sample.right_count
+                    pose = self.x, self.y, self.th, 0.0, 0.0
+                else:
+                    if timing.delta_ms is None or timing.delta_ms <= 0:
+                        self.nonmonotonic_timestamps += 1
+                        continue
+                    if timing.delta_ms > self.telemetry_gap_threshold_ms:
+                        self.telemetry_gaps += 1
+                    dl = (
+                        (sample.left_count - self.prev_lc)
+                        * self.mm_per_count
+                        / 1000.0
+                    )
+                    dr = (
+                        (sample.right_count - self.prev_rc)
+                        * self.mm_per_count
+                        / 1000.0
+                    )
+                    dt = timing.delta_ms / 1000.0
+                    self.prev_lc = sample.left_count
+                    self.prev_rc = sample.right_count
+                    self.integrate(dl, dr, dt)
+                    pose = self.x, self.y, self.th, self.v, self.w
+                self.last_odom_stamp_ns = timing.stamp_ns
+                self.odom_published += 1
+            self.publish_odom(timing.stamp_ns, *pose)
 
     def integrate(self, dl, dr, dt):
         """정확 원호 적분. 직선 근사(Euler)는 회전 중 위치를 계속 안쪽으로
@@ -176,18 +262,20 @@ class Esp32Base(Node):
             self.th = math.atan2(math.sin(th2), math.cos(th2))
         self.v, self.w = ds / dt, dth / dt
 
-    # ── 주기 발행 ───────────────────────────────────────────────────
-    def tick(self):
+    # ── 명령 전송 주기 (오도메트리 발행과 독립) ────────────────────
+    def command_tick(self):
         with self.lock:
             expired = time.time() - self.last_cmd_t > self.cmd_timeout
-            l, r = (0.0, 0.0) if expired else (self.tgt_l, self.tgt_r)
-            x, y, th, v, w = self.x, self.y, self.th, self.v, self.w
+            left, right = (
+                (0.0, 0.0) if expired else (self.tgt_l, self.tgt_r)
+            )
         try:
-            self.ser.write(f"v {l:.4f} {r:.4f}\n".encode())
+            self.ser.write(f"v {left:.4f} {right:.4f}\n".encode())
         except Exception as e:
             self.get_logger().error(f"시리얼 송신 실패: {e}")
 
-        stamp = self.get_clock().now().to_msg()
+    def publish_odom(self, stamp_ns, x, y, th, v, w):
+        stamp = Time(nanoseconds=stamp_ns).to_msg()
         q = yaw_to_quat(th)
 
         o = Odometry()
@@ -212,6 +300,116 @@ class Esp32Base(Node):
         t.transform.translation.x, t.transform.translation.y = x, y
         t.transform.rotation = q
         self.tf.sendTransform(t)
+
+    def on_scan(self, msg):
+        scan_time = Time.from_msg(msg.header.stamp)
+        scan_ns = scan_time.nanoseconds
+        available = self.tf_buffer.can_transform(
+            self.odom_frame,
+            self.base_frame,
+            scan_time,
+            timeout=Duration(seconds=0.0),
+        )
+        latest_age_ms = None
+        if available:
+            try:
+                latest = self.tf_buffer.lookup_transform(
+                    self.odom_frame,
+                    self.base_frame,
+                    Time(),
+                    timeout=Duration(seconds=0.0),
+                )
+                latest_ns = Time.from_msg(latest.header.stamp).nanoseconds
+                latest_age_ms = (scan_ns - latest_ns) / 1_000_000.0
+            except Exception:
+                available = False
+        with self.lock:
+            self.scan_count += 1
+            if available:
+                self.scan_tf_available += 1
+            self.last_scan_tf_age_ms = latest_age_ms
+
+    @staticmethod
+    def _percentile(values, fraction):
+        if not values:
+            return 0.0
+        ordered = sorted(values)
+        index = min(len(ordered) - 1, int((len(ordered) - 1) * fraction))
+        return ordered[index]
+
+    def publish_diagnostics(self):
+        now_ns = self.get_clock().now().nanoseconds
+        with self.lock:
+            received = self.telemetry_received
+            published = self.odom_published
+            malformed = self.malformed_telemetry
+            nonmonotonic = self.nonmonotonic_timestamps
+            resets = self.mcu_resets
+            rollovers = self.mcu_rollovers
+            gaps = self.telemetry_gaps
+            last_arrival_ns = self.last_arrival_ns
+            last_odom_ns = self.last_odom_stamp_ns
+            latencies = list(self.transport_latency_ms)
+            scan_count = self.scan_count
+            scan_tf_available = self.scan_tf_available
+            scan_tf_age_ms = self.last_scan_tf_age_ms
+
+        telemetry_age_ms = (
+            -1.0
+            if last_arrival_ns is None
+            else (now_ns - last_arrival_ns) / 1_000_000.0
+        )
+        odom_age_ms = (
+            -1.0
+            if last_odom_ns is None
+            else (now_ns - last_odom_ns) / 1_000_000.0
+        )
+        tf_ratio = 1.0 if scan_count == 0 else scan_tf_available / scan_count
+        level = DiagnosticStatus.OK
+        message = "MCU-timed odometry healthy"
+        if last_arrival_ns is None or telemetry_age_ms > self.telemetry_gap_threshold_ms * 2:
+            level = DiagnosticStatus.ERROR
+            message = "encoder telemetry stale or absent"
+        elif gaps or malformed or nonmonotonic or (scan_count and tf_ratio < 0.995):
+            level = DiagnosticStatus.WARN
+            message = "timing anomalies detected"
+
+        values = {
+            "telemetry_received": received,
+            "odom_published": published,
+            "malformed_telemetry": malformed,
+            "nonmonotonic_timestamps": nonmonotonic,
+            "mcu_resets": resets,
+            "mcu_rollovers": rollovers,
+            "telemetry_gaps": gaps,
+            "telemetry_age_ms": f"{telemetry_age_ms:.3f}",
+            "odom_age_ms": f"{odom_age_ms:.3f}",
+            "transport_latency_latest_ms": (
+                f"{latencies[-1]:.3f}" if latencies else "n/a"
+            ),
+            "transport_latency_p50_ms": f"{self._percentile(latencies, 0.50):.3f}",
+            "transport_latency_p95_ms": f"{self._percentile(latencies, 0.95):.3f}",
+            "scan_tf_available": scan_tf_available,
+            "scan_count": scan_count,
+            "scan_tf_availability_ratio": f"{tf_ratio:.6f}",
+            "latest_scan_to_tf_age_ms": (
+                f"{scan_tf_age_ms:.3f}" if scan_tf_age_ms is not None else "n/a"
+            ),
+        }
+        status = DiagnosticStatus(
+            level=level,
+            name="esp32_odometry/timing",
+            message=message,
+            hardware_id="esp32_base",
+            values=[
+                KeyValue(key=str(key), value=str(value))
+                for key, value in values.items()
+            ],
+        )
+        array = DiagnosticArray()
+        array.header.stamp = self.get_clock().now().to_msg()
+        array.status = [status]
+        self.pub_diag.publish(array)
 
     def shutdown(self):
         try:
