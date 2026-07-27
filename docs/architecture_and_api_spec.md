@@ -110,7 +110,8 @@ flowchart LR
    * 웹 정적 아티팩트(React), 백엔드 REST API(`/api/*`), 웹 관제 웹소켓(`/ws-관제`), 로봇 WSS(`/ws/robot`) 요청을 적절한 내부 포트로 리버스 프록시 라우팅합니다.
 3. **메인 백엔드 (Spring Boot / AWS EC2)**:
    * **로봇 WSS 핸들러 내장**: Nginx로부터 전달받은 WSS 소켓 연결(`/ws/robot`)을 수신하고 명령 및 상태 데이터를 실시간 양방향 송수신합니다.
-   * **자율 경보 수신 및 푸시**: 로봇이 교차검증으로 확정한 화재 이벤트(`EVENT_FIRE`)를 수신하면 즉시 SQLite에 이력을 저장하고 STOMP `/topic/alerts` 로 관제 대시보드에 경보를 브로드캐스트합니다.
+   * **자율 경보 수신 및 푸시**: 로봇이 확정한 화재(`EVENT_FIRE`)·분전반 과열(`EVENT_OVERHEAT`) 이벤트를 수신하면 SQLite에 이력 저장(열화상 이미지 제외) 후 STOMP `/topic/alerts` 로 표준 경보(`AlertMessage`, 과열은 열화상 중계 포함)를 브로드캐스트합니다.
+   * **분전반 점검 상태 관리**: 로봇의 정상 점검(`INSPECTION`)·과열(`EVENT_OVERHEAT`) 리포트로 설비(분전반) 최근 점검 상태(`NORMAL`/`OVER`)·온도를 갱신합니다. (임계 판정은 로봇이 수행, 임계치는 로봇 보유)
    * **제어 명령 중계**: 웹 대시보드가 STOMP `/app/control/*` 로 보낸 제어(`DRIVE`/`SET_MODE`/`ESTOP`/`SAVE_MAP`/`NAVIGATE`)를 검증(`validate`) 후 로봇 WSS 세션으로 중계합니다.
    * **듀얼 영상 중계**: 로봇의 `VIDEO_FRAME`(RGB/열화상)을 STOMP `/topic/video/{robotId}` 로 중계합니다.
    * **상태 캐싱 및 실시간 푸시**: 로봇의 실시간 상태를 자바 내장 메모리(**ConcurrentHashMap**)에 캐싱하여 관리 효율을 높이고, 실시간 데이터와 상태를 웹소켓(STOMP)으로 대시보드에 브로드캐스팅합니다.
@@ -238,8 +239,9 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 | MVP | **POST** | `/api/auth/signup` | 관리자 회원가입 (이메일 기반) | `{"email": "safety@bbiyong.io", "password": "...", "name": "..."}` | `{"status": "SUCCESS", "email": "safety@bbiyong.io"}` |
 | MVP | **POST** | `/api/auth/login` | 관리자 로그인 (이메일 기반) | `{"email": "safety@bbiyong.io", "password": "..."}` | `{"tokenType": "Bearer", "accessToken": "JWT", "role": "ROLE_ADMIN"}` |
 | MVP | **GET** | `/api/robots` | 로봇 목록/상태 요약 조회 | None | `[{"robotId": "orinka_01", "status": "AUTO_PATROL", "battery": 71}]` |
-| MVP | **GET** | `/api/events` | 이상 탐지 이벤트 이력 조회 (SQLite) | `?page=0&size=10` | `{"content": [{"eventId": 1, "type": "FIRE", ...}]}` |
-| 후속 | **PUT** | `/api/equipments/{id}` | 설비(분전반) 경보 임계 온도 설정 | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
+| MVP | **GET** | `/api/events` | 이상 탐지 이벤트 이력 조회 (SQLite) | `?page=0&size=10&type=FIRE` | `{"content": [{"eventId": 1, "type": "FIRE", ...}], "totalElements": 1}` |
+| MVP | **GET** | `/api/equipments` | 분전반 목록·최근 점검 상태 조회 (임계치는 로봇 보유·표시용) | None | `[{"equipmentId": "panel_A", "status": "NORMAL", "lastTemperature": 41.5, "threshold": 55.0}]` |
+| 후속 | **PUT** | `/api/equipments/{id}` | 설비 임계 온도 수정 (임계치 로봇 보유이므로 표시용/푸시 방식 확정 후) | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
 
 > **인증 주의**: 회원가입/로그인은 이메일 기반이며, 로그인 성공 시 JWT를 발급합니다. (인가 필터 적용은 후속 — 현재는 엔드포인트 오픈)
 
@@ -250,7 +252,7 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 * **엔드포인트**: `/ws-관제`(및 `/ws/control`, SockJS 지원), app prefix `/app`, broker prefix `/topic`
 * **구독 토픽 (Sub, `/topic`)**:
   * `/topic/robots`: 실시간 로봇 텔레메트리(위치, `status`, 배터리, 속도, E-STOP, 통신 지연, 추론 FPS) 갱신
-  * `/topic/alerts`: 로봇이 교차검증으로 확정한 화재 경보 실시간 푸시(`source: ROBOT`)
+  * `/topic/alerts`: 로봇이 확정한 **화재(FIRE)·분전반 과열(OVERHEAT)** 경보 통합 푸시(표준 `AlertMessage`, `source: ROBOT`). 과열은 `equipmentId`/`threshold`/`thermalImage`(열화상 base64, 중계만·미저장) 포함
   * `/topic/video/{robotId}`: 로봇 듀얼 카메라 프레임 중계 — `channel`(`FRONT`/`THERMAL`)로 구분되는 base64 JPEG 프레임
   * `/topic/map` *(미확정/후속)*: 로봇 맵 스트리밍 능력 확인 시 2D 점유 격자 중계
 * **발행 목적지 (Pub, `/app/control/*`)** — 백엔드가 payload를 검증(`validate`) 후 로봇 WSS 명령으로 중계. `robot_id` 는 payload에 포함(기본 `orinka_01`):

@@ -98,47 +98,28 @@
 ### 1.3 설비 관리 API
 
 #### [GET] `/api/equipments`
-* **설명**: 공장 내부의 감시 대상 설비 목록과 설정 온도를 조회합니다.
+* **설명**: 감시 대상 분전반(설비) 목록과 최근 점검 결과를 조회합니다. 기동 시 `panel_A/B/C`가 시드됩니다.
+* ⚠️ **임계치(`threshold`)는 로봇이 보유·판정**하며, 여기 값은 **표시용 참고값**입니다(로봇이 리포트한 값으로 갱신). 과열 확정 판정 자체는 로봇이 수행합니다.
 * **Response Body (200 OK)**:
 ```json
 [
   {
-    "equipmentId": "panel_01",
-    "name": "A동 중앙 메인 제어반",
-    "thresholdTemperature": 50.0,
-    "location": {
-      "x": 8.50,
-      "y": 3.10
-    }
-  },
-  {
-    "equipmentId": "panel_02",
-    "name": "B동 용접설비 동력 분전함",
-    "thresholdTemperature": 55.0,
-    "location": {
-      "x": 12.80,
-      "y": 14.20
-    }
+    "equipmentId": "panel_A",
+    "name": "A구역 분전반",
+    "x": 8.5,
+    "y": 3.1,
+    "threshold": 55.0,
+    "lastTemperature": 41.5,
+    "lastInspectedAt": "2026-07-27T10:53:00Z",
+    "status": "NORMAL"
   }
 ]
 ```
+* `status` 값: `NORMAL`(정상) / `OVER`(임계 초과) / `UNKNOWN`(점검 전)
+* `lastTemperature`·`lastInspectedAt`은 로봇의 최근 점검 리포트(INSPECTION/EVENT_OVERHEAT)로 갱신됩니다.
 
-#### [PUT] `/api/equipments/{equipmentId}`
-* **설명**: 특정 설비의 과열 경보 발생 임계 온도를 수정합니다.
-* **Request Body**:
-```json
-{
-  "thresholdTemperature": 52.5
-}
-```
-* **Response Body (200 OK)**:
-```json
-{
-  "equipmentId": "panel_01",
-  "thresholdTemperature": 52.5,
-  "updatedAt": "2026-07-18T19:39:00Z"
-}
-```
+#### [후속/Deferred][PUT] `/api/equipments/{equipmentId}`
+* **설명**: 임계 온도 수정. **임계치는 로봇 보유가 authoritative**이므로, 이 API는 표시용 값 수정 또는 로봇 임계 푸시 방식이 정해진 뒤 구현합니다. (MVP 미구현)
 
 ---
 
@@ -209,23 +190,28 @@
 * 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`, `inferenceFps` (온습도 센서 미사용으로 주변 온도·습도 제외)
 
 #### 2) 실시간 경보 푸시 구독 (`SUB /topic/alerts`)
-* **설명**: 순찰 로봇이 화재 후보를 근접 교차검증(YOLO 객체탐지 + 열화상)하여 **화재로 확정한 시점**에 발행되는 경보입니다. 브라우저에 실시간 경보 모달을 띄우기 위해 사용합니다. (접근/검증 진행 단계는 경보가 아닌 `/topic/robots` 상태로만 반영됩니다.)
-* **Payload**:
+* **설명**: 로봇이 확정한 **화재(FIRE)** 및 **분전반 과열(OVERHEAT)** 경보를 단일 토픽으로 발행합니다(표준 `AlertMessage`). 화재는 근접 교차검증 확정 시, 과열은 분전반 순회 중 임계 초과 시 전송됩니다. (접근/검증 진행 단계는 경보가 아닌 `/topic/robots` 상태로만 반영)
+* **Payload (FIRE)**:
 ```json
 {
-  "alertId": 1,
-  "type": "FIRE",
-  "level": "CRITICAL",
-  "source": "ROBOT",
-  "robotId": "orinka_01",
-  "confidence": 0.94,
-  "temperature": 58.4,
-  "location": { "x": 15.45, "y": 8.12 },
+  "type": "FIRE", "level": "CRITICAL", "source": "ROBOT", "robotId": "orinka_01",
+  "confidence": 0.94, "temperature": 58.4, "equipmentId": null, "threshold": null, "thermalImage": null,
+  "x": 15.45, "y": 8.12,
   "message": "순찰 로봇(orinka_01)이 근접 교차검증으로 화재를 확정했습니다.",
-  "timestamp": "2026-07-18T19:40:03Z"
+  "timestamp": "2026-07-27T10:53:00Z"
 }
 ```
-* `source` 값: `ROBOT` (과열 경보 등 향후 확장 시 값 추가)
+* **Payload (OVERHEAT)** — 과열은 `equipmentId`/`threshold`/`thermalImage`(열화상 base64, **중계만·미저장**) 포함:
+```json
+{
+  "type": "OVERHEAT", "level": "WARNING", "source": "ROBOT", "robotId": "orinka_01",
+  "confidence": null, "temperature": 63.2, "equipmentId": "panel_A", "threshold": 55.0, "thermalImage": "<base64 jpeg>",
+  "x": 8.5, "y": 3.1,
+  "message": "설비(panel_A) 과열이 감지되었습니다.",
+  "timestamp": "2026-07-27T10:53:00Z"
+}
+```
+* `type`: `FIRE` | `OVERHEAT` · `level`: `CRITICAL`(화재) | `WARNING`(과열) · `source`: `ROBOT`
 
 #### 3) 듀얼 카메라 영상 프레임 구독 (`SUB /topic/video/{robotId}`)
 * **설명**: 로봇이 WSS로 전송한 RGB(FRONT)·열화상(THERMAL) JPEG 프레임을 백엔드가 실시간 중계합니다. 대시보드는 `channel`로 두 스트림을 구분하여 나란히 렌더링합니다.
@@ -301,9 +287,16 @@ AWS 인프라 보안 및 방화벽 규정을 준수하기 위해 Nginx 리버스
 {"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "location": {"x": 15.0, "y": 8.2}}
 ```
 
-#### 3) 장비 과열 이벤트 패킷 (개행 필수)
+#### 3) 분전반 과열 이벤트 패킷 (개행 필수)
+* **설명**: 로봇이 분전반을 순회하며 **자체 보유 임계치로 판정**하여 **초과 시** 전송한다. 열화상 스냅샷(`thermalImage`, base64)을 함께 보내며, 백엔드는 SQLite에 이력 저장(이미지 제외) + STOMP `/topic/alerts`로 경보(열화상 포함) 중계한다.
 ```json
-{"source": "robot", "type": "EVENT_OVERHEAT", "robot_id": "orinka_01", "equipment_id": "panel_01", "temperature": 53.2, "location": {"x": 8.5, "y": 3.1}}
+{"source": "robot", "type": "EVENT_OVERHEAT", "robot_id": "orinka_01", "equipment_id": "panel_A", "temperature": 63.2, "threshold": 55.0, "thermalImage": "<base64 jpeg>", "location": {"x": 8.5, "y": 3.1}}
+```
+
+#### 3-1) 분전반 정상 점검 리포트 패킷 (개행 필수)
+* **설명**: 임계치를 넘지 않은 **정상 점검** 결과도 전송한다. 경보는 아니며, 백엔드는 설비 최근 점검 상태(`NORMAL`)·온도만 갱신한다.
+```json
+{"source": "robot", "type": "INSPECTION", "robot_id": "orinka_01", "equipment_id": "panel_A", "temperature": 41.5, "threshold": 55.0, "location": {"x": 8.5, "y": 3.1}}
 ```
 
 #### [후속/Deferred] 4) 2D 도면 매핑 점유 격자 패킷 (`MAPPING` 모드, 개행 필수)
