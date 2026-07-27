@@ -28,7 +28,10 @@ stop 'teleop_node.py'
 [ "$KEEPMAP" != "keepmap" ] && stop 'async_slam_toolbox_node'
 sleep 3
 
-PARAMS="$HOME/ydlidar_ros2_ws/install/ydlidar_ros2_driver/share/ydlidar_ros2_driver/params/ydlidar.yaml"
+# Use the versioned project configuration deployed to ~/calib. The vendor
+# install YAML previously restored clockwise (mirrored) LaserScan angles on
+# every restart.
+PARAMS="$HOME/calib/ydlidar.yaml"
 up ydlidar ros2 run ydlidar_ros2_driver ydlidar_ros2_driver_node \
     --ros-args --params-file "$PARAMS" -r scan:=/scan_raw
 sleep 10

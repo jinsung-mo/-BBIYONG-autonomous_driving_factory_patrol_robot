@@ -57,3 +57,11 @@ def test_sensor_launch_preserves_raw_scan() -> None:
     assert '("scan", "/scan_raw")' in source
     assert '("scan_filtered", "/scan_filtered")' in source
     assert 'arguments=["/scan_filtered", "/scan"]' in source
+
+
+def test_ydlidar_uses_ros_counter_clockwise_angles() -> None:
+    params = load_yaml("ydlidar.yaml")["ydlidar_ros2_driver_node"][
+        "ros__parameters"
+    ]
+    assert params["inverted"] is True
+    assert params["reversion"] is False
