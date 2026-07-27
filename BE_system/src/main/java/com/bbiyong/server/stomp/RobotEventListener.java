@@ -1,5 +1,6 @@
 package com.bbiyong.server.stomp;
 
+import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
@@ -26,8 +27,8 @@ public class RobotEventListener {
     public void handleTelemetryEvent(RobotTelemetryEvent event) {
         try {
             String jsonStr = objectMapper.writeValueAsString(event.getPacket());
-            log.info("Broadcasting Telemetry via STOMP to /topic/telemetry: {}", jsonStr);
-            messagingTemplate.convertAndSend("/topic/telemetry", jsonStr);
+            log.debug("Broadcasting telemetry via STOMP to /topic/robots: {}", jsonStr);
+            messagingTemplate.convertAndSend("/topic/robots", jsonStr);
         } catch (Exception e) {
             log.error("Failed to serialize telemetry event", e);
         }
@@ -50,23 +51,22 @@ public class RobotEventListener {
 
     @EventListener
     public void handleFireEvent(RobotFireEvent event) {
-        try {
-            String jsonStr = objectMapper.writeValueAsString(event.getPacket());
-            log.info("Broadcasting FIRE ALERT via STOMP to /topic/events/fire: {}", jsonStr);
-            messagingTemplate.convertAndSend("/topic/events/fire", jsonStr);
-        } catch (Exception e) {
-            log.error("Failed to serialize fire event", e);
-        }
+        broadcastAlert(AlertMessage.fromFire(event.getPacket()));
     }
 
     @EventListener
     public void handleOverheatEvent(RobotOverheatEvent event) {
+        broadcastAlert(AlertMessage.fromOverheat(event.getPacket()));
+    }
+
+    /** 화재/과열 확정 경보를 단일 /topic/alerts 로 표준 페이로드 브로드캐스트. */
+    private void broadcastAlert(AlertMessage alert) {
         try {
-            String jsonStr = objectMapper.writeValueAsString(event.getPacket());
-            log.info("Broadcasting OVERHEAT ALERT via STOMP to /topic/events/overheat: {}", jsonStr);
-            messagingTemplate.convertAndSend("/topic/events/overheat", jsonStr);
+            String jsonStr = objectMapper.writeValueAsString(alert);
+            log.info("Broadcasting {} ALERT via STOMP to /topic/alerts: {}", alert.type(), jsonStr);
+            messagingTemplate.convertAndSend("/topic/alerts", jsonStr);
         } catch (Exception e) {
-            log.error("Failed to serialize overheat event", e);
+            log.error("Failed to serialize/broadcast alert", e);
         }
     }
 }

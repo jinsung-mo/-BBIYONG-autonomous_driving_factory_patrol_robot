@@ -1,6 +1,7 @@
 package com.bbiyong.server.stomp;
 
 import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import com.bbiyong.server.wss.event.RobotVideoEvent;
 import org.junit.jupiter.api.DisplayName;
@@ -34,7 +35,7 @@ public class StompWebSocketTests {
     private ApplicationEventPublisher eventPublisher;
 
     @Test
-    @DisplayName("STOMP - /ws/control 접속 및 /topic/telemetry 브로드캐스팅 수신 검증")
+    @DisplayName("STOMP - /ws/control 접속 및 /topic/robots 텔레메트리 브로드캐스팅 수신 검증")
     void testStompTelemetryBroadcasting() throws Exception {
         String stompUrl = "ws://localhost:" + port + "/ws/control";
         WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
@@ -45,7 +46,7 @@ public class StompWebSocketTests {
 
         BlockingQueue<String> receivedQueue = new ArrayBlockingQueue<>(5);
 
-        session.subscribe("/topic/telemetry", new StompFrameHandler() {
+        session.subscribe("/topic/robots", new StompFrameHandler() {
             @Override
             public Type getPayloadType(StompHeaders headers) {
                 return String.class;
@@ -121,6 +122,52 @@ public class StompWebSocketTests {
         assertThat(broadcasted).isNotNull();
         assertThat(broadcasted).contains("THERMAL");
         assertThat(broadcasted).contains("BASE64_JPEG_DATA");
+
+        session.disconnect();
+    }
+
+    @Test
+    @DisplayName("STOMP - 화재 확정 경보가 /topic/alerts 표준 페이로드로 발행됨")
+    void testStompFireAlertBroadcasting() throws Exception {
+        String stompUrl = "ws://localhost:" + port + "/ws/control";
+        WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
+        stompClient.setMessageConverter(new StringMessageConverter());
+
+        StompSession session = stompClient.connectAsync(stompUrl, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS);
+        assertThat(session.isConnected()).isTrue();
+
+        BlockingQueue<String> receivedQueue = new ArrayBlockingQueue<>(5);
+
+        session.subscribe("/topic/alerts", new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return String.class;
+            }
+
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                if (payload instanceof String jsonStr) {
+                    receivedQueue.add(jsonStr);
+                }
+            }
+        });
+
+        Thread.sleep(500);
+
+        RobotPacket packet = new RobotPacket();
+        packet.setSource("robot");
+        packet.setType("EVENT_FIRE");
+        packet.setRobotId("orinka_alert_test");
+        packet.setConfidence(0.94);
+        packet.setTemperature(58.4);
+
+        eventPublisher.publishEvent(new RobotFireEvent(this, packet));
+
+        String broadcasted = receivedQueue.poll(5, TimeUnit.SECONDS);
+        assertThat(broadcasted).isNotNull();
+        assertThat(broadcasted).contains("\"type\":\"FIRE\"");
+        assertThat(broadcasted).contains("\"source\":\"ROBOT\"");
+        assertThat(broadcasted).contains("orinka_alert_test");
 
         session.disconnect();
     }
