@@ -1,6 +1,5 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
-from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -33,34 +32,11 @@ def _control_nodes(context):
     return [
         Node(package="bbiyong_base", executable="cmd_mux", output="screen"),
         Node(package="bbiyong_base", executable="ackermann_adapter", output="screen", parameters=[parameter]),
-        Node(
-            package="bbiyong_base",
-            executable="remote_control_bridge",
-            output="screen",
-            condition=IfCondition(LaunchConfiguration("start_remote_control")),
-            parameters=[{
-                "wss_url": LaunchConfiguration("wss_url"),
-                "robot_id": LaunchConfiguration("robot_id"),
-                "max_linear_mps": LaunchConfiguration("remote_max_linear_mps"),
-                "max_angular_rps": LaunchConfiguration("remote_max_angular_rps"),
-                "reconnect_sec": LaunchConfiguration("remote_reconnect_sec"),
-                "connect_timeout_sec": LaunchConfiguration("remote_connect_timeout_sec"),
-                "authorization_header": LaunchConfiguration("remote_authorization_header"),
-            }],
-        ),
     ]
 
 
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("vehicle_config"),
-        DeclareLaunchArgument("start_remote_control", default_value="false"),
-        DeclareLaunchArgument("wss_url", default_value=""),
-        DeclareLaunchArgument("robot_id", default_value="orinka_01"),
-        DeclareLaunchArgument("remote_max_linear_mps", default_value="0.15"),
-        DeclareLaunchArgument("remote_max_angular_rps", default_value="0.5"),
-        DeclareLaunchArgument("remote_reconnect_sec", default_value="3.0"),
-        DeclareLaunchArgument("remote_connect_timeout_sec", default_value="5.0"),
-        DeclareLaunchArgument("remote_authorization_header", default_value=""),
         OpaqueFunction(function=_control_nodes),
     ])

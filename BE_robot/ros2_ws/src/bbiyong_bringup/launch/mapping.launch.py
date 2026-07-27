@@ -1,7 +1,6 @@
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -28,20 +27,7 @@ def generate_launch_description():
         DeclareLaunchArgument("start_lidar", default_value="true"),
         DeclareLaunchArgument("publish_laser_tf", default_value="true"),
         DeclareLaunchArgument("allow_unmeasured_lidar", default_value="false"),
-        DeclareLaunchArgument("start_remote_control", default_value="false"),
-        DeclareLaunchArgument("wss_url", default_value=""),
-        DeclareLaunchArgument("robot_id", default_value="orinka_01"),
         sensors,
-        Node(
-            package="bbiyong_base",
-            executable="remote_control_bridge",
-            output="screen",
-            condition=IfCondition(LaunchConfiguration("start_remote_control")),
-            parameters=[{
-                "wss_url": LaunchConfiguration("wss_url"),
-                "robot_id": LaunchConfiguration("robot_id"),
-            }],
-        ),
         Node(
             package="slam_toolbox",
             executable="async_slam_toolbox_node",

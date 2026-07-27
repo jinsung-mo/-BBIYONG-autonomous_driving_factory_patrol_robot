@@ -30,15 +30,14 @@ source_workspace() {
 usage() {
   cat <<'EOF'
 Usage:
-  bbiyong mapping [--remote]
+  bbiyong mapping
   bbiyong save-map <output-prefix>
   bbiyong localize <map.yaml>
-  bbiyong navigate <map.yaml> <vehicle.yaml> <nav2.yaml> [--remote]
-  bbiyong control <vehicle.yaml> [--remote]
-  bbiyong explore <vehicle.yaml> <nav2.yaml> <map-output-prefix> [--remote]
+  bbiyong navigate <map.yaml> <vehicle.yaml> <nav2.yaml>
+  bbiyong control <vehicle.yaml>
+  bbiyong explore <vehicle.yaml> <nav2.yaml> <map-output-prefix>
   bbiyong status
 
-Set BBIYONG_WSS_URL (and optional BBIYONG_ROBOT_ID) when using --remote.
 EOF
 }
 
@@ -49,12 +48,7 @@ source_workspace
 
 case "$command" in
   mapping)
-    [[ $# -eq 0 || $# -eq 1 ]] || die "mapping takes optional --remote"
-    if [[ "${1:-}" == "--remote" ]]; then
-      [[ -n "${BBIYONG_WSS_URL:-}" ]] || die "set BBIYONG_WSS_URL before --remote"
-      exec ros2 launch bbiyong_bringup mapping.launch.py odom_source:=rf2o allow_unmeasured_lidar:=true start_remote_control:=true wss_url:="$BBIYONG_WSS_URL" robot_id:="${BBIYONG_ROBOT_ID:-orinka_01}"
-    fi
-    [[ $# -eq 0 ]] || die "unknown mapping option: $1"
+    [[ $# -eq 0 ]] || die "mapping takes no arguments"
     exec ros2 launch bbiyong_bringup mapping.launch.py odom_source:=rf2o allow_unmeasured_lidar:=true
     ;;
   save-map)
@@ -68,34 +62,19 @@ case "$command" in
     exec ros2 launch bbiyong_bringup localization.launch.py map:="$1" odom_source:=rf2o allow_unmeasured_lidar:=true
     ;;
   navigate)
-    [[ $# -eq 3 || $# -eq 4 ]] || die "navigate requires map.yaml vehicle.yaml nav2.yaml and optional --remote"
+    [[ $# -eq 3 ]] || die "navigate requires map.yaml vehicle.yaml nav2.yaml"
     require_file "$1"; require_file "$2"; require_file "$3"
-    if [[ "${4:-}" == "--remote" ]]; then
-      [[ -n "${BBIYONG_WSS_URL:-}" ]] || die "set BBIYONG_WSS_URL before --remote"
-      exec ros2 launch bbiyong_bringup navigation.launch.py map:="$1" vehicle_config:="$2" nav2_params:="$3" odom_source:=wheel start_remote_control:=true wss_url:="$BBIYONG_WSS_URL" robot_id:="${BBIYONG_ROBOT_ID:-orinka_01}"
-    fi
-    [[ $# -eq 3 ]] || die "unknown navigate option: $4"
     exec ros2 launch bbiyong_bringup navigation.launch.py map:="$1" vehicle_config:="$2" nav2_params:="$3" odom_source:=wheel
     ;;
   control)
-    [[ $# -eq 1 || $# -eq 2 ]] || die "control requires vehicle.yaml and optional --remote"
+    [[ $# -eq 1 ]] || die "control requires vehicle.yaml"
     require_file "$1"
-    if [[ "${2:-}" == "--remote" ]]; then
-      [[ -n "${BBIYONG_WSS_URL:-}" ]] || die "set BBIYONG_WSS_URL before --remote"
-      exec ros2 launch bbiyong_bringup control.launch.py vehicle_config:="$1" start_remote_control:=true wss_url:="$BBIYONG_WSS_URL"
-    fi
-    [[ $# -eq 1 ]] || die "unknown control option: $2"
     exec ros2 launch bbiyong_bringup control.launch.py vehicle_config:="$1"
     ;;
   explore)
-    [[ $# -eq 3 || $# -eq 4 ]] || die "explore requires vehicle.yaml nav2.yaml map-output-prefix and optional --remote"
+    [[ $# -eq 3 ]] || die "explore requires vehicle.yaml nav2.yaml map-output-prefix"
     require_file "$1"; require_file "$2"
     mkdir -p "$(dirname "$3")"
-    if [[ "${4:-}" == "--remote" ]]; then
-      [[ -n "${BBIYONG_WSS_URL:-}" ]] || die "set BBIYONG_WSS_URL before --remote"
-      exec ros2 launch bbiyong_bringup exploration.launch.py vehicle_config:="$1" nav2_params:="$2" odom_source:=wheel map_output:="$3" start_remote_control:=true wss_url:="$BBIYONG_WSS_URL" robot_id:="${BBIYONG_ROBOT_ID:-orinka_01}"
-    fi
-    [[ $# -eq 3 ]] || die "unknown explore option: $4"
     exec ros2 launch bbiyong_bringup exploration.launch.py vehicle_config:="$1" nav2_params:="$2" odom_source:=wheel map_output:="$3"
     ;;
   status)

@@ -240,7 +240,7 @@ ros2 topic echo /exploration_map_saver/saved
 
 ## 주요 진단 명령
 
-원격 수동 제어는 기본 비활성이다. navigation/exploration launch가 control mux를 포함하므로 별도의 control launch를 중복 실행하지 않는다. Jetson operator wrapper 사용법과 안전 계약은 [docs/REMOTE_CONTROL.md](docs/REMOTE_CONTROL.md)를 따른다.
+navigation/exploration launch는 control mux를 포함하므로 별도의 control launch를 중복 실행하지 않는다. Jetson operator wrapper는 `mapping`, `save-map`, `localize`, `navigate`, `control`, `explore`, `status` 명령을 제공한다.
 
 ```bash
 ros2 topic hz /scan
