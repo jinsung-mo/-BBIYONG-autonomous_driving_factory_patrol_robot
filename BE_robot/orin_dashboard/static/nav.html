@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrinCar 실시간 지도</title>
+<style>
+  :root{--bg:#15171c;--panel:#1e2128;--line:#2c3038;--ink:#e6e3dd;--muted:#9aa0a8;
+        --accent:#f0c98a;--ok:#8fd39a;--bad:#e08a84}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);overflow:hidden;
+       font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif}
+  #cv{position:fixed;inset:0;cursor:grab}
+  #cv:active{cursor:grabbing}
+  #ui{position:fixed;top:12px;left:12px;width:250px;background:var(--panel);
+      border:1px solid var(--line);border-radius:10px;padding:13px;font-size:12px}
+  h1{font-size:14px;margin:0 0 10px}
+  .kv{display:flex;justify-content:space-between;gap:8px;padding:2px 0;color:var(--muted)}
+  .kv b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .kv.big b{color:var(--accent);font-size:13px}
+  .bad b{color:var(--bad)} .ok b{color:var(--ok)}
+  .row{margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+  label{display:flex;align-items:center;gap:6px;color:var(--muted);padding:2px 0}
+  button{background:#262a32;color:var(--ink);border:1px solid var(--line);
+         border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  .hint{font-size:10px;color:#6f757d;line-height:1.6;margin-top:8px}
+  #cam{position:fixed;top:12px;right:12px;width:340px;background:var(--panel);
+       border:1px solid var(--line);border-radius:10px;padding:11px;font-size:12px}
+  #cam img{width:100%;display:block;border-radius:6px;background:#000;
+           margin-bottom:7px;aspect-ratio:4/3;object-fit:cover}
+  .camhd{display:flex;justify-content:space-between;align-items:baseline;
+         margin-bottom:8px}
+  .camhd b{font-size:13px}
+  .camhd span{font-size:11px;color:var(--muted)}
+  #det.fire{color:var(--bad);font-weight:700}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="ui">
+  <h1>OrinCar 실시간 지도</h1>
+  <div class="kv big"><span>상태</span><b id="st">연결 중…</b></div>
+  <div class="kv"><span>지도</span><b id="mapsz">—</b></div>
+  <div class="kv"><span>해상도</span><b id="res">—</b></div>
+  <div class="kv"><span>탐색 면적</span><b id="area">—</b></div>
+  <div class="kv"><span>자세 (프레임)</span><b id="frame">—</b></div>
+  <div class="kv"><span>x, y</span><b id="pos">—</b></div>
+  <div class="kv"><span>heading</span><b id="yaw">—</b></div>
+  <div class="kv"><span>갱신</span><b id="age">—</b></div>
+  <div class="row">
+    <label><input type="checkbox" id="cScan" checked> 라이다 스캔</label>
+    <label><input type="checkbox" id="cFollow" checked> 로봇 따라가기</label>
+    <label><input type="checkbox" id="cTrail" checked> 이동 궤적</label>
+    <div style="margin-top:8px;display:flex;gap:6px">
+      <button id="bFit">전체 보기</button>
+      <button id="bClear">궤적 지우기</button>
+    </div>
+  </div>
+  <div class="hint">드래그=이동 · 휠=확대<br>회색 미탐색 · 흰색 자유 · 검정 벽</div>
+</div>
+<div id="cam">
+  <div class="camhd"><b>카메라</b><span id="camst">—</span></div>
+  <img id="camimg" alt="camera">
+  <div class="kv"><span>바닥 트임 (좌/중/우)</span><b id="floor">—</b></div>
+  <div class="kv"><span>화재·연기</span><b id="det">—</b></div>
+</div>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let view = {x:0, y:0, s:60, init:false};   // s = 픽셀/미터
+let nav = null, trail = [], lastSeq = -1, mapCanvas = null, fails = 0;
+
+function resize(){ cv.width = innerWidth; cv.height = innerHeight; draw(); }
+addEventListener('resize', resize);
+
+// ── 드래그·줌 ────────────────────────────────────────────────
+let drag = null;
+cv.addEventListener('mousedown', e => { drag = {x:e.clientX, y:e.clientY}; });
+addEventListener('mouseup', () => drag = null);
+addEventListener('mousemove', e => {
+  if (!drag) return;
+  view.x += e.clientX - drag.x; view.y += e.clientY - drag.y;
+  drag = {x:e.clientX, y:e.clientY};
+  document.getElementById('cFollow').checked = false;
+  draw();
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const k = e.deltaY < 0 ? 1.12 : 1/1.12;
+  // 커서를 중심으로 확대 — 화면 좌표가 유지되도록 평행이동을 보정한다
+  view.x = e.clientX - (e.clientX - view.x) * k;
+  view.y = e.clientY - (e.clientY - view.y) * k;
+  view.s *= k; draw();
+}, {passive:false});
+
+document.getElementById('bFit').onclick = () => { fit(); draw(); };
+document.getElementById('bClear').onclick = () => { trail = []; draw(); };
+for (const id of ['cScan','cFollow','cTrail'])
+  document.getElementById(id).onchange = draw;
+
+// 지도 좌표(m) → 화면(px).  y 는 위로 증가하므로 뒤집는다.
+const sx = mx => view.x + mx * view.s;
+const sy = my => view.y - my * view.s;
+
+function fit(){
+  if (!nav || !nav.map) return;
+  const m = nav.map, w = m.w * m.res, h = m.h * m.res;
+  view.s = Math.min(cv.width / w, cv.height / h) * 0.88;
+  view.x = cv.width/2 - (m.ox + w/2) * view.s;
+  view.y = cv.height/2 + (m.oy + h/2) * view.s;
+  view.init = true;
+}
+
+// 지도는 셀 수가 많아 매 프레임 다시 그리면 느리다.
+// seq 가 바뀔 때만 오프스크린 캔버스에 1픽셀=1셀로 굽고, 화면에는 그걸 확대해 붙인다.
+function bakeMap(m){
+  const c = document.createElement('canvas');
+  c.width = m.w; c.height = m.h;
+  const g = c.getContext('2d'), img = g.createImageData(m.w, m.h);
+  const d = img.data, s = m.data;
+  for (let i = 0; i < m.w * m.h; i++){
+    const ch = s.charCodeAt(i);
+    let v, a = 255;
+    if (ch === 35) v = 20;             // '#' 벽
+    else if (ch === 32) v = 245;       // ' ' 자유
+    else { v = 60; a = 90; }           // '.' 미탐색
+    // 이미지 y 를 뒤집어 굽는다 (맵은 아래→위, 캔버스는 위→아래)
+    const row = m.h - 1 - ((i / m.w) | 0), col = i % m.w;
+    const j = (row * m.w + col) * 4;
+    d[j] = d[j+1] = d[j+2] = v; d[j+3] = a;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+function draw(){
+  ctx.fillStyle = '#15171c';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  if (!nav) return;
+  const m = nav.map;
+
+  if (m && mapCanvas){
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(mapCanvas, sx(m.ox), sy(m.oy + m.h * m.res),
+                  m.w * m.res * view.s, m.h * m.res * view.s);
+  }
+
+  const p = nav.pose;
+  if (document.getElementById('cTrail').checked && trail.length > 1){
+    ctx.strokeStyle = 'rgba(240,201,138,0.55)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sx(trail[0][0]), sy(trail[0][1]));
+    for (const t of trail) ctx.lineTo(sx(t[0]), sy(t[1]));
+    ctx.stroke();
+  }
+
+  if (p && nav.scan && document.getElementById('cScan').checked){
+    const s = nav.scan;
+    ctx.fillStyle = 'rgba(122,162,210,0.85)';
+    for (let i = 0; i < s.ranges.length; i++){
+      const r = s.ranges[i];
+      if (!r) continue;
+      // 스캔은 laser 기준이지만 여기서는 base_link 근사로 그린다
+      // (오프셋 6cm 는 화면 축척에서 1px 미만인 경우가 대부분)
+      const a = p.yaw + s.angle_min + i * s.angle_inc;
+      ctx.fillRect(sx(p.x + r*Math.cos(a)) - 1, sy(p.y + r*Math.sin(a)) - 1, 2, 2);
+    }
+  }
+
+  if (p){
+    const X = sx(p.x), Y = sy(p.y), R = Math.max(5, view.s * 0.10);
+    ctx.fillStyle = '#f0c98a';
+    ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#f0c98a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(X, Y);
+    ctx.lineTo(X + Math.cos(p.yaw)*R*2.4, Y - Math.sin(p.yaw)*R*2.4);
+    ctx.stroke();
+  }
+}
+
+function setTxt(id, v){ document.getElementById(id).textContent = v; }
+
+function mapSymbol(value){ return value < 0 ? '.' : value > 50 ? '#' : ' '; }
+
+function decodeMapSnapshot(message){
+  const cells = [];
+  for(let i=0;i<message.cells.length;i+=2)
+    cells.push(mapSymbol(message.cells[i]).repeat(message.cells[i+1]));
+  const data = cells.join('');
+  if(data.length !== message.w * message.h) throw new Error('invalid map size');
+  return {w:message.w,h:message.h,res:message.res,ox:message.ox,oy:message.oy,
+          seq:message.sequence,data};
+}
+
+function applyMapPatch(current, message){
+  if(!current || current.seq !== message.base_sequence) return null;
+  const cells = current.data.split('');
+  for(let i=0;i<message.changes.length;i+=3){
+    const start=message.changes[i], count=message.changes[i+1];
+    if(start < 0 || count < 1 || start+count > cells.length) return null;
+    cells.fill(mapSymbol(message.changes[i+2]), start, start+count);
+  }
+  return {...current,seq:message.sequence,data:cells.join('')};
+}
+
+let mapRequest = null;
+async function loadMap(){
+  if(mapRequest) return mapRequest;
+  mapRequest = (async()=>{
+    const current = nav && nav.map;
+    const suffix = current ? `?since=${current.seq}` : '';
+    let response = await fetch('api/nav/map'+suffix, {cache:'no-store'});
+    if(response.status === 304) return current;
+    if(!response.ok) throw new Error('map HTTP '+response.status);
+    let message = await response.json();
+    let map = message.kind === 'patch' ? applyMapPatch(current,message) :
+              decodeMapSnapshot(message);
+    if(!map){
+      response = await fetch('api/nav/map', {cache:'no-store'});
+      if(!response.ok) throw new Error('map snapshot HTTP '+response.status);
+      message = await response.json();
+      map = decodeMapSnapshot(message);
+    }
+    return map;
+  })();
+  try { return await mapRequest; }
+  finally { mapRequest = null; }
+}
+
+async function poll(){
+  try {
+    const r = await fetch('api/nav/live', {cache:'no-store'});
+    if (!r.ok){
+      const j = await r.json().catch(()=>({}));
+      setTxt('st', j.error || ('HTTP ' + r.status));
+      document.getElementById('st').parentElement.className = 'kv big bad';
+      return;
+    }
+    // 신선도는 서버가 헤더로 준다. 브라우저 시계로 계산하면 Orin 과의
+    // 시계 차이가 섞여 음수가 나온다.
+    const age = parseFloat(r.headers.get('X-Nav-Age'));
+    const live = await r.json();
+    let map = nav && nav.map;
+    if(live.map_sequence && (!map || map.seq !== live.map_sequence)){
+      map = await loadMap();
+    }
+    nav = {...live, map};
+    nav._age = isNaN(age) ? null : age;
+    fails = 0;
+    document.getElementById('st').parentElement.className = 'kv big';
+    setTxt('st', nav.map ? '매핑 중' : '지도 대기');
+
+    if (nav.map){
+      const m = nav.map;
+      if (m.seq !== lastSeq){ mapCanvas = bakeMap(m); lastSeq = m.seq; }
+      setTxt('mapsz', `${m.w}×${m.h} 셀`);
+      setTxt('res', `${(m.res*1000).toFixed(0)} mm/셀`);
+      let free = 0;
+      for (let i = 0; i < m.data.length; i++) if (m.data.charCodeAt(i) === 32) free++;
+      setTxt('area', `${(free * m.res * m.res).toFixed(1)} m²`);
+      if (!view.init) fit();
+    }
+    if (nav.pose){
+      const p = nav.pose;
+      setTxt('frame', p.frame);
+      setTxt('pos', `${p.x.toFixed(2)}, ${p.y.toFixed(2)} m`);
+      setTxt('yaw', `${(p.yaw*180/Math.PI).toFixed(1)}°`);
+      const last = trail[trail.length-1];
+      if (!last || Math.hypot(p.x-last[0], p.y-last[1]) > 0.03){
+        trail.push([p.x, p.y]);
+        if (trail.length > 4000) trail.shift();
+      }
+      if (document.getElementById('cFollow').checked){
+        view.x = cv.width/2 - p.x * view.s;
+        view.y = cv.height/2 + p.y * view.s;
+      }
+    } else setTxt('frame', 'TF 없음');
+    const el = document.getElementById('age').parentElement;
+    setTxt('age', nav._age === null ? '—' : nav._age.toFixed(1) + ' s 전');
+    el.className = (nav._age !== null && nav._age > 3) ? 'kv bad' : 'kv';
+    draw();
+  } catch (e) {
+    if (++fails > 2){
+      setTxt('st', '서버 연결 끊김');
+      document.getElementById('st').parentElement.className = 'kv big bad';
+    }
+  }
+}
+
+// ── 카메라 패널 ──────────────────────────────────────────────
+async function pollCam(){
+  try {
+    const r = await fetch('/api/cam', {cache:'no-store'});
+    if (!r.ok){
+      document.getElementById('camst').textContent = '미실행';
+      return;
+    }
+    const age = parseFloat(r.headers.get('X-Nav-Age'));
+    const c = await r.json();
+    document.getElementById('camimg').src = 'data:image/jpeg;base64,' + c.jpeg;
+    document.getElementById('camst').textContent =
+      (c.trt ? `TensorRT ${c.det_fps} FPS` : '탐지 꺼짐') +
+      (isNaN(age) ? '' : ` · ${age.toFixed(1)}s 전`);
+    const f = c.floor_clear;
+    setTxt('floor', f ? f.map(v => v.toFixed(2)).join('  ') : '—');
+    document.getElementById('floor').parentElement.className =
+      (f && Math.min(...f) < 0.3) ? 'kv bad' : 'kv';
+    const el = document.getElementById('det');
+    if (!c.dets || !c.dets.length){ el.textContent = '없음'; el.className = ''; }
+    else {
+      el.textContent = c.dets.map(d => `${d.name} ${d.conf.toFixed(2)}`).join(', ');
+      el.className = c.dets.some(d => d.cls === 1) ? 'fire' : '';
+    }
+  } catch(e){ document.getElementById('camst').textContent = '연결 실패'; }
+}
+
+resize();
+poll(); pollCam();
+setInterval(poll, 500);
+setInterval(pollCam, 700);
+</script>
+</body>
+</html>
