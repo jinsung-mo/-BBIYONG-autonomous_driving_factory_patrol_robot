@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>BBIYONG Robot Console</title>
+<style>body{font:16px sans-serif;max-width:760px;margin:2rem auto}button,input{padding:.5rem;margin:.2rem}#keys button{width:4rem;height:3rem}pre{background:#111;color:#bfb;padding:1rem}</style></head>
+<body><h1>BBIYONG 관제 콘솔</h1><p>연결: <b id="state">disconnected</b> · robot_id <input id="robot" value="orinka_01"></p>
+<button id="connect">Connect STOMP</button><button id="estop">ESTOP</button>
+<p><button data-mode="manual">수동</button><button data-mode="autonomy">자율</button><button data-mode="disabled">비활성</button></p>
+<div id="keys"><button data-key="ArrowUp">▲</button><br><button data-key="ArrowLeft">◀</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button></div>
+<p>지도 이름 <input id="map" value="mapping"><button id="save">현재 지도 저장</button></p>
+<p>목적지 x <input id="x" type="number" value="0"> y <input id="y" type="number" value="0"> yaw <input id="yaw" type="number" value="0"><button id="goal">Nav2 Goal</button></p>
+<pre id="telemetry">telemetry: waiting</pre>
+<script>
+let socket, held=new Set(), timer; const $=id=>document.getElementById(id), state=$('state');
+const robot=()=>$('robot').value.trim()||'orinka_01';
+function frame(destination, body){return `SEND\ndestination:${destination}\ncontent-type:application/json\n\n${JSON.stringify({...body,robot_id:robot()})}\0`}
+function send(destination, body){if(socket?.readyState===WebSocket.OPEN)socket.send(frame(destination,body))}
+function drive(stop=false){let l=0,a=0;if(!stop){if(held.has('ArrowUp'))l+=.1;if(held.has('ArrowDown'))l-=.1;if(held.has('ArrowLeft'))a+=.3;if(held.has('ArrowRight'))a-=.3}send('/app/control/drive',{command:'DRIVE',linear:l,angular:a})}
+function stop(){held.clear();drive(true)}
+function connect(){const scheme=location.protocol==='https:'?'wss':'ws';socket=new WebSocket(`${scheme}://${location.host}/ws/control`);socket.onopen=()=>{state.textContent='connected';socket.send('CONNECT\naccept-version:1.2\n\n\0');socket.send('SUBSCRIBE\nid:robots\ndestination:/topic/robots\n\n\0');socket.send('SUBSCRIBE\nid:alerts\ndestination:/topic/alerts\n\n\0');timer=setInterval(()=>drive(false),100)};socket.onmessage=e=>{$('telemetry').textContent=e.data};socket.onclose=()=>{state.textContent='disconnected';clearInterval(timer);stop()};socket.onerror=()=>stop()}
+$('connect').onclick=connect;$('estop').onclick=()=>send('/app/control/mode',{command:'ESTOP'});document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>send('/app/control/mode',{command:'SET_MODE',mode:b.dataset.mode}));
+$('save').onclick=()=>send('/app/control/operation',{command:'SAVE_MAP',name:$('map').value});$('goal').onclick=()=>send('/app/control/operation',{command:'NAVIGATE',x:Number($('x').value),y:Number($('y').value),yaw:Number($('yaw').value)});
+addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();held.add(e.key)}});addEventListener('keyup',e=>{if(held.delete(e.key))drive(false)});addEventListener('blur',stop);document.addEventListener('visibilitychange',()=>{if(document.hidden)stop()});addEventListener('beforeunload',stop);
+document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=()=>held.add(b.dataset.key);b.onpointerup=b.onpointerleave=stop});
+</script></body></html>
