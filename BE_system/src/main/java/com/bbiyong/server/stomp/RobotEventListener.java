@@ -1,8 +1,9 @@
 package com.bbiyong.server.stomp;
 
-import com.bbiyong.server.tcp.event.RobotFireEvent;
-import com.bbiyong.server.tcp.event.RobotOverheatEvent;
-import com.bbiyong.server.tcp.event.RobotTelemetryEvent;
+import com.bbiyong.server.wss.event.RobotFireEvent;
+import com.bbiyong.server.wss.event.RobotOverheatEvent;
+import com.bbiyong.server.wss.event.RobotTelemetryEvent;
+import com.bbiyong.server.wss.event.RobotVideoEvent;
 import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -29,6 +30,21 @@ public class RobotEventListener {
             messagingTemplate.convertAndSend("/topic/telemetry", jsonStr);
         } catch (Exception e) {
             log.error("Failed to serialize telemetry event", e);
+        }
+    }
+
+    @EventListener
+    public void handleVideoEvent(RobotVideoEvent event) {
+        String robotId = event.getPacket().getRobotId();
+        if (robotId == null || robotId.isBlank()) {
+            log.warn("Dropping VIDEO_FRAME with missing robot_id");
+            return;
+        }
+        try {
+            String jsonStr = objectMapper.writeValueAsString(event.getPacket());
+            messagingTemplate.convertAndSend("/topic/video/" + robotId, jsonStr);
+        } catch (Exception e) {
+            log.error("Failed to serialize/relay video frame for robot [{}]", robotId, e);
         }
     }
 

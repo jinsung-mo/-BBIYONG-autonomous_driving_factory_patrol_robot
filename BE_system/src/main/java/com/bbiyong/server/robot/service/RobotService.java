@@ -4,8 +4,8 @@ import com.bbiyong.server.robot.domain.Location;
 import com.bbiyong.server.robot.domain.RobotState;
 import com.bbiyong.server.robot.dto.RobotResponse;
 import com.bbiyong.server.robot.repository.RobotStateCache;
-import com.bbiyong.server.tcp.dto.RobotPacket;
-import com.bbiyong.server.tcp.event.RobotTelemetryEvent;
+import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -31,6 +31,10 @@ public class RobotService {
                         state.getName(),
                         state.getStatus(),
                         state.getBattery(),
+                        state.getSpeed(),
+                        state.getEstop(),
+                        state.getCommLatencyMs(),
+                        state.getInferenceFps(),
                         state.getLastConnected(),
                         state.getLocation()
                 ))
@@ -54,6 +58,10 @@ public class RobotService {
 
         state.setStatus(packet.getStatus());
         state.setBattery(packet.getBattery());
+        state.setSpeed(packet.getSpeed());
+        state.setEstop(packet.getEstop());
+        state.setCommLatencyMs(packet.getCommLatencyMs());
+        state.setInferenceFps(packet.getInferenceFps());
         state.setLastConnected(Instant.now());
 
         if (packet.getLocation() != null) {

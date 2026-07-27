@@ -10,7 +10,7 @@ pipeline {
         stage('Test') {
             steps {
                 dir('BE_system') {
-                    sh 'sh ./gradlew test --no-daemon'
+                    sh './gradlew test --no-daemon'
                 }
             }
         }
@@ -18,7 +18,17 @@ pipeline {
         stage('Deploy') {
             steps {
                 dir('BE_system') {
-                    sh 'docker compose up -d --build app'
+                    // Create .env file for dev environment if on dev branch
+                    script {
+                        if (env.BRANCH_NAME == 'be_system/dev') {
+                            sh '''
+                                echo "ENV=dev" > .env
+                                echo "SERVER_PORT=9081" >> .env
+                                echo "DB_PATH=/opt/bbiyong/data_dev" >> .env
+                            '''
+                        }
+                    }
+                    sh 'docker compose up -d --build'
                 }
             }
         }
@@ -44,3 +54,4 @@ pipeline {
         }
     }
 }
+

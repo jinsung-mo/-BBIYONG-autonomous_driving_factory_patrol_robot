@@ -1,7 +1,8 @@
 package com.bbiyong.server.stomp;
 
-import com.bbiyong.server.tcp.dto.RobotPacket;
-import com.bbiyong.server.tcp.event.RobotTelemetryEvent;
+import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.event.RobotTelemetryEvent;
+import com.bbiyong.server.wss.event.RobotVideoEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,6 +73,54 @@ public class StompWebSocketTests {
         String broadcasted = receivedQueue.poll(5, TimeUnit.SECONDS);
         assertThat(broadcasted).isNotNull();
         assertThat(broadcasted).contains("orinka_stomp_test");
+
+        session.disconnect();
+    }
+
+    @Test
+    @DisplayName("STOMP - 듀얼 영상 프레임이 /topic/video/{robotId} 로 중계됨")
+    void testStompVideoBroadcasting() throws Exception {
+        String stompUrl = "ws://localhost:" + port + "/ws/control";
+        WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
+        stompClient.setMessageConverter(new StringMessageConverter());
+
+        StompSession session = stompClient.connectAsync(stompUrl, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS);
+        assertThat(session.isConnected()).isTrue();
+
+        BlockingQueue<String> receivedQueue = new ArrayBlockingQueue<>(5);
+
+        session.subscribe("/topic/video/orinka_video_test", new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return String.class;
+            }
+
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                if (payload instanceof String jsonStr) {
+                    receivedQueue.add(jsonStr);
+                }
+            }
+        });
+
+        Thread.sleep(500);
+
+        RobotPacket packet = new RobotPacket();
+        packet.setSource("robot");
+        packet.setType("VIDEO_FRAME");
+        packet.setRobotId("orinka_video_test");
+        packet.setChannel("THERMAL");
+        packet.setFormat("jpeg");
+        packet.setData("BASE64_JPEG_DATA");
+        packet.setMaxTemp(36.1);
+        packet.setSeq(1024L);
+
+        eventPublisher.publishEvent(new RobotVideoEvent(this, packet));
+
+        String broadcasted = receivedQueue.poll(5, TimeUnit.SECONDS);
+        assertThat(broadcasted).isNotNull();
+        assertThat(broadcasted).contains("THERMAL");
+        assertThat(broadcasted).contains("BASE64_JPEG_DATA");
 
         session.disconnect();
     }

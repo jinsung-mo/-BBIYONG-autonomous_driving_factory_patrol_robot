@@ -3,9 +3,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: bbiyong-server
+    container_name: bbiyong-server-${ENV:-main}
     ports:
-      - "127.0.0.1:8081:8080"
+      - "127.0.0.1:${SERVER_PORT:-8081}:8080"
     volumes:
-      - /opt/bbiyong/data:/app/data
+      - ${DB_PATH:-/opt/bbiyong/data}:/app/data
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/bbiyong
+      - SPRING_DATASOURCE_USERNAME=user
+      - SPRING_DATASOURCE_PASSWORD=password
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: bbiyong-mysql-${ENV:-main}
+    environment:
+      MYSQL_DATABASE: bbiyong
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: rootpassword
+    volumes:
+      - ${MYSQL_DB_PATH:-/opt/bbiyong/mysql_data}:/var/lib/mysql
     restart: unless-stopped

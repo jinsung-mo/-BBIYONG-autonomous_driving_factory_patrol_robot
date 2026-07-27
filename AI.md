@@ -8,7 +8,10 @@
 어떤 AI 도구를 사용하더라도 일관성 있는 컨벤션을 유지할 수 있도록 핵심 규칙들이 분할되어 관리됩니다.
 
 1. **Jira 자동화 규칙**: [jira-rules.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/.agents/rules/jira-rules.md)
-   * Epic ➔ Story ➔ Task 3단계 위계 준수 (Sub-task 사용 제한)
+   * 위계: `Epic ➔ (Story | Task)` 준수 (Sub-task 사용 금지)
+   * ⚠️ **이 Jira 인스턴스 현실**: 에픽만 상위 레벨이고 스토리·작업은 동일 레벨(형제)입니다. 따라서 **Task의 상위(parent)는 오직 Epic만 가능**하며, Story는 Task의 상위가 될 수 없습니다.
+   * **Story·Task 모두 parent = Epic**으로 연결하고, **Task와 Story의 연관은 이슈 링크(`Relates`)** 로 표현합니다.
+   * **스토리 그룹핑 유지**: Task 생성 시 대응 Story가 없으면 Story(parent=Epic)를 먼저 만들고, Task(parent=Epic)를 만든 뒤 `Relates` 링크로 연결
    * 제목 작성 시 `[유형][모듈] 작업 내용 요약` 형식 준수 (예: `[Feat][BE] 회원가입 API 구현`)
    * 티켓 생성 시 필수 속성 자동 매핑 (스토리 포인트, 기한, 우선순위, 레이블)
    * 티켓 본문(Description) 템플릿 강제 (이모티콘 미사용)
@@ -72,7 +75,7 @@ AI 에이전트가 Jira API를 직접 제어할 수 있도록 **Jira MCP Server*
 
 * **Jira 티켓 발행 지시**:
   > *"회원관리 기능 개발을 위한 지라 티켓 설계하고 자동 생성해줘."*
-  > * AI는 자동으로 [jira-rules.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/.agents/rules/jira-rules.md)를 참고해 Epic ➔ Story ➔ Task 구조의 상세 To-Do 및 완료 기준을 마크다운으로 설계한 뒤 Jira API로 발행합니다. (예: `[Feat][BE] 회원가입 API 구현` 제목 형식과 이모티콘 없는 본문 템플릿 사용)
+  > * AI는 자동으로 [jira-rules.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/.agents/rules/jira-rules.md)를 참고해 `Epic ➔ (Story | Task)` 구조로 설계하며, 상위 스토리가 없는 경우 스토리(parent=Epic)를 먼저 생성한 뒤 Task(parent=Epic)를 만들고 `Relates` 이슈 링크로 연결하여 Jira API로 발행합니다. (예: `[Feat][BE] 회원가입 API 구현` 제목 형식과 이모티콘 없는 본문 템플릿 사용)
 * **Git 협업 및 커밋 지시**:
   > *"이번 작업 완료했어. 지라 연동 규칙에 맞춰 브랜치 따고, 커밋 작성한 뒤 내 파트 메인 브랜치로 MR 올려줘."*
   > * AI는 [git-rules.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/.agents/rules/git-rules.md)에 따라 `[S15P11E101-144] feat: [BE] 회원가입 API 구현` 형태의 커밋 메시지와 `feat/S15P11E101-144-login` 브랜치를 생성한 뒤, `be_system/main` 등 알맞은 타겟 브랜치로 병합 요청을 보냅니다.
