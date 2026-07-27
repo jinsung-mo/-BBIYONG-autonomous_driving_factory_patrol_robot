@@ -20,6 +20,7 @@ setup(
         "console_scripts": [
             "cmd_mux = bbiyong_base.cmd_mux_node:main",
             "ackermann_adapter = bbiyong_base.ackermann_adapter_node:main",
+            "differential_adapter = bbiyong_base.differential_adapter_node:main",
         ]
     },
 )

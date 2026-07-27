@@ -11,12 +11,20 @@ class OperatorShutdownWiringTest(unittest.TestCase):
 
     def test_all_control_nodes_use_context_safe_shutdown(self) -> None:
         package = Path(__file__).parents[1] / "bbiyong_base"
-        for node_name in ("cmd_mux_node.py", "ackermann_adapter_node.py"):
+        for node_name in (
+            "cmd_mux_node.py",
+            "ackermann_adapter_node.py",
+            "differential_adapter_node.py",
+        ):
             source = (package / node_name).read_text()
             with self.subTest(node_name=node_name):
                 self.assertIn("rclpy.ok(context=", source)
                 self.assertIn("rclpy.try_shutdown()", source)
-        for node_name in ("cmd_mux_node.py", "ackermann_adapter_node.py"):
+        for node_name in (
+            "cmd_mux_node.py",
+            "ackermann_adapter_node.py",
+            "differential_adapter_node.py",
+        ):
             source = (package / node_name).read_text()
             with self.subTest(node_name=f"{node_name}-interrupt"):
                 self.assertIn("except KeyboardInterrupt:", source)

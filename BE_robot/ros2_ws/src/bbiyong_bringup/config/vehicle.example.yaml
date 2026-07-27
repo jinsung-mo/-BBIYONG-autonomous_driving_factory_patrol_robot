@@ -3,6 +3,8 @@
 vehicle:
   configured: false
   hardware_enabled: false
+  # ackermann | differential. The current chassis is differential
+  # (two driven wheels + caster, no steering servo).
   drive_type: ackermann
   # The generated rectangular footprint assumes base_link is at the chassis center.
   base_link_reference: geometric_center
@@ -17,6 +19,13 @@ vehicle:
   max_angular_accel_rps2: 0.50
   throttle_direction: 1
   steering_direction: 1
+  # Differential drive only. Distance between the two driven wheel contact
+  # patches, measured on the built chassis. Leave null until it is measured:
+  # the adapter keeps both wheel outputs at zero while it is null.
+  track_width_m: null
+  # Flip to -1 if a motor is wired with reversed polarity.
+  left_wheel_direction: 1
+  right_wheel_direction: 1
   cmd_timeout_sec: 0.35
 
 lidar:
