@@ -80,3 +80,34 @@ lidar:                            # base_link(구동축 중심) -> 라이다
   (`esp32_base_node.py`)를 쓴다.
 - 좌우 3~4% 격차가 게인과 무관하게 잔존. 오도메트리는 정직해서 매핑엔 무해.
 - laser_yaw 방향은 ±0.5도로 맞는데 이동거리가 라이다 > 오도 11~14%. 원인 미규명.
+
+## 6. ESP32 오도메트리 시간 기준과 진단
+
+`speed_pid.ino`의 CSV 텔레메트리는 `T,millis,...,좌카운트,우카운트` 형식이다.
+`esp32_base_node.py`는 Jetson 수신 시각으로 엔코더 간격을 계산하지 않고, 이 MCU
+`millis`를 ROS clock domain으로 변환해 `/odom`과 `odom→base_link`에 사용한다.
+오도메트리는 30 Hz 타이머에서 반복 발행하지 않고 **텔레메트리 한 건당 한 번**
+발행한다. `publish_rate_hz`는 모터 명령과 watchdog 정지 전송 주기일 뿐이다.
+
+노드를 배포할 때 아래 두 파일을 항상 같은 디렉터리에 둔다.
+
+- `esp32_base_node.py`
+- `esp32_timing.py`
+
+시간 상태는 `/diagnostics`의 `esp32_odometry/timing`에서 확인한다.
+
+```bash
+ros2 topic echo /diagnostics
+ros2 topic hz /odom
+```
+
+주요 항목:
+
+- `transport_latency_p95_ms`: MCU 측정부터 ROS 수신까지의 상대 지연 p95
+- `scan_tf_availability_ratio`: scan timestamp에서 `odom→base_link` 조회 성공 비율
+- `latest_scan_to_tf_age_ms`: scan timestamp와 최신 odom TF timestamp의 차이
+- `telemetry_gaps`: 기본 250 ms보다 긴 MCU 텔레메트리 간격
+- `mcu_resets`, `mcu_rollovers`, `nonmonotonic_timestamps`: MCU clock 이상 카운터
+
+`scan_tf_availability_ratio`가 0.995 미만이거나 telemetry가
+`2 × telemetry_gap_threshold_ms` 이상 끊기면 WARN/ERROR로 보고한다.
