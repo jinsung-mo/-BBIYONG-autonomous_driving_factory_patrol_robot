@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import time
 from datetime import datetime
@@ -9,6 +10,14 @@ from pathlib import Path
 import cv2
 import torch
 from ultralytics import YOLO
+
+from cascade import CascadeConfig, fuse_cascade, should_run_verifier
+from postprocessing import (
+    FireSmokePostprocessor,
+    FrameDecision,
+    PostprocessConfig,
+    detections_from_result,
+)
 
 
 AI_ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +50,22 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--half", action="store_true", help="Use FP16 inference on CUDA")
     parser.add_argument("--no-mirror", action="store_true", help="Do not mirror the preview")
+    parser.add_argument(
+        "--postprocess-config",
+        type=Path,
+        help="Validation-tuned class thresholds and temporal alarm policy JSON",
+    )
+    parser.add_argument(
+        "--verifier-model",
+        help="Optional larger smoke/fire checkpoint used only on ambiguous/periodic frames",
+    )
+    parser.add_argument("--verify-low", type=float, default=0.15)
+    parser.add_argument("--verify-high", type=float, default=0.60)
+    parser.add_argument("--primary-conf", type=float, default=0.25)
+    parser.add_argument("--agreement-iou", type=float, default=0.50)
+    parser.add_argument("--verifier-only-conf", type=float, default=0.75)
+    parser.add_argument("--final-nms-iou", type=float, default=0.50)
+    parser.add_argument("--verifier-interval", type=int, default=5)
     return parser.parse_args()
 
 
@@ -97,10 +122,54 @@ def print_model_contract(model: YOLO, model_path: str, device: str) -> None:
         )
 
 
-def draw_status(frame, fps: float, inference_ms: float, device: str) -> None:
-    text = f"FPS {fps:.1f} | inference {inference_ms:.1f} ms | {device} | Q/Esc quit | S save"
+def draw_status(
+    frame,
+    fps: float,
+    inference_ms: float,
+    device: str,
+    alarm: str = "",
+    verifier_status: str = "",
+) -> None:
+    text = f"FPS {fps:.1f} | inference {inference_ms:.1f} ms | {device}"
+    if alarm:
+        text += f" | ALARM: {alarm}"
+    if verifier_status:
+        text += f" | verifier {verifier_status}"
+    text += " | Q/Esc quit | S save"
     cv2.putText(frame, text, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 0, 0), 4, cv2.LINE_AA)
     cv2.putText(frame, text, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 1, cv2.LINE_AA)
+
+
+def draw_postprocessed(frame, decision: FrameDecision):
+    annotated = frame.copy()
+    colors = {0: (180, 180, 180), 1: (0, 0, 255)}
+    for detection in decision.detections:
+        x1, y1, x2, y2 = (int(value) for value in detection.xyxy)
+        color = colors.get(detection.class_id, (0, 255, 255))
+        thickness = 3 if detection.class_id in decision.active_classes else 2
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
+        label = f"{detection.class_name} {detection.confidence:.2f}"
+        cv2.putText(
+            annotated,
+            label,
+            (x1, max(18, y1 - 6)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.58,
+            (0, 0, 0),
+            4,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            annotated,
+            label,
+            (x1, max(18, y1 - 6)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.58,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+    return annotated
 
 
 def main() -> int:
@@ -119,8 +188,38 @@ def main() -> int:
             raise ValueError("--half requires a CUDA device")
         model = YOLO(model_path)
         print_model_contract(model, model_path, device)
+        names = normalized_names(model)
+        postprocessor = None
+        postprocess_config = None
+        if args.postprocess_config:
+            postprocess_config = PostprocessConfig.load(args.postprocess_config.expanduser().resolve())
+            if names != FIRE_SMOKE_NAMES:
+                raise ValueError("Post-processing requires the two-class smoke/fire checkpoint")
+            postprocessor = FireSmokePostprocessor(postprocess_config)
+            print(f"postprocess_config={args.postprocess_config.expanduser().resolve()}")
+        verifier_model = None
+        cascade_config = None
+        if args.verifier_model:
+            if postprocessor is None:
+                raise ValueError("--verifier-model requires --postprocess-config")
+            verifier_path = resolve_model(args.verifier_model)
+            verifier_model = YOLO(verifier_path)
+            verifier_names = normalized_names(verifier_model)
+            if verifier_names != FIRE_SMOKE_NAMES:
+                raise ValueError("Verifier must be a two-class smoke/fire checkpoint")
+            cascade_config = CascadeConfig(
+                verify_low=args.verify_low,
+                verify_high=args.verify_high,
+                primary_confidence=args.primary_conf,
+                agreement_iou=args.agreement_iou,
+                verifier_only_confidence=args.verifier_only_conf,
+                final_nms_iou=args.final_nms_iou,
+                verifier_interval=args.verifier_interval,
+            )
+            cascade_config.validate()
+            print(f"verifier_model={verifier_path}")
         camera = open_camera(args.camera, args.backend)
-    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+    except (FileNotFoundError, KeyError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}")
         return 2
 
@@ -141,6 +240,8 @@ def main() -> int:
     fps_ema = 0.0
     failed_reads = 0
     printed_resolution = False
+    frame_index = 0
+    verifier_runs = 0
 
     print("controls: q/Esc=quit, s=save screenshot")
     try:
@@ -154,6 +255,7 @@ def main() -> int:
                     return 4
                 continue
             failed_reads = 0
+            frame_index += 1
 
             if not printed_resolution:
                 print(f"camera_resolution={frame.shape[1]}x{frame.shape[0]}")
@@ -161,24 +263,80 @@ def main() -> int:
             if not args.no_mirror:
                 frame = cv2.flip(frame, 1)
 
-            precision_args = {"quantize": 16} if args.half else {}
+            precision_args = {"half": True} if args.half else {}
+            prediction_conf = (
+                postprocess_config.candidate_confidence if postprocess_config else args.conf
+            )
+            prediction_iou = postprocess_config.nms_iou if postprocess_config else args.iou
+            prediction_max_det = postprocess_config.max_det if postprocess_config else args.max_det
             results = model.predict(
                 source=frame,
                 imgsz=args.imgsz,
-                conf=args.conf,
-                iou=args.iou,
-                max_det=args.max_det,
+                conf=prediction_conf,
+                iou=prediction_iou,
+                max_det=prediction_max_det,
                 device=device,
                 verbose=False,
                 **precision_args,
             )
             result = results[0]
-            annotated = result.plot()
+            alarm = ""
+            verifier_inference_ms = 0.0
+            if postprocessor:
+                primary_detections = detections_from_result(result, names)
+                if verifier_model and cascade_config:
+                    run_verifier = should_run_verifier(
+                        primary_detections, frame_index, cascade_config
+                    )
+                    verifier_detections = None
+                    if run_verifier:
+                        verifier_runs += 1
+                        verifier_result = verifier_model.predict(
+                            source=frame,
+                            imgsz=args.imgsz,
+                            conf=min(
+                                cascade_config.verify_low,
+                                cascade_config.verifier_only_confidence,
+                            ),
+                            iou=postprocess_config.nms_iou,
+                            max_det=postprocess_config.max_det,
+                            device=device,
+                            verbose=False,
+                            **precision_args,
+                        )[0]
+                        verifier_detections = detections_from_result(
+                            verifier_result, verifier_names
+                        )
+                        verifier_inference_ms = float(
+                            verifier_result.speed.get("inference", 0.0)
+                        )
+                    primary_detections = list(
+                        fuse_cascade(
+                            primary_detections,
+                            verifier_detections,
+                            cascade_config,
+                        )
+                    )
+                decision = postprocessor.process(primary_detections)
+                annotated = draw_postprocessed(frame, decision)
+                alarm = ", ".join(names[class_id] for class_id in sorted(decision.active_classes))
+            else:
+                annotated = result.plot()
             elapsed = max(time.perf_counter() - loop_started, 1e-9)
             instantaneous_fps = 1.0 / elapsed
             fps_ema = instantaneous_fps if fps_ema == 0.0 else 0.9 * fps_ema + 0.1 * instantaneous_fps
-            inference_ms = float(result.speed.get("inference", 0.0))
-            draw_status(annotated, fps_ema, inference_ms, device)
+            inference_ms = float(result.speed.get("inference", 0.0)) + verifier_inference_ms
+            verifier_status = ""
+            if verifier_model:
+                verifier_status = f"{'ON' if run_verifier else 'skip'} ({verifier_runs/frame_index:.0%})"
+            draw_status(
+                annotated,
+                fps_ema,
+                inference_ms,
+                device,
+                alarm,
+                verifier_status,
+            )
             cv2.imshow(window_name, annotated)
 
             key = cv2.waitKey(1) & 0xFF

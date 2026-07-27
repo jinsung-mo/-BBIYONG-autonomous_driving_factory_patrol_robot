@@ -4,6 +4,7 @@ import argparse
 import csv
 import hashlib
 import json
+import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -17,6 +18,7 @@ from dataset_utils import print_report, validate_dataset
 AI_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_CLASSES = {0: "smoke", 1: "fire"}
 MODEL_NAMES = ("yolo11n", "yolo11s", "yolo26n")
+METRIC_NAMES = ("precision", "recall", "map50", "map50_95")
 
 
 def parse_model_specs(values: Iterable[str]) -> dict[str, Path]:
@@ -87,6 +89,92 @@ def parameter_count(model: YOLO) -> int:
     return sum(parameter.numel() for parameter in model.model.parameters())
 
 
+def summarize_values(values: Iterable[float]) -> tuple[float, float]:
+    """Return the arithmetic mean and population standard deviation."""
+    samples = [scalar(value) for value in values]
+    if not samples:
+        raise ValueError("Cannot summarize an empty sequence")
+    return statistics.fmean(samples), statistics.pstdev(samples)
+
+
+def summarize_repeats(repeats: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate repeated evaluations while retaining each raw result."""
+    if not repeats:
+        raise ValueError("At least one evaluation repeat is required")
+
+    aggregate: dict[str, float] = {}
+    aggregate_std: dict[str, float] = {}
+    for metric in METRIC_NAMES:
+        aggregate[metric], aggregate_std[metric] = summarize_values(
+            repeat["aggregate"][metric] for repeat in repeats
+        )
+
+    class_ids = [item["class_id"] for item in repeats[0]["per_class"]]
+    per_class = []
+    per_class_std = []
+    for class_id in class_ids:
+        first = next(item for item in repeats[0]["per_class"] if item["class_id"] == class_id)
+        mean_item = {"class_id": class_id, "class_name": first["class_name"]}
+        std_item = {"class_id": class_id, "class_name": first["class_name"]}
+        for metric in METRIC_NAMES:
+            values = (
+                next(item for item in repeat["per_class"] if item["class_id"] == class_id)[metric]
+                for repeat in repeats
+            )
+            mean_item[metric], std_item[metric] = summarize_values(values)
+        per_class.append(mean_item)
+        per_class_std.append(std_item)
+
+    speed_keys = sorted({key for repeat in repeats for key in repeat["speed_ms"]})
+    speed_ms: dict[str, float] = {}
+    speed_ms_std: dict[str, float] = {}
+    for key in speed_keys:
+        speed_ms[key], speed_ms_std[key] = summarize_values(
+            repeat["speed_ms"][key] for repeat in repeats if key in repeat["speed_ms"]
+        )
+
+    return {
+        "repeat_count": len(repeats),
+        "aggregate": aggregate,
+        "aggregate_std": aggregate_std,
+        "per_class": per_class,
+        "per_class_std": per_class_std,
+        "speed_ms": speed_ms,
+        "speed_ms_std": speed_ms_std,
+        "repeats": repeats,
+    }
+
+
+def configure_inference_determinism(enabled: bool) -> None:
+    """Toggle deterministic algorithms without autotuning variable validation shapes."""
+    torch.use_deterministic_algorithms(enabled, warn_only=True)
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.deterministic = enabled
+        # Validation uses aspect-ratio-dependent batch shapes. Enabling the cuDNN
+        # benchmark makes it autotune kernels repeatedly and is much slower here.
+        torch.backends.cudnn.benchmark = False
+
+
+def metrics_match(repeats: list[dict[str, Any]], tolerance: float = 1e-12) -> bool:
+    """Check aggregate and per-class accuracy metrics against the first pass."""
+    if not repeats:
+        return False
+    expected = repeats[0]
+    for current in repeats[1:]:
+        for metric in METRIC_NAMES:
+            if abs(current["aggregate"][metric] - expected["aggregate"][metric]) > tolerance:
+                return False
+        for expected_class, current_class in zip(
+            expected["per_class"], current["per_class"], strict=True
+        ):
+            if current_class["class_id"] != expected_class["class_id"]:
+                return False
+            for metric in METRIC_NAMES:
+                if abs(current_class[metric] - expected_class[metric]) > tolerance:
+                    return False
+    return True
+
+
 def write_csv(records: list[dict[str, Any]], path: Path) -> None:
     fields = (
         "model",
@@ -94,14 +182,22 @@ def write_csv(records: list[dict[str, Any]], path: Path) -> None:
         "class_id",
         "class_name",
         "precision",
+        "precision_std",
         "recall",
+        "recall_std",
         "map50",
+        "map50_std",
         "map50_95",
+        "map50_95_std",
+        "repeats",
         "parameters",
         "checkpoint_mb",
         "preprocess_ms",
+        "preprocess_ms_std",
         "inference_ms",
+        "inference_ms_std",
         "postprocess_ms",
+        "postprocess_ms_std",
     )
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -111,10 +207,15 @@ def write_csv(records: list[dict[str, Any]], path: Path) -> None:
                 "model": record["model"],
                 "parameters": record["parameters"],
                 "checkpoint_mb": record["checkpoint_mb"],
+                "repeats": record.get("repeat_count", 1),
                 "preprocess_ms": record["speed_ms"].get("preprocess"),
+                "preprocess_ms_std": record.get("speed_ms_std", {}).get("preprocess", 0.0),
                 "inference_ms": record["speed_ms"].get("inference"),
+                "inference_ms_std": record.get("speed_ms_std", {}).get("inference", 0.0),
                 "postprocess_ms": record["speed_ms"].get("postprocess"),
+                "postprocess_ms_std": record.get("speed_ms_std", {}).get("postprocess", 0.0),
             }
+            aggregate_std = record.get("aggregate_std", {})
             writer.writerow(
                 {
                     **common,
@@ -122,10 +223,20 @@ def write_csv(records: list[dict[str, Any]], path: Path) -> None:
                     "class_id": "",
                     "class_name": "all",
                     **record["aggregate"],
+                    **{f"{metric}_std": aggregate_std.get(metric, 0.0) for metric in METRIC_NAMES},
                 }
             )
+            class_std = {item["class_id"]: item for item in record.get("per_class_std", [])}
             for class_metrics in record["per_class"]:
-                writer.writerow({**common, "scope": "class", **class_metrics})
+                std = class_std.get(class_metrics["class_id"], {})
+                writer.writerow(
+                    {
+                        **common,
+                        "scope": "class",
+                        **class_metrics,
+                        **{f"{metric}_std": std.get(metric, 0.0) for metric in METRIC_NAMES},
+                    }
+                )
 
 
 def write_chart(records: list[dict[str, Any]], path: Path) -> None:
@@ -136,13 +247,21 @@ def write_chart(records: list[dict[str, Any]], path: Path) -> None:
 
     labels = [record["model"] for record in records]
     map_values = [record["aggregate"]["map50_95"] for record in records]
+    map_errors = [record.get("aggregate_std", {}).get("map50_95", 0.0) for record in records]
     smoke_recall = [record["per_class"][0]["recall"] for record in records]
     fire_recall = [record["per_class"][1]["recall"] for record in records]
     positions = list(range(len(labels)))
     width = 0.25
 
     figure, axis = plt.subplots(figsize=(9, 5))
-    axis.bar([x - width for x in positions], map_values, width, label="mAP50-95")
+    axis.bar(
+        [x - width for x in positions],
+        map_values,
+        width,
+        yerr=map_errors,
+        capsize=3,
+        label="mAP50-95",
+    )
     axis.bar(positions, smoke_recall, width, label="Smoke recall")
     axis.bar([x + width for x in positions], fire_recall, width, label="Fire recall")
     axis.set_title("Fine-tuned model evaluation")
@@ -177,6 +296,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--iou", type=float, default=0.7)
     parser.add_argument("--max-det", type=int, default=300)
     parser.add_argument(
+        "--repeats",
+        type=int,
+        default=5,
+        help="Number of non-deterministic evaluation passes averaged per model (default: 5)",
+    )
+    parser.add_argument(
+        "--deterministic-checks",
+        type=int,
+        default=3,
+        help="Deterministic reproducibility passes run before averaging (default: 3)",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=AI_ROOT / "artifacts" / "evaluations" / "three-model-comparison",
@@ -197,8 +328,18 @@ def main() -> int:
     data_path = args.data.expanduser().resolve()
     if not data_path.is_file():
         raise SystemExit(f"Dataset YAML does not exist: {data_path}")
-    if args.imgsz < 32 or args.batch == 0 or args.workers < 0 or args.max_det < 1:
-        raise SystemExit("imgsz must be >= 32, batch non-zero, workers >= 0, and max-det >= 1")
+    if (
+        args.imgsz < 32
+        or args.batch == 0
+        or args.workers < 0
+        or args.max_det < 1
+        or args.repeats < 1
+        or args.deterministic_checks < 1
+    ):
+        raise SystemExit(
+            "imgsz must be >= 32, batch non-zero, workers >= 0, max-det >= 1, "
+            "repeats >= 1, and deterministic-checks >= 1"
+        )
     if not 0.0 <= args.conf <= 1.0 or not 0.0 < args.iou <= 1.0:
         raise SystemExit("conf must be in [0, 1] and iou must be in (0, 1]")
 
@@ -225,22 +366,83 @@ def main() -> int:
             raise SystemExit(
                 f"Checkpoint {checkpoint} has classes {class_names}; expected {EXPECTED_CLASSES}"
             )
-        results = model.val(
-            data=str(data_path),
-            split=args.split,
-            imgsz=args.imgsz,
-            batch=args.batch,
-            device=device,
-            workers=args.workers,
-            conf=args.conf,
-            iou=args.iou,
-            max_det=args.max_det,
-            plots=True,
-            project=str(output),
-            name=name,
-            exist_ok=False,
+        deterministic_results = []
+        configure_inference_determinism(True)
+        for repeat_index in range(1, args.deterministic_checks + 1):
+            print(
+                f"[evaluation] model={name} deterministic-check="
+                f"{repeat_index}/{args.deterministic_checks}",
+                flush=True,
+            )
+            results = model.val(
+                data=str(data_path),
+                split=args.split,
+                imgsz=args.imgsz,
+                batch=args.batch,
+                device=device,
+                workers=args.workers,
+                conf=args.conf,
+                iou=args.iou,
+                max_det=args.max_det,
+                deterministic=True,
+                plots=False,
+                project=str(output / name),
+                name=f"deterministic-check-{repeat_index:02d}",
+                exist_ok=False,
+            )
+            aggregate, per_class = extract_metrics(results, class_names)
+            deterministic_results.append(
+                {
+                    "repeat": repeat_index,
+                    "aggregate": aggregate,
+                    "per_class": per_class,
+                    "speed_ms": {key: scalar(value) for key, value in results.speed.items()},
+                    "plots_directory": str(Path(results.save_dir).resolve()),
+                }
+            )
+        deterministic_check = summarize_repeats(deterministic_results)
+        deterministic_check["metrics_match"] = metrics_match(deterministic_results)
+        print(
+            f"[evaluation] model={name} deterministic-metrics-match="
+            f"{deterministic_check['metrics_match']}",
+            flush=True,
         )
-        aggregate, per_class = extract_metrics(results, class_names)
+
+        repeat_results = []
+        configure_inference_determinism(False)
+        for repeat_index in range(1, args.repeats + 1):
+            print(
+                f"[evaluation] model={name} averaged-pass={repeat_index}/{args.repeats} "
+                "deterministic=False",
+                flush=True,
+            )
+            results = model.val(
+                data=str(data_path),
+                split=args.split,
+                imgsz=args.imgsz,
+                batch=args.batch,
+                device=device,
+                workers=args.workers,
+                conf=args.conf,
+                iou=args.iou,
+                max_det=args.max_det,
+                deterministic=False,
+                plots=repeat_index == 1,
+                project=str(output / name),
+                name=f"average-pass-{repeat_index:02d}",
+                exist_ok=False,
+            )
+            aggregate, per_class = extract_metrics(results, class_names)
+            repeat_results.append(
+                {
+                    "repeat": repeat_index,
+                    "aggregate": aggregate,
+                    "per_class": per_class,
+                    "speed_ms": {key: scalar(value) for key, value in results.speed.items()},
+                    "plots_directory": str(Path(results.save_dir).resolve()),
+                }
+            )
+        repeated_summary = summarize_repeats(repeat_results)
         records.append(
             {
                 "model": name,
@@ -248,10 +450,8 @@ def main() -> int:
                 "checkpoint_sha256": sha256(checkpoint),
                 "checkpoint_mb": round(checkpoint.stat().st_size / (1024 * 1024), 3),
                 "parameters": parameter_count(model),
-                "aggregate": aggregate,
-                "per_class": per_class,
-                "speed_ms": {key: scalar(value) for key, value in results.speed.items()},
-                "plots_directory": str(Path(results.save_dir).resolve()),
+                "deterministic_check": deterministic_check,
+                **repeated_summary,
             }
         )
 
@@ -269,6 +469,9 @@ def main() -> int:
             "conf": args.conf,
             "iou": args.iou,
             "max_det": args.max_det,
+            "repeats": args.repeats,
+            "deterministic_checks": args.deterministic_checks,
+            "ranking_phase": "non_deterministic_average",
         },
         "selection_metric": "aggregate.map50_95",
         "ranking": [record["model"] for record in ranking],
@@ -280,13 +483,16 @@ def main() -> int:
     write_csv(records, output / "comparison.csv")
     write_chart(records, output / "comparison.png")
 
-    print("\nmodel       smoke_R   fire_R  mAP50-95  inference_ms", flush=True)
+    print("\nMean values across repeated evaluation passes:", flush=True)
+    print("model       smoke_R   fire_R  mAP50-95       inference_ms", flush=True)
     for record in ranking:
         print(
             f"{record['model']:<11} {record['per_class'][0]['recall']:>7.4f} "
             f"{record['per_class'][1]['recall']:>8.4f} "
-            f"{record['aggregate']['map50_95']:>9.4f} "
-            f"{record['speed_ms'].get('inference', float('nan')):>13.3f}",
+            f"{record['aggregate']['map50_95']:>6.4f}"
+            f"+/-{record['aggregate_std']['map50_95']:<6.4f} "
+            f"{record['speed_ms'].get('inference', float('nan')):>8.3f}"
+            f"+/-{record['speed_ms_std'].get('inference', float('nan')):<7.3f}",
             flush=True,
         )
     print(f"[evaluation] comparison={output / 'comparison.json'}", flush=True)

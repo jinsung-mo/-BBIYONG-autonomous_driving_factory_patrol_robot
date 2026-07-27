@@ -259,6 +259,182 @@ classes. After training, pass the run's `best.pt` instead:
 The script reads class names from the checkpoint and confirms the expected
 fine-tuned mapping `0: smoke`, `1: fire` when present.
 
+## 5. Tune and use the YOLO11n post-processing pipeline
+
+Tune class-specific confidence thresholds on the validation split. Smoke uses
+F2 and fire uses F1.5 by default so missed detections cost more than false
+positives during image-level threshold selection:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\tune_postprocessing.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --device 0 `
+  --batch 16 `
+  --smoke-beta 2.0 `
+  --fire-beta 1.5 `
+  --output artifacts\postprocessing\yolo11n-validation
+```
+
+The tuner performs inference once at a permissive candidate threshold, sweeps
+fixed operating thresholds separately for smoke and fire, and writes
+`threshold_sweep.csv` plus `postprocess_config.json`. It accepts only `val` as
+the tuning split to prevent accidental test-set leakage.
+
+Use the generated configuration with live YOLO11n inference:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\camera_inference.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --postprocess-config artifacts\postprocessing\yolo11n-validation\postprocess_config.json `
+  --camera 0 `
+  --device 0 `
+  --half
+```
+
+The runtime uses the lower class-specific hold thresholds after activation and
+requires three positive frames in a five-frame window before raising an alarm.
+It clears an alarm after three consecutive misses. This temporal policy rejects
+isolated false positives while allowing permissive image thresholds for recall.
+Tune the window, hit count, clearing delay, and optional spatial IoU using
+representative validation videos before accepting them for deployment. Evaluate
+the locked configuration once on held-out test images and factory videos.
+
+### Optional YOLO11n to YOLO11s cascade
+
+Use YOLO11n on every frame and invoke YOLO11s only for ambiguous YOLO11n
+detections or every fifth frame. Normal YOLO11n detections remain unchanged;
+lower-confidence proposals require same-class verifier agreement. Matching
+verifier boxes are consumed, verifier-only recovery uses a stricter threshold,
+and final class-aware NMS removes cross-model duplicates. Agreement confidence
+uses a geometric mean because the related checkpoints are not independent.
+The fused detections still pass through the temporal policy above:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\camera_inference.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --verifier-model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --postprocess-config artifacts\postprocessing\yolo11n-validation-20260723\postprocess_config.json `
+  --verify-low 0.15 `
+  --verify-high 0.60 `
+  --primary-conf 0.25 `
+  --agreement-iou 0.50 `
+  --verifier-only-conf 0.75 `
+  --final-nms-iou 0.50 `
+  --verifier-interval 5 `
+  --camera 0 `
+  --device 0 `
+  --half
+```
+
+The preview reports when the verifier runs, its running invocation percentage,
+and the combined inference time. The cascade values are initial operating
+defaults; sweep them on validation images and videos before final acceptance.
+
+### Test the cascade on a video
+
+Run both trained checkpoints on a video with a live detection overlay and a
+side-panel log. A tuned post-processing configuration can be supplied with
+`--postprocess-config`; without one, the player uses the command-line confidence
+and NMS values with the standard temporal policy:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\video_inference.py `
+  --source data\fire_test1.mp4 `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --verifier-model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --device auto
+```
+
+Use `Space` or `P` to pause/resume, `A`/`D` to skip backward/forward five
+seconds, `J`/`L` to skip 30 seconds, comma/period to step one frame while
+paused, `R` to restart, `S` to save the annotated view, and `Q` or `Esc` to
+exit. Drag the **Position** bar with the mouse to seek to any point in the
+video. The panel beside the video shows inference time, cascade verifier use,
+alarms, detections, and recent frame logs.
+
+### Compare YOLO11n and the cascade on labeled images
+
+Evaluate standalone YOLO11n predictions and fused cascade predictions against
+the same labeled test images. The report includes overall and per-class
+precision, recall, F1, mAP50, mAP50-95, inference latency, and verifier usage:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_cascade.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --verifier-model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --split test `
+  --device 0 `
+  --batch 16 `
+  --primary-conf 0.25 `
+  --agreement-iou 0.50 `
+  --verifier-only-conf 0.75 `
+  --final-nms-iou 0.50 `
+  --verifier-interval 5 `
+  --output artifacts\evaluations\cascade-vs-yolo11n-test-20260723
+```
+
+Use `--split val` while tuning cascade thresholds and reserve `--split test`
+for the locked final comparison. Images are independent, so temporal alarm
+state is not applied. With `--verifier-interval 5`, periodic verification uses
+sorted image order to mirror the runtime rate; use `--verifier-interval 1` to
+measure the every-image verifier upper bound. Add `--limit 100` for a quick
+smoke test. Each output directory must be new.
+
+### Measure YOLO11n and YOLO11s complementarity
+
+Before building another ensemble, measure whether YOLO11s detects enough
+validation targets that YOLO11n misses. This analysis is intentionally limited
+to the validation split so its result can guide fusion design without leaking
+held-out test labels:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\analyze_model_complementarity.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11n-2\weights\best.pt `
+  --other-model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --device 0 `
+  --batch 16 `
+  --output artifacts\evaluations\model-complementarity-val-<date>
+```
+
+The JSON and CSV reports separate shared, YOLO11n-only, YOLO11s-only, and
+jointly missed targets at the locked score and IoU thresholds. Oracle recall is
+an upper bound: it assumes perfect selection between both models and is not a
+deployable ensemble metric. A meaningful unique-recovery rate justifies testing
+a corrected fusion on validation data; acceptance still requires measured
+precision, recall, mAP, latency, and final held-out testing.
+
+### Evaluate four-view hybrid test-time augmentation voting
+
+Repeating an unchanged image does not add evidence because inference is
+deterministic. This evaluator runs YOLO11s at 640 on the original, horizontally
+flipped, gamma-darkened, and gamma-brightened image. A lower-confidence,
+class-matched box passes when at least three views agree spatially. A strong
+single-view detection can pass directly using class-specific thresholds:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_tta_consensus.py `
+  --model artifacts\runs\dfire-v1-640-b56-seed42\yolo11s\weights\best.pt `
+  --data data\fire_smoke\data.yaml `
+  --device 0 `
+  --batch 16 `
+  --min-votes 3 `
+  --agreement-iou 0.50 `
+  --dark-gamma 1.20 `
+  --bright-gamma 0.80 `
+  --high-conf-smoke 0.65 `
+  --high-conf-fire 0.60 `
+  --output artifacts\evaluations\yolo11s-tta-consensus-val-<date>
+```
+
+Tune the evaluator on `--split val`, then run the locked configuration once on
+`--split test`. It compares the consensus with the ordinary YOLO11s pass at the
+same score threshold. Treat the additional inference cost as part of the
+acceptance decision; for live video, temporal voting across real frames is
+normally more efficient than four augmented passes per frame.
+
 ## Reproducibility notes
 
 - Keep the downloaded D-Fire archive immutable; generate a new derived version
