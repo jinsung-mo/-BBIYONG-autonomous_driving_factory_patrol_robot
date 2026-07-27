@@ -1,6 +1,7 @@
 package com.bbiyong.server.equipment;
 
 import com.bbiyong.server.equipment.domain.Equipment;
+import com.bbiyong.server.equipment.dto.StatusResponse;
 import com.bbiyong.server.equipment.repository.EquipmentRepository;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
@@ -11,8 +12,13 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
+
+import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -75,5 +81,41 @@ class EquipmentTests {
         Equipment e = equipmentRepository.findById("panel_B").orElseThrow();
         assertThat(e.getStatus()).isEqualTo("NORMAL");
         assertThat(e.getLastTemperature()).isEqualTo(41.5);
+    }
+
+    @Test
+    void updateThresholdSuccess() {
+        ResponseEntity<StatusResponse> resp = restTemplate.exchange(
+                RequestEntity.put(URI.create("/api/equipments/panel_C"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"threshold\": 70.0}"),
+                StatusResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().status()).isEqualTo("SUCCESS");
+        assertThat(equipmentRepository.findById("panel_C").orElseThrow().getThreshold()).isEqualTo(70.0);
+    }
+
+    @Test
+    void updateThresholdNotFoundReturns404() {
+        ResponseEntity<String> resp = restTemplate.exchange(
+                RequestEntity.put(URI.create("/api/equipments/panel_ZZZ"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"threshold\": 55.0}"),
+                String.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void updateThresholdInvalidBodyReturns400() {
+        ResponseEntity<String> resp = restTemplate.exchange(
+                RequestEntity.put(URI.create("/api/equipments/panel_C"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"threshold\": -5.0}"),
+                String.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

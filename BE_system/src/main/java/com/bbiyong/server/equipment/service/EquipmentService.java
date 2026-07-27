@@ -8,8 +8,10 @@ import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
@@ -27,6 +29,19 @@ public class EquipmentService {
     @Transactional(readOnly = true)
     public List<Equipment> getAllEquipments() {
         return equipmentRepository.findAll();
+    }
+
+    /**
+     * 설비 임계 온도(표시용 참고값)를 수정한다. 존재하지 않는 설비면 404.
+     */
+    @Transactional
+    public void updateThreshold(String equipmentId, double threshold) {
+        Equipment e = equipmentRepository.findById(equipmentId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "설비를 찾을 수 없습니다: " + equipmentId));
+        e.setThreshold(threshold);
+        equipmentRepository.save(e);
+        log.info("Equipment [{}] threshold updated: {}", equipmentId, threshold);
     }
 
     /** 애플리케이션 기동 시 감시 대상 분전반 초기 시드 (비어있을 때만). */
