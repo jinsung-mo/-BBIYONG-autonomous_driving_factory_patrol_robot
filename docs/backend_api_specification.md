@@ -157,6 +157,76 @@
 
 ---
 
+### 1.5 영상 아카이브 API (Video Archive)
+
+로봇 순찰 영상의 저장(녹화/아카이브) 메타데이터 관리 API입니다.
+* **원본 영상은 DB에 저장하지 않으며**, 파일시스템(MVP) 또는 S3(고도화)에 저장하고 본 API는 **메타데이터만** 다룹니다.
+* 녹화·업로드는 로봇 또는 게이트웨이가 담당하고, 업로드 완료 후 `POST /api/videos`로 메타데이터를 등록합니다.
+* `id`는 **UUID(String)** 로 애플리케이션이 부여합니다. (hibernate-community SQLite 방언의 IDENTITY 이슈 회피 — 숫자형 비-id 컬럼이 있는 엔티티에서 오토인크리먼트가 깨지는 문제)
+* MVP에서 `playbackUrl`/`thumbnailUrl`은 저장 경로를 그대로 반환합니다. (S3 Presigned URL은 후속)
+
+#### 데이터 모델: `video_clips`
+| 컬럼 | 타입 | 설명 |
+| :--- | :--- | :--- |
+| `id` | String(UUID) | PK (앱 할당) |
+| `robot_id` | String | 촬영 로봇 ID |
+| `event_id` | Long (nullable) | 연관 이벤트(`event_logs`) |
+| `clip_type` | String | `EVENT` / `PATROL` / `MANUAL` |
+| `storage_type` | String | `FILESYSTEM` / `S3` |
+| `file_path` | String(512) | 파일 경로 또는 S3 Key/URL |
+| `thumbnail_path` | String(512) (nullable) | 썸네일 경로 |
+| `duration_sec` | Integer (nullable) | 영상 길이(초) |
+| `file_size_bytes` | Long (nullable) | 파일 크기 |
+| `started_at` / `ended_at` | Instant | 촬영 시작/종료 |
+| `created_at` | Instant | 등록 시각 |
+
+#### [POST] `/api/videos`
+* **설명**: 녹화 주체(로봇/게이트웨이)가 업로드 완료 후 메타데이터를 등록합니다. (서버 간 내부 호출)
+* **Request Body**:
+```json
+{
+  "robotId": "orinka_01", "eventId": 1, "clipType": "EVENT", "storageType": "FILESYSTEM",
+  "filePath": "/data/videos/orinka_01/evt_1.mp4", "thumbnailPath": "/data/videos/orinka_01/evt_1.jpg",
+  "durationSec": 30, "fileSizeBytes": 5242880,
+  "startedAt": "2026-07-27T10:30:00Z", "endedAt": "2026-07-27T10:30:30Z"
+}
+```
+* **Response Body (201 Created)**:
+```json
+{ "id": "8f3b...uuid", "robotId": "orinka_01", "eventId": 1, "status": "REGISTERED", "createdAt": "2026-07-27T10:30:35Z" }
+```
+
+#### [GET] `/api/videos`
+* **설명**: 영상 클립 목록을 필터·페이징(최근순) 조회합니다.
+* **Query**: `robotId`(opt), `clipType`(opt: EVENT/PATROL/MANUAL), `from`/`to`(opt, ISO-8601, `started_at` 범위), `page`(0), `size`(10)
+* **Response Body (200 OK)**:
+```json
+{
+  "content": [
+    { "id": "8f3b...uuid", "robotId": "orinka_01", "eventId": 1, "clipType": "EVENT",
+      "durationSec": 30, "thumbnailUrl": "/data/videos/orinka_01/evt_1.jpg", "startedAt": "2026-07-27T10:30:00Z" }
+  ],
+  "page": 0, "size": 10, "totalPages": 1, "totalElements": 1
+}
+```
+
+#### [GET] `/api/videos/{id}`
+* **설명**: 특정 클립 상세 + 재생 URL. 없으면 `404`.
+* **Response Body (200 OK)**:
+```json
+{
+  "id": "8f3b...uuid", "robotId": "orinka_01", "eventId": 1, "clipType": "EVENT", "storageType": "FILESYSTEM",
+  "durationSec": 30, "fileSizeBytes": 5242880,
+  "playbackUrl": "/data/videos/orinka_01/evt_1.mp4", "thumbnailUrl": "/data/videos/orinka_01/evt_1.jpg",
+  "startedAt": "2026-07-27T10:30:00Z", "endedAt": "2026-07-27T10:30:30Z"
+}
+```
+
+#### [GET] `/api/events/{eventId}/video`
+* **설명**: 특정 이벤트에 연관된 클립 목록(Summary 배열)을 최근순으로 조회합니다.
+
+---
+
 ## 2. Web Frontend ↔ Spring Boot WebSocket 명세
 
 실시간 대시보드 갱신 및 경보 푸시를 담당하며, STOMP 프로토콜을 사용합니다.

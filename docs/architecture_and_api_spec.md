@@ -241,6 +241,10 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 | MVP | **GET** | `/api/robots` | 로봇 목록/상태 요약 조회 | None | `[{"robotId": "orinka_01", "status": "AUTO_PATROL", "battery": 71}]` |
 | MVP | **GET** | `/api/events` | 이상 탐지 이벤트 이력 조회 (SQLite) | `?page=0&size=10&type=FIRE` | `{"content": [{"eventId": 1, "type": "FIRE", ...}], "totalElements": 1}` |
 | MVP | **GET** | `/api/equipments` | 분전반 목록·최근 점검 상태 조회 (임계치는 로봇 보유·표시용) | None | `[{"equipmentId": "panel_A", "status": "NORMAL", "lastTemperature": 41.5, "threshold": 55.0}]` |
+| MVP | **POST** | `/api/videos` | 영상 클립 메타데이터 등록 (녹화 주체 내부 호출) | `{"robotId":"...","clipType":"EVENT","storageType":"FILESYSTEM","filePath":"...","startedAt":"..."}` | `{"id":"<uuid>","status":"REGISTERED"}` |
+| MVP | **GET** | `/api/videos` | 영상 아카이브 목록 조회 (필터·페이징, 최근순) | `?robotId=&clipType=&from=&to=&page=0&size=10` | `{"content":[{"id":"<uuid>","clipType":"EVENT","thumbnailUrl":"..."}],"totalElements":1}` |
+| MVP | **GET** | `/api/videos/{id}` | 영상 클립 상세 + 재생 URL | None | `{"id":"<uuid>","playbackUrl":"...","startedAt":"..."}` |
+| MVP | **GET** | `/api/events/{eventId}/video` | 이벤트 연관 클립 목록 | None | `[{"id":"<uuid>","clipType":"EVENT"}]` |
 | 후속 | **PUT** | `/api/equipments/{id}` | 설비 임계 온도 수정 (임계치 로봇 보유이므로 표시용/푸시 방식 확정 후) | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
 
 > **인증 주의**: 회원가입/로그인은 이메일 기반이며, 로그인 성공 시 JWT를 발급합니다. (인가 필터 적용은 후속 — 현재는 엔드포인트 오픈)
