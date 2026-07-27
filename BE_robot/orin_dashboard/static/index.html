@@ -1,0 +1,2179 @@
+<!doctype html>
+<!--ORINCAR-DASH v1 — 통합 대시보드. 의존성 0 (CDN·npm 없음). 이 주석은 SPA 폴백 감지에 쓰인다.-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>OrinCar 계기판</title>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   OrinCar 계기판 — 다크 계측 UI
+   외부 의존성 0. 시스템 폰트만.
+
+   설계 규칙 (지키지 않으면 다시 "생성된 티"가 난다)
+   ① 색은 장식이 아니라 의미다. UI 크롬(사이드바·카드·버튼·구분선)은
+      채도 0 의 회색만 쓴다. 색이 나오는 곳은 세 군데뿐 —
+      상태값(ok/warn/crit) · 데이터 마크(스캔점·탐지박스) · 무장 스위치.
+   ② 그라데이션·글로우·backdrop-blur 없음. 표면은 평면 + 1px 헤어라인.
+   ③ 숫자는 전부 mono + tabular-nums. 자릿수가 바뀌어도 안 흔들린다.
+   ④ 계측 눈금(.meter)이 이 화면의 시그니처다. 막대 길이가 아니라
+      "임계까지 얼마나 남았나"를 눈금으로 읽는다. 자동차 레드라인과 같다.
+   ⑤ 애니메이션은 값이 실제로 변할 때만. 상태를 깜빡여서 살아있는 척하지 않는다.
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  /* 표면 사다리 — 4단. 그림자 대신 헤어라인으로 분리한다 */
+  --bg:#0b0c0e; --s1:#121316; --s2:#17181c; --s3:#1e2025;
+  --line:#24262b; --line2:#31343b;
+  /* 잉크 — 순백(#fff)은 헤일레이션이 생겨 쓰지 않는다 */
+  --ink:#e8eaed; --ink2:#b3b8bf; --muted:#7c828b; --faint:#585d66;
+  /* 의미색만. 다크용으로 채도를 낮췄다 */
+  --ok:#4fb883; --warn:#e0a53a; --crit:#d9564f;
+  --data:#7fa3cf;                       /* 라이다 스캔·정보 마크 전용. UI 강조색 아님 */
+  --arm:#e0a53a;                        /* 무장 상태. 화면 전체에서 유일한 채색 면 */
+
+  --sbw:206px;
+  --r:6px; --r2:3px;                    /* 라운딩은 작게 — 계측기는 둥글지 않다 */
+
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI Variable Text","Segoe UI",
+         "Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",Ubuntu,Cantarell,Roboto,sans-serif;
+  /* 리눅스(Orin)·윈도우 양쪽에서 고정폭 숫자를 보장하는 스택 */
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Ubuntu Mono",
+         "DejaVu Sans Mono","Liberation Mono",Consolas,"D2Coding",monospace;
+
+  /* 타입 스케일 — 단계 간 최소 1.25배. 애매한 중간값을 두지 않는다 */
+  --t-micro:10px; --t-sm:11.5px; --t-base:13px; --t-md:15px;
+  --t-lg:19px; --t-num:26px; --t-hero:40px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:var(--t-base);line-height:1.45;-webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;                 /* 전역 — 일부만 적용하면 격자가 깨진다 */
+}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#2a2d34;border-radius:0}
+::-webkit-scrollbar-thumb:hover{background:#383c45}
+::-webkit-scrollbar-track{background:transparent}
+b,strong{font-weight:600}
+code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--ink2);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* 실크스크린 라벨 — 계기판 패널에 새겨진 글씨의 어법 */
+.lbl{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.14em;
+     text-transform:uppercase;color:var(--faint)}
+
+/* ── 레이아웃 ───────────────────────────────────────────────── */
+.app{display:flex;min-height:100%;align-items:stretch}
+.sidebar{
+  flex:0 0 var(--sbw);width:var(--sbw);position:sticky;top:0;height:100vh;
+  background:var(--s1);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;z-index:30;
+}
+.brand{padding:16px 16px 14px;display:flex;align-items:center;gap:10px;
+       border-bottom:1px solid var(--line)}
+.brand svg{flex:0 0 24px;color:var(--ink)}
+.brand-txt{min-width:0}
+.brand-txt b{display:block;font-size:13px;letter-spacing:.1em;font-weight:600}
+.brand-txt span{display:block;font-family:var(--mono);font-size:9.5px;color:var(--faint);
+                letter-spacing:.1em;text-transform:uppercase;margin-top:1px}
+.nav{padding:8px;display:flex;flex-direction:column;gap:1px;overflow:auto}
+.nav-cap{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--faint);
+         text-transform:uppercase;padding:14px 8px 6px}
+.nav button{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  background:transparent;border:0;color:var(--ink2);font:inherit;font-size:var(--t-base);
+  padding:8px 9px;border-radius:var(--r2);cursor:pointer;position:relative;
+  transition:background .1s,color .1s;
+}
+.nav button:hover{background:var(--s2);color:var(--ink)}
+.nav button.on{background:var(--s3);color:var(--ink);font-weight:500}
+.nav button.on::before{content:"";position:absolute;left:-8px;top:6px;bottom:6px;
+                       width:2px;background:var(--ink)}
+.nav .ico{width:18px;height:18px;flex:0 0 18px;opacity:.72;display:block}
+.nav button.on .ico{opacity:1}
+.nav .ico svg{width:18px;height:18px;display:block;fill:none;stroke:currentColor;
+              stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
+/* 제어는 유일한 "쓰기" 항목이다. 조회 항목들과 시각적으로 분리한다 */
+.nav button[data-p="drive"]{border:1px solid var(--line2)}
+.nav button[data-p="drive"].on{border-color:var(--arm);background:rgba(224,165,58,.1);color:#f4dfb0}
+.nav button[data-p="drive"].on::before{background:var(--arm)}
+.nav .tag{margin-left:auto;font-family:var(--mono);font-size:9.5px;padding:1px 5px;
+          border-radius:var(--r2);background:var(--s3);color:var(--muted);letter-spacing:.02em}
+.nav .tag.live{background:rgba(79,184,131,.12);color:var(--ok)}
+.nav .tag.hot{background:rgba(217,86,79,.14);color:var(--crit)}
+.side-foot{margin-top:auto;padding:11px 14px;border-top:1px solid var(--line);
+           font-size:var(--t-sm);color:var(--faint);display:flex;flex-direction:column;gap:5px}
+.side-foot a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line2)}
+.side-foot a:hover{color:var(--ink2)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* ── 상태 레일 (annunciator) — 절대 자리를 옮기지 않는다 ─────── */
+.statusbar{
+  position:sticky;top:0;z-index:25;display:flex;align-items:center;
+  padding:0 16px;height:46px;flex:0 0 46px;
+  background:var(--s1);border-bottom:1px solid var(--line);
+  overflow-x:auto;scrollbar-width:none;
+}
+.statusbar::-webkit-scrollbar{display:none}
+.sb{display:flex;align-items:baseline;gap:6px;padding:0 14px;white-space:nowrap;
+    border-right:1px solid var(--line);height:20px}
+.sb:first-child{padding-left:0}
+.sb .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;
+       text-transform:uppercase;color:var(--faint);align-self:center}
+.sb .v{font-family:var(--mono);font-size:14px;color:var(--ink);letter-spacing:-.01em}
+.sb .v.sm{font-size:12px}
+.sb .u{font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+.v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.bad{color:var(--crit)}
+.dot{width:7px;height:7px;background:var(--faint);flex:0 0 7px;align-self:center}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--crit)}
+.sb-grow{flex:1;min-width:8px;border:0;padding:0}
+.sb.last{border-right:0}
+
+.chip{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:var(--r2);
+      border:1px solid var(--line2);color:var(--muted);background:var(--s2);white-space:nowrap;
+      letter-spacing:.04em}
+.chip.ok{color:var(--ok);border-color:rgba(79,184,131,.3);background:rgba(79,184,131,.07)}
+.chip.warn{color:var(--warn);border-color:rgba(224,165,58,.32);background:rgba(224,165,58,.07)}
+.chip.bad{color:var(--crit);border-color:rgba(217,86,79,.35);background:rgba(217,86,79,.08)}
+.chip.acc{color:var(--ink2);border-color:var(--line2)}
+
+/* ── 콘텐츠 ─────────────────────────────────────────────────── */
+.content{padding:18px 20px 44px;flex:1;min-width:0}
+.page{display:none}
+.page.on{display:block}
+.ph{display:flex;align-items:baseline;gap:12px;margin:0 0 14px;flex-wrap:wrap}
+.ph h1{font-size:var(--t-lg);margin:0;font-weight:600;letter-spacing:-.015em}
+.ph .sub{font-size:var(--t-sm);color:var(--muted)}
+.sech{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.16em;
+      text-transform:uppercase;color:var(--faint);
+      margin:22px 0 9px;display:flex;align-items:center;gap:10px}
+.sech::after{content:"";flex:1;height:1px;background:var(--line);order:1}
+.sech-r{order:2;letter-spacing:.06em;color:var(--muted);text-transform:none}
+
+.grid{display:grid;gap:10px}
+.grid.top{align-items:start}          /* 지도가 없는 행은 카드를 늘려 빈칸을 만들지 않는다 */
+.g6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.gauto{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.span2{grid-column:span 2}
+.span3{grid-column:span 3}
+.span4{grid-column:span 4}
+
+.card{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);
+      padding:13px 14px;min-width:0;position:relative}
+.card.pad0{padding:0;overflow:hidden;display:flex}
+.card.pad0 .mapbox{flex:1;width:100%}
+.card-t{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.14em;
+        text-transform:uppercase;color:var(--faint);
+        display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.card-t .r{margin-left:auto;letter-spacing:.02em;text-transform:none;
+           font-size:10.5px;color:var(--muted)}
+
+/* ── 시그니처: 임계 눈금 미터 ───────────────────────────────────
+   막대만 있으면 "지금 값"밖에 안 보인다. 경고·위험 지점에 눈금을 찍어
+   "임계까지 얼마 남았나"를 읽게 한다. --w/--c 로 눈금 위치를 준다. */
+.meter{position:relative;height:3px;background:#212429;overflow:visible}
+.meter>i{display:block;height:100%;background:var(--muted);width:0;
+         transition:width .35s cubic-bezier(.2,.7,.3,1)}
+.meter>i.ok{background:var(--ok)}
+.meter>i.warn{background:var(--warn)}
+.meter>i.bad{background:var(--crit)}
+.meter>i.acc{background:var(--ink2)}
+.meter::before,.meter::after{content:"";position:absolute;top:-3px;bottom:-3px;width:1px}
+.meter::before{left:var(--w,101%);background:rgba(224,165,58,.72)}
+.meter::after{left:var(--c,101%);background:rgba(217,86,79,.85)}
+.meter.plain::before,.meter.plain::after{display:none}
+.meter.tall{height:5px}
+
+/* ── 스탯 타일: 두 가지 무게만 존재한다 ─────────────────────── */
+.tile .big{display:flex;align-items:baseline;gap:4px;margin:2px 0 9px}
+.tile .big .n{font-family:var(--mono);font-size:var(--t-num);font-weight:600;line-height:1;
+              letter-spacing:-.035em}
+.tile .big .u{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.tile .sub{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:8px;
+           letter-spacing:.01em}
+/* 무게 3단 — 큰 숫자+스파크라인 / 중간 / 압축 */
+.tile.lead .big .n{font-size:var(--t-hero)}
+.tile.lead .big .u{font-size:13px}
+.tile.mid .big .n{font-size:31px}
+.tile.mid .big .u{font-size:12px}
+.spk{display:block;width:100%;height:28px;margin:0 0 7px}
+.tile.lead .spk{height:46px}
+.legend{font-family:var(--mono);font-size:9.5px;color:var(--faint);letter-spacing:.06em;
+        display:flex;gap:12px;margin-top:6px;flex-wrap:wrap}
+.legend span:last-child{margin-left:auto;text-align:right}
+
+/* ── 게이지 (시스템 페이지) ─────────────────────────────────── */
+.gwrap{display:flex;flex-direction:column;align-items:center;gap:3px}
+.gauge{position:relative;width:100%;max-width:196px;aspect-ratio:1}
+.gauge svg{width:100%;height:100%;display:block;overflow:visible}
+.g-track{fill:none;stroke:#1f2228;stroke-width:5;stroke-linecap:butt}
+.g-val{fill:none;stroke:var(--ink2);stroke-width:5;stroke-linecap:butt;
+       transition:stroke-dashoffset .45s cubic-bezier(.2,.7,.3,1),stroke .25s}
+.g-val.ok{stroke:var(--ok)} .g-val.warn{stroke:var(--warn)} .g-val.bad{stroke:var(--crit)}
+.g-tick{stroke:#2f333b;stroke-width:1.2;stroke-linecap:butt}
+.g-red{stroke:rgba(217,86,79,.55);stroke-width:2.5;fill:none}
+.g-amb{stroke:rgba(224,165,58,.4);stroke-width:2.5;fill:none}
+.g-mid{position:absolute;inset:0;display:flex;flex-direction:column;
+       align-items:center;justify-content:center;pointer-events:none}
+.g-mid .n{font-family:var(--mono);font-size:30px;font-weight:600;line-height:1;
+          letter-spacing:-.04em}
+.g-mid .u{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px;
+          letter-spacing:.1em}
+.g-lab{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.14em;
+       text-transform:uppercase;color:var(--faint);margin-top:4px;text-align:center}
+.g-sub{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:center}
+
+/* ── 키-값 목록 ─────────────────────────────────────────────── */
+.kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;
+    border-bottom:1px solid #1b1d22;font-size:12.5px;align-items:baseline}
+.kv:last-child{border-bottom:0}
+.kv>span{color:var(--muted);white-space:nowrap}
+.kv>b{font-family:var(--mono);color:var(--ink);font-weight:500;text-align:right;
+      min-width:0;overflow:hidden;text-overflow:ellipsis}
+.kv>b.ok{color:var(--ok)} .kv>b.warn{color:var(--warn)} .kv>b.bad{color:var(--crit)}
+.kv>b.dim{color:var(--faint)}
+
+/* 코어 바 */
+.cores{display:flex;flex-direction:column;gap:6px}
+.core{display:grid;grid-template-columns:24px 1fr 38px;align-items:center;gap:9px}
+.core .id{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.core .pc{font-family:var(--mono);font-size:11px;text-align:right;color:var(--ink2)}
+
+/* 토픽 */
+.topics{display:flex;flex-wrap:wrap;gap:4px}
+.topic{font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:var(--r2);
+       background:var(--s2);border:1px solid var(--line);color:var(--muted)}
+.topic.key{color:var(--ink2);border-color:var(--line2);background:var(--s3)}
+
+/* ── 지도 ───────────────────────────────────────────────────── */
+.mapbox{position:relative;background:#090a0c;border-radius:var(--r);overflow:hidden}
+.mapbox canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+.mapbox canvas:active{cursor:grabbing}
+.mapbox.tall{height:min(66vh,660px)}
+.mapbox.mini{min-height:300px}
+/* 지도 카드가 옆 카드에 끌려 과하게 커지면 검은 여백만 늘어난다 */
+.card.pad0 .mapbox.mini{max-height:520px}
+/* 지도 위 텍스트는 반드시 불투명 판 위에 올린다 — 배경이 변하는 곳에
+   반투명 글씨를 얹으면 읽히지 않는다 (글래스모피즘 아님, 가독성 조치) */
+.map-legend{position:absolute;left:10px;bottom:9px;display:flex;gap:12px;
+            font-family:var(--mono);font-size:9.5px;color:var(--muted);
+            background:#0d0e11;border:1px solid var(--line);
+            padding:5px 9px;border-radius:var(--r2);pointer-events:none;letter-spacing:.04em}
+.map-legend i{display:inline-block;width:7px;height:7px;margin-right:5px;vertical-align:0}
+.map-badge{position:absolute;right:10px;top:9px;display:flex;gap:5px;pointer-events:none}
+.mapctl{display:flex;flex-direction:column;gap:7px}
+.sw{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink2);cursor:pointer;
+    padding:2px 0;user-select:none}
+.sw input{appearance:none;width:30px;height:16px;border-radius:var(--r2);background:#22252b;
+          border:1px solid var(--line2);position:relative;cursor:pointer;flex:0 0 30px;
+          transition:background .13s,border-color .13s}
+.sw input::after{content:"";position:absolute;left:2px;top:2px;width:10px;height:10px;
+                 background:#6a707a;transition:transform .13s,background .13s}
+.sw input:checked{background:var(--s3);border-color:var(--muted)}
+.sw input:checked::after{transform:translateX(14px);background:var(--ink)}
+.btn{background:var(--s2);color:var(--ink2);border:1px solid var(--line2);border-radius:var(--r2);
+     padding:6px 11px;font:inherit;font-size:11.5px;cursor:pointer;transition:.11s}
+.btn:hover{border-color:var(--muted);color:var(--ink);background:var(--s3)}
+.btn.on{border-color:var(--ink2);color:var(--ink);background:var(--s3)}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+
+/* ── 카메라 ─────────────────────────────────────────────────── */
+.camstage{position:relative;background:#000;border-radius:var(--r2);overflow:hidden;
+          aspect-ratio:var(--camar,4/3);width:100%;margin:0 auto;border:1px solid var(--line)}
+/* 세로가 화면을 넘지 않도록 폭 상한으로 높이를 제한한다(실제 비율 사용) */
+.camstage.big{max-width:min(100%,calc(70vh * var(--camarn,1.3333)))}
+.camstage.drive{max-width:min(100%,calc(64vh * var(--camarn,1.3333)))}
+.camstage img{width:100%;height:100%;display:block;object-fit:contain;background:#000}
+.camstage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.camstage .nofeed{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                  color:var(--faint);font-size:12px;flex-direction:column;gap:6px}
+/* 폭이 남아도 세 칸을 무한정 늘리지 않는다 — 숫자 3개가 화면을 가로지르면
+   읽는 눈이 멀리 이동해야 해서 오히려 느리다 */
+.floor{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;max-width:600px}
+.floor .f{background:var(--s2);border:1px solid var(--line);border-radius:var(--r2);padding:6px 8px}
+.floor .f .lab{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;
+               text-transform:uppercase;color:var(--faint)}
+.floor .f .val{font-family:var(--mono);font-size:16px;margin:1px 0 5px;letter-spacing:-.02em}
+.floor .f.unknown{border-style:dashed}
+.floor .f.unknown .val{color:var(--faint);font-size:13px}
+.objs{display:flex;flex-direction:column;gap:5px;max-height:340px;overflow:auto}
+.obj{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;
+     background:var(--s2);border:1px solid var(--line);border-radius:var(--r2);padding:7px 9px}
+.obj .nm{font-size:12.5px;display:flex;align-items:center;gap:6px;min-width:0}
+.obj .nm .sw2{width:7px;height:7px;flex:0 0 7px}
+.obj .cf{font-family:var(--mono);font-size:11.5px;color:var(--ink2)}
+.obj .meta{grid-column:1/-1;font-family:var(--mono);font-size:10px;color:var(--faint);
+           display:flex;gap:10px;flex-wrap:wrap;letter-spacing:.02em}
+.obj.living{border-color:rgba(224,165,58,.3)}
+.obj.fire{border-color:rgba(217,86,79,.42);background:rgba(217,86,79,.06)}
+.tagl{font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:var(--r2);
+      background:var(--s3);color:var(--muted)}
+.tagl.warn{background:rgba(224,165,58,.14);color:var(--warn)}
+
+/* ══ 제어 — 화면에서 유일하게 로봇을 움직이는 곳 ══════════════ */
+.ctl{border-color:var(--line2)}
+.ctl.armed{border-color:rgba(224,165,58,.5)}
+/* 무장 스위치: 이 화면에서 유일한 채색 면. 과감함은 한 곳에만 쓴다 */
+.arm{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line2);
+     border-radius:var(--r2);overflow:hidden;margin-bottom:11px}
+.arm button{background:var(--s2);border:0;color:var(--muted);font:inherit;font-size:12.5px;
+            padding:12px 8px;cursor:pointer;font-family:var(--mono);letter-spacing:.1em;
+            transition:.11s;min-height:44px}
+.arm button:hover:not(.on){background:var(--s3);color:var(--ink2)}
+.arm button.on{background:var(--s3);color:var(--ink);font-weight:600}
+.arm button[data-arm="1"].on{background:var(--arm);color:#1a1408}
+.arm button:disabled{opacity:.35;cursor:not-allowed}
+/* reason — 로봇이 왜 안 움직이는지가 여기 다 있다. 가공하지 않고 그대로 보여준다 */
+.reason{background:var(--s2);border:1px solid var(--line);border-radius:var(--r2);
+        padding:8px 10px;margin-bottom:9px;min-height:48px}
+.reason .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+           text-transform:uppercase;color:var(--faint);display:block;margin-bottom:3px}
+.reason b{font-size:13px;font-weight:500;color:var(--ink);line-height:1.4;display:block}
+.reason.moving{border-color:rgba(79,184,131,.4)}
+.reason.moving b{color:var(--ok)}
+.reason.block{border-color:rgba(224,165,58,.4)}
+.reason.block b{color:var(--warn)}
+.reason.off b{color:var(--muted)}
+.reason.ready{border-color:var(--line2)}
+.reason.ready b{color:var(--ink)}
+/* D패드 — 정사각에 가깝게. 폭이 남아도 옆으로 늘리지 않는다.
+   터치 타깃은 최소 56px 을 지킨다 (좁다고 줄이면 오조작이 난다) */
+.dpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+      margin:12px auto;max-width:264px}
+.dpad button{background:var(--s2);border:1px solid var(--line2);border-radius:var(--r2);
+             color:var(--ink);font-family:var(--mono);font-size:19px;min-height:62px;
+             cursor:pointer;touch-action:none;user-select:none;transition:.08s;
+             display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px}
+.dpad button small{font-size:9px;letter-spacing:.12em;color:var(--muted)}
+.dpad button:hover:not(:disabled){background:var(--s3);border-color:var(--muted)}
+.dpad button.hold{background:var(--arm);border-color:var(--arm);color:#1a1408}
+.dpad button.hold small{color:#5c4712}
+/* 비활성이어도 구조는 보여야 한다 — 아예 지워버리면 고장난 것처럼 읽힌다 */
+.dpad button:disabled{color:var(--muted);border-color:var(--line);
+                      background:#131418;cursor:not-allowed}
+.dpad button:disabled small{color:var(--faint)}
+.dpad .sp{visibility:hidden}
+.estop{width:100%;min-height:64px;background:rgba(217,86,79,.1);color:#f0a6a1;
+       border:1px solid rgba(217,86,79,.5);border-radius:var(--r2);
+       font:inherit;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:.06em;
+       display:flex;align-items:center;justify-content:center;gap:10px;transition:.1s}
+.estop:hover{background:var(--crit);color:#150707;border-color:var(--crit)}
+.estop span{font-family:var(--mono);font-size:10px;letter-spacing:.14em;opacity:.75;
+            border:1px solid currentColor;border-radius:2px;padding:1px 5px}
+.vecrow{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}
+.vec{background:var(--s2);border:1px solid var(--line);border-radius:var(--r2);padding:7px 9px}
+.vec .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;
+        text-transform:uppercase;color:var(--faint);display:block}
+.vec .n{font-family:var(--mono);font-size:20px;letter-spacing:-.03em;color:var(--ink)}
+.vec .n.live{color:var(--ok)}
+.vec .u{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-left:3px}
+.gap{font-family:var(--mono);font-size:10px;color:var(--warn);min-height:14px;
+     margin:-4px 0 6px;letter-spacing:.02em}
+
+/* ── 알림 / 빈 상태 ─────────────────────────────────────────── */
+.empty{border:1px dashed var(--line2);border-radius:var(--r);padding:46px 26px;
+       text-align:center;color:var(--muted);background:var(--s1)}
+.empty h3{margin:0 0 8px;font-size:var(--t-md);color:var(--ink2);font-weight:600}
+.empty p{margin:0 0 6px;font-size:12.5px;line-height:1.7}
+.empty .note{font-size:11.5px;color:var(--faint);margin-top:14px}
+/* 알림에는 이모지 대신 계통 태그를 쓴다 — 어느 계통 문제인지가 정보다 */
+.alert{display:flex;gap:10px;align-items:flex-start;border-radius:var(--r2);padding:9px 11px;
+       font-size:12.5px;line-height:1.6;border:1px solid var(--line2);background:var(--s2);
+       color:var(--ink2);margin-bottom:7px}
+.alert.bad{border-color:rgba(217,86,79,.4);background:rgba(217,86,79,.07);color:#f2c9c6}
+.alert.warn{border-color:rgba(224,165,58,.35);background:rgba(224,165,58,.06);color:#efdcb4}
+.alert .sys{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;flex:0 0 auto;
+            border:1px solid currentColor;border-radius:2px;padding:1px 5px;opacity:.75;
+            margin-top:1px}
+.hint{font-size:11px;color:var(--faint);line-height:1.7;margin-top:9px}
+
+/* ── 설계 ───────────────────────────────────────────────────── */
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:10px}
+.dcard{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.dcard img{width:100%;display:block;background:#0a0b0d;cursor:zoom-in}
+.dcard .cap{padding:8px 10px;font-size:11.5px;color:var(--ink2)}
+.dcard .cap small{display:block;color:var(--faint);font-family:var(--mono);
+                  font-size:10px;margin-top:3px;letter-spacing:.02em}
+#dframe{width:100%;height:min(70vh,700px);border:1px solid var(--line);
+        border-radius:var(--r);background:#0a0b0d}
+.lightbox{position:fixed;inset:0;z-index:99;background:rgba(6,7,9,.95);display:none;
+          align-items:center;justify-content:center;padding:28px;cursor:zoom-out}
+.lightbox.on{display:flex}
+.lightbox img{max-width:100%;max-height:100%;border-radius:var(--r2)}
+
+/* ── 반응형 ─────────────────────────────────────────────────── */
+@media (max-width:1400px){
+  .g6{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .g6 .span2{grid-column:span 2}
+}
+@media (max-width:1040px){
+  :root{--sbw:60px}
+  .brand-txt,.nav button span.t,.nav .tag,.nav-cap,.side-foot span.long{display:none}
+  .brand{justify-content:center;padding:14px 0}
+  .nav button{justify-content:center;padding:11px 0}
+  .side-foot{align-items:center;padding:9px 4px;text-align:center;font-size:9.5px}
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .span4,.span3{grid-column:span 2}
+}
+/* 태블릿 구간(721~980)은 아직 2열이 들어간다. 여기서 1열로 떨어뜨리면
+   카드가 세로로 한없이 길어져 스크롤만 늘어난다. */
+@media (max-width:980px) and (min-width:721px){
+  .g3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g3>*:last-child{grid-column:1/-1}      /* 셋째 카드는 한 줄을 통째로 */
+  .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .span2,.span3,.span4{grid-column:1/-1}
+}
+@media (max-width:980px){
+  .g6{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g6 .span2{grid-column:span 2}
+  .content{padding:15px 13px 36px}
+  .mapbox.tall{height:52vh}
+  .camstage.big,.camstage.drive{max-width:100%}
+}
+@media (max-width:720px){
+  .g3,.g2{grid-template-columns:1fr}
+  :root{--sbw:auto}
+  .app{flex-direction:column}
+  .sidebar{position:sticky;top:0;width:auto;height:auto;flex:0 0 auto;
+           flex-direction:row;align-items:center;border-right:0;
+           border-bottom:1px solid var(--line);overflow-x:auto}
+  .brand{padding:9px 11px;border-bottom:0;border-right:1px solid var(--line)}
+  .nav{flex-direction:row;padding:6px;gap:4px}
+  .nav button{padding:8px 10px;white-space:nowrap}
+  .nav button span.t{display:inline}
+  .nav button.on::before{display:none}
+  .side-foot{display:none}
+  .g6{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g6 .span2{grid-column:span 2}
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .statusbar{height:auto;flex:0 0 auto;padding:7px 12px}
+  .sb{padding:0 10px}
+  .gauge{max-width:130px}
+  .span2,.span3,.span4{grid-column:1/-1}
+  .card.pad0{grid-column:1/-1}
+  .map-legend{display:none}
+  .mapbox.tall{height:46vh}
+  .vecrow{grid-template-columns:1fr 1fr}
+}
+@media (max-width:390px){
+  .g6,.g4{grid-template-columns:1fr}
+  .g6 .span2{grid-column:span 1}
+  .floor{grid-template-columns:1fr 1fr 1fr}
+  .tile.lead .big .n{font-size:32px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── 사이드바 ─────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+           stroke-width="1.4" aria-hidden="true">
+        <rect x="2.5" y="2.5" width="19" height="19" rx="2"/>
+        <rect x="8" y="8" width="8" height="8" fill="currentColor" stroke="none"/>
+      </svg>
+      <div class="brand-txt"><b>ORINCAR</b><span>E101 · 자율순찰</span></div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-cap">관측</div>
+      <button data-p="all"><span class="ico"><svg viewBox="0 0 18 18"><rect x="2" y="2" width="6" height="6"/><rect x="10" y="2" width="6" height="6"/><rect x="2" y="10" width="6" height="6"/><rect x="10" y="10" width="6" height="6"/></svg></span><span class="t">전체</span></button>
+      <button data-p="sys"><span class="ico"><svg viewBox="0 0 18 18"><rect x="4.5" y="4.5" width="9" height="9"/><path d="M7 4.5V2M11 4.5V2M7 16v-2.5M11 16v-2.5M4.5 7H2M4.5 11H2M16 7h-2.5M16 11h-2.5"/></svg></span><span class="t">시스템</span><span class="tag" id="tagSys">—</span></button>
+      <button data-p="nav"><span class="ico"><svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.6"/><path d="M9 4.6l2.9 7.2L9 10.3 6.1 11.8z"/></svg></span><span class="t">주행</span><span class="tag" id="tagNav">—</span></button>
+      <button data-p="cam"><span class="ico"><svg viewBox="0 0 18 18"><rect x="2" y="4.2" width="14" height="10.6" rx="1.5"/><circle cx="9" cy="9.5" r="3"/></svg></span><span class="t">카메라</span><span class="tag" id="tagCam">—</span></button>
+      <div class="nav-cap">조작</div>
+      <button data-p="drive"><span class="ico"><svg viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="3.5"/><path d="M9 5.2v7.6M5.2 9h7.6"/></svg></span><span class="t">제어</span><span class="tag" id="tagDrv">—</span></button>
+      <div class="nav-cap">하드웨어</div>
+      <button data-p="dsg"><span class="ico"><svg viewBox="0 0 18 18"><path d="M9 1.8l6.4 3.5v7.4L9 16.2l-6.4-3.5V5.3z"/><path d="M9 1.8V9M9 9l6.4-3.7M9 9l-6.4-3.7"/></svg></span><span class="t">설계</span><span class="tag" id="tagDsg">—</span></button>
+    </nav>
+    <div class="side-foot">
+      <div><span class="long">가동 </span><b class="num" id="fUp">—</b></div>
+      <div><a href="nav.html" target="_blank" title="기존 단독 지도 페이지">nav.html<span class="long"> (구버전)</span></a></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <!-- ── 상태 레일 — 자리가 고정된 계기. 어떤 섹션에서도 사라지지 않는다 ── -->
+    <header class="statusbar">
+      <div class="sb"><span class="dot" id="sbDot"></span><span class="v sm" id="sbConn">연결 확인 중</span></div>
+      <div class="sb"><span class="l">LiDAR</span><span class="v" id="sbHz">—</span><span class="u">Hz</span></div>
+      <div class="sb"><span class="l">화재</span><span class="v sm" id="sbFire">—</span></div>
+      <div class="sb"><span class="l">CPU</span><span class="v" id="sbCpu">—</span><span class="u">%</span></div>
+      <div class="sb"><span class="l">Tj</span><span class="v" id="sbTemp">—</span><span class="u">°C</span></div>
+      <div class="sb" id="sbPwrBox"
+           title="Orin 모듈 입력 전력(VDD_IN). 모터는 MDD10A에 배터리가 직결돼 있어 포함되지 않는다. 25W 는 nvpmodel 전력모드 상한.">
+        <span class="l">Orin 전력</span><span class="v" id="sbPwr">—</span>
+        <span class="u">W / 25</span></div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           시간 예산 슬롯 (TIME BUDGET)
+           이 칸의 의미는 "가동시간"이 아니라 **시간 예산**이다.
+           지금은 잴 수 있는 게 부팅 후 경과시간뿐이라 uptime 을 넣는다.
+           전압/전류 측정기가 도착하면 여기를 "잔여 주행 가능 시간"으로 바꾼다.
+           (현 INA226 은 R100 션트라 전압만 재고 전류를 못 재 잔여시간 추정 불가)
+
+           교체 방법: 아래 HTML 은 손대지 않는다. JS 의 TIME_BUDGET 상수를
+           uptimeBudget → rangeBudget 으로 바꾸기만 하면 된다.
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="sb" id="sbBudget" data-slot="time-budget">
+        <span class="l" id="budgetLab">가동</span>
+        <span class="v" id="budgetVal">—</span>
+        <span class="u" id="budgetUnit"></span></div>
+
+      <div class="sb"><span class="l">최근접</span><span class="v" id="sbMin">—</span></div>
+      <div class="sb sb-grow"></div>
+      <div class="sb"><span class="chip" id="sbDrive">조종 대기</span></div>
+      <div class="sb last"><span class="chip" id="sbTick">—</span></div>
+    </header>
+
+    <div class="content">
+
+      <!-- ══ 전체 ═══════════════════════════════════════════ -->
+      <section class="page" data-page="all">
+        <div class="ph"><h1>전체 개요</h1><span class="sub">로봇이 지금 무엇을 보고 있고, 계산기가 버티고 있는가</span></div>
+        <div id="allAlerts"></div>
+
+        <!-- 지도·카메라·현재값을 나란히 둔다. 지도를 넓게 잡으면 실제 탐색
+             영역보다 검은 여백이 훨씬 커진다 — 그 폭을 숫자로 채우는 편이 낫다. -->
+        <div class="sech">관측</div>
+        <div class="grid g3">
+          <div class="card pad0">
+            <div class="mapbox mini">
+              <canvas id="cvMini"></canvas>
+              <div class="map-badge"><span class="chip" id="miniBadge">지도 대기</span></div>
+              <div class="map-legend">
+                <span><i style="background:#3a3f47"></i>미탐색</span>
+                <span><i style="background:#e8eaed"></i>자유</span>
+                <span><i style="background:#0f1216;outline:1px solid #444"></i>벽</span>
+                <span><i style="background:#7fa3cf"></i>스캔</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-t">카메라<span class="r" id="allCamSt">—</span></div>
+            <div class="camstage"><img id="imgMini" alt="카메라 축소 화면"><canvas id="ovMini"></canvas>
+              <div class="nofeed" id="nfMini">영상 없음</div></div>
+            <div class="floor" id="floorMini"></div>
+          </div>
+          <div class="card">
+            <div class="card-t">지금<span class="r" id="aAge">—</span></div>
+            <div class="kv"><span>자세 x, y</span><b id="aPos">—</b></div>
+            <div class="kv"><span>heading</span><b id="aYaw">—</b></div>
+            <div class="kv"><span>최근접 장애물</span><b id="aMin">—</b></div>
+            <div class="kv"><span>스캔 포인트</span><b id="aPts">—</b></div>
+            <div class="kv"><span>탐색 면적</span><b id="aArea">—</b></div>
+            <div class="card-t" style="margin:16px 0 8px">인지</div>
+            <div class="kv"><span>화재 · 연기</span><b id="aFire">—</b></div>
+            <div class="kv"><span>COCO 객체</span><b id="aObj">—</b></div>
+            <div class="kv"><span>생물 추정</span><b id="aLiving">—</b></div>
+            <div class="kv"><span>바닥 최저</span><b id="aFloor">—</b></div>
+            <div class="card-t" style="margin:16px 0 8px">계통</div>
+            <div class="kv"><span>지도</span><b id="aMap">—</b></div>
+            <div class="kv"><span>ESP32</span><b id="aEsp">—</b></div>
+            <div class="kv"><span>배터리 INA226</span><b id="aBat">—</b></div>
+            <div class="kv"><span>조종</span><b id="aDrv">—</b></div>
+            <div class="hint">바닥값이 <b>모름</b>이면 프레임을 못 읽은 것이다 —
+              트였다는 뜻이 아니다.</div>
+          </div>
+        </div>
+
+        <!-- 위계는 세 단계다. 이 로봇에서 실제로 일을 그르치는 건
+             ① 발열·부하(스로틀) ② 센서 처리량 이고, 나머지는 참고값이다.
+             같은 무게로 늘어놓으면 무엇이 중요한지 안 보인다. -->
+        <div class="sech">컴퓨트 <span class="sech-r" id="histSpan">—</span></div>
+        <div class="grid g2">
+          <div class="card tile lead"><div class="card-t">CPU 부하<span class="r" id="tCpuR">—</span></div>
+            <div class="big"><span class="n" id="tCpu">—</span><span class="u">%</span></div>
+            <canvas class="spk" id="spkCpu"></canvas>
+            <div class="meter" style="--w:70%;--c:88%"><i id="tCpuB"></i></div>
+            <div class="legend"><span>경고 70</span><span>위험 88</span><span id="tCpuS">—</span></div></div>
+
+          <div class="card tile lead"><div class="card-t">Tj 온도<span class="r" id="tTmpR">—</span></div>
+            <div class="big"><span class="n" id="tTmp">—</span><span class="u">°C</span></div>
+            <canvas class="spk" id="spkTmp"></canvas>
+            <div class="meter" style="--w:65%;--c:80%"><i id="tTmpB"></i></div>
+            <div class="legend"><span>경고 65</span><span>스로틀 80</span><span id="tTmpS">—</span></div></div>
+        </div>
+
+        <div class="sech">센서 처리량 — 인지가 살아 있는가</div>
+        <div class="grid g2">
+          <div class="card tile mid"><div class="card-t">LiDAR 주기<span class="r" id="tHzR">—</span></div>
+            <div class="big"><span class="n" id="tHz">—</span><span class="u">Hz</span></div>
+            <canvas class="spk" id="spkHz" style="height:24px"></canvas>
+            <!-- 이 둘은 "높을수록 좋음"이라 눈금이 왼쪽에 온다 (경고 9Hz · 위험 5Hz) -->
+            <div class="meter" style="--w:75%;--c:42%"><i id="tHzB"></i></div>
+            <div class="legend"><span>경고 9</span><span>위험 5</span>
+              <span id="tHzS">—</span></div></div>
+          <div class="card tile mid"><div class="card-t">탐지 처리량<span class="r" id="tDetR">—</span></div>
+            <div class="big"><span class="n" id="tDet">—</span><span class="u">FPS</span></div>
+            <canvas class="spk" id="spkDet" style="height:24px"></canvas>
+            <div class="meter" style="--w:33%;--c:17%"><i id="tDetB"></i></div>
+            <div class="legend"><span>경고 20</span><span>위험 10</span>
+              <span id="tDetS">—</span></div></div>
+        </div>
+
+        <div class="sech">여유 자원</div>
+        <div class="grid g4">
+          <div class="card tile"><div class="card-t">메모리</div>
+            <div class="big"><span class="n" id="tRam">—</span><span class="u">%</span></div>
+            <div class="meter" style="--w:75%;--c:90%"><i id="tRamB"></i></div>
+            <div class="sub" id="tRamS">—</div></div>
+          <div class="card tile"><div class="card-t">디스크</div>
+            <div class="big"><span class="n" id="tDsk">—</span><span class="u">%</span></div>
+            <div class="meter" style="--w:80%;--c:92%"><i id="tDskB"></i></div>
+            <div class="sub" id="tDskS">—</div></div>
+          <div class="card tile"><div class="card-t">GPU</div>
+            <div class="big"><span class="n" id="tGpu">—</span><span class="u">%</span></div>
+            <div class="meter" style="--w:80%;--c:95%"><i id="tGpuB"></i></div>
+            <div class="sub" id="tGpuS">—</div></div>
+          <div class="card tile"><div class="card-t">Orin 전력</div>
+            <div class="big"><span class="n" id="tPwr">—</span><span class="u">W</span></div>
+            <div class="meter" style="--w:80%;--c:95%"><i id="tPwrB"></i></div>
+            <div class="sub" id="tPwrS">상한 25 W · 모터 제외</div></div>
+        </div>
+
+        <div class="sech">ROS 2 토픽</div>
+        <div class="card"><div class="topics" id="topicsAll"></div></div>
+      </section>
+
+      <!-- ══ 시스템 ═════════════════════════════════════════ -->
+      <section class="page" data-page="sys">
+        <div class="ph"><h1>시스템</h1><span class="sub">Jetson Orin Nano Super · JetPack R36.4.7 · 25 W 모드</span></div>
+
+        <div class="grid g4">
+          <div class="card"><div class="gwrap">
+            <div class="gauge" id="gCpu"></div><div class="g-lab">CPU 부하</div>
+            <div class="g-sub" id="gCpuS">—</div></div></div>
+          <div class="card"><div class="gwrap">
+            <div class="gauge" id="gTmp"></div><div class="g-lab">Tj 온도</div>
+            <div class="g-sub" id="gTmpS">—</div></div></div>
+          <div class="card"><div class="gwrap">
+            <div class="gauge" id="gRam"></div><div class="g-lab">메모리</div>
+            <div class="g-sub" id="gRamS">—</div></div></div>
+          <div class="card"><div class="gwrap">
+            <div class="gauge" id="gGpu"></div><div class="g-lab">GPU</div>
+            <div class="g-sub" id="gGpuS">—</div></div></div>
+        </div>
+
+        <div class="sech">코어별 부하 · 전력</div>
+        <div class="grid g2">
+          <div class="card"><div class="card-t">CPU 코어<span class="r" id="freqS">—</span></div>
+            <div class="cores" id="cores"></div>
+            <div class="card-t" style="margin:16px 0 8px">부하 이력<span class="r" id="histSpan2">—</span></div>
+            <canvas class="spk" id="spkCpu2" style="height:64px"></canvas>
+            <div class="legend"><span>코어 평균 %</span><span id="tCpuS2">—</span></div>
+          </div>
+          <div class="card"><div class="card-t">Orin 전력<span class="r">모터 제외</span></div>
+            <div class="kv"><span>VDD_IN (모듈 입력)</span><b id="pTot">—</b></div>
+            <div class="meter tall" style="--w:80%;--c:95%;margin:3px 0 10px"><i id="pTotB"></i></div>
+            <div class="kv"><span>VDD_CPU_GPU_CV</span><b id="pCpu">—</b></div>
+            <div class="meter plain" style="margin:3px 0 10px"><i id="pCpuB"></i></div>
+            <div class="kv"><span>VDD_SOC</span><b id="pSoc">—</b></div>
+            <div class="meter plain" style="margin:3px 0 2px"><i id="pSocB"></i></div>
+            <div class="hint">전력모드 상한 <b>25 W</b>(nvpmodel mode 1) 대비다.
+              구동 모터는 MDD10A 에 배터리가 직결돼 이 수치에 <b>잡히지 않는다</b> —
+              INA226 은 전압만 재므로 <b>로봇 전체 소비전력을 측정할 수단은 현재 없다</b>.</div>
+            <div style="margin:14px 0 5px" class="card-t">디스크</div>
+            <div class="meter tall" style="--w:80%;--c:92%"><i id="dskB"></i></div>
+            <div class="kv" style="margin-top:8px"><span>사용 / 전체</span><b id="dskS">—</b></div>
+            <div style="margin:12px 0 5px" class="card-t">스왑 (zram)</div>
+            <div class="meter tall" style="--w:60%;--c:85%"><i id="swpB"></i></div>
+            <div class="kv" style="margin-top:8px"><span>사용 / 전체</span><b id="swpS">—</b></div>
+          </div>
+        </div>
+
+        <div class="sech">온도 센서</div>
+        <!-- 센서 개수는 기기마다 다르다. 고정 열 수를 쓰면 마지막 줄이 반쯤 빈다 -->
+        <div class="card"><div class="grid gauto" id="therm"></div></div>
+
+        <div class="sech">ROS 2 · 장치</div>
+        <div class="grid g3">
+          <div class="card span2"><div class="card-t">토픽<span class="r" id="topicN">—</span></div>
+            <div class="topics" id="topicsSys"></div>
+            <div class="hint">밝은 항목이 자율주행 핵심 경로다 — <code>/scan</code> <code>/map</code> <code>/odom</code> <code>/cmd_vel</code> <code>/tf</code></div>
+          </div>
+          <div class="card"><div class="card-t">장치</div>
+            <div class="kv"><span>ESP32 (/dev/esp32)</span><b id="dEsp">—</b></div>
+            <div class="kv"><span>배터리 INA226</span><b id="dBat">—</b></div>
+            <div class="kv"><span>스캔 주기</span><b id="dHz">—</b></div>
+            <div class="kv"><span>가동 시간</span><b id="dUp">—</b></div>
+            <div class="kv"><span>수집 시각</span><b id="dTs">—</b></div>
+            <div class="hint">모터·배터리 값은 ESP32 펌웨어/INA226 배선이 붙어야 채워진다.
+              비어 있는 것 자체가 개발 중 정보다.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 주행 ═══════════════════════════════════════════ -->
+      <section class="page" data-page="nav">
+        <div class="ph"><h1>주행</h1><span class="sub">SLAM Toolbox 지도 · LiDAR 스캔 · 자세 · 궤적</span></div>
+        <div id="navAlert"></div>
+        <div class="grid g4">
+          <div class="card span3 pad0">
+            <div class="mapbox tall">
+              <canvas id="cvMain"></canvas>
+              <div class="map-badge">
+                <span class="chip" id="navBadge">지도 대기</span>
+                <span class="chip" id="navAge">—</span>
+              </div>
+              <div class="map-legend">
+                <span><i style="background:#3a3f47"></i>미탐색</span>
+                <span><i style="background:#e8eaed"></i>자유</span>
+                <span><i style="background:#0f1216;outline:1px solid #444"></i>벽</span>
+                <span><i style="background:#7fa3cf"></i>스캔</span>
+                <span>드래그 이동 · 휠 확대</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-t">상태</div>
+            <div class="kv"><span>지도</span><b id="nMap">—</b></div>
+            <div class="kv"><span>해상도</span><b id="nRes">—</b></div>
+            <div class="kv"><span>탐색 면적</span><b id="nArea">—</b></div>
+            <div class="kv"><span>프레임</span><b id="nFrame">—</b></div>
+            <div class="kv"><span>x, y</span><b id="nPos">—</b></div>
+            <div class="kv"><span>heading</span><b id="nYaw">—</b></div>
+            <div class="kv"><span>스캔 포인트</span><b id="nPts">—</b></div>
+            <div class="kv"><span>최근접 장애물</span><b id="nMin">—</b></div>
+            <div class="kv"><span>갱신</span><b id="nAge">—</b></div>
+
+            <div class="card-t" style="margin:16px 0 8px">표시</div>
+            <div class="mapctl">
+              <label class="sw"><input type="checkbox" id="cScan" checked> 라이다 스캔</label>
+              <label class="sw"><input type="checkbox" id="cFollow" checked> 로봇 따라가기</label>
+              <label class="sw"><input type="checkbox" id="cTrail" checked> 이동 궤적</label>
+              <div class="btnrow" style="margin-top:5px">
+                <button class="btn" id="bFit">전체 보기</button>
+                <button class="btn" id="bClear">궤적 지우기</button>
+              </div>
+            </div>
+            <div class="hint">신선도는 서버 헤더(<code>X-Nav-Age</code>)를 그대로 쓴다.
+              브라우저 시계로 계산하면 Orin 과의 시계차로 음수가 나온다.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 카메라 ═════════════════════════════════════════ -->
+      <section class="page" data-page="cam">
+        <div class="ph"><h1>카메라</h1><span class="sub">Brio 100 · YOLO11 화재/연기 · COCO 객체 · 바닥 판정</span></div>
+        <div id="camAlert"></div>
+        <div class="grid g3 top">
+          <div class="card span2">
+            <div class="card-t">영상<span class="r" id="camSt">—</span></div>
+            <div class="camstage big"><img id="imgMain" alt="카메라 화면"><canvas id="ovMain"></canvas>
+              <div class="nofeed" id="nfMain"><b>영상 없음</b><span>camera_node.py 확인</span></div></div>
+            <div class="btnrow" style="margin-top:11px">
+              <span class="chip" id="cTrt">TensorRT —</span>
+              <span class="chip" id="cCoco">COCO —</span>
+              <span class="chip" id="cImg">프레임 —</span>
+              <span class="chip" id="cFps">— FPS</span>
+            </div>
+            <div class="card-t" style="margin:16px 0 0">바닥 트임 (좌 · 중 · 우)</div>
+            <div class="floor" id="floorMain"></div>
+            <div class="hint" id="floorHint">1.0 = 완전히 트임 · 0 에 가까울수록 막힘.
+              프레임을 못 읽으면 <b>"트임"이 아니라 "모름"</b>이다.</div>
+          </div>
+          <div class="card">
+            <div class="card-t">화재 · 연기<span class="r" id="fireN">—</span></div>
+            <div id="fireList"></div>
+            <div class="card-t" style="margin:18px 0 8px">COCO 객체<span class="r" id="objN">—</span></div>
+            <div class="objs" id="objList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 제어 — 유일한 쓰기 화면 ════════════════════════ -->
+      <section class="page" data-page="drive">
+        <div class="ph"><h1>제어</h1>
+          <span class="sub">수동 조종 · 이 화면만 로봇을 움직인다</span>
+          <span class="chip warn" style="margin-left:auto">쓰기</span></div>
+        <div id="drvAlert"></div>
+        <div class="grid g3 top">
+          <div class="card span2">
+            <div class="card-t">조종 시야<span class="r" id="drvCamSt">—</span></div>
+            <div class="camstage drive"><img id="imgDrv" alt="조종 시야"><canvas id="ovDrv"></canvas>
+              <div class="nofeed" id="nfDrv"><b>영상 없음</b><span>보이지 않으면 움직이지 마라</span></div></div>
+            <div class="card-t" style="margin:14px 0 0">바닥 트임 (좌 · 중 · 우)</div>
+            <div class="floor" id="floorDrv"></div>
+          </div>
+
+          <div class="card ctl" id="ctlCard">
+            <div class="card-t">조종<span class="r" id="drvLim">—</span></div>
+
+            <div class="arm" id="armSw">
+              <button type="button" class="arm-b on" data-arm="0">잠금</button>
+              <button type="button" class="arm-b" data-arm="1">무장</button>
+            </div>
+
+            <div class="reason off" id="drvReasonBox">
+              <span class="l">로봇이 보고하는 상태</span>
+              <b id="drvReason">—</b>
+            </div>
+
+            <div class="vecrow">
+              <div class="vec"><span class="l">전진 v</span>
+                <span class="n" id="drvV">0.00</span><span class="u">m/s</span></div>
+              <div class="vec"><span class="l">회전 w</span>
+                <span class="n" id="drvW">0.00</span><span class="u">rad/s</span></div>
+            </div>
+            <div class="gap" id="drvGap"></div>
+
+            <div class="dpad" id="dpad">
+              <button type="button" class="sp" tabindex="-1"></button>
+              <button type="button" data-d="f" aria-label="전진">▲<small>W</small></button>
+              <button type="button" class="sp" tabindex="-1"></button>
+              <button type="button" data-d="l" aria-label="좌회전">◀<small>A</small></button>
+              <button type="button" data-d="b" aria-label="후진">▼<small>S</small></button>
+              <button type="button" data-d="r" aria-label="우회전">▶<small>D</small></button>
+            </div>
+
+            <button type="button" class="estop" id="bStop">정지 <span>ESC</span></button>
+
+            <div class="hint"><b>누르고 있는 동안만</b> 간다 — 손을 떼면 0.4초 안에 선다.
+              이건 고장이 아니라 데드맨이다.</div>
+
+            <div class="card-t" style="margin:16px 0 8px">검증된 안전장치</div>
+            <div class="kv"><span>무장 안 하고 v=0.10</span><b class="ok">무시됨</b></div>
+            <div class="kv"><span>v=9.9 요청</span><b class="ok">0.15 로 절삭</b></div>
+            <div class="kv"><span>1초 무명령</span><b class="ok">자동 정지</b></div>
+            <div class="kv"><span>라이다 가드</span><b id="drvStopM">—</b></div>
+            <div class="kv"><span>순찰 실행 중</span><b id="drvPatrol">—</b></div>
+            <div class="hint">데드맨은 서버 0.4s · teleop 0.5s · 펌웨어 1s <b>3중</b>이다.
+              라이다 가드는 <b>전진 성분만</b> 죽이고 회전은 살린다 —
+              막힌 데서 빠져나와야 하기 때문이다.</div>
+          </div>
+        </div>
+
+        <div class="sech">사각 보완 — 카메라가 못 보는 쪽</div>
+        <div class="card pad0">
+          <div class="mapbox tall" style="height:min(48vh,460px)">
+            <canvas id="cvDrv"></canvas>
+            <div class="map-badge"><span class="chip" id="drvBadge">지도 대기</span></div>
+            <div class="map-legend">
+              <span><i style="background:#e8eaed"></i>자유</span>
+              <span><i style="background:#0f1216;outline:1px solid #444"></i>벽</span>
+              <span><i style="background:#7fa3cf"></i>스캔</span>
+              <span>카메라는 앞만 본다 — 옆·뒤는 여기서 확인한다</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 설계 ═══════════════════════════════════════════ -->
+      <section class="page" data-page="dsg">
+        <div class="ph"><h1>설계</h1><span class="sub">STL 조립 렌더 · 차체 배치</span></div>
+        <div id="designHost">
+          <div class="empty" id="designEmpty">
+            <h3>설계 자산 준비 중</h3>
+            <p><code>static/design/</code> 에 렌더 자산이 생성되면 <b>자동으로</b> 여기에 표시된다.<br>
+               페이지를 새로고침할 필요 없다 — <span id="designProbe">8초마다 확인 중…</span></p>
+            <p class="note">인식하는 형식 —
+              <code>design/manifest.json</code> (권장) ·
+              <code>design/index.html</code> (뷰어 iframe) ·
+              <code>design/*.png|jpg|webp|svg</code> (자동 탐지)</p>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div>
+<div class="lightbox" id="lb"><img id="lbImg" alt=""></div>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════════════════════
+   OrinCar 계기판
+   - 의존성 0. 순수 DOM/Canvas/SVG.
+   - 지도 렌더러는 검증된 nav.html 코드를 캔버스별 인스턴스로 감쌌다.
+   ══════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v<a?a:(v>b?b:v);
+const lvl = (v,w,b) => v==null ? '' : (v>=b ? 'bad' : (v>=w ? 'warn' : 'ok'));
+const COL = {ok:'#4fb883', warn:'#e0a53a', bad:'#d9564f', acc:'#8b929b', '':'#8b929b'};
+
+function setMeter(el, frac, level){
+  if(!el) return;
+  el.style.width = clamp(frac*100,0,100).toFixed(1)+'%';
+  el.className = level || 'acc';
+}
+const setBar = setMeter;                              // 설계 페이지가 쓰는 이름 유지
+function setTxt(el, t){ el = (typeof el==='string')?$(el):el; if(el) el.textContent = t; }
+function fmtUp(s){
+  if(s==null) return '—';
+  s = Math.floor(s);
+  const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
+  return d? `${d}일 ${h}시간` : (h? `${h}시간 ${m}분` : `${m}분 ${s%60}초`);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   시간 예산 슬롯 — 상태 레일의 한 칸
+   ──────────────────────────────────────────────────────────────
+   이 칸이 답해야 하는 질문은 "얼마나 켜져 있었나"가 아니라
+   **"시간이 얼마나 남았나"** 다. 지금은 그걸 잴 수단이 없어서
+   대신 가동시간을 보여준다.
+
+   전압/전류 측정기가 도착하면:
+     1) rangeBudget() 을 채운다 (아래 주석 참고)
+     2) TIME_BUDGET 을 rangeBudget 으로 바꾼다
+     3) 끝. HTML·CSS·렌더 코드는 손대지 않는다.
+
+   왜 지금 못 하나: INA226 이 R100 션트라서 전압만 읽힌다.
+   전류를 못 재면 소비전력을 모르고, 소비전력을 모르면 잔여시간이 안 나온다.
+   게다가 구동 모터는 MDD10A 에 배터리가 직결이라 Orin 전력계에도 안 잡힌다.
+   ══════════════════════════════════════════════════════════════ */
+
+/** 계약: (state) → {label, value, unit, level, title} */
+function uptimeBudget(s){
+  const sec = s && s.uptime_sec;
+  if(sec == null) return {label:'가동', value:'—', unit:'', level:'', title:'가동 시간 미상'};
+  const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60);
+  return {
+    label:'가동',
+    value: h ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m`,
+    unit:'',
+    level:'',
+    // 이 자리가 왜 "시간 예산"인지 툴팁으로 남긴다
+    title:`부팅 후 ${fmtUp(sec)} 경과.\n이 칸은 전압계가 붙으면 "잔여 주행 가능 시간"으로 바뀐다.\n`
+        + `지금은 INA226 이 전압만 재고 전류를 못 재서 잔여시간을 추정할 수 없다.`
+  };
+}
+
+/* 전압계 도착 후 여기를 채우고 TIME_BUDGET 을 이걸로 바꾼다.
+function rangeBudget(s){
+  const b = s.battery || {};
+  if(b.volts == null || b.amps == null)
+    return {label:'잔여', value:'—', unit:'', level:'warn', title:'전류 미측정'};
+  const wh   = remainingWh(b.volts);          // 6S2P 방전곡선 → 남은 에너지
+  const hrs  = wh / (b.volts * b.amps);       // 현재 소비율 기준
+  const h = Math.floor(hrs), m = Math.round((hrs-h)*60);
+  return {label:'잔여', value:`${h}h ${String(m).padStart(2,'0')}m`, unit:'',
+          level: hrs<0.5 ? 'bad' : (hrs<1 ? 'warn' : 'ok'),
+          title:`현재 소비율 ${(b.volts*b.amps).toFixed(1)} W 기준 추정`};
+}
+*/
+
+const TIME_BUDGET = uptimeBudget;               // ← 교체 지점은 이 한 줄이다
+
+function renderTimeBudget(s){
+  const b = TIME_BUDGET(s);
+  setTxt('budgetLab', b.label);
+  const v = $('budgetVal');
+  v.textContent = b.value;
+  v.className = 'v ' + (b.level || '');
+  setTxt('budgetUnit', b.unit || '');
+  $('sbBudget').title = b.title || '';
+}
+
+/* ══ 이력 링버퍼 — 스파크라인용. 서버가 이력을 안 주므로 클라에서 쌓는다 ══ */
+const HCAP = 150;                                     // 2초 × 150 ≈ 5분
+const HIST = {};
+function hpush(key, v){
+  if(v == null) return;
+  (HIST[key] = HIST[key] || []).push(v);
+  if(HIST[key].length > HCAP) HIST[key].shift();
+}
+/* 축·격자·범례 없는 스파크라인 (Tufte). 데이터만 그린다.
+   ⚠️ 가진 표본을 캔버스 **전폭에 펴서** 그린다. 오른쪽 정렬로 그리면
+   막 켰을 때 오른쪽 끝 몇 px 짜리 선만 남아 카드가 비어 보인다.
+   대신 실제로 몇 분치인지는 섹션 헤더(#histSpan)가 정직하게 말한다. */
+/* y축은 **관측된 범위에 맞춰 늘린다**. 0~100 고정으로 그리면 Tj 처럼
+   51~52°C 사이에서 움직이는 값은 완전한 직선이 되어 아무 정보도 주지 못한다.
+   대신 잡음이 드라마로 부풀지 않도록 지표별 최소 스팬(minSpan)을 준다.
+   ⚠️ 0 기준이 아니므로 축 범위를 반드시 legend 에 적는다 — 안 그러면 오독된다.
+   절대 위치·임계까지의 여유는 아래 .meter 가 따로 책임진다. */
+function spark(id, key, level, minSpan, rangeEl, fmt){
+  const cv = $(id); if(!cv) return;
+  const r = cv.getBoundingClientRect();
+  if(r.width < 4 || r.height < 4) return;
+  const dpr = Math.min(2, window.devicePixelRatio||1);
+  cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+  const g = cv.getContext('2d');
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,r.width,r.height);
+  const a = HIST[key] || [];
+  const W = r.width, H = r.height, P = 3;
+  g.strokeStyle = '#1e2127'; g.lineWidth = 1;               // 바닥 기준선
+  g.beginPath(); g.moveTo(0, H-.5); g.lineTo(W, H-.5); g.stroke();
+  if(a.length < 2){
+    g.fillStyle = '#4a4f58';
+    g.font = '9px ' + getComputedStyle(document.body).fontFamily;
+    g.fillText('이력 수집 중', 1, H-4);
+    if(rangeEl) setTxt(rangeEl, '—');
+    return;
+  }
+  let lo = Math.min(...a), hi = Math.max(...a);
+  const f = fmt || (v => v.toFixed(0));
+  if(rangeEl) setTxt(rangeEl, `축 ${f(lo)}–${f(hi)}`);
+  const span = Math.max(hi-lo, minSpan||1), mid = (lo+hi)/2;
+  lo = mid - span/2; hi = mid + span/2;
+  const X = i => i*(W/(a.length-1));
+  const Y = v => H-P - clamp((v-lo)/(hi-lo),0,1)*(H-P*2);
+  const c = COL[level] || COL.acc;
+  const trace = () => {
+    g.beginPath(); g.moveTo(X(0), Y(a[0]));
+    for(let i=1;i<a.length;i++) g.lineTo(X(i), Y(a[i]));
+  };
+  trace(); g.lineTo(W, H); g.lineTo(0, H); g.closePath();
+  g.fillStyle = c + '22'; g.fill();
+  trace(); g.strokeStyle = c; g.lineWidth = 1.25; g.stroke();
+  g.fillStyle = c;                                          // 최신값 표시
+  g.fillRect(W-3, Y(a[a.length-1])-1.5, 3, 3);
+}
+
+/* ── 원형 게이지 — 눈금 + 경고/위험 레드라인 호 ─────────────── */
+const A0 = 135, A1 = 405;                        // 270° 스윕 (좌하 → 우하)
+function polar(cx,cy,r,deg){
+  const a = deg*Math.PI/180;
+  return [cx + r*Math.cos(a), cy + r*Math.sin(a)];
+}
+function arcD(cx,cy,r,d0,d1){
+  const [x0,y0]=polar(cx,cy,r,d0), [x1,y1]=polar(cx,cy,r,d1);
+  const large = (d1-d0) > 180 ? 1 : 0;
+  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+const R = 40, LEN = 2*Math.PI*R*((A1-A0)/360);
+const deg = f => A0 + (A1-A0)*clamp(f,0,1);
+function makeGauge(host, warn, crit){
+  const ticks = [];
+  for(let i=0;i<=10;i++){
+    const d = A0 + (A1-A0)*i/10;
+    const [x0,y0]=polar(50,50,R+4.5,d), [x1,y1]=polar(50,50,R+(i%5?7:9),d);
+    ticks.push(`<line class="g-tick" x1="${x0.toFixed(2)}" y1="${y0.toFixed(2)}"
+                 x2="${x1.toFixed(2)}" y2="${y1.toFixed(2)}" ${i%5?'opacity=".55"':''}/>`);
+  }
+  // 임계 구간을 바깥쪽 얇은 호로 표시한다 — 자동차 레드라인
+  const RR = R + 6;
+  const bands = (warn!=null && crit!=null)
+    ? `<path class="g-amb" d="${arcD(50,50,RR,deg(warn),deg(crit))}"/>
+       <path class="g-red" d="${arcD(50,50,RR,deg(crit),A1)}"/>` : '';
+  host.innerHTML =
+    `<svg viewBox="-6 -6 112 112" aria-hidden="true">
+       ${ticks.join('')}${bands}
+       <path class="g-track" d="${arcD(50,50,R,A0,A1)}"/>
+       <path class="g-val" d="${arcD(50,50,R,A0,A1)}"
+             stroke-dasharray="${LEN.toFixed(2)}" stroke-dashoffset="${LEN.toFixed(2)}"/>
+     </svg>
+     <div class="g-mid"><div class="n">—</div><div class="u"></div></div>`;
+  return {
+    val: host.querySelector('.g-val'),
+    num: host.querySelector('.g-mid .n'),
+    unit: host.querySelector('.g-mid .u')
+  };
+}
+function setGauge(g, frac, text, unit, level){
+  if(!g) return;
+  g.val.style.strokeDashoffset = (LEN * (1 - clamp(frac,0,1))).toFixed(2);
+  g.val.setAttribute('class','g-val ' + (level||''));
+  g.num.textContent = text;
+  g.unit.textContent = unit||'';
+}
+const G = {};
+
+/* ══ 섹션 전환 ═════════════════════════════════════════════ */
+let PAGE = 'all';
+function show(p){
+  const prev = PAGE;
+  PAGE = p;
+  // 제어 화면을 벗어나면 무조건 무장을 푼다 — 다른 화면 보면서 키가 먹으면 안 된다
+  if(prev === 'drive' && p !== 'drive') drvDisarm();
+  document.querySelectorAll('.page').forEach(s => s.classList.toggle('on', s.dataset.page===p));
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.p===p));
+  if(location.hash.slice(1)!==p) history.replaceState(null,'','#'+p);
+  // 캔버스는 display:none 상태에서 크기가 0이라, 보이는 순간 다시 재야 한다
+  requestAnimationFrame(()=>{ resizeAll(); });
+  if(p==='dsg') probeDesign();
+  if(p==='drive') pollDrive();
+  tick();
+}
+function resizeAll(){
+  mapMain.resize(); mapMini.resize(); mapDrv.resize();
+  drawCamOverlays(); redrawSparks();
+}
+document.querySelectorAll('#nav button').forEach(b => b.onclick = () => show(b.dataset.p));
+addEventListener('hashchange', () => {
+  const p = location.hash.slice(1);
+  if(p && p!==PAGE && document.querySelector(`.page[data-page="${p}"]`)) show(p);
+});
+
+/* ══════════════════════════════════════════════════════════════
+   지도 뷰 — 캔버스별 인스턴스
+   ══════════════════════════════════════════════════════════════ */
+const NAV = { data:null, age:null, err:null, trail:[] };
+
+function MapView(canvas, opt){
+  opt = opt || {};
+  const ctx = canvas.getContext('2d');
+  const V = {x:0, y:0, s:60, init:false};
+  let baked = null, bakedSeq = -1, W = 0, H = 0;
+  const flags = { scan:true, follow:true, trail:true };
+
+  function resize(){
+    const r = canvas.getBoundingClientRect();
+    if(r.width < 2 || r.height < 2) return;             // 숨겨진 섹션
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+  const sx = mx => V.x + mx * V.s;                       // 지도(m) → 화면(px)
+  const sy = my => V.y - my * V.s;                       // y 는 위로 증가 → 뒤집는다
+
+  function fit(){
+    const m = NAV.data && NAV.data.map;
+    if(!m || !W) return;
+    const w = m.w*m.res, h = m.h*m.res;
+    V.s = Math.min(W/w, H/h) * 0.88;
+    V.x = W/2 - (m.ox + w/2)*V.s;
+    V.y = H/2 + (m.oy + h/2)*V.s;
+    V.init = true;
+  }
+  // 셀이 많아 매 프레임 다시 그리면 느리다. seq 가 바뀔 때만 1px=1셀로 굽는다.
+  function bake(m){
+    const c = document.createElement('canvas');
+    c.width = m.w; c.height = m.h;
+    const g = c.getContext('2d'), img = g.createImageData(m.w, m.h);
+    const d = img.data, s = m.data;
+    for(let i=0;i<m.w*m.h;i++){
+      const ch = s.charCodeAt(i);
+      let v, a = 255;
+      if(ch===35){ v = 15; }                              // '#' 벽
+      else if(ch===32){ v = 232; }                        // ' ' 자유
+      else { v = 56; a = 92; }                            // '.' 미탐색
+      const row = m.h-1-((i/m.w)|0), col = i%m.w;        // 맵 아래→위, 캔버스 위→아래
+      const j = (row*m.w + col)*4;
+      d[j]=d[j+1]=d[j+2]=v; d[j+3]=a;
+    }
+    g.putImageData(img,0,0);
+    return c;
+  }
+
+  function draw(){
+    if(!W) return;
+    ctx.fillStyle = '#090a0c'; ctx.fillRect(0,0,W,H);
+    const nav = NAV.data;
+    if(!nav){
+      ctx.fillStyle = '#4a4f59';
+      ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+      ctx.textAlign = 'center';
+      ctx.fillText(NAV.err || '지도 데이터 대기 중…', W/2, H/2);
+      return;
+    }
+    const m = nav.map, p = nav.pose;
+    if(m){
+      if(m.seq !== bakedSeq){ baked = bake(m); bakedSeq = m.seq; }
+      if(!V.init) fit();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(baked, sx(m.ox), sy(m.oy + m.h*m.res),
+                    m.w*m.res*V.s, m.h*m.res*V.s);
+    }
+    if(flags.trail && NAV.trail.length > 1){
+      ctx.strokeStyle = 'rgba(232,234,237,.32)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(sx(NAV.trail[0][0]), sy(NAV.trail[0][1]));
+      for(const t of NAV.trail) ctx.lineTo(sx(t[0]), sy(t[1]));
+      ctx.stroke();
+    }
+    if(p && nav.scan && flags.scan){
+      const s = nav.scan;
+      ctx.fillStyle = 'rgba(127,163,207,.92)';
+      for(let i=0;i<s.ranges.length;i++){
+        const r = s.ranges[i];
+        if(!r) continue;
+        // 스캔은 laser 기준이나 base_link 근사로 그린다(오프셋 6cm 는 대개 1px 미만)
+        const a = p.yaw + s.angle_min + i*s.angle_inc;
+        ctx.fillRect(sx(p.x + r*Math.cos(a))-1, sy(p.y + r*Math.sin(a))-1, 2, 2);
+      }
+    }
+    if(p){
+      const X = sx(p.x), Y = sy(p.y), rad = Math.max(5, V.s*0.10);
+      ctx.beginPath(); ctx.arc(X, Y, rad*2.6, 0, 7);
+      ctx.fillStyle = 'rgba(232,234,237,.09)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(X, Y, rad, 0, 7);
+      ctx.fillStyle = '#e8eaed'; ctx.fill();
+      ctx.strokeStyle = '#e8eaed'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(X,Y);
+      ctx.lineTo(X + Math.cos(p.yaw)*rad*2.8, Y - Math.sin(p.yaw)*rad*2.8);
+      ctx.stroke();
+      if(flags.follow){ V.x = W/2 - p.x*V.s; V.y = H/2 + p.y*V.s; }
+    }
+  }
+
+  if(opt.interactive){
+    let drag = null;
+    canvas.addEventListener('pointerdown', e => {
+      drag = {x:e.clientX, y:e.clientY}; canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointerup', () => drag = null);
+    canvas.addEventListener('pointercancel', () => drag = null);
+    canvas.addEventListener('pointermove', e => {
+      if(!drag) return;
+      V.x += e.clientX-drag.x; V.y += e.clientY-drag.y;
+      drag = {x:e.clientX, y:e.clientY};
+      if(opt.onDrag) opt.onDrag();
+      draw();
+    });
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const k = e.deltaY < 0 ? 1.12 : 1/1.12;
+      const r = canvas.getBoundingClientRect();
+      const cxp = e.clientX-r.left, cyp = e.clientY-r.top;
+      // 커서를 중심으로 확대 — 커서 아래 화면 좌표가 유지되도록 보정
+      V.x = cxp - (cxp - V.x)*k;
+      V.y = cyp - (cyp - V.y)*k;
+      V.s *= k; draw();
+    }, {passive:false});
+  }
+  return { draw, resize, fit(){ fit(); draw(); }, flags };
+}
+
+const mapMain = MapView($('cvMain'), {
+  interactive:true,
+  onDrag(){ $('cFollow').checked = false; mapMain.flags.follow = false; }
+});
+const mapMini = MapView($('cvMini'), {});
+const mapDrv  = MapView($('cvDrv'),  {});
+addEventListener('resize', resizeAll);
+
+$('bFit').onclick = () => { $('cFollow').checked = false; mapMain.flags.follow = false; mapMain.fit(); };
+$('bClear').onclick = () => { NAV.trail = []; mapMain.draw(); mapMini.draw(); mapDrv.draw(); };
+for(const [id,key] of [['cScan','scan'],['cFollow','follow'],['cTrail','trail']]){
+  $(id).onchange = e => { mapMain.flags[key] = e.target.checked; mapMain.draw(); };
+}
+
+/* ══ /api/state ════════════════════════════════════════════ */
+// nvpmodel 전력모드 상한(mode 1 = 25W). API 가 주는 값이 아니라 기기 설정값이다.
+const PWR_CAP_W = 25;
+const KEY_TOPICS = ['/scan','/map','/odom','/cmd_vel','/tf','/pose',
+                    '/camera/fire','/camera/objects','/camera/floor_clear','/teleop/status'];
+let stateFails = 0, lastState = null;
+
+function renderTopics(host, topics){
+  if(!host) return;
+  host.innerHTML = topics.map(t =>
+    `<span class="topic${KEY_TOPICS.includes(t)?' key':''}">${t}</span>`).join('');
+}
+
+async function pollState(){
+  try{
+    const r = await fetch('api/state', {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    lastState = await r.json();
+    stateFails = 0;
+    renderState(lastState);
+  }catch(e){
+    if(++stateFails > 1){
+      $('sbDot').className = 'dot bad';
+      setTxt('sbConn','서버 끊김');
+      setTxt('tagSys','—'); $('tagSys').className = 'tag hot';
+    }
+  }
+}
+
+function renderState(s){
+  const sys = s.system || {}, th = s.thermal || {}, ros = s.ros || {};
+  const cores = sys.cpu_cores || [];
+  const cpu = cores.length ? cores.reduce((a,b)=>a+b,0)/cores.length : null;
+  const temps = Object.entries(th);
+  const tj = th['tj-thermal'] != null ? th['tj-thermal']
+            : (temps.length ? Math.max(...temps.map(x=>x[1])) : null);
+  const ramP = sys.ram_total_mb ? sys.ram_used_mb/sys.ram_total_mb*100 : null;
+  // tegrastats 수집 전에는 없을 수 있다 → null 이면 '—'
+  const pwW = sys.power_total_mw == null ? null : sys.power_total_mw/1000;
+  const dskP = s.disk ? s.disk.percent : null;
+  const hz = ros.scan_hz;
+  const gp = sys.gpu_percent;
+
+  hpush('cpu', cpu); hpush('tmp', tj); hpush('pwr', pwW); hpush('hz', hz);
+
+  // ── 상태 레일
+  $('sbDot').className = 'dot ' + (tj>=80 || cpu>=92 ? 'bad' : 'ok');
+  setTxt('sbConn','로봇 연결됨');
+  const eHz = $('sbHz');
+  eHz.textContent = hz ? hz.toFixed(1) : '—';
+  eHz.className = 'v ' + (hz ? (hz<5?'bad':(hz<9?'warn':'ok')) : '');
+  const eCpu = $('sbCpu');
+  eCpu.textContent = cpu==null?'—':Math.round(cpu);
+  eCpu.className = 'v ' + lvl(cpu,70,88);
+  const eT = $('sbTemp');
+  eT.textContent = tj==null?'—':tj.toFixed(1);
+  eT.className = 'v ' + lvl(tj,65,80);
+  // Orin 모듈 입력(VDD_IN)만이다 — 모터는 MDD10A 배터리 직결이라 여기 안 잡힌다
+  const eP = $('sbPwr');
+  eP.textContent = pwW==null ? '—' : pwW.toFixed(1);
+  eP.className = 'v ' + (pwW==null ? '' : lvl(pwW/PWR_CAP_W*100, 80, 95));
+  renderTimeBudget(s);                                   // ← 시간 예산 슬롯
+  setTxt('sbTick', new Date().toLocaleTimeString('ko-KR',{hour12:false}));
+
+  // ── 사이드바 태그
+  const sysBad = (tj>=80)||(cpu>=92)||(dskP>=92);
+  $('tagSys').textContent = cpu==null?'—':Math.round(cpu)+'%';
+  $('tagSys').className = 'tag ' + (sysBad?'hot':'live');
+  $('tagNav').textContent = hz ? hz.toFixed(0)+'Hz' : '—';
+  $('tagNav').className = 'tag ' + (hz>9?'live':(hz?'hot':''));
+
+  // ── 개요: 주요 2 + 보조 2
+  // 스파크라인 축 범위(tCpuS·tTmpS…)는 spark() 가 직접 쓴다 — 여기서 건드리지 않는다
+  setTxt('tCpu', cpu==null?'—':Math.round(cpu));
+  setMeter($('tCpuB'), (cpu||0)/100, lvl(cpu,70,88));
+  setTxt('tCpuR', cores.length
+    ? `${cores.length}코어 ${sys.cpu_freq_mhz||'—'} MHz · 최대 ${Math.max(...cores)}%` : '—');
+  setTxt('tTmp', tj==null?'—':tj.toFixed(1));
+  setMeter($('tTmpB'), (tj||0)/100, lvl(tj,65,80));
+  setTxt('tTmpR', tj==null?'—':`센서 ${temps.length}개 · 스로틀까지 ${(80-tj).toFixed(1)}°C`);
+  setTxt('tRam', ramP==null?'—':Math.round(ramP));
+  setMeter($('tRamB'), (ramP||0)/100, lvl(ramP,75,90));
+  setTxt('tRamS', `${(sys.ram_used_mb/1024||0).toFixed(1)} / ${(sys.ram_total_mb/1024||0).toFixed(1)} GB`);
+  setTxt('tDsk', dskP==null?'—':dskP);
+  setMeter($('tDskB'), (dskP||0)/100, lvl(dskP,80,92));
+  setTxt('tDskS', s.disk?`${s.disk.used_gb} / ${s.disk.total_gb} GB`:'—');
+
+  setTxt('tHz', hz?hz.toFixed(1):'—');
+  setMeter($('tHzB'), (hz||0)/14, hz?(hz<5?'bad':(hz<9?'warn':'ok')):'');
+  setTxt('tHzR', hz ? `YDLIDAR X4 Pro · ${hz>=9?'정상':'저하'}` : '/scan 토픽 없음');
+  setTxt('tGpu', gp==null?'—':Math.round(gp));
+  setMeter($('tGpuB'), (gp||0)/100, lvl(gp,80,95));
+  setTxt('tGpuS', 'TensorRT 추론 부하');
+  setTxt('tPwr', pwW==null?'—':pwW.toFixed(1));
+  setMeter($('tPwrB'), (pwW||0)/PWR_CAP_W, pwW==null?'':lvl(pwW/PWR_CAP_W*100,80,95));
+
+  redrawSparks();
+
+  // ── 시스템 게이지
+  setGauge(G.cpu, (cpu||0)/100, cpu==null?'—':Math.round(cpu), '%', lvl(cpu,70,88));
+  setTxt('gCpuS', `${sys.cpu_freq_mhz||'—'} MHz · ${cores.length}코어`);
+  setGauge(G.tmp, (tj||0)/100, tj==null?'—':tj.toFixed(1), '°C', lvl(tj,65,80));
+  setTxt('gTmpS', tj==null?'—':`스로틀 80 까지 ${(80-tj).toFixed(1)}°C`);
+  setGauge(G.ram, (ramP||0)/100, ramP==null?'—':Math.round(ramP), '%', lvl(ramP,75,90));
+  setTxt('gRamS', `${sys.ram_used_mb||0} / ${sys.ram_total_mb||0} MB`);
+  setGauge(G.gpu, (gp||0)/100, gp==null?'—':Math.round(gp), '%', lvl(gp,80,95));
+  setTxt('gGpuS', `Orin 전력 ${pwW==null?'—':pwW.toFixed(2)+' W'} / ${PWR_CAP_W} W`);
+
+  // ── 코어 바
+  const ch = $('cores');
+  if(ch.children.length !== cores.length){
+    ch.innerHTML = cores.map((_,i) =>
+      `<div class="core"><span class="id">C${i}</span>
+        <span class="meter plain"><i></i></span><span class="pc">—</span></div>`).join('');
+  }
+  cores.forEach((v,i) => {
+    const row = ch.children[i];
+    setMeter(row.querySelector('i'), v/100, lvl(v,70,88));
+    row.querySelector('.pc').textContent = v+'%';
+  });
+  setTxt('freqS', (sys.cpu_freq_mhz||'—')+' MHz');
+
+  const pw = sys.power_mw || {};
+  const wt = mw => mw==null ? '—' : (mw/1000).toFixed(2)+' W';
+  setTxt('pTot', pwW==null ? '—' : `${pwW.toFixed(2)} W / ${PWR_CAP_W} W`);
+  setMeter($('pTotB'), (pwW||0)/PWR_CAP_W, pwW==null?'':lvl(pwW/PWR_CAP_W*100,80,95));
+  setTxt('pCpu', wt(pw.VDD_CPU_GPU_CV));
+  setMeter($('pCpuB'), (pw.VDD_CPU_GPU_CV||0)/1000/PWR_CAP_W, 'acc');
+  setTxt('pSoc', wt(pw.VDD_SOC));
+  setMeter($('pSocB'), (pw.VDD_SOC||0)/1000/PWR_CAP_W, 'acc');
+  setMeter($('dskB'), (dskP||0)/100, lvl(dskP,80,92));
+  setTxt('dskS', s.disk?`${s.disk.used_gb} / ${s.disk.total_gb} GB (${dskP}%)`:'—');
+  const swp = sys.swap_total_mb ? sys.swap_used_mb/sys.swap_total_mb : 0;
+  setMeter($('swpB'), swp, lvl(swp*100,60,85));
+  setTxt('swpS', `${sys.swap_used_mb||0} / ${sys.swap_total_mb||0} MB`);
+
+  // ── 온도 센서
+  $('therm').innerHTML = temps.map(([k,v]) =>
+    `<div class="card tile" style="background:var(--s2)">
+       <div class="card-t">${k.replace('-thermal','')}</div>
+       <div class="big"><span class="n" style="font-size:21px">${v.toFixed(1)}</span><span class="u">°C</span></div>
+       <div class="meter" style="--w:65%;--c:80%"><i class="${lvl(v,65,80)}" style="width:${clamp(v,0,100)}%"></i></div>
+     </div>`).join('');
+
+  renderTopics($('topicsAll'), ros.topics||[]);
+  renderTopics($('topicsSys'), ros.topics||[]);
+  setTxt('topicN', (ros.topics||[]).length + '개');
+
+  const mo = s.motor||{}, ba = s.battery||{};
+  const eEsp = $('dEsp');
+  eEsp.textContent = mo.connected ? '연결됨' : '미연결';
+  eEsp.className = mo.connected ? 'ok' : 'dim';
+  const eBa = $('dBat');
+  eBa.textContent = ba.connected ? (ba.volts!=null?ba.volts.toFixed(2)+' V':'연결됨') : '미배선';
+  eBa.className = ba.connected ? 'ok' : 'dim';
+  const eAe = $('aEsp'); eAe.textContent = eEsp.textContent; eAe.className = eEsp.className;
+  const eAb = $('aBat'); eAb.textContent = eBa.textContent; eAb.className = eBa.className;
+  setTxt('dHz', hz?hz.toFixed(2)+' Hz':'—');
+  setTxt('dUp', fmtUp(s.uptime_sec));
+  setTxt('fUp', fmtUp(s.uptime_sec));
+  setTxt('dTs', s.ts ? new Date(s.ts*1000).toLocaleTimeString('ko-KR',{hour12:false}) : '—');
+
+  renderAlerts(s, tj, cpu, dskP, hz);
+}
+
+const hlast = k => (HIST[k] && HIST[k].length) ? HIST[k][HIST[k].length-1] : null;
+function redrawSparks(){
+  const cpu = hlast('cpu'), tmp = hlast('tmp'), hz = hlast('hz'), det = hlast('det');
+  const d1 = v => v.toFixed(1);
+  spark('spkCpu','cpu', lvl(cpu,70,88), 25, 'tCpuS');
+  spark('spkCpu2','cpu', lvl(cpu,70,88), 25, 'tCpuS2');
+  spark('spkTmp','tmp', lvl(tmp,65,80), 6, 'tTmpS', d1);
+  // 라이다·탐지는 "높을수록 좋음" — 임계 판정을 뒤집는다
+  spark('spkHz','hz', hz==null?'':(hz<5?'bad':(hz<9?'warn':'ok')), 2, 'tHzS', d1);
+  spark('spkDet','det', det==null?'':(det<10?'bad':(det<20?'warn':'ok')), 12, 'tDetS', d1);
+  // 몇 분치를 보고 있는지 지어내지 않고 실제 표본 수로 말한다 (2초 간격)
+  const n = (HIST.cpu||[]).length;
+  const span = n<2 ? '이력 수집 중'
+        : (n*2 < 60 ? `최근 ${n*2}초` : `최근 ${Math.round(n*2/60)}분`);
+  setTxt('histSpan', span); setTxt('histSpan2', span);
+}
+
+// 이모지 대신 계통 태그를 쓴다 — "어느 계통이 문제인가"가 곧 정보다
+function renderAlerts(s, tj, cpu, dskP, hz){
+  const a = [];
+  if(tj>=80) a.push(['bad','THERM','Tj '+tj.toFixed(1)+'°C — 스로틀 임계(80) 초과. 추론 속도가 떨어진다.']);
+  else if(tj>=65) a.push(['warn','THERM','Tj '+tj.toFixed(1)+'°C — 임계까지 '+(80-tj).toFixed(1)+'°C 남았다.']);
+  if(dskP>=92) a.push(['bad','DISK','디스크 '+dskP+'% — 맵·로그 저장이 실패할 수 있다.']);
+  if(hz!=null && hz<9) a.push(['warn','LIDAR','스캔 '+hz.toFixed(1)+' Hz — 정상 대역(11~12) 미달.']);
+  if(!(s.ros&&s.ros.topics||[]).includes('/scan'))
+    a.push(['bad','LIDAR','/scan 토픽이 없다 — 라이다 드라이버가 안 떠 있다.']);
+  if(!(s.motor&&s.motor.connected))
+    a.push(['warn','ESP32','미연결 — 모터·엔코더 값이 들어오지 않는다.']);
+  $('allAlerts').innerHTML = a.map(([c,sysn,t]) =>
+    `<div class="alert ${c}"><span class="sys">${sysn}</span><span>${t}</span></div>`).join('');
+}
+
+/* ══ /api/nav/live + /api/nav/map ═════════════════════════ */
+let navFails = 0;
+let mapRequest = null;
+
+function mapSymbol(value){ return value < 0 ? '.' : value > 50 ? '#' : ' '; }
+
+function decodeMapSnapshot(message){
+  const cells = [];
+  for(let i=0;i<message.cells.length;i+=2){
+    cells.push(mapSymbol(message.cells[i]).repeat(message.cells[i+1]));
+  }
+  const data = cells.join('');
+  if(data.length !== message.w * message.h) throw new Error('invalid map size');
+  return {
+    w:message.w, h:message.h, res:message.res, ox:message.ox, oy:message.oy,
+    seq:message.sequence, data
+  };
+}
+
+function applyMapPatch(current, message){
+  if(!current || current.seq !== message.base_sequence) return null;
+  const cells = current.data.split('');
+  for(let i=0;i<message.changes.length;i+=3){
+    const start=message.changes[i], count=message.changes[i+1];
+    if(start < 0 || count < 1 || start+count > cells.length) return null;
+    cells.fill(mapSymbol(message.changes[i+2]), start, start+count);
+  }
+  return {...current, seq:message.sequence, data:cells.join('')};
+}
+
+async function loadMap(){
+  if(mapRequest) return mapRequest;
+  mapRequest = (async()=>{
+    const current = NAV.data && NAV.data.map;
+    const suffix = current ? `?since=${current.seq}` : '';
+    let response = await fetch('api/nav/map'+suffix, {cache:'no-store'});
+    if(response.status === 304) return current;
+    if(!response.ok) throw new Error('map HTTP '+response.status);
+    let message = await response.json();
+    let map = message.kind === 'patch' ? applyMapPatch(current, message) :
+              decodeMapSnapshot(message);
+    if(!map){
+      response = await fetch('api/nav/map', {cache:'no-store'});
+      if(!response.ok) throw new Error('map snapshot HTTP '+response.status);
+      message = await response.json();
+      map = decodeMapSnapshot(message);
+    }
+    return map;
+  })();
+  try { return await mapRequest; }
+  finally { mapRequest = null; }
+}
+
+async function pollNav(){
+  try{
+    const r = await fetch('api/nav/live', {cache:'no-store'});
+    if(!r.ok){
+      const j = await r.json().catch(()=>({}));
+      NAV.err = j.error || ('HTTP '+r.status);
+      NAV.data = null;
+      $('navAlert').innerHTML =
+        `<div class="alert bad"><span class="sys">NAV</span><span>${NAV.err}
+         ${j.hint?`<br><code>${j.hint}</code>`:''}</span></div>`;
+      setTxt('navBadge','중단'); setTxt('miniBadge','중단'); setTxt('drvBadge','중단');
+      $('tagNav').textContent = '—'; $('tagNav').className = 'tag hot';
+      mapMain.draw(); mapMini.draw(); mapDrv.draw();
+      return;
+    }
+    // 신선도는 서버 헤더를 그대로 쓴다 (브라우저 시계로 빼면 시계차로 음수)
+    const age = parseFloat(r.headers.get('X-Nav-Age'));
+    const live = await r.json();
+    let map = NAV.data && NAV.data.map;
+    if(live.map_sequence && (!map || map.seq !== live.map_sequence)){
+      map = await loadMap();
+    }
+    const nav = {...live, map};
+    NAV.data = nav; NAV.age = isNaN(age)?null:age; NAV.err = null; navFails = 0;
+    $('navAlert').innerHTML = '';
+    renderNav(nav);
+  }catch(e){
+    if(++navFails > 2){ NAV.err = '서버 연결 끊김'; NAV.data = null;
+      mapMain.draw(); mapMini.draw(); mapDrv.draw(); }
+  }
+}
+
+function renderNav(nav){
+  const m = nav.map, p = nav.pose, sc = nav.scan;
+  const badge = m ? '매핑 중' : '지도 대기';
+  setTxt('navBadge', badge); setTxt('miniBadge', badge); setTxt('drvBadge', badge);
+  if(m){
+    let free = 0;
+    for(let i=0;i<m.data.length;i++) if(m.data.charCodeAt(i)===32) free++;
+    setTxt('nMap', `${m.w}×${m.h} 셀`);
+    setTxt('aMap', `${m.w}×${m.h} · ${(m.res*1000).toFixed(0)} mm/셀`);
+    setTxt('nRes', `${(m.res*1000).toFixed(0)} mm/셀`);
+    setTxt('nArea', `${(free*m.res*m.res).toFixed(1)} m²`);
+    setTxt('aArea', `${(free*m.res*m.res).toFixed(1)} m²`);
+  } else { for(const id of ['nMap','nRes','nArea','aArea','aMap']) setTxt(id,'—'); }
+
+  if(p){
+    setTxt('nFrame', p.frame);
+    setTxt('nPos', `${p.x.toFixed(2)}, ${p.y.toFixed(2)} m`);
+    setTxt('nYaw', `${(p.yaw*180/Math.PI).toFixed(1)}°`);
+    setTxt('aPos', `${p.x.toFixed(2)}, ${p.y.toFixed(2)} m`);
+    setTxt('aYaw', `${(p.yaw*180/Math.PI).toFixed(1)}°`);
+    const last = NAV.trail[NAV.trail.length-1];
+    if(!last || Math.hypot(p.x-last[0], p.y-last[1]) > 0.03){
+      NAV.trail.push([p.x,p.y]);
+      if(NAV.trail.length > 4000) NAV.trail.shift();
+    }
+  } else { setTxt('nFrame','TF 없음');
+           for(const id of ['nPos','nYaw','aPos','aYaw']) setTxt(id,'—'); }
+
+  if(sc && sc.ranges){
+    const hit = sc.ranges.filter(v=>v>0);
+    setTxt('nPts', `${hit.length} / ${sc.ranges.length}`);
+    setTxt('aPts', `${hit.length} / ${sc.ranges.length}`);
+    const mn = hit.length ? Math.min(...hit) : null;
+    const cls = mn==null ? '' : (mn<0.25 ? 'bad' : (mn<0.45 ? 'warn' : ''));
+    const txt = mn==null ? '—' : mn.toFixed(2)+' m';
+    for(const id of ['nMin','aMin','sbMin']){
+      const e = $(id); if(!e) continue;
+      e.textContent = txt;
+      e.className = (id==='sbMin' ? 'v ' : '') + cls;
+    }
+  } else { for(const id of ['nPts','aPts']) setTxt(id,'—');
+           for(const id of ['nMin','aMin']) setTxt(id,'—');
+           const sm=$('sbMin'); if(sm){ sm.textContent='—'; sm.className='v'; } }
+
+  const at = NAV.age==null ? '—' : NAV.age.toFixed(1)+' s 전';
+  setTxt('nAge', at); setTxt('navAge', at); setTxt('aAge', at);
+  $('nAge').className = (NAV.age!=null && NAV.age>3) ? 'bad' : '';
+  $('navAge').className = 'chip ' + ((NAV.age!=null && NAV.age>3) ? 'bad' : 'ok');
+  mapMain.draw(); mapMini.draw(); mapDrv.draw();
+}
+
+/* ══ /api/cam ══════════════════════════════════════════════ */
+const CAM = { data:null, err:null };
+const FLOOR_LAB = ['좌','중','우'];
+const CAM_IMGS = [['imgMain','ovMain'], ['imgMini','ovMini'], ['imgDrv','ovDrv']];
+let camFails = 0;
+
+async function pollCam(){
+  try{
+    const r = await fetch('api/cam', {cache:'no-store'});
+    if(!r.ok){
+      const j = await r.json().catch(()=>({}));
+      CAM.err = j.error || ('HTTP '+r.status); CAM.data = null; renderCam();
+      return;
+    }
+    const age = parseFloat(r.headers.get('X-Nav-Age'));
+    const c = await r.json();
+    c._age = isNaN(age)?null:age;
+    CAM.data = c; CAM.err = null; camFails = 0;
+    renderCam();
+  }catch(e){
+    if(++camFails > 2){ CAM.err = '서버 연결 끊김'; CAM.data = null; renderCam(); }
+  }
+}
+
+function floorHTML(f){
+  return FLOOR_LAB.map((lab,i) => {
+    if(!f) return `<div class="f unknown"><div class="lab">${lab}</div>
+      <div class="val">모름</div><div class="meter plain"><i style="width:0"></i></div></div>`;
+    const v = f[i], L = v<0.3?'bad':(v<0.6?'warn':'ok');
+    return `<div class="f"><div class="lab">${lab}</div>
+      <div class="val" style="color:var(--${L==='bad'?'crit':L})">${v.toFixed(2)}</div>
+      <div class="meter plain"><i class="${L}" style="width:${(v*100).toFixed(0)}%"></i></div></div>`;
+  }).join('');
+}
+
+function renderCam(){
+  const c = CAM.data;
+  if(!c){
+    setTxt('camSt', CAM.err||'—'); setTxt('allCamSt', CAM.err||'—');
+    setTxt('drvCamSt', CAM.err||'—');
+    for(const id of ['nfMain','nfMini','nfDrv']) $(id).style.display = 'flex';
+    $('camAlert').innerHTML = CAM.err ?
+      `<div class="alert bad"><span class="sys">CAM</span><span>${CAM.err}</span></div>` : '';
+    setTxt('sbFire','—'); $('sbFire').className = 'v sm';
+    $('tagCam').textContent = '—'; $('tagCam').className = 'tag hot';
+    for(const id of ['floorMain','floorMini','floorDrv']) $(id).innerHTML = floorHTML(null);
+    for(const id of ['aFire','aObj','aLiving']){ const e=$(id); e.textContent='—'; e.className='dim'; }
+    $('aFloor').textContent = '모름'; $('aFloor').className = 'warn';
+    return;
+  }
+  $('camAlert').innerHTML = '';
+  const src = c.jpeg ? 'data:image/jpeg;base64,'+c.jpeg : '';
+  for(const [id] of CAM_IMGS){
+    const im = $(id);
+    if(src && im.getAttribute('src') !== src) im.src = src;
+  }
+  for(const id of ['nfMain','nfMini','nfDrv']) $(id).style.display = src ? 'none':'flex';
+  // 표시 비율을 서버가 알려준 JPEG 크기로 잡는다 — 이미지 로딩 전에도 안 흔들린다
+  if(c.out_w && c.out_h){
+    const ar = c.out_w/c.out_h;
+    document.querySelectorAll('.camstage').forEach(el => {
+      el.style.setProperty('--camar', ar.toFixed(4));
+      el.style.setProperty('--camarn', ar.toFixed(4));
+    });
+  }
+
+  const st = (c.trt ? `TensorRT ${c.det_fps} FPS` : '탐지 꺼짐')
+           + (c._age==null ? '' : ` · ${c._age.toFixed(1)}s 전`);
+  setTxt('camSt', st); setTxt('allCamSt', st); setTxt('drvCamSt', st);
+  hpush('det', c.det_fps);
+  setTxt('tDet', c.det_fps!=null ? c.det_fps.toFixed(1) : '—');
+  setMeter($('tDetB'), (c.det_fps||0)/60, c.det_fps>=20?'ok':(c.det_fps>=10?'warn':(c.det_fps?'bad':'')));
+  setTxt('tDetR', (c.trt ? 'YOLO11 TensorRT · ' : 'TensorRT 꺼짐 · ')
+    + (c.det_fps>=20 ? '정상' : (c.det_fps ? '저하' : '중단')));
+  redrawSparks();
+
+  const chip = (el,on,txt,cls) => { const e=$(el); e.textContent=txt;
+    e.className='chip '+(on?(cls||'ok'):''); };
+  chip('cTrt', c.trt, 'TensorRT '+(c.trt?'ON':'OFF'));
+  chip('cCoco', c.coco, 'COCO '+(c.coco?'ON':'OFF'), 'acc');
+  chip('cImg', c.img_ok, '프레임 '+(c.img_ok?'정상':'없음'), c.img_ok?'ok':'bad');
+  if(!c.img_ok) $('cImg').className = 'chip bad';
+  chip('cFps', c.det_fps>=20, (c.det_fps!=null?c.det_fps.toFixed(1):'—')+' FPS');
+
+  // ⚠️ img_ok=false 면 floor_clear 는 null 이다 — "트임" 이 아니라 "모름"
+  const f = c.img_ok ? c.floor_clear : null;
+  for(const id of ['floorMain','floorMini','floorDrv']) $(id).innerHTML = floorHTML(f);
+  const ef = $('aFloor');
+  if(f){ const mn = Math.min(...f);
+         ef.textContent = mn.toFixed(2);
+         ef.className = mn<0.3?'bad':(mn<0.6?'warn':'ok'); }
+  else { ef.textContent = '모름'; ef.className = 'warn'; }
+  $('floorHint').innerHTML = f
+    ? '1.0 = 완전히 트임 · 0 에 가까울수록 막힘. 0.3 미만이면 정지 판단 대상이다.'
+    : '<b style="color:var(--warn)">프레임을 못 읽어 판정 불가 — "트임"이 아니라 "모름"이다.</b>';
+
+  // 화재/연기
+  const dets = c.dets || [];
+  const fire = dets.some(d => d.cls===1 || d.name==='fire');
+  const eF = $('sbFire');
+  eF.textContent = dets.length ? (fire?'화재':'연기') : '없음';
+  eF.className = 'v sm ' + (dets.length ? (fire?'bad':'warn') : 'ok');
+  $('tagCam').textContent = dets.length ? '!' : (c.objs? c.objs.length : 0);
+  $('tagCam').className = 'tag ' + (dets.length?'hot':'live');
+  setTxt('fireN', dets.length + '건');
+  const eaf = $('aFire');
+  eaf.textContent = dets.length ? `${dets.length}건 · ${fire?'화재':'연기'}` : '없음';
+  eaf.className = dets.length ? (fire?'bad':'warn') : 'ok';
+  $('fireList').innerHTML = dets.length
+    ? dets.map(d => `<div class="obj fire">
+        <div class="nm"><span class="sw2" style="background:var(--crit)"></span>
+          <b>${d.name||('cls '+d.cls)}</b></div>
+        <div class="cf">${(d.conf*100).toFixed(0)}%</div>
+        ${d.box?`<div class="meta"><span>box ${d.box.map(v=>Math.round(v)).join(', ')}</span></div>`:''}
+      </div>`).join('')
+    : `<div style="font-size:12.5px;color:var(--ok);padding:5px 0">화재·연기 없음</div>`;
+
+  // COCO 객체
+  const objs = c.objs || [];
+  setTxt('objN', objs.length + '개');
+  setTxt('aObj', objs.length + '개');
+  const living = objs.filter(o=>o.living).length;
+  const eal = $('aLiving');
+  eal.textContent = living ? living + '개' : '없음';
+  eal.className = living ? 'warn' : 'dim';
+  $('objList').innerHTML = objs.length
+    ? objs.map(o => `<div class="obj${o.living?' living':''}">
+        <div class="nm"><span class="sw2" style="background:${o.living?'var(--warn)':'var(--data)'}"></span>
+          <b>${o.name}</b>${o.living?'<span class="tagl warn">생물</span>':''}</div>
+        <div class="cf">${(o.conf*100).toFixed(0)}%</div>
+        <div class="meta">
+          <span>방위 ${(o.bearing*180/Math.PI).toFixed(1)}°</span>
+          <span>하단 ${o.bottom!=null?o.bottom.toFixed(2):'—'}</span>
+          ${o.box?`<span>box ${o.box.map(v=>Math.round(v)).join(',')}</span>`:''}
+        </div></div>`).join('')
+    : `<div style="font-size:12.5px;color:var(--faint);padding:5px 0">검출된 객체 없음</div>`;
+
+  drawCamOverlays();
+}
+
+// 탐지 박스 좌표계(src_w×src_h)와 전송 JPEG 크기(out_w×out_h)는 서로 다르다.
+// 서버가 두 값을 모두 실어 주므로 그대로 쓴다 — camera_node 가 캡처/축소 해상도를
+// 바꿔도 프런트는 자동으로 맞는다. (옛 응답 대비 폴백만 남긴다)
+function drawCamOverlays(){
+  for(const [imgId, cvId] of CAM_IMGS){
+    const img = $(imgId), cv = $(cvId), c = CAM.data;
+    const r = img.getBoundingClientRect();
+    if(r.width < 2) continue;
+    const dpr = Math.min(2, window.devicePixelRatio||1);
+    cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+    const g = cv.getContext('2d');
+    g.setTransform(dpr,0,0,dpr,0,0);
+    g.clearRect(0,0,r.width,r.height);
+    if(!c) continue;
+    const sw = c.src_w || 640, sh = c.src_h || 480;          // 박스 좌표 기준
+    const ow = c.out_w || img.naturalWidth  || sw;           // 실제 JPEG 크기
+    const oh = c.out_h || img.naturalHeight || sh;
+    if(!ow || !oh) continue;
+    // object-fit:contain 으로 생기는 레터박스 보정 — 비율은 JPEG 쪽을 따른다
+    const ar = ow/oh, br = r.width/r.height;
+    const dw = ar>br ? r.width : r.height*ar, dh = ar>br ? r.width/ar : r.height;
+    const ox = (r.width-dw)/2, oy = (r.height-dh)/2;
+    const kx = dw/sw, ky = dh/sh;                            // 축별로 환산
+    const small = (imgId==='imgMini');
+    const boxes = [].concat(
+      (c.dets||[]).map(d => ({b:d.box, t:d.name||'det', col:'#d9564f'})),
+      (c.objs||[]).map(o => ({b:o.box, t:`${o.name} ${(o.conf*100)|0}%`,
+                              col:o.living?'#e0a53a':'#7fa3cf'})));
+    g.lineWidth = small?1.25:1.75;
+    g.font = (small?9:11)+'px ' + getComputedStyle(document.body).fontFamily;
+    for(const bx of boxes){
+      if(!bx.b) continue;
+      const x = ox+bx.b[0]*kx, y = oy+bx.b[1]*ky,
+            w = (bx.b[2]-bx.b[0])*kx, h = (bx.b[3]-bx.b[1])*ky;
+      g.strokeStyle = bx.col; g.strokeRect(x,y,w,h);
+      if(small) continue;
+      const tw = g.measureText(bx.t).width + 8;
+      g.fillStyle = bx.col; g.fillRect(x, Math.max(0,y-14), tw, 14);
+      g.fillStyle = '#0b0c0e'; g.fillText(bx.t, x+4, Math.max(10.5,y-3.5));
+    }
+  }
+}
+for(const [id] of CAM_IMGS) $(id).addEventListener('load', drawCamOverlays);
+
+/* ══════════════════════════════════════════════════════════════
+   제어 — /api/drive
+   ──────────────────────────────────────────────────────────────
+   데드맨이 0.4초다. 한 번 보내고 마는 게 아니라 **누르고 있는 동안
+   10Hz 로 계속 POST** 해야 한다. 손을 떼면 서는 게 정상 동작이다.
+
+   무장(arm)은 기본 꺼짐. 꺼져 있으면 armed:false 만 나가고
+   서버가 v/w 를 무시한다. 제어 화면을 벗어나면 자동으로 풀린다.
+   ══════════════════════════════════════════════════════════════ */
+/* ⚠️ GET 과 POST 의 응답 모양이 다르다. 실측:
+     GET  → {t,v,w,reason,v_max,w_max,stop_m,patrol_running}
+     POST → {ok,armed,v,w,ts}              ← reason·한계값이 없다
+   그래서 POST 응답으로 상태를 덮어쓰면 reason 이 사라진다.
+   둘을 따로 보관하고, **무장 중에도 GET 을 계속 돌린다** —
+   "왜 안 움직이는지"는 오직 GET 의 reason 에만 들어 있기 때문이다. */
+const DRV = {
+  armed:false,
+  avail:null,                 // null=미확인 · true=조종 가능 · false=teleop 미실행(503)
+  st:null,                    // GET 응답 — reason·한계·순찰 여부의 정본
+  echo:null,                  // POST 응답 — 서버가 실제로 받아들인 v/w
+  keys:new Set(),             // 키보드로 눌린 방향
+  pads:new Set(),             // 화면 버튼으로 눌린 방향
+  busy:false,
+  fails:0
+};
+const DIRS = ['f','b','l','r'];
+
+function drvHeld(){ return new Set([...DRV.keys, ...DRV.pads]); }
+function drvVec(){
+  if(!DRV.armed) return {v:0, w:0};
+  const k = drvHeld();
+  const lim = DRV.st || {};
+  const vmax = lim.v_max != null ? lim.v_max : 0.15;
+  const wmax = lim.w_max != null ? lim.w_max : 0.60;
+  return {
+    v: ((k.has('f')?1:0) - (k.has('b')?1:0)) * vmax,
+    w: ((k.has('l')?1:0) - (k.has('r')?1:0)) * wmax
+  };
+}
+
+/** 명령 1발. armed=false 면 그대로 정지 명령이 된다. */
+async function drvSend(force){
+  if(DRV.busy && !force) return;
+  DRV.busy = true;
+  const {v,w} = drvVec();
+  try{
+    const r = await fetch('api/drive', {
+      method:'POST', cache:'no-store',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({armed: DRV.armed, v, w})
+    });
+    if(r.status === 503){ DRV.avail = false; DRV.st = null; DRV.echo = null; DRV.armed = false; }
+    else if(r.ok){ DRV.avail = true; DRV.echo = await r.json(); DRV.fails = 0; }
+    else { DRV.avail = false; }
+  }catch(e){
+    if(++DRV.fails > 2){ DRV.avail = false; DRV.armed = false; }
+  }finally{
+    DRV.busy = false;
+    renderDrive();
+  }
+}
+
+/** GET — reason·한계값·순찰 여부의 유일한 출처. 무장 중에도 계속 돈다. */
+async function pollDrive(){
+  try{
+    const r = await fetch('api/drive', {cache:'no-store'});
+    if(r.status === 503){
+      DRV.avail = false; DRV.st = null;
+      if(DRV.armed) drvDisarm();          // 노드가 죽으면 무장을 유지할 이유가 없다
+    }
+    else if(r.ok){ DRV.avail = true; DRV.st = await r.json(); }
+    else DRV.avail = false;
+  }catch(e){ DRV.avail = false; }
+  renderDrive();
+}
+
+function drvDisarm(){
+  const was = DRV.armed || DRV.keys.size || DRV.pads.size;
+  DRV.armed = false; DRV.keys.clear(); DRV.pads.clear();
+  document.querySelectorAll('#dpad button').forEach(b => b.classList.remove('hold'));
+  if(was) drvSend(true); else renderDrive();
+}
+function drvArm(on){
+  if(on && DRV.avail === false) return;    // 조종 불가면 무장 자체를 막는다
+  if(!on) return drvDisarm();
+  DRV.armed = true;
+  drvSend(true);
+}
+
+function renderDrive(){
+  const st = DRV.st, armed = DRV.armed, dead = DRV.avail === false;
+
+  // 무장 스위치
+  document.querySelectorAll('#armSw button').forEach(b => {
+    b.classList.toggle('on', (b.dataset.arm === '1') === armed);
+    b.disabled = dead;
+  });
+  $('ctlCard').classList.toggle('armed', armed);
+
+  // 순찰 중이면 수동이 차단된다
+  const patrol = !!(st && st.patrol_running);
+  const blocked = dead || patrol;
+  document.querySelectorAll('#dpad button[data-d]').forEach(b => b.disabled = !armed || blocked);
+
+  // reason 은 가공하지 않는다 — 로봇이 왜 안 움직이는지가 전부 거기 있다
+  const box = $('drvReasonBox');
+  let cls = 'off', txt;
+  if(dead){ txt = '조종 불가 — teleop_node 가 실행 중이 아니다 (HTTP 503)'; cls = 'block'; }
+  else if(!st){ txt = '상태 조회 중…'; }
+  else {
+    txt = st.reason || '—';
+    const moving = Math.abs(st.v||0) > 1e-4 || Math.abs(st.w||0) > 1e-4;
+    cls = moving ? 'moving'
+        : (patrol || /가드|차단|순찰/.test(txt) ? 'block'
+        : (armed ? 'ready' : 'off'));     // 무장했지만 방향 입력이 없는 상태
+  }
+  box.className = 'reason ' + cls;
+  setTxt('drvReason', txt);
+
+  // 내가 요청한 값이 아니라 **로봇이 실제로 내보내는 값**을 보여준다.
+  // 라이다 가드가 전진을 죽여도 여기 숫자는 정직하게 0 이 된다.
+  const v = st ? (st.v||0) : 0, w = st ? (st.w||0) : 0;
+  const ev = $('drvV'), ew = $('drvW');
+  ev.textContent = v.toFixed(2); ew.textContent = w.toFixed(2);
+  ev.className = 'n' + (Math.abs(v)>1e-4?' live':'');
+  ew.className = 'n' + (Math.abs(w)>1e-4?' live':'');
+
+  // 요청과 실제가 다르면 서버가 잘랐거나 가드가 막은 것이다 — 숨기지 않는다
+  const req = drvVec(), gap = armed &&
+    (Math.abs(req.v-v) > 1e-3 || Math.abs(req.w-w) > 1e-3);
+  setTxt('drvGap', gap ? `요청 ${req.v.toFixed(2)} / ${req.w.toFixed(2)} → 서버가 조정함` : '');
+
+  setTxt('drvLim', st ? `±${st.v_max} m/s · ±${st.w_max} rad/s` : '—');
+  setTxt('drvStopM', st && st.stop_m!=null ? `진행방향 ${(st.stop_m*100).toFixed(0)} cm 이내 정지` : '—');
+  const ep = $('drvPatrol');
+  ep.textContent = patrol ? '실행 중 — 수동 차단' : (st ? '멈춤' : '—');
+  ep.className = patrol ? 'warn' : 'dim';
+
+  // 상태 레일 + 사이드바
+  const rail = $('sbDrive'), tag = $('tagDrv'), ov = $('aDrv');
+  if(dead){ rail.textContent='조종 불가'; rail.className='chip bad';
+            tag.textContent='—'; tag.className='tag hot';
+            ov.textContent='불가 (노드 없음)'; ov.className='bad'; }
+  else if(armed){ rail.textContent='무장'; rail.className='chip warn';
+            tag.textContent='무장'; tag.className='tag hot';
+            ov.textContent='무장'; ov.className='warn'; }
+  else { rail.textContent='조종 잠금'; rail.className='chip';
+            tag.textContent='잠금'; tag.className='tag';
+            ov.textContent = patrol ? '순찰 중' : '잠금'; ov.className='dim'; }
+
+  // 경고 배너
+  $('drvAlert').innerHTML =
+    dead ? `<div class="alert bad"><span class="sys">TELEOP</span><span>
+             조종 노드가 응답하지 않는다 (503). Orin 에서
+             <code>python3 ~/calib/teleop_node.py</code> 를 띄워야 한다.</span></div>`
+    : patrol ? `<div class="alert warn"><span class="sys">PATROL</span><span>
+             순찰이 실행 중이라 수동 조종이 차단됐다 — 같은 <code>/cmd_vel</code> 을
+             두 곳에서 쓰면 서로 덮어쓴다.</span></div>` : '';
+}
+
+/* ── 입력: 화면 버튼 ─────────────────────────────────────── */
+function padSet(dir, on, btn){
+  if(on){ if(DRV.pads.has(dir)) return; DRV.pads.add(dir); }
+  else  { if(!DRV.pads.has(dir)) return; DRV.pads.delete(dir); }
+  if(btn) btn.classList.toggle('hold', on);
+  drvSend(true);
+}
+document.querySelectorAll('#dpad button[data-d]').forEach(btn => {
+  const d = btn.dataset.d;
+  const down = e => { if(btn.disabled) return; e.preventDefault();
+                      btn.setPointerCapture && btn.setPointerCapture(e.pointerId);
+                      padSet(d, true, btn); };
+  const up   = e => { padSet(d, false, btn); };
+  btn.addEventListener('pointerdown', down);
+  btn.addEventListener('pointerup', up);
+  btn.addEventListener('pointercancel', up);
+  btn.addEventListener('pointerleave', up);
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+});
+document.querySelectorAll('#armSw button').forEach(b =>
+  b.onclick = () => drvArm(b.dataset.arm === '1'));
+$('bStop').onclick = () => drvDisarm();
+
+/* ── 입력: 키보드 ────────────────────────────────────────────
+   e.key 가 아니라 e.code 를 쓴다. 한글 입력 상태에서 W 는 'ㅈ' 이 되지만
+   code 는 'KeyW' 로 고정이다. */
+const KEYMAP = {KeyW:'f', KeyS:'b', KeyA:'l', KeyD:'r',
+                ArrowUp:'f', ArrowDown:'b', ArrowLeft:'l', ArrowRight:'r'};
+addEventListener('keydown', e => {
+  if(e.key === 'Escape'){                       // 어느 화면에서든 비상정지
+    $('lb').classList.remove('on');
+    if(DRV.armed || DRV.keys.size || DRV.pads.size) drvDisarm();
+    return;
+  }
+  if(PAGE !== 'drive' || e.repeat) return;
+  const tag = (e.target.tagName||'').toLowerCase();
+  if(tag==='input' || tag==='textarea' || e.target.isContentEditable) return;
+  const d = KEYMAP[e.code];
+  if(!d) return;
+  e.preventDefault();                           // 방향키 스크롤 방지
+  if(!DRV.armed || DRV.avail === false) return; // 무장 전에는 아무 일도 없다
+  if(!DRV.keys.has(d)){ DRV.keys.add(d); drvSend(true); }
+});
+addEventListener('keyup', e => {
+  const d = KEYMAP[e.code];
+  if(d && DRV.keys.delete(d)) drvSend(true);
+});
+// 탭이 가려지거나 포커스를 잃으면 키가 눌린 채로 남는다 → 무장 해제
+addEventListener('blur', drvDisarm);
+document.addEventListener('visibilitychange', () => { if(document.hidden) drvDisarm(); });
+
+// 데드맨 유지 루프. 무장 중에만 10Hz 로 나간다.
+// 방향키를 안 눌러도 v=0,w=0 을 계속 보내 "데드맨 타임아웃"이 아니라
+// "정지" 상태로 유지한다 — 그래야 reason 이 실제 상황을 말한다.
+setInterval(() => { if(DRV.armed) drvSend(); }, 100);
+
+/* ══ 설계 (자산이 생기면 자동 표시) ═════════════════════════ */
+// server.py 는 없는 정적 파일에 대해 index.html 을 200 으로 돌려주는 SPA 폴백이다.
+// 그래서 "받았다"가 곧 "존재한다"가 아니다 — 본문에 이 마커가 있으면 폴백이다.
+const FALLBACK_MARK = 'ORINCAR-DASH v1';
+let designReady = false, designTries = 0, designSig = null;
+
+async function probeDesign(){
+  designTries++;
+  if(!designReady) setTxt('designProbe', `자동 확인 중 (${designTries}회)`);
+
+  // ① manifest.json — 성공한 뒤에도 계속 확인해 재생성분을 자동 반영한다(요청 1개)
+  try{
+    const r = await fetch('design/manifest.json', {cache:'no-store'});
+    const ct = (r.headers.get('Content-Type')||'');
+    if(r.ok && ct.includes('json')){
+      const m = await r.json();
+      const sig = (m.generated||'') + '|' + ((m.parts||[]).length);
+      if(sig !== designSig){ designSig = sig; renderDesign(m); }
+      designReady = true; return;
+    }
+  }catch(e){}
+  if(designReady) return;
+
+  // ② design/index.html (뷰어) — 폴백이 아닌지 본문 마커로 확인
+  try{
+    const r = await fetch('design/index.html', {cache:'no-store'});
+    if(r.ok){
+      const t = await r.text();
+      if(t.indexOf(FALLBACK_MARK) === -1 && t.length > 60){
+        $('designHost').innerHTML =
+          `<div class="card-t">design/index.html 뷰어</div>
+           <iframe id="dframe" src="design/index.html" title="설계 뷰어"></iframe>`;
+        designReady = true; return;
+      }
+    }
+  }catch(e){}
+
+  // ③ 관용적인 파일명 탐색 (이미지는 로드 성공 여부로 판정된다)
+  //    요청 수가 많아 매번 돌리지 않는다 — 첫 시도와 이후 5회에 한 번만.
+  if(designTries !== 1 && designTries % 5 !== 0){
+    setTxt('designProbe', `자동 확인 중 (${designTries}회 · 아직 없음)`);
+    return;
+  }
+  const names = ['assembly','assembly-iso','iso','preview','render','chassis',
+                 'front','side','top','exploded','batch1'];
+  const exts = ['png','jpg','webp','svg'];
+  const cands = [];
+  for(const n of names) for(const e of exts) cands.push(`design/${n}.${e}`);
+  const found = (await Promise.all(cands.map(probeImg))).filter(Boolean);
+  if(found.length){
+    renderDesign({views: found.map(src => ({src, label: src.split('/').pop()}))});
+    designReady = true; return;
+  }
+  setTxt('designProbe', `자동 확인 중 (${designTries}회 · 아직 없음)`);
+}
+function probeImg(src){
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => res(im.naturalWidth > 8 ? src : null);
+    im.onerror = () => res(null);
+    im.src = src + '?_=' + Date.now();
+  });
+}
+/* build_design_assets.py 가 내는 정식 매니페스트.
+   parts[] = {id,file,group,thumb,view,bbox_mm,grams,faces,watertight,fits_bed} */
+function renderDesign(m){
+  const parts = Array.isArray(m.parts) ? m.parts : [];
+  if(parts.length && typeof parts[0] === 'object' &&
+     (parts[0].thumb || parts[0].view || parts[0].bbox_mm)) return renderParts(m, parts);
+  renderGeneric(m);
+}
+
+const dpath = p => (!p ? '' : (/^(https?:|\/)/.test(p) ? p : 'design/'+p));
+let dGroup = '*';
+
+function renderParts(m, parts){
+  const c = m.counts || {};
+  const groups = m.groups || [...new Set(parts.map(p=>p.group))];
+  const stat = (l,v,s,cls) =>
+    `<div class="card tile"><div class="card-t">${l}</div>
+      <div class="big"><span class="n" style="font-size:23px${cls?`;color:var(--${cls})`:''}">${v}</span></div>
+      <div class="sub">${s||''}</div></div>`;
+  const head =
+    `<div class="grid g4" style="margin-bottom:12px">
+       ${stat('부품', parts.length, groups.join(' · '))}
+       ${stat('총 중량', (m.total_grams||0).toLocaleString()+' g',
+              `PETG ${m.petg_density_g_cm3||'—'} g/cm³`)}
+       ${stat('비수밀 메시', c.not_watertight ?? '—', '0 이어야 출력 가능',
+              c.not_watertight ? 'crit':'ok')}
+       ${stat('베드 초과', c.over_bed ?? '—', `베드 ${m.bed_mm||'—'} mm`,
+              c.over_bed ? 'crit':'ok')}
+     </div>
+     <div class="btnrow" style="margin-bottom:12px">
+       ${m.viewer?`<button class="btn" id="dOpen">3D 뷰어 열기</button>
+         <a class="btn" href="design/${m.viewer}" target="_blank" style="text-decoration:none">새 탭에서</a>`:''}
+       ${m.gallery?`<a class="btn" href="design/${m.gallery}" target="_blank"
+          style="text-decoration:none">갤러리</a>`:''}
+       <span class="chip">생성 ${m.generated ? m.generated.replace('T',' ').slice(0,16) : '—'}</span>
+     </div>
+     <div id="dViewer"></div>`;
+
+  const chips = ['*'].concat(groups).map(g =>
+    `<button class="btn dg${g===dGroup?' on':''}" data-g="${g}">
+      ${g==='*'?'전체':g} (${g==='*'?parts.length:parts.filter(p=>p.group===g).length})</button>`).join('');
+
+  const list = parts.filter(p => dGroup==='*' || p.group===dGroup);
+  const cards = list.map(p => {
+    const bad = (p.watertight===false) || (p.fits_bed===false);
+    const bb = (p.bbox_mm||[]).map(v=>Math.round(v)).join(' × ');
+    return `<div class="dcard"${bad?' style="border-color:rgba(217,86,79,.5)"':''}>
+      <img src="${dpath(p.thumb||p.view)}" data-full="${dpath(p.view||p.thumb)}"
+           alt="${p.id}" loading="lazy" onerror="this.style.display='none'">
+      <div class="cap"><b>${p.id}</b>
+        <small>${bb?bb+' mm':''}${p.grams!=null?` · ${p.grams} g`:''}${p.faces?` · ${p.faces} face`:''}</small>
+        <small>${p.group||''}${p.watertight===false?' · <span style="color:var(--crit)">비수밀</span>':''}${p.fits_bed===false?' · <span style="color:var(--crit)">베드 초과</span>':''}</small>
+      </div></div>`;
+  }).join('');
+
+  $('designHost').innerHTML = head +
+    `<div class="sech">부품</div>
+     <div class="btnrow" style="margin-bottom:11px">${chips}</div>
+     <div class="dgrid">${cards}</div>`;
+
+  document.querySelectorAll('.dg').forEach(b => b.onclick = () => {
+    dGroup = b.dataset.g; renderParts(m, parts);
+  });
+  bindLightbox();
+  const ob = $('dOpen');
+  if(ob) ob.onclick = () => {                    // 3D 는 무거우니 눌렀을 때만 띄운다
+    $('dViewer').innerHTML = `<iframe id="dframe" src="design/${m.viewer}" title="3D 뷰어"></iframe>`;
+    ob.disabled = true; ob.textContent = '3D 뷰어 표시 중';
+  };
+  $('tagDsg').textContent = parts.length;
+  $('tagDsg').className = 'tag ' + ((c.not_watertight||c.over_bed) ? 'hot' : 'live');
+}
+
+function bindLightbox(){
+  document.querySelectorAll('.dcard img').forEach(im => im.onclick = () => {
+    $('lbImg').src = im.dataset.full || im.src; $('lb').classList.add('on');
+  });
+}
+
+function renderGeneric(m){
+  const views = m.views || m.images || (Array.isArray(m) ? m : []);
+  const norm = views.map(v => typeof v==='string' ? {src:v} : v)
+    .map(v => ({...v, src: /^(https?:|\/|design\/)/.test(v.src) ? v.src : 'design/'+v.src}));
+  const notes = m.parts || [];
+  $('designHost').innerHTML =
+    (m.title ? `<div class="alert"><span class="sys">DSG</span><span><b>${m.title}</b>
+       ${m.note?'<br>'+m.note:''}</span></div>` : '') +
+    (norm.length ? `<div class="dgrid">` + norm.map(v =>
+      `<div class="dcard"><img src="${v.src}" alt="${v.label||''}" loading="lazy">
+        <div class="cap">${v.label||v.src.split('/').pop()}
+        ${v.caption?`<small>${v.caption}</small>`:''}</div></div>`).join('') + `</div>`
+      : `<div class="empty"><h3>manifest 는 있으나 이미지가 없다</h3></div>`) +
+    (notes.length ? `<div class="sech">부품</div><div class="card">` + notes.map(p =>
+      `<div class="kv"><span>${p.name||p}</span><b>${p.batch||p.note||''}</b></div>`).join('')
+      + `</div>` : '');
+  bindLightbox();
+  $('tagDsg').textContent = norm.length || '—';
+  $('tagDsg').className = 'tag live';
+}
+$('lb').onclick = () => $('lb').classList.remove('on');
+
+/* ══ 폴링 루프 ═════════════════════════════════════════════ */
+// 섹션마다 필요한 것만 자주 받는다. 백그라운드 탭에서는 아예 멈춘다.
+let t = 0;
+function tick(){
+  if(document.hidden) return;
+  t++;
+  if(t % 4 === 1) pollState();                                  // 2초
+  const navHot = (PAGE==='nav' || PAGE==='all' || PAGE==='drive');
+  if(navHot || t % 8 === 0) pollNav();                          // 0.5s / 4s
+  const camHot = (PAGE==='cam' || PAGE==='all' || PAGE==='drive');
+  if(camHot ? (t % 2 === 0) : (t % 6 === 0)) pollCam();          // 1s / 3s
+  // 제어 화면에서는 매 틱(0.5s) GET 한다 — reason 이 늦으면 왜 안 가는지 모른다
+  if(PAGE==='drive' || t % 20 === 0) pollDrive();
+}
+setInterval(tick, 500);
+setInterval(() => { if(!designReady && !document.hidden) probeDesign(); }, 8000);
+
+/* ══ 부트 ══════════════════════════════════════════════════ */
+// 게이지: [키, 호스트 id, 경고 지점(0~1), 위험 지점(0~1)]
+[['cpu','gCpu',.70,.88],['tmp','gTmp',.65,.80],
+ ['ram','gRam',.75,.90],['gpu','gGpu',.80,.95]]
+  .forEach(([k,id,w,c]) => { G[k] = makeGauge($(id), w, c); });
+for(const id of ['floorMain','floorMini','floorDrv']) $(id).innerHTML = floorHTML(null);
+show((location.hash.slice(1) && document.querySelector(`.page[data-page="${location.hash.slice(1)}"]`))
+     ? location.hash.slice(1) : 'all');
+pollState(); pollNav(); pollCam(); pollDrive(); probeDesign();
+document.addEventListener('visibilitychange', () => { if(!document.hidden) tick(); });
+</script>
+</body>
+</html>
