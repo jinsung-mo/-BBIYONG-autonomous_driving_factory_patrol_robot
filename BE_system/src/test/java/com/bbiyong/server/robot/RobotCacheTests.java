@@ -1,8 +1,10 @@
 package com.bbiyong.server.robot;
 
+import com.bbiyong.server.auth.jwt.JwtTokenProvider;
 import com.bbiyong.server.robot.dto.RobotResponse;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +26,18 @@ public class RobotCacheTests {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
+    @BeforeEach
+    void authenticate() {
+        String token = jwtTokenProvider.generate("admin@bbiyong.io", "ROLE_ADMIN");
+        restTemplate.getRestTemplate().getInterceptors().add((req, body, exec) -> {
+            req.getHeaders().setBearerAuth(token);
+            return exec.execute(req, body);
+        });
+    }
 
     @Test
     public void testTelemetryEventUpdatesCacheAndExposesViaApi() {

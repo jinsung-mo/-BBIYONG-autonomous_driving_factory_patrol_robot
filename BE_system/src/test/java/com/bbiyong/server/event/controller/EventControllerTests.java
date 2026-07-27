@@ -1,5 +1,6 @@
 package com.bbiyong.server.event.controller;
 
+import com.bbiyong.server.auth.jwt.JwtTokenProvider;
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.repository.EventLogRepository;
@@ -30,8 +31,16 @@ class EventControllerTests {
     @Autowired
     private TestRestTemplate restTemplate;
 
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
     @BeforeEach
     void seed() {
+        String token = jwtTokenProvider.generate("admin@bbiyong.io", "ROLE_ADMIN");
+        restTemplate.getRestTemplate().getInterceptors().add((req, body, exec) -> {
+            req.getHeaders().setBearerAuth(token);
+            return exec.execute(req, body);
+        });
         eventLogRepository.deleteAll();
         save("OVERHEAT", Instant.parse("2026-07-24T00:00:00Z"));
         save("FIRE", Instant.parse("2026-07-24T00:01:00Z"));
