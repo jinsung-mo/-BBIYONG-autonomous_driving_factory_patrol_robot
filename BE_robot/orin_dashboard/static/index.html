@@ -749,7 +749,7 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
             <div class="card-t" style="margin:16px 0 8px">표시</div>
             <div class="mapctl">
               <label class="sw"><input type="checkbox" id="cScan" checked> 라이다 스캔</label>
-              <label class="sw"><input type="checkbox" id="cFollow" checked> 로봇 따라가기</label>
+              <label class="sw"><input type="checkbox" id="cFollow" checked> 로봇 중심 (진행 방향 위)</label>
               <label class="sw"><input type="checkbox" id="cTrail" checked> 이동 궤적</label>
               <div class="btnrow" style="margin-top:5px">
                 <button class="btn" id="bFit">전체 보기</button>
@@ -1114,7 +1114,7 @@ function MapView(canvas, opt){
   opt = opt || {};
   const ctx = canvas.getContext('2d');
   const V = {x:0, y:0, s:60, init:false};
-  let baked = null, bakedSeq = -1, W = 0, H = 0;
+  let baked = null, bakedSeq = -1, W = 0, H = 0, lastViewPose = null;
   const flags = { scan:true, follow:true, trail:true };
 
   function resize(){
@@ -1170,20 +1170,52 @@ function MapView(canvas, opt){
       return;
     }
     const m = nav.map, p = nav.pose;
+    // Robot-centred mode is valid only when the pose and OccupancyGrid share
+    // the map frame. Freeze on the last fresh transform instead of applying
+    // odom coordinates to a map-frame image or jumping on stale TF.
+    const poseFresh = p && p.frame === 'map' && p.stale !== true;
+    if(poseFresh) lastViewPose = {...p};
+    const viewPose = flags.follow ? lastViewPose : null;
+    const point = (mx, my) => {
+      if(!viewPose) return [sx(mx), sy(my)];
+      const dx = mx-viewPose.x, dy = my-viewPose.y;
+      const c = Math.cos(viewPose.yaw), s = Math.sin(viewPose.yaw);
+      // base_link +X (forward) is screen-up; +Y (left) is screen-left.
+      return [
+        W/2 + (s*dx-c*dy)*V.s,
+        H/2 - (c*dx+s*dy)*V.s
+      ];
+    };
     if(m){
       if(m.seq !== bakedSeq){ baked = bake(m); bakedSeq = m.seq; }
       if(!V.init) fit();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(baked, sx(m.ox), sy(m.oy + m.h*m.res),
-                    m.w*m.res*V.s, m.h*m.res*V.s);
+      if(viewPose){
+        ctx.save();
+        ctx.translate(W/2, H/2);
+        ctx.rotate(viewPose.yaw-Math.PI/2);
+        ctx.scale(V.s, -V.s);
+        ctx.translate(-viewPose.x, -viewPose.y);
+        ctx.translate(m.ox, m.oy+m.h*m.res);
+        ctx.scale(m.res, -m.res);
+        ctx.drawImage(baked, 0, 0);
+        ctx.restore();
+      }else{
+        ctx.drawImage(baked, sx(m.ox), sy(m.oy + m.h*m.res),
+                      m.w*m.res*V.s, m.h*m.res*V.s);
+      }
     }
     if(flags.trail && NAV.trail.length > 1){
       ctx.strokeStyle = 'rgba(232,234,237,.32)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(sx(NAV.trail[0][0]), sy(NAV.trail[0][1]));
-      for(const t of NAV.trail) ctx.lineTo(sx(t[0]), sy(t[1]));
+      const first = point(NAV.trail[0][0], NAV.trail[0][1]);
+      ctx.beginPath(); ctx.moveTo(first[0], first[1]);
+      for(const t of NAV.trail){
+        const q = point(t[0], t[1]);
+        ctx.lineTo(q[0], q[1]);
+      }
       ctx.stroke();
     }
-    if(p && nav.scan && flags.scan){
+    if(p && nav.scan && flags.scan && (!flags.follow || poseFresh)){
       const s = nav.scan;
       ctx.fillStyle = 'rgba(127,163,207,.92)';
       for(let i=0;i<s.ranges.length;i++){
@@ -1191,20 +1223,35 @@ function MapView(canvas, opt){
         if(!r) continue;
         // 스캔은 laser 기준이나 base_link 근사로 그린다(오프셋 6cm 는 대개 1px 미만)
         const a = p.yaw + s.angle_min + i*s.angle_inc;
-        ctx.fillRect(sx(p.x + r*Math.cos(a))-1, sy(p.y + r*Math.sin(a))-1, 2, 2);
+        const q = point(p.x + r*Math.cos(a), p.y + r*Math.sin(a));
+        ctx.fillRect(q[0]-1, q[1]-1, 2, 2);
       }
     }
     if(p){
-      const X = sx(p.x), Y = sy(p.y), rad = Math.max(5, V.s*0.10);
+      const q = point(p.x, p.y);
+      const X = viewPose ? W/2 : q[0], Y = viewPose ? H/2 : q[1];
+      const rad = Math.max(5, V.s*0.10);
       ctx.beginPath(); ctx.arc(X, Y, rad*2.6, 0, 7);
       ctx.fillStyle = 'rgba(232,234,237,.09)'; ctx.fill();
       ctx.beginPath(); ctx.arc(X, Y, rad, 0, 7);
       ctx.fillStyle = '#e8eaed'; ctx.fill();
       ctx.strokeStyle = '#e8eaed'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(X,Y);
-      ctx.lineTo(X + Math.cos(p.yaw)*rad*2.8, Y - Math.sin(p.yaw)*rad*2.8);
+      if(viewPose) ctx.lineTo(X, Y-rad*2.8);
+      else ctx.lineTo(X + Math.cos(p.yaw)*rad*2.8, Y - Math.sin(p.yaw)*rad*2.8);
       ctx.stroke();
-      if(flags.follow){ V.x = W/2 - p.x*V.s; V.y = H/2 + p.y*V.s; }
+    }
+    if(flags.follow && !poseFresh){
+      ctx.fillStyle = 'rgba(9,10,12,.82)';
+      ctx.fillRect(8, H-30, W-16, 22);
+      ctx.fillStyle = '#f5a623';
+      ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        p && p.frame !== 'map' ? 'map→base_link TF 없음 — 로봇 중심 보기 정지'
+                               : 'TF 지연/누락 — 마지막 정상 자세에서 보기 고정',
+        W/2, H-15
+      );
     }
   }
 
