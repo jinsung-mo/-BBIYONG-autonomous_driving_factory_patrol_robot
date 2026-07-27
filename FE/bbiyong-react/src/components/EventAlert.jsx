@@ -39,7 +39,7 @@ function playAlarmBeep(kind) {
 }
 
 export default function EventAlert() {
-  const { status } = useSim()
+  const { status, actions } = useSim()
   const [alerts, setAlerts] = useState([])
   const prevFire = useRef(status.fireOn)
   const prevHeat = useRef(status.heatOn)
@@ -84,9 +84,13 @@ export default function EventAlert() {
   // 언마운트 시 남은 타이머 정리
   useEffect(() => () => { Object.values(soundTimers.current).forEach(clearInterval) }, [])
 
+  // ✕로 닫으면 알림만 없애는 게 아니라, 해당 경보 원인(화재/과열)도 함께 해제한다.
   const dismiss = (id) => {
+    const target = alerts.find((a) => a.id === id)
     stopSound(id)
     setAlerts((prev) => prev.filter((a) => a.id !== id))
+    if (target?.kind === 'fire' && status.fireOn) actions.toggleFire()
+    if (target?.kind === 'heat' && status.heatOn) actions.toggleHeat()
   }
 
   if (alerts.length === 0) return null

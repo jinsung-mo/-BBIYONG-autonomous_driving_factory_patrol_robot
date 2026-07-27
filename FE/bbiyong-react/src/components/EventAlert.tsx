@@ -48,7 +48,7 @@ function playAlarmBeep(kind: AlertKind) {
 }
 
 export default function EventAlert() {
-  const { status } = useSim()
+  const { status, actions } = useSim()
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const prevFire = useRef(status.fireOn)
   const prevHeat = useRef(status.heatOn)
@@ -75,7 +75,13 @@ export default function EventAlert() {
     prevHeat.current = status.heatOn
   }, [status.heatOn])
 
-  const dismiss = (id: number) => setAlerts((prev) => prev.filter((a) => a.id !== id))
+  // ✕로 닫으면 알림만 없애는 게 아니라, 해당 경보 원인(화재/과열)도 함께 해제한다.
+  const dismiss = (id: number) => {
+    const target = alerts.find((a) => a.id === id)
+    setAlerts((prev) => prev.filter((a) => a.id !== id))
+    if (target?.kind === 'fire' && status.fireOn) actions.toggleFire()
+    if (target?.kind === 'heat' && status.heatOn) actions.toggleHeat()
+  }
 
   if (alerts.length === 0) return null
 

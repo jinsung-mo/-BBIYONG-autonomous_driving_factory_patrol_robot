@@ -291,6 +291,19 @@ select,.inp{width:100%; padding:8px 10px; border:1px solid var(--line); border-r
 .modal-log li{cursor:default;}
 .empty-log{color:var(--sub); font-size:13px; text-align:center; padding:24px 0;}
 
+/* ============ 화재/과열 팝업 알림 (상시 다크, 최상단) ============ */
+.alert-toast-wrap{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:8px; width:min(420px,92vw); pointer-events:none;}
+.alert-toast{display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:10px; background:#1a2030; border:1px solid #3a445a; box-shadow:0 16px 40px rgba(0,0,0,.45); pointer-events:auto; animation:toast-in .22s ease-out;}
+.alert-toast.fire{border-color:#ff8078; background:#3a1512;}
+.alert-toast.heat{border-color:#f5a623; background:#3a2a0c;}
+.alert-toast-text{display:flex; flex-direction:column; gap:2px; flex:1; min-width:0;}
+.alert-toast-title{font-size:13px; font-weight:800; color:#fff;}
+.alert-toast-sub{font-size:11.5px; color:#dfe4ec;}
+.alert-toast-time{font-size:11px; color:#9aa3b2;}
+.alert-toast-x{border:0; background:transparent; color:#c6cdd9; font-size:13px; padding:4px 6px; border-radius:6px; cursor:pointer;}
+.alert-toast-x:hover{background:rgba(255,255,255,.12);}
+@keyframes toast-in{from{opacity:0; transform:translateY(-10px);} to{opacity:1; transform:translateY(0);}}
+
 /* ============ 유저 메뉴 (네비게이션, 상시 다크) ============ */
 .usermenu{position:relative;}
 .usermenu-btn{display:flex; align-items:center; gap:8px; padding:4px 10px 4px 4px; border-radius:999px; border:1px solid #2a3040; background:#1a2030; color:#dfe4ec;}
