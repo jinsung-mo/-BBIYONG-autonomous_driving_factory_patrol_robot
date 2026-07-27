@@ -1,3 +1,4 @@
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
@@ -5,6 +6,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    share = get_package_share_directory("bbiyong_bringup")
     params = LaunchConfiguration("nav2_params")
     common = {
         "output": "screen",
@@ -19,9 +21,14 @@ def generate_launch_description():
         "bt_navigator",
         "waypoint_follower",
         "velocity_smoother",
+        "collision_monitor",
     ]
     return LaunchDescription([
         DeclareLaunchArgument("nav2_params"),
+        DeclareLaunchArgument(
+            "collision_monitor_params",
+            default_value=f"{share}/config/collision_monitor.yaml",
+        ),
         DeclareLaunchArgument("log_level", default_value="info"),
         Node(
             package="nav2_controller",
@@ -52,9 +59,16 @@ def generate_launch_description():
             name="velocity_smoother",
             remappings=[
                 ("cmd_vel", "cmd_vel_nav"),
-                ("cmd_vel_smoothed", "/cmd_vel/autonomy"),
+                ("cmd_vel_smoothed", "/cmd_vel/autonomy_raw"),
             ],
             **common,
+        ),
+        Node(
+            package="nav2_collision_monitor",
+            executable="collision_monitor",
+            name="collision_monitor",
+            output="screen",
+            parameters=[LaunchConfiguration("collision_monitor_params")],
         ),
         Node(
             package="nav2_lifecycle_manager",
