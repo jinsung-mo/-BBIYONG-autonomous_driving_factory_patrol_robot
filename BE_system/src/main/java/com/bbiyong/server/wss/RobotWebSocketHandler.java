@@ -2,6 +2,7 @@ package com.bbiyong.server.wss;
 
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotFireEvent;
+import com.bbiyong.server.wss.event.RobotInspectionEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import com.bbiyong.server.wss.event.RobotVideoEvent;
@@ -76,9 +77,13 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                     eventPublisher.publishEvent(new RobotFireEvent(this, packet));
                     break;
                 case "EVENT_OVERHEAT":
-                    log.info("Overheat event received via WSS from [{}] for equipment [{}]: temp={}",
-                            robotId, packet.getEquipmentId(), packet.getTemperature());
+                    log.info("Overheat event received via WSS from [{}] for equipment [{}]: temp={}, threshold={}",
+                            robotId, packet.getEquipmentId(), packet.getTemperature(), packet.getThreshold());
                     eventPublisher.publishEvent(new RobotOverheatEvent(this, packet));
+                    break;
+                case "INSPECTION":
+                    // 분전반 정상 점검 리포트 (경보 아님) - 설비 최근점검 상태 갱신용
+                    eventPublisher.publishEvent(new RobotInspectionEvent(this, packet));
                     break;
                 default:
                     log.warn("Unknown WSS packet type [{}] in message: {}", packet.getType(), payload);
