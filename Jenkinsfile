@@ -18,16 +18,6 @@ pipeline {
         stage('Deploy') {
             steps {
                 dir('BE_system') {
-                    // Create .env file for dev environment if on dev branch
-                    script {
-                        if (env.BRANCH_NAME == 'be_system/dev') {
-                            sh '''
-                                echo "ENV=dev" > .env
-                                echo "SERVER_PORT=9081" >> .env
-                                echo "DB_PATH=/opt/bbiyong/data_dev" >> .env
-                            '''
-                        }
-                    }
                     sh 'docker compose up -d --build'
                 }
             }
