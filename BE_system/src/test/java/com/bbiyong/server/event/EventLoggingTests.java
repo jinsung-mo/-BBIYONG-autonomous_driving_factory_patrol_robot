@@ -50,7 +50,9 @@ public class EventLoggingTests {
         overheatPacket.setRobotId("orinka_01");
         overheatPacket.setType("EVENT_OVERHEAT");
         overheatPacket.setTemperature(85.5);
-        
+        overheatPacket.setEquipmentId("panel_01");
+        overheatPacket.setThreshold(55.0);
+
         RobotPacket.Location overheatLoc = new RobotPacket.Location();
         overheatLoc.setX(30.0);
         overheatLoc.setY(40.0);
@@ -76,6 +78,10 @@ public class EventLoggingTests {
         assertThat(fireLog.getX()).isEqualTo(10.0);
         assertThat(fireLog.getY()).isEqualTo(20.0);
         assertThat(fireLog.getTimestamp()).isNotNull();
+        // 강화 필드: 화재는 CRITICAL, 메시지 보존, 설비 정보 없음
+        assertThat(fireLog.getLevel()).isEqualTo("CRITICAL");
+        assertThat(fireLog.getMessage()).contains("orinka_01");
+        assertThat(fireLog.getEquipmentId()).isNull();
 
         // Verify Overheat Log details
         EventLog overheatLog = logs.stream()
@@ -90,5 +96,10 @@ public class EventLoggingTests {
         assertThat(overheatLog.getX()).isEqualTo(30.0);
         assertThat(overheatLog.getY()).isEqualTo(40.0);
         assertThat(overheatLog.getTimestamp()).isNotNull();
+        // 강화 필드: 과열은 WARNING, 어느 설비인지·임계치·메시지 보존
+        assertThat(overheatLog.getLevel()).isEqualTo("WARNING");
+        assertThat(overheatLog.getEquipmentId()).isEqualTo("panel_01");
+        assertThat(overheatLog.getThreshold()).isEqualTo(55.0);
+        assertThat(overheatLog.getMessage()).contains("panel_01");
     }
 }
