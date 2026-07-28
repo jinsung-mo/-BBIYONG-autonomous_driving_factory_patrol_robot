@@ -8,7 +8,7 @@ import { useSim } from '../SimContext.js'
 // 현재 편성된 순찰 로봇 — 출동 대상은 이 1대뿐 (StatusPanel의 표기와 동일)
 const ROBOT_NAME = '오린카-01'
 
-const SOUND_REPEAT_MS = 5000 // 알림이 떠 있는 동안 경보음 반복 간격
+const SOUND_REPEAT_MS = 3000 // 알림이 떠 있는 동안 경보음 반복 간격
 let uid = 0
 
 // 오디오 파일 없이 오실레이터로 경보음 생성 (화재: 높은 삐-삐-삐 / 과열: 낮은 삐-삐)
