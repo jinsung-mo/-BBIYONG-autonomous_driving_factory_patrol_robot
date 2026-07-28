@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = "spring.datasource.url=jdbc:sqlite:build/test.db")
+@SpringBootTest(properties = "spring.datasource.url=jdbc:sqlite:file:memdb_robot?mode=memory&cache=shared")
 @AutoConfigureMockMvc
 @DirtiesContext
 class RobotControllerTests {

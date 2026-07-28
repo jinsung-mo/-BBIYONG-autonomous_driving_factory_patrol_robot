@@ -20,7 +20,7 @@ import java.net.URI;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.datasource.url=jdbc:sqlite:build/test-video.db",
+        "spring.datasource.url=jdbc:sqlite:file:memdb_vid?mode=memory&cache=shared",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @AutoConfigureTestRestTemplate
@@ -87,16 +87,30 @@ class VideoArchiveTests {
     }
 
     @Test
-    void detailReturnsPlaybackUrl() {
+    void filesystemDetailReturnsServableStreamUrl() {
         VideoResponses.RegisterResult r = register("""
                 {"robotId":"orinka_01","clipType":"MANUAL","storageType":"FILESYSTEM",
-                 "filePath":"/data/videos/man_1.mp4","startedAt":"2026-07-27T11:00:00Z"}
+                 "filePath":"man_1.mp4","startedAt":"2026-07-27T11:00:00Z"}
                 """);
         ResponseEntity<VideoResponses.Detail> detail =
                 restTemplate.getForEntity("/api/videos/" + r.id(), VideoResponses.Detail.class);
         assertThat(detail.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(detail.getBody().playbackUrl()).isEqualTo("/data/videos/man_1.mp4");
+        // FILESYSTEM 저장분은 서버가 서빙하는 재생 API URL 로 노출된다.
+        assertThat(detail.getBody().playbackUrl()).isEqualTo("/api/videos/" + r.id() + "/stream");
         assertThat(detail.getBody().clipType()).isEqualTo("MANUAL");
+    }
+
+    @Test
+    void s3DetailPassesThroughOriginalUrl() {
+        VideoResponses.RegisterResult r = register("""
+                {"robotId":"orinka_01","clipType":"PATROL","storageType":"S3",
+                 "filePath":"https://cdn.example.com/videos/s3_1.mp4","startedAt":"2026-07-27T12:00:00Z"}
+                """);
+        ResponseEntity<VideoResponses.Detail> detail =
+                restTemplate.getForEntity("/api/videos/" + r.id(), VideoResponses.Detail.class);
+        assertThat(detail.getStatusCode().is2xxSuccessful()).isTrue();
+        // S3/외부 저장분은 저장된 URL 을 그대로 반환한다.
+        assertThat(detail.getBody().playbackUrl()).isEqualTo("https://cdn.example.com/videos/s3_1.mp4");
     }
 
     @Test
