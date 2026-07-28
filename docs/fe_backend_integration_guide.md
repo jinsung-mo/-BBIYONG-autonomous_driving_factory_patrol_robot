@@ -14,6 +14,7 @@
 | BE 상행 브로드캐스트 (로봇 WSS → `/topic/robots`·`/topic/video`) | ✅ 배포·**라이브 검증 완료** | 텔레메트리·영상 프레임 실측 |
 | BE 경보 (`/topic/alerts`, `AlertMessage`) | ✅ 배포 (유닛테스트 통과) | |
 | **BE STOMP 인증 (CONNECT JWT 검증)** | 🔜 **병합·배포 후 적용** | 무인증 → **JWT 필수**로 전환 (S15P11E101-418). FE는 지금부터 토큰을 실어 구현할 것 |
+| **BE 2D 맵 API (`/api/maps`)** | 🔜 **병합·배포 후 적용** | SLAM 맵 이미지 저장·서빙 (S15P11E101-426). 실시간 `/topic/map`은 Deferred → 우선 REST 제공. FE 렌더는 §8 |
 | **FE 연동** | ❌ **미연동** | 현재 관제 화면(예: `EventAlert.jsx`)은 로컬 시뮬레이션(`useSim`)으로만 동작 |
 
 > 즉 **백엔드는 준비 완료**, FE에서 (인증 포함) 구독/발행만 붙이면 됩니다.
@@ -194,6 +195,66 @@ publish('/app/control/operation', { command: 'NAVIGATE', x: 15.0, y: 8.2, yaw: 0
 - 상행 브로드캐스트: 로봇 WSS `STATE_UPDATE`/`VIDEO_FRAME` → `/topic/robots`·`/topic/video/{id}` 정상 수신.
 
 즉 FE가 이 문서대로 붙이면 별도 백엔드 변경 없이 동작한다.
+
+---
+
+## 8. 2D 맵 렌더링 (REST · `/api/maps`)
+
+2D 도면은 로봇 SLAM 맵이다. **실시간 점유격자 스트리밍(`/topic/map`)은 로봇의 맵 상향 스트리밍 능력이 미확정이라 Deferred**이며, 그 전까지 **REST로 최신 맵 이미지 + 좌표 메타를 제공**한다. FE는 이 이미지를 받아 2D 맵 패널에 그리고, `resolution`·`origin`으로 로봇 좌표와 정렬한다. (S15P11E101-426)
+
+### 8.1 엔드포인트
+| 메서드/경로 | 용도 |
+| :-- | :-- |
+| `GET /api/maps/latest?robotId=orinka_01` | **대시보드가 현재 도면을 그릴 때** 쓰는 최신 맵(메타 + imageUrl) |
+| `GET /api/maps/{id}/image` | 맵 이미지 바이트 서빙 (PNG 등) |
+| `GET /api/maps` | 맵 목록(최신순 Summary) |
+| `POST /api/maps/upload` *(FE 아님)* | 로봇/게이트웨이가 `SAVE_MAP` 산출물(이미지+메타) 등록 |
+
+### 8.2 `GET /api/maps/latest` 응답
+```json
+{
+  "id": "57d4fa92-...",
+  "name": "factory_01",
+  "robotId": "orinka_01",
+  "imageUrl": "/api/maps/57d4fa92-.../image",
+  "widthPx": 400,
+  "heightPx": 300,
+  "resolution": 0.05,
+  "originX": -10.0,
+  "originY": -7.5,
+  "originYaw": 0.0,
+  "fileSizeBytes": 1910,
+  "createdAt": "2026-07-28T03:29:49Z"
+}
+```
+- `resolution`: 미터/픽셀 (m/px)
+- `originX`/`originY`/`originYaw`: 맵 원점의 월드 좌표(ROS map 규약: 이미지 좌하단이 원점, 위로 갈수록 +y)
+
+### 8.3 FE 사용 (인증 필요 → blob-fetch)
+`/api/maps/{id}/image`도 JWT 인가 대상이라 `<img src>`로는 헤더를 못 싣는다. **fetch로 blob을 받아** `URL.createObjectURL`로 렌더한다.
+```js
+// 1) 최신 맵 메타 (authed)
+const map = await authedGet('/api/maps/latest?robotId=orinka_01', accessToken)
+
+// 2) 이미지는 blob-fetch
+const blob = await fetch(REST_BASE + map.imageUrl, {
+  headers: { Authorization: 'Bearer ' + accessToken },
+}).then((r) => r.blob())
+const src = URL.createObjectURL(blob) // <img src={src}> 또는 canvas 배경
+```
+
+### 8.4 로봇 좌표 ↔ 맵 픽셀 정렬
+텔레메트리 위치(`/topic/robots`의 `location.x/y`, 미터)를 맵 이미지 위에 겹칠 때:
+```js
+// 월드(m) → 이미지 픽셀 (y축은 이미지가 아래로 증가하므로 뒤집는다)
+const px = (worldX - map.originX) / map.resolution
+const py = map.heightPx - (worldY - map.originY) / map.resolution
+```
+- 이 변환으로 로봇 마커·경보 위치(`AlertMessage.x/y`)·NAVIGATE 목표를 실제 도면 위 정확한 지점에 표시할 수 있다.
+- 그동안 좌표 매핑을 임시 1:1로 두었다면, 위 `resolution`/`origin` 값으로 대체하면 맵·지점이동이 함께 정확해진다.
+
+### 8.5 상태
+- `-426` **병합·배포 후** 사용 가능. 그 전엔 404. 업로더(로봇/게이트웨이)가 `SAVE_MAP` 후 `POST /api/maps/upload`를 호출해야 맵이 채워진다.
 
 ---
 
