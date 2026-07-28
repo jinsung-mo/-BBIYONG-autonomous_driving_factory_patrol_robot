@@ -71,20 +71,27 @@ function ensureClient() {
   return client
 }
 
-// accessToken 은 STOMP CONNECT 헤더에 실린다. 토큰이 바뀌면 재연결해 새 토큰으로 CONNECT 한다.
-export function connect(accessToken = null) {
-  const changed = token !== accessToken
+// accessToken 은 STOMP CONNECT 헤더에 실린다(가이드 §1).
+// 연결 수명주기와 분리해 둔다 — disconnect()가 비동기라, 연결 관리와 토큰 관리를 한데 묶으면
+// deactivate() 완료가 늦게 도착하면서 이미 설정된 새 토큰을 지워버린다.
+export function setToken(accessToken = null) {
+  if (token === accessToken) return
   token = accessToken
+  // 연결 중이면 끊어서 재연결시킨다 → beforeConnect 에서 새 토큰으로 CONNECT
+  if (client && client.connected) client.forceDisconnect()
+  emitState()
+}
+
+export function connect() {
   const c = ensureClient()
-  if (!c.active) { c.activate(); return }
-  if (changed && c.connected) c.forceDisconnect() // reconnectDelay 로 자동 재연결 → beforeConnect 에서 새 토큰 적용
+  if (!c.active) c.activate()
 }
 
 export async function disconnect() {
   if (!client) return
   registry.clear(); active.clear()
   await client.deactivate()
-  connected = false; lastError = null; authError = false; token = null; emitState()
+  connected = false; lastError = null; authError = false; emitState()
 }
 
 // destination 구독. 반환값을 호출하면 해제된다.
