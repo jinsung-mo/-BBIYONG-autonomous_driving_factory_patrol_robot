@@ -25,7 +25,7 @@ public final class VideoResponses {
                           Integer durationSec, String thumbnailUrl, String startedAt) {
         public static Summary of(VideoClip v) {
             return new Summary(v.getId(), v.getRobotId(), v.getEventId(), v.getClipType(),
-                    v.getDurationSec(), v.getThumbnailPath(),
+                    v.getDurationSec(), VideoResponses.thumbnailUrlFor(v),
                     v.getStartedAt() != null ? v.getStartedAt().toString() : null);
         }
     }
@@ -36,10 +36,28 @@ public final class VideoResponses {
         public static Detail of(VideoClip v) {
             return new Detail(v.getId(), v.getRobotId(), v.getEventId(), v.getClipType(), v.getStorageType(),
                     v.getDurationSec(), v.getFileSizeBytes(),
-                    v.getFilePath(), v.getThumbnailPath(),
+                    VideoResponses.playbackUrlFor(v), VideoResponses.thumbnailUrlFor(v),
                     v.getStartedAt() != null ? v.getStartedAt().toString() : null,
                     v.getEndedAt() != null ? v.getEndedAt().toString() : null);
         }
+    }
+
+    /** FILESYSTEM 저장분은 서버가 서빙하는 재생 API URL, S3/외부는 저장된 URL 을 그대로 반환. */
+    private static String playbackUrlFor(VideoClip v) {
+        if ("FILESYSTEM".equals(v.getStorageType())) {
+            return "/api/videos/" + v.getId() + "/stream";
+        }
+        return v.getFilePath();
+    }
+
+    private static String thumbnailUrlFor(VideoClip v) {
+        if (v.getThumbnailPath() == null) {
+            return null;
+        }
+        if ("FILESYSTEM".equals(v.getStorageType())) {
+            return "/api/videos/" + v.getId() + "/thumbnail";
+        }
+        return v.getThumbnailPath();
     }
 
     public record PageResult(List<Summary> content, int page, int size, int totalPages, long totalElements) {
