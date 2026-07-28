@@ -18,7 +18,7 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.datasource.url=jdbc:sqlite:build/test-events.db",
+        "spring.datasource.url=jdbc:sqlite:file:memdb_evt?mode=memory&cache=shared",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @AutoConfigureTestRestTemplate

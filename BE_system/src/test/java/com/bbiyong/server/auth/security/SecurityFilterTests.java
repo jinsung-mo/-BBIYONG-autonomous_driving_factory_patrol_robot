@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * JWT 인증/인가 필터 동작 검증 (완료 기준).
  */
-@SpringBootTest(properties = "spring.datasource.url=jdbc:sqlite:build/test-security.db")
+@SpringBootTest(properties = "spring.datasource.url=jdbc:sqlite:file:memdb_sec?mode=memory&cache=shared")
 @AutoConfigureMockMvc
 @DirtiesContext
 class SecurityFilterTests {
