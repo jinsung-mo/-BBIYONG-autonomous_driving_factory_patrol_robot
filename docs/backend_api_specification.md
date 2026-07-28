@@ -118,8 +118,11 @@
 * `status` 값: `NORMAL`(정상) / `OVER`(임계 초과) / `UNKNOWN`(점검 전)
 * `lastTemperature`·`lastInspectedAt`은 로봇의 최근 점검 리포트(INSPECTION/EVENT_OVERHEAT)로 갱신됩니다.
 
-#### [후속/Deferred][PUT] `/api/equipments/{equipmentId}`
-* **설명**: 임계 온도 수정. **임계치는 로봇 보유가 authoritative**이므로, 이 API는 표시용 값 수정 또는 로봇 임계 푸시 방식이 정해진 뒤 구현합니다. (MVP 미구현)
+#### [PUT] `/api/equipments/{equipmentId}`
+* **설명**: 설비 임계 온도(표시용 참고값)를 수정합니다. **임계치의 authoritative 값은 로봇이 보유**하며, 이 API는 서버 측 표시값만 갱신합니다. 갱신값을 로봇으로 반영(푸시)하는 방식은 여전히 후속 확정 대상입니다.
+* **Request Body**: `{"threshold": 55.0}` — `threshold`는 필수, 0보다 커야 합니다.
+* **Response**: `{"status": "SUCCESS"}`
+* **오류**: 없는 `equipmentId` → `404`, `threshold` 누락/음수 → `400` (공통 에러 포맷).
 
 ---
 

@@ -245,7 +245,7 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 | MVP | **GET** | `/api/videos` | 영상 아카이브 목록 조회 (필터·페이징, 최근순) | `?robotId=&clipType=&from=&to=&page=0&size=10` | `{"content":[{"id":"<uuid>","clipType":"EVENT","thumbnailUrl":"..."}],"totalElements":1}` |
 | MVP | **GET** | `/api/videos/{id}` | 영상 클립 상세 + 재생 URL | None | `{"id":"<uuid>","playbackUrl":"...","startedAt":"..."}` |
 | MVP | **GET** | `/api/events/{eventId}/video` | 이벤트 연관 클립 목록 | None | `[{"id":"<uuid>","clipType":"EVENT"}]` |
-| 후속 | **PUT** | `/api/equipments/{id}` | 설비 임계 온도 수정 (임계치 로봇 보유이므로 표시용/푸시 방식 확정 후) | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
+| MVP | **PUT** | `/api/equipments/{id}` | 설비 임계 온도(표시용 참고값) 수정. 없는 설비는 404, `threshold`는 양수 필수 | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
 
 > **인증 주의**: 회원가입/로그인은 이메일 기반이며, 로그인 성공 시 JWT를 발급합니다. (인가 필터 적용은 후속 — 현재는 엔드포인트 오픈)
 
