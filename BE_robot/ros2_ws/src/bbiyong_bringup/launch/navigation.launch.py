@@ -11,9 +11,16 @@ def generate_launch_description():
         DeclareLaunchArgument("map", description="absolute path to saved map YAML"),
         DeclareLaunchArgument("vehicle_config", default_value=f"{share}/config/vehicle.example.yaml"),
         DeclareLaunchArgument("ydlidar_params", default_value=f"{share}/config/ydlidar.yaml"),
+        DeclareLaunchArgument("scan_filter_params", default_value=f"{share}/config/scan_filter.yaml"),
         DeclareLaunchArgument("nav2_params", default_value=f"{share}/config/nav2_ackermann.template.yaml"),
+        DeclareLaunchArgument(
+            "collision_monitor_params",
+            default_value=f"{share}/config/collision_monitor.yaml",
+        ),
         DeclareLaunchArgument("odom_source", default_value="rf2o"),
         DeclareLaunchArgument("start_lidar", default_value="true"),
+        DeclareLaunchArgument("start_scan_filter", default_value="true"),
+        DeclareLaunchArgument("publish_scan_compat", default_value="true"),
         DeclareLaunchArgument("publish_laser_tf", default_value="true"),
         DeclareLaunchArgument("allow_unmeasured_lidar", default_value="false"),
         IncludeLaunchDescription(
@@ -22,9 +29,12 @@ def generate_launch_description():
                 "map": LaunchConfiguration("map"),
                 "vehicle_config": LaunchConfiguration("vehicle_config"),
                 "ydlidar_params": LaunchConfiguration("ydlidar_params"),
+                "scan_filter_params": LaunchConfiguration("scan_filter_params"),
                 "nav2_params": LaunchConfiguration("nav2_params"),
                 "odom_source": LaunchConfiguration("odom_source"),
                 "start_lidar": LaunchConfiguration("start_lidar"),
+                "start_scan_filter": LaunchConfiguration("start_scan_filter"),
+                "publish_scan_compat": LaunchConfiguration("publish_scan_compat"),
                 "publish_laser_tf": LaunchConfiguration("publish_laser_tf"),
                 "allow_unmeasured_lidar": LaunchConfiguration("allow_unmeasured_lidar"),
             }.items(),
@@ -35,6 +45,9 @@ def generate_launch_description():
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(f"{share}/launch/navigation_core.launch.py"),
-            launch_arguments={"nav2_params": LaunchConfiguration("nav2_params")}.items(),
+            launch_arguments={
+                "nav2_params": LaunchConfiguration("nav2_params"),
+                "collision_monitor_params": LaunchConfiguration("collision_monitor_params"),
+            }.items(),
         ),
     ])

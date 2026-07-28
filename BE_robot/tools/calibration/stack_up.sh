@@ -20,15 +20,26 @@ up() {   # up <이름> <명령...>
 }
 
 stop 'ydlidar_ros2_driver_node'
+stop 'scan_to_scan_filter_chain'
+stop 'topic_tools.*relay.*/scan_filtered.*/scan'
 stop 'esp32_base_node'
 stop 'camera_node.py'
+stop 'teleop_node.py'
 [ "$KEEPMAP" != "keepmap" ] && stop 'async_slam_toolbox_node'
 sleep 3
 
-PARAMS="$HOME/ydlidar_ros2_ws/install/ydlidar_ros2_driver/share/ydlidar_ros2_driver/params/ydlidar.yaml"
+# Use the versioned project configuration deployed to ~/calib. The vendor
+# install YAML previously restored clockwise (mirrored) LaserScan angles on
+# every restart.
+PARAMS="$HOME/calib/ydlidar.yaml"
 up ydlidar ros2 run ydlidar_ros2_driver ydlidar_ros2_driver_node \
-    --ros-args --params-file "$PARAMS"
+    --ros-args --params-file "$PARAMS" -r scan:=/scan_raw
 sleep 10
+up scan_filter ros2 run laser_filters scan_to_scan_filter_chain \
+    --ros-args --params-file "$HOME/calib/scan_filter.yaml" \
+    -r scan:=/scan_raw -r scan_filtered:=/scan_filtered
+up scan_relay ros2 run topic_tools relay /scan_filtered /scan
+sleep 3
 up base python3 "$HOME/calib/esp32_base_node.py"
 sleep 7
 if [ "$KEEPMAP" != "keepmap" ]; then
@@ -40,7 +51,7 @@ fi
 sleep 6
 
 echo "── 상태 ──"
-for t in /scan /odom /map /camera/floor_clear; do
+for t in /scan_raw /scan_filtered /scan /odom /map /camera/floor_clear; do
     if ros2 topic list 2>/dev/null | grep -qx "$t"; then echo "  ✓ $t"
     else echo "  ✗ $t"; fi
 done
