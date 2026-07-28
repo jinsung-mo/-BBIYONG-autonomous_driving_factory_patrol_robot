@@ -56,6 +56,12 @@ export default class Simulation {
     this.canvases = {}
     this.listeners = new Set()
 
+    // ---- 실서버(live) 외부 입력 ----
+    // 값이 있으면 시뮬 상태머신 대신 실제 로봇의 위치/영상을 그린다.
+    // null이면 기존 시뮬레이션 동작 그대로 (mock 모드).
+    this.externalPose = null              // { c, r, hd }
+    this.externalFrames = { FRONT: null, THERMAL: null } // { img, maxTemp }
+
     this._raf = null
     this._emitTimer = null
     this._started = false
@@ -367,8 +373,37 @@ export default class Simulation {
     if (src && src.width > 0) g.drawImage(src, 0, 0, cv.width, cv.height)
   }
 
+  // ---------- 실서버 외부 입력 ----------
+  // live 모드에서 텔레메트리 위치를 격자 좌표로 변환해 넣는다. null이면 시뮬 상태머신으로 복귀.
+  setExternalPose(pose) {
+    this.externalPose = pose
+    if (!pose) this.botResume()
+  }
+
+  // live 모드 카메라 프레임. img는 디코딩이 끝난 HTMLImageElement.
+  setExternalFrame(channel, img, maxTemp) {
+    if (channel !== 'FRONT' && channel !== 'THERMAL') return
+    this.externalFrames[channel] = img ? { img, maxTemp } : null
+  }
+
+  clearExternalFrames() { this.externalFrames = { FRONT: null, THERMAL: null } }
+
+  // 캔버스를 꽉 채우되 종횡비를 유지해 그린다 (letterbox).
+  _drawFrame(g, img, Wc, Hc) {
+    g.fillStyle = '#000'; g.fillRect(0, 0, Wc, Hc)
+    const s = Math.min(Wc / img.width, Hc / img.height)
+    const w = img.width * s, h = img.height * s
+    g.drawImage(img, (Wc - w) / 2, (Hc - h) / 2, w, h)
+  }
+
   // ---------- 로봇 상태 머신 ----------
   botStep() {
+    // 실서버 위치가 들어오면 시뮬 주행을 멈추고 그 값을 따른다.
+    if (this.externalPose) {
+      this.bot.pos = { c: this.externalPose.c, r: this.externalPose.r }
+      if (typeof this.externalPose.hd === 'number') this.bot.hd = this.externalPose.hd
+      return
+    }
     const bot = this.bot
     if (bot.mode === 'patrol') {
       const a = loop[bot.seg], b = loop[(bot.seg + 1) % loop.length]
@@ -468,6 +503,15 @@ export default class Simulation {
   drawRcam() {
     const cv = this.canvases.rcam; if (!cv) return
     const g = fit(cv), Wc = cv.width, Hc = cv.height, t = this.t
+
+    // live: 로봇이 보내온 실제 전면 카메라 프레임 (YOLO 오버레이는 로봇 쪽에서 이미 합성됨)
+    const front = this.externalFrames.FRONT
+    if (front) {
+      this._drawFrame(g, front.img, Wc, Hc)
+      g.fillStyle = 'rgba(180,230,255,.75)'; g.font = '10px Consolas,monospace'
+      g.fillText('FRONT · LIVE', 10, Hc - 12)
+      return
+    }
     const vx = Wc / 2, vy = Hc * 0.47, ex = Wc * 0.13 // 소실점 · 통로 폭
     const edgeX = (spread) => ex + (Wc / 2 - ex) * spread // 깊이별 통로 반폭
 
@@ -597,6 +641,19 @@ export default class Simulation {
     const g = fit(cv), Wc = cv.width, Hc = cv.height, t = this.t
     const bx = this.bot.pos.c, br = this.bot.pos.r
     const vx = Wc / 2, vy = Hc * 0.47
+
+    // live: 로봇 열화상 프레임. HUD 최고온도는 프레임에 실려온 maxTemp를 그대로 쓴다.
+    const thermal = this.externalFrames.THERMAL
+    if (thermal) {
+      this._drawFrame(g, thermal.img, Wc, Hc)
+      if (typeof thermal.maxTemp === 'number') {
+        this.thermalMax = 'MAX ' + thermal.maxTemp.toFixed(1) + '°C' + (thermal.maxTemp > 60 ? ' ⚠ 임계 초과' : '')
+        this.thermalColor = thermal.maxTemp > 60 ? '#ff8d85' : (thermal.maxTemp > 52 ? '#ffd9a8' : '#b9ffe0')
+      }
+      g.fillStyle = 'rgba(255,220,180,.9)'; g.font = '11px Consolas,monospace'
+      g.fillText('THERMAL · LIVE', 10, 18)
+      return
+    }
 
     // 아이언바우 팔레트
     const stops = [[6, 10, 52], [24, 36, 150], [128, 28, 150], [214, 48, 58], [248, 142, 22], [255, 236, 120], [255, 255, 255]]
