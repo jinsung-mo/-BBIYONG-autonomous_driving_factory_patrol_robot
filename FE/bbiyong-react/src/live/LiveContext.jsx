@@ -8,7 +8,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ROBOT_ID, getDataSource, saveDataSource } from './config.js'
-import { connect, disconnect, subscribe, publish, onState } from './stompClient.js'
+import { connect, disconnect, subscribe, publish, onState, setToken } from './stompClient.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 
 const LiveContext = createContext(null)
@@ -51,9 +51,16 @@ export function LiveProvider({ children }) {
     setDataSource(getDataSource() === 'live' ? 'mock' : 'live')
   }, [setDataSource])
 
-  // ---- 연결 · 구독 (live 모드에서만) ----
+  // 토큰은 연결 수명주기보다 먼저 반영한다 — 아래 연결 effect가 이 값으로 CONNECT 한다.
+  // 세션 도중 토큰이 바뀌면 setToken() 이 재연결시킨다(구독은 유지).
+  useEffect(() => { setToken(accessToken) }, [accessToken])
+
+  // ---- 연결 · 구독 ----
+  // 토큰이 없으면 아예 붙지 않는다. 인증 강제(S15P11E101-418) 이후 무토큰 CONNECT는
+  // 100% 거부되므로, 시도하면 reconnectDelay 주기로 거부만 반복하며 서버를 두드리게 된다.
+  const canConnect = enabled && !!accessToken
   useEffect(() => {
-    if (!enabled) {
+    if (!canConnect) {
       setConnected(false); setLastError(null); setAuthError(false)
       setTelemetry(null); telemetryRef.current = null
       videoRef.current = { FRONT: null, THERMAL: null }
@@ -84,16 +91,15 @@ export function LiveProvider({ children }) {
     }, TELEMETRY_FLUSH_MS)
 
     // CONNECT 프레임에 JWT를 실어 연결한다(가이드 §1).
-    // 토큰이 없어도 시도는 한다 — 인증 강제(S15P11E101-418) 배포 전 서버는 토큰을 무시하므로
-    // 지금은 붙고, 배포 후에는 ERROR 프레임으로 거부되어 authError로 드러난다.
-    connect(accessToken)
+    // 인증 강제(S15P11E101-418)가 배포되어, 토큰이 없거나 무효면 ERROR 프레임으로 거부된다.
+    connect()
 
     return () => {
       clearInterval(flush)
       offRobots(); offAlerts(); offVideo(); offState()
       disconnect()
     }
-  }, [enabled, accessToken])
+  }, [canConnect])
 
   const dismissAlert = useCallback((id) => {
     setAlerts((prev) => prev.filter((a) => a._id !== id))

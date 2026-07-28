@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSim } from '../SimContext.js'
 import { useLive } from '../live/LiveContext.jsx'
 import { alertToToast } from '../live/mappers.js'
@@ -84,7 +84,8 @@ function ToastList({ items, onDismiss }) {
 // ---- live: /topic/alerts 수신분을 그대로 렌더 ----
 function LiveAlerts() {
   const { alerts, dismissAlert } = useLive()
-  const items = alerts.map((a) => ({ id: a._id, ...alertToToast(a) }))
+  // 매 렌더마다 새 배열이 되면 경보음 타이머 동기화 effect가 불필요하게 재실행된다
+  const items = useMemo(() => alerts.map((a) => ({ id: a._id, ...alertToToast(a) })), [alerts])
   return <ToastList items={items} onDismiss={dismissAlert} />
 }
 

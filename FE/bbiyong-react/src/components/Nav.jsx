@@ -9,13 +9,13 @@ function LiveBadge() {
 
   let state = 'off', label = '시뮬레이션', hint = '클릭 시 실서버 모드로 전환'
   if (enabled) {
-    if (authError) { state = 'err'; label = '실서버 인증 거부'; hint = lastError || 'JWT 재발급이 필요합니다' }
+    if (!hasToken) {
+      // 인증 강제(S15P11E101-418) 배포됨 — 토큰 없이는 CONNECT 자체가 거부된다.
+      state = 'err'; label = '실서버 로그인 필요'
+      hint = '시뮬레이션 계정으로 로그인해 JWT가 없습니다. 로그아웃 후 실서버 계정으로 다시 로그인하세요.'
+    } else if (authError) { state = 'err'; label = '실서버 인증 거부'; hint = lastError || 'JWT 재발급이 필요합니다' }
     else if (!connected) { state = 'wait'; label = '실서버 연결 중…'; hint = lastError || '' }
-    else if (!hasToken) {
-      // 인증 강제(S15P11E101-418) 배포 전에는 토큰 없이도 붙는다 — 배포되면 끊긴다.
-      state = 'wait'; label = '실서버 연결됨 (토큰 없음)'
-      hint = '시뮬레이션 계정으로 로그인해 토큰이 없습니다. 인증 적용 후에는 연결이 거부되니 실서버 계정으로 다시 로그인하세요.'
-    } else { state = 'on'; label = '실서버 연결됨'; hint = '클릭 시 시뮬레이션 모드로 전환' }
+    else { state = 'on'; label = '실서버 연결됨'; hint = '클릭 시 시뮬레이션 모드로 전환' }
   }
 
   return (
