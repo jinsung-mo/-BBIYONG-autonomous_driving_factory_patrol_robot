@@ -13,9 +13,10 @@
 | BE 제어 중계 (STOMP `/app/control/*` → 로봇 WSS) | ✅ 배포·**라이브 검증 완료** | DRIVE/SET_MODE/ESTOP/NAVIGATE 4종 실측 |
 | BE 상행 브로드캐스트 (로봇 WSS → `/topic/robots`·`/topic/video`) | ✅ 배포·**라이브 검증 완료** | 텔레메트리·영상 프레임 실측 |
 | BE 경보 (`/topic/alerts`, `AlertMessage`) | ✅ 배포 (유닛테스트 통과) | |
+| **BE STOMP 인증 (CONNECT JWT 검증)** | 🔜 **병합·배포 후 적용** | 무인증 → **JWT 필수**로 전환 (S15P11E101-418). FE는 지금부터 토큰을 실어 구현할 것 |
 | **FE 연동** | ❌ **미연동** | 현재 관제 화면(예: `EventAlert.jsx`)은 로컬 시뮬레이션(`useSim`)으로만 동작 |
 
-> 즉 **백엔드는 준비 완료**, FE에서 구독/발행만 붙이면 됩니다.
+> 즉 **백엔드는 준비 완료**, FE에서 (인증 포함) 구독/발행만 붙이면 됩니다.
 
 ---
 
@@ -30,20 +31,28 @@
 | 로컬 개발 | `npm run dev` → 위 배포 wss로 붙이거나, 로컬 백엔드면 `ws://localhost:8080/ws-관제` |
 
 **인증 정책**
-- **STOMP 계층은 현재 인증 불필요** — 그냥 CONNECT 하면 구독/발행 가능.
-- **REST(`/api/**`)는 JWT 필수** — 로그인 후 `Authorization: Bearer <accessToken>`.
-- (후속) STOMP에도 인증을 붙이려면 CONNECT 헤더에 토큰을 싣는 방식으로 확장 예정.
+- **STOMP 계층도 JWT 필수** (S15P11E101-418) — **CONNECT 프레임에 `Authorization: Bearer <accessToken>` 헤더**를 실어야 연결·구독·발행이 가능. 토큰이 없거나 무효면 서버가 연결을 거부(ERROR 프레임)한다.
+- **REST(`/api/**`)도 JWT 필수** — `Authorization: Bearer <accessToken>`.
+- 먼저 §2 로그인으로 `accessToken`을 확보한 뒤, **STOMP CONNECT·REST 호출 양쪽에 동일 토큰**을 사용한다.
+- 로봇 원시 WSS(`/ws/robot`)는 로봇↔서버 전용 별도 채널로 본 인증과 무관.
+- 배포 반영 시점: 위 인증은 -418 병합·배포 후 강제된다. **FE는 지금부터 토큰을 실어 구현**하면 되며, 아직 미적용인 서버에서도 토큰을 실어 보내는 것은 무시되어 정상 동작한다.
 
 **라이브러리 권장**: `@stomp/stompjs` (필요 시 `sockjs-client`).
 
 ```js
 import { Client } from '@stomp/stompjs'
 
+// 1) 먼저 §2 로그인으로 accessToken 확보
 const client = new Client({
   brokerURL: 'wss://i15e101.p.ssafy.io/ws/control',
+  connectHeaders: { Authorization: 'Bearer ' + accessToken }, // ← CONNECT 인증 필수
   reconnectDelay: 2000,
   onConnect: () => {
     // 아래 3.구독 참고
+  },
+  onStompError: (frame) => {
+    // 토큰 누락/만료 시 서버가 ERROR 프레임으로 연결 거부
+    console.error('STOMP 연결 거부(인증 확인 필요):', frame.headers['message'])
   },
 })
 client.activate()
@@ -61,7 +70,7 @@ POST https://i15e101.p.ssafy.io/api/auth/login     # (public)
   body: {"email":"you@bbiyong.io","password":"pass1234!"}
   → {"tokenType":"Bearer","accessToken":"<JWT>","expiresIn":86400,"role":"ROLE_ADMIN"}
 ```
-이후 조회 API 호출 시 헤더에 `Authorization: Bearer <accessToken>` 필요.
+이후 **조회 API 호출 시 헤더**에, 그리고 **STOMP CONNECT 헤더**(§1)에 `Authorization: Bearer <accessToken>` 필요.
 조회 API: `GET /api/robots`, `GET /api/equipments`, `GET /api/events`, `GET /api/videos`.
 
 ---
@@ -174,7 +183,7 @@ publish('/app/control/operation', { command: 'NAVIGATE', x: 15.0, y: 8.2, yaw: 0
   - 서버 경보는 one-shot이므로 ✕ 닫기는 시뮬 토글이 아니라 토스트만 닫도록 조정.
 - **StatusPanel / MapPanel**: 시뮬 값 대신 `/topic/robots` 수신값(위치·배터리·속도·estop·FPS)으로 표시.
 - **ControlPanel**: 버튼 클릭 시 §4의 `/app/control/*` 발행 추가.
-- **인증**: 실서버 모드에서 REST 조회가 필요하면 §2 로그인으로 JWT 확보 후 헤더 첨부.
+- **인증**: 실서버 모드는 §2 로그인으로 JWT 확보 후, **STOMP CONNECT(§1)와 REST 조회 양쪽에** 헤더 첨부. 토큰 없이는 STOMP 연결 자체가 거부된다.
 
 ---
 
