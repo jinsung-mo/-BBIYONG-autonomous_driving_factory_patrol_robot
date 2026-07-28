@@ -11,7 +11,9 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -62,5 +64,15 @@ class SecurityFilterTests {
                                 {"email": "not-an-email", "password": "x", "name": ""}
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void corsPreflightFromLocalhostIsAllowed() throws Exception {
+        // 로컬 FE(localhost:5173) 오리진의 프리플라이트가 CORS 허용 헤더로 응답해야 한다.
+        mockMvc.perform(options("/api/robots")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:5173")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:5173"));
     }
 }
