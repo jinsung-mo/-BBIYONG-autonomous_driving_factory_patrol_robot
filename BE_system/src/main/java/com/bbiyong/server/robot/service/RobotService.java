@@ -4,6 +4,7 @@ import com.bbiyong.server.robot.domain.Location;
 import com.bbiyong.server.robot.domain.RobotState;
 import com.bbiyong.server.robot.dto.RobotResponse;
 import com.bbiyong.server.robot.repository.RobotStateCache;
+import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -19,9 +20,11 @@ import java.util.stream.Collectors;
 public class RobotService {
 
     private final RobotStateCache stateCache;
+    private final RobotWebSocketSessionManager sessionManager;
 
-    public RobotService(RobotStateCache stateCache) {
+    public RobotService(RobotStateCache stateCache, RobotWebSocketSessionManager sessionManager) {
         this.stateCache = stateCache;
+        this.sessionManager = sessionManager;
     }
 
     public List<RobotResponse> getAllRobots() {
@@ -36,7 +39,8 @@ public class RobotService {
                         state.getCommLatencyMs(),
                         state.getInferenceFps(),
                         state.getLastConnected(),
-                        state.getLocation()
+                        state.getLocation(),
+                        sessionManager.isConnected(state.getRobotId())
                 ))
                 .collect(Collectors.toList());
     }
