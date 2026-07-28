@@ -10,13 +10,8 @@ export default function useSimulation() {
 
   const [status, setStatus] = useState(() => sim.snapshot())
   const [clock, setClock] = useState('--:--:--')
-  const [activeTab, setActiveTabState] = useState('robot') // 순찰 로봇 관제가 첫 페이지
   const [activeKeys, setActiveKeys] = useState({ w: false, a: false, s: false, d: false })
-  const [theme, setTheme] = useState('dark') // 'dark' | 'light' — 두 페이지 공통
-
-  // 최신 탭 값을 키보드 핸들러에서 참조 (핸들러는 1회만 등록)
-  const tabRef = useRef(activeTab)
-  tabRef.current = activeTab
+  const [theme, setTheme] = useState('dark') // 'dark' | 'light'
 
   // 구독 + 루프 시작/정리
   useEffect(() => {
@@ -28,20 +23,14 @@ export default function useSimulation() {
     return () => { unsub(); sim.stop(); clearInterval(clockTimer) }
   }, [sim])
 
-  const setTab = useCallback((tab) => {
-    setActiveTabState(tab)
-    sim.setTab(tab)
-  }, [sim])
-
-  // 테마를 <html data-theme>에 반영 (CSS 변수 오버라이드가 두 페이지에 적용)
+  // 테마를 <html data-theme>에 반영
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
 
-  // 키보드 WASD + 방향키 — CCTV(PTZ) / 로봇(이동) 컨텍스트별 매핑
+  // 키보드 WASD + 방향키 — 로봇 이동
   useEffect(() => {
-    const cctvMap = { w: 'u', a: 'l', s: 'd', d: 'r' }
     const arrowMap = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
     const resolve = (e) => {
       let key = e.key.toLowerCase()
@@ -52,8 +41,7 @@ export default function useSimulation() {
       const key = resolve(e)
       if (!key) return
       setActiveKeys((prev) => (prev[key] ? prev : { ...prev, [key]: true }))
-      if (tabRef.current === 'cctv') sim.ptzMove(cctvMap[key])
-      else sim.dpadMove(key)
+      sim.dpadMove(key)
     }
     const onUp = (e) => {
       const key = resolve(e)
@@ -68,9 +56,6 @@ export default function useSimulation() {
   // 캔버스 콜백 ref (마운트 시 sim에 등록)
   const canvasRef = useCallback((name) => (el) => { if (el) sim.registerCanvas(name, el) }, [sim])
   const refs = useMemo(() => ({
-    cam3: canvasRef('cam3'),
-    bigcam: canvasRef('bigcam'),
-    conf: canvasRef('conf'),
     rcam: canvasRef('rcam'),
     tcam: canvasRef('tcam'),
     map2d: canvasRef('map2d'),
@@ -81,8 +66,6 @@ export default function useSimulation() {
     toggleFire: () => sim.toggleFire(),
     toggleHeat: () => sim.toggleHeat(),
     toggleSound: () => sim.toggleSound(),
-    ptzMove: (dir) => sim.ptzMove(dir),
-    ptzZoom: (delta) => sim.ptzZoom(delta),
     setSeg: (man) => sim.segSet(man),
     dpadMove: (dir) => sim.dpadMove(dir),
     dpStop: () => sim.dpStop(),
@@ -97,5 +80,5 @@ export default function useSimulation() {
     clearExternalFrames: () => sim.clearExternalFrames(),
   }), [sim])
 
-  return { status, clock, activeTab, setTab, activeKeys, refs, actions, theme, toggleTheme }
+  return { status, clock, activeKeys, refs, actions, theme, toggleTheme }
 }

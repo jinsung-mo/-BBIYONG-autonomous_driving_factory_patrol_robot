@@ -11,7 +11,7 @@ import { worldToCell } from './config.js'
 import { DRIVE_VECTORS } from './mappers.js'
 
 export default function LiveSimBridge() {
-  const { actions, activeTab } = useSim()
+  const { actions } = useSim()
   const { enabled, connected, telemetry, onVideoFrame, control } = useLive()
 
   // 채널별로 Image 하나를 재사용한다 (프레임마다 새로 만들면 GC 부담이 크다)
@@ -47,11 +47,10 @@ export default function LiveSimBridge() {
   }, [enabled, onVideoFrame, actions])
 
   // ---- 키보드 WASD → DRIVE 발행 ----
-  // 로봇 관제 탭에서만 동작한다(CCTV 탭의 WASD는 PTZ 조작).
   // keydown은 누르고 있는 동안 반복 발생하므로 눌림 집합으로 전이만 잡아 발행한다.
   const held = useRef(new Set())
   useEffect(() => {
-    if (!enabled || !connected || activeTab !== 'robot') return undefined
+    if (!enabled || !connected) return undefined
 
     const arrowMap = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
     const resolve = (e) => {
@@ -87,7 +86,7 @@ export default function LiveSimBridge() {
       window.removeEventListener('blur', onBlur)
       onBlur()
     }
-  }, [enabled, connected, activeTab, control])
+  }, [enabled, connected, control])
 
   return null
 }

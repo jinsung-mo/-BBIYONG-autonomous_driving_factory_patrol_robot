@@ -7,7 +7,6 @@ import LiveSimBridge from './live/LiveSimBridge.jsx'
 import WelcomeScreen from './components/auth/WelcomeScreen.jsx'
 import AuthScreen from './components/auth/AuthScreen.jsx'
 import Nav from './components/Nav.jsx'
-import CctvPage from './components/cctv/CctvPage.jsx'
 import RobotPage from './components/robot/RobotPage.jsx'
 import EventAlert from './components/EventAlert.jsx'
 
@@ -20,11 +19,9 @@ function Dashboard() {
         {/* live 모드일 때 실서버 위치·영상 프레임을 캔버스 렌더러로 밀어 넣는다 */}
         <LiveSimBridge />
         <Nav />
-        {/* 화재/과열 발생 팝업 알림 — 탭과 무관하게 항상 최상단에 떠 있음 */}
+        {/* 화재/과열 발생 팝업 알림 — 항상 최상단에 떠 있음 */}
         <EventAlert />
-        {/* 순찰 로봇 관제가 첫 페이지, CCTV 관제가 두 번째 페이지 */}
-        <RobotPage active={sim.activeTab === 'robot'} />
-        <CctvPage active={sim.activeTab === 'cctv'} />
+        <RobotPage />
       </LiveProvider>
     </SimContext.Provider>
   )

@@ -24,7 +24,7 @@ export default function WelcomeScreen({ onEnter }) {
         <h1 className="welcome-brand">삐용<span className="en">BBIYONG</span></h1>
         <p className="welcome-tag">공장 무인 안전 이상탐지 통합 관제 시스템</p>
         <p className="welcome-desc">
-          순찰 로봇 오린카와 CCTV를 하나의 콘솔에서 운용합니다.<br />
+          순찰 로봇 오린카를 웹 콘솔에서 원격으로 운용합니다.<br />
           현장의 이상 징후를 상시 감시하고, 발생 즉시 대응 체계로 연결합니다.
         </p>
 

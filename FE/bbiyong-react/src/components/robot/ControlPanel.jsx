@@ -11,12 +11,13 @@ const GOTO_OPTS = [
   { value: '8,2', label: 'C구역 하역장 (CCTV)' },
 ]
 
-// 순찰 로봇 수동 조작 패널 (WASD 이동 · 모드 · 지점이동 · 토글)
+// 순찰 로봇 수동 조작 패널 (WASD 이동 · 모드 · 지점이동)
 //
 // live 모드에서는 각 버튼이 /app/control/* 로 STOMP 발행한다(가이드 §4).
 // - 방향키는 누르는 동안 DRIVE, 떼면 정지(0,0)를 보낸다.
 // - '순찰 복귀'는 별도 명령이 없어 SET_MODE mode=autonomy 로 보낸다.
-// - 전조등·경고 방송·볼륨은 로봇 명령 계약에 없어(§5) 비활성 처리한다.
+//
+// 전조등·경고 방송·볼륨·리셋은 로봇 명령 계약에 없어(§5) 패널에서 제거했다.
 export default function ControlPanel() {
   const { status, activeKeys, actions } = useSim()
   const { enabled, connected, control, telemetry } = useLive()
@@ -30,7 +31,6 @@ export default function ControlPanel() {
     : status.seg
 
   const liveReady = enabled && connected
-  const unsupported = enabled // 로봇 프로토콜 미지원 항목
 
   // 버튼은 키보드 방향키 기호로 표기 (조작은 WASD/방향키 동일)
   const glyph = { w: '△', a: '◁', s: '▽', d: '▷' }
@@ -54,19 +54,15 @@ export default function ControlPanel() {
   }
 
   const Switch = ({ label, name }) => (
-    <div className="sw" title={unsupported ? '로봇 명령 계약에 없는 항목 — 실서버 모드에서는 사용할 수 없습니다' : undefined}>
+    <div className="sw">
       {label}
       <span
-        className={`swb${switches[name] ? ' on' : ''}${unsupported ? ' off-contract' : ''}`}
+        className={`swb${switches[name] ? ' on' : ''}`}
         role="switch"
         aria-checked={switches[name]}
-        aria-disabled={unsupported}
-        tabIndex={unsupported ? -1 : 0}
-        onClick={() => { if (!unsupported) actions.toggleSwitch(name) }}
-        onKeyDown={(e) => {
-          if (unsupported) return
-          if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); actions.toggleSwitch(name) }
-        }}
+        tabIndex={0}
+        onClick={() => actions.toggleSwitch(name)}
+        onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); actions.toggleSwitch(name) } }}
       >
         <i />
       </span>
@@ -102,8 +98,6 @@ export default function ControlPanel() {
         <div className="col">
           <Switch label="로봇 제어" name="power" />
           <button className="dbtn stop" onClick={onEmergencyStop} disabled={enabled && !connected}>■ 긴급 정지</button>
-          {/* 리셋은 로봇 명령 계약에 없다 — live 모드에서는 비활성 */}
-          <button className="dbtn" onClick={actions.reset} disabled={enabled}>↺ 리셋</button>
           <button className="dbtn go" onClick={onReturnPatrol} disabled={enabled && !connected}>⇤ 순찰 복귀</button>
         </div>
 
@@ -123,13 +117,6 @@ export default function ControlPanel() {
             </select>
             <button className="dbtn go" onClick={onGoto} disabled={enabled && !connected}>지점 이동</button>
           </div>
-        </div>
-
-        <div className="col">
-          <Switch label="전조등" name="light" />
-          <Switch label="경고 방송" name="siren" />
-          <div className="kv" style={{ marginTop: 6 }}><span>볼륨</span><b className="mono">100</b></div>
-          <input type="range" min="0" max="100" defaultValue="100" aria-label="볼륨" disabled={unsupported} />
         </div>
       </div>
     </div>
