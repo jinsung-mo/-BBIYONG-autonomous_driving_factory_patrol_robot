@@ -3,6 +3,7 @@
 
 const USERS_KEY = 'bbiyong.users'
 const SESSION_KEY = 'bbiyong.session'
+const TOKEN_KEY = 'bbiyong.token'
 
 // 데모용 기본 관리자 계정
 const SEED = [{ email: 'safety@bbiyong.io', password: 'bbiyong', name: 'E101 관리자', role: '관제 권한' }]
@@ -43,4 +44,15 @@ export function getSession() {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY)) } catch { return null }
 }
 export function setSession(email) { localStorage.setItem(SESSION_KEY, JSON.stringify({ email })) }
-export function clearSession() { localStorage.removeItem(SESSION_KEY) }
+export function clearSession() { localStorage.removeItem(SESSION_KEY); clearToken() }
+
+// ---- 실서버 세션 (JWT) ----
+// STOMP CONNECT 헤더와 REST 조회 헤더에 함께 쓰인다.
+// 저장된 user는 서버 응답(role)과 로그인 폼 값(email·name)을 합친 공개 정보다.
+export function getAuth() {
+  try { return JSON.parse(localStorage.getItem(TOKEN_KEY)) } catch { return null }
+}
+export function setAuth({ accessToken, user }) {
+  localStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, user }))
+}
+export function clearToken() { localStorage.removeItem(TOKEN_KEY) }

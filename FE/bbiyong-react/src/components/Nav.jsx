@@ -1,5 +1,29 @@
 import { useSim } from '../SimContext.js'
+import { useLive } from '../live/LiveContext.jsx'
 import UserMenu from './auth/UserMenu.jsx'
+
+// 실서버 연결 상태 뱃지 + mock/live 전환.
+// 연결 여부를 눈으로 확인할 수단이 없으면 이후 연동 작업이 전부 깜깜이가 되므로 상단에 상시 노출한다.
+function LiveBadge() {
+  const { enabled, connected, lastError, authError, hasToken, toggleDataSource } = useLive()
+
+  let state = 'off', label = '시뮬레이션', hint = '클릭 시 실서버 모드로 전환'
+  if (enabled) {
+    if (authError) { state = 'err'; label = '실서버 인증 거부'; hint = lastError || 'JWT 재발급이 필요합니다' }
+    else if (!connected) { state = 'wait'; label = '실서버 연결 중…'; hint = lastError || '' }
+    else if (!hasToken) {
+      // 인증 강제(S15P11E101-418) 배포 전에는 토큰 없이도 붙는다 — 배포되면 끊긴다.
+      state = 'wait'; label = '실서버 연결됨 (토큰 없음)'
+      hint = '시뮬레이션 계정으로 로그인해 토큰이 없습니다. 인증 적용 후에는 연결이 거부되니 실서버 계정으로 다시 로그인하세요.'
+    } else { state = 'on'; label = '실서버 연결됨'; hint = '클릭 시 시뮬레이션 모드로 전환' }
+  }
+
+  return (
+    <button className={`live-badge ${state}`} onClick={toggleDataSource} title={hint}>
+      <i />{label}
+    </button>
+  )
+}
 
 export default function Nav() {
   const { activeTab, setTab, clock, status, actions, theme, toggleTheme } = useSim()
@@ -15,6 +39,7 @@ export default function Nav() {
         <button className={activeTab === 'cctv' ? 'on' : ''} onClick={() => setTab('cctv')}>CCTV 관제</button>
       </div>
       <div className="sp" />
+      <LiveBadge />
       <div className="demo">
         <span>이벤트 데모</span>
         <button className={status.fireOn ? 'on' : ''} onClick={actions.toggleFire}>
