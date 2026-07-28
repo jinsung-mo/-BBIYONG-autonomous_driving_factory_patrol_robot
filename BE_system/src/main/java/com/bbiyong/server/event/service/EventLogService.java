@@ -1,9 +1,9 @@
 package com.bbiyong.server.event.service;
 
 import com.bbiyong.server.event.domain.EventLog;
+import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.repository.EventLogRepository;
-import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -38,48 +38,40 @@ public class EventLogService {
 
     @EventListener
     public void handleFireEvent(RobotFireEvent event) {
-        RobotPacket packet = event.getPacket();
-        if (packet == null) {
+        if (event.getPacket() == null) {
             return;
         }
-
-        EventLog logEntry = new EventLog();
-        logEntry.setType("FIRE");
-        logEntry.setRobotId(packet.getRobotId());
-        logEntry.setConfidence(packet.getConfidence());
-        logEntry.setTemperature(packet.getTemperature());
-        logEntry.setTimestamp(Instant.now());
-        logEntry.setStatus("UNRESOLVED");
-
-        if (packet.getLocation() != null) {
-            logEntry.setX(packet.getLocation().getX());
-            logEntry.setY(packet.getLocation().getY());
-        }
-
-        eventLogRepository.save(logEntry);
-        log.info("Persisted Fire Event Log for robot: {}", packet.getRobotId());
+        persist(AlertMessage.fromFire(event.getPacket()));
     }
 
     @EventListener
     public void handleOverheatEvent(RobotOverheatEvent event) {
-        RobotPacket packet = event.getPacket();
-        if (packet == null) {
+        if (event.getPacket() == null) {
             return;
         }
+        persist(AlertMessage.fromOverheat(event.getPacket()));
+    }
 
+    /**
+     * 실시간 경보(AlertMessage)와 동일한 필드로 이력을 영속화한다.
+     * (열화상 thermalImage 는 설계상 미저장)
+     */
+    private void persist(AlertMessage alert) {
         EventLog logEntry = new EventLog();
-        logEntry.setType("OVERHEAT");
-        logEntry.setRobotId(packet.getRobotId());
-        logEntry.setTemperature(packet.getTemperature());
+        logEntry.setType(alert.type());
+        logEntry.setLevel(alert.level());
+        logEntry.setMessage(alert.message());
+        logEntry.setRobotId(alert.robotId());
+        logEntry.setConfidence(alert.confidence());
+        logEntry.setTemperature(alert.temperature());
+        logEntry.setEquipmentId(alert.equipmentId());
+        logEntry.setThreshold(alert.threshold());
+        logEntry.setX(alert.x());
+        logEntry.setY(alert.y());
         logEntry.setTimestamp(Instant.now());
         logEntry.setStatus("UNRESOLVED");
 
-        if (packet.getLocation() != null) {
-            logEntry.setX(packet.getLocation().getX());
-            logEntry.setY(packet.getLocation().getY());
-        }
-
         eventLogRepository.save(logEntry);
-        log.info("Persisted Overheat Event Log for robot: {}", packet.getRobotId());
+        log.info("Persisted {} event log for robot: {}", alert.type(), alert.robotId());
     }
 }
