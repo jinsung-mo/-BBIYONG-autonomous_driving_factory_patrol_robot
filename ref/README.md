@@ -26,6 +26,58 @@
 
 ---
 
+## 🔑 FE 파트에게 — 이 폴더를 읽어 주세요
+
+### 어떻게 도달하는가
+
+`ref/` 는 **아직 `fe/dev` 에 없다.** 팀 규약이 3단계 머지(`feat` → 파트 `dev` → 파트 `main` → `main`)라
+`be_robot/dev` → `be_robot/main` → `main` → `fe/main` → `fe/dev` 로 내려와야 여러분 브랜치에서 보인다.
+**그때까지는 브랜치를 직접 읽으면 된다** — 체크아웃도, 브랜치 전환도 필요 없다.
+
+```bash
+git fetch origin
+
+# 이 README
+git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/README.md
+
+# 본론 — 대시보드 참조본 README
+git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/orin-dashboard/README.md
+
+# 실제 코드
+git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/orin-dashboard/static/index.html
+git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/orin-dashboard/server.py
+git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/orin-dashboard/nav_protocol.py
+```
+
+파일을 손에 놓고 보고 싶으면 **작업 트리를 건드리지 말고** 별도 디렉터리로 빼라 —
+
+```bash
+git worktree add ../S15P11E101-ref origin/docs/S15P11E101-372-dashboard-ref-for-fe
+# 다 보고 나면
+git worktree remove ../S15P11E101-ref
+```
+
+GitLab 웹에서 볼 수도 있다 — 저장소 → 상단 브랜치 선택기에서
+`docs/S15P11E101-372-dashboard-ref-for-fe` 를 고르고 루트의 `ref/` 로 들어가면 된다.
+(이 MR 의 **Changes** 탭에서도 전체 파일이 그대로 보인다.)
+
+### 어떤 순서로 읽는가
+
+| 순서 | 무엇 | 왜 이 순서인가 |
+|---|---|---|
+| 1 | **이 파일** (`ref/README.md`) | 규칙 4줄과 "왜 그대로 쓰면 안 되는가". 5분 |
+| 2 | [`orin-dashboard/README.md`](orin-dashboard/README.md) **§3 기능 지도** | 기능 이름 → 구현 위치(함수명). **"카메라 어디 있지?"의 답이 여기 있다** |
+| 3 | 〃 **§4 API 계약** | 엔드포인트·응답 형태·폴링 주기. 백엔드와 맞출 것 |
+| 4 | 〃 **§5 함정** | 🔴 **여기가 이 폴더의 값어치다.** 실물에서 틀려 보고 고친 것 10건 — 좌표 변환, 신선도(stale) 처리, 폴링 페이싱, 데드맨 규약 |
+| 5 | 〃 **§6 보안** | 그대로 베끼면 따라오는 것(`innerHTML` XSS 등). **베끼기 전에 반드시** |
+| 6 | 실제 코드 | 위에서 찍은 함수만 골라서. 2,047줄을 처음부터 읽지 마라 |
+
+**§5 만 읽어도 본전은 뽑는다.** 나머지는 필요할 때 되돌아오면 된다.
+
+질문은 로봇 파트로. 코드가 왜 그렇게 생겼는지는 대부분 §5 에 이유가 적혀 있다.
+
+---
+
 ## 왜 그대로 쓰면 안 되는가
 
 이 코드는 **로봇에 직접 붙는 개발·시연용 도구**다. 제품 프런트엔드가 아니다.
