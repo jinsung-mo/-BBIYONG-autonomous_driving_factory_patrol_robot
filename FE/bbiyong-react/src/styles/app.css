@@ -32,18 +32,6 @@ canvas{display:block; width:100%; height:100%;}
 #nav .theme-btn:hover{background:#232a38;}
 #nav .sp{flex:1;}
 #nav .clock{font-size:13px; color:#c6cdd9;}
-/* 실서버 연결 상태 뱃지 (mock/live 전환 버튼 겸용) */
-#nav .live-badge{display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px;
-  border:1px solid #3a445a; background:#1a2030; color:#aeb6c4; font-size:11.5px; font-weight:600; cursor:pointer;}
-#nav .live-badge i{width:7px; height:7px; border-radius:50%; background:#7c8596;}
-#nav .live-badge.on{border-color:#2f9e77; color:#9fe6cf;}
-#nav .live-badge.on i{background:#3ddc97; box-shadow:0 0 6px #3ddc97;}
-#nav .live-badge.wait{border-color:#c97a10; color:#f0c98a;}
-#nav .live-badge.wait i{background:#f5a623; animation:live-blink 1s infinite;}
-#nav .live-badge.err{border-color:#ff8078; color:#ff9d95;}
-#nav .live-badge.err i{background:#ff5648;}
-#nav .live-badge:hover{background:#232a38;}
-@keyframes live-blink{50%{opacity:.25;}}
 /* 실서버 모드에서 사용할 수 없는 조작(미연결 · 로봇 프로토콜 미지원) */
 button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .page{display:none; height:calc(100vh - 56px); overflow:auto;}
