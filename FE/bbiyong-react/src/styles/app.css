@@ -30,108 +30,12 @@ canvas{display:block; width:100%; height:100%;}
 #nav .logo b{color:#ff6a5f;}
 #nav .theme-btn{padding:6px 12px; border-radius:8px; border:1px solid #3a445a; background:#1a2030; color:#dfe4ec; font-size:12px; margin-right:4px;}
 #nav .theme-btn:hover{background:#232a38;}
-#nav .tabs{display:flex; gap:6px; margin-left:10px;}
-#nav .tabs button{padding:7px 16px; border-radius:8px; border:1px solid #2a3040; background:transparent; color:#aeb6c4; font-weight:600;}
-#nav .tabs button.on{background:#232a38; color:#fff; border-color:#3a445a;}
 #nav .sp{flex:1;}
-#nav .demo{display:flex; gap:8px; align-items:center;}
-#nav .demo span{font-size:11px; color:#7c8596;}
-#nav .demo button{padding:6px 12px; border-radius:8px; border:1px solid #3a445a; background:#1a2030; color:#dfe4ec; font-size:12px;}
-#nav .demo button.on{background:var(--red); border-color:#ff8078; color:#fff;}
-#nav .demo button.heat.on{background:#c97a10; border-color:#f5a623;}
 #nav .clock{font-size:13px; color:#c6cdd9;}
-/* 실서버 연결 상태 뱃지 (mock/live 전환 버튼 겸용) */
-#nav .live-badge{display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px;
-  border:1px solid #3a445a; background:#1a2030; color:#aeb6c4; font-size:11.5px; font-weight:600; cursor:pointer;}
-#nav .live-badge i{width:7px; height:7px; border-radius:50%; background:#7c8596;}
-#nav .live-badge.on{border-color:#2f9e77; color:#9fe6cf;}
-#nav .live-badge.on i{background:#3ddc97; box-shadow:0 0 6px #3ddc97;}
-#nav .live-badge.wait{border-color:#c97a10; color:#f0c98a;}
-#nav .live-badge.wait i{background:#f5a623; animation:live-blink 1s infinite;}
-#nav .live-badge.err{border-color:#ff8078; color:#ff9d95;}
-#nav .live-badge.err i{background:#ff5648;}
-#nav .live-badge:hover{background:#232a38;}
-@keyframes live-blink{50%{opacity:.25;}}
 /* 실서버 모드에서 사용할 수 없는 조작(미연결 · 로봇 프로토콜 미지원) */
 button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
-.swb.off-contract{opacity:.4; cursor:not-allowed;}
 .page{display:none; height:calc(100vh - 56px); overflow:auto;}
 .page.on{display:block;}
-
-/* ============ 화면 3 · CCTV 관제 (라이트) ============ */
-#pgA{padding:14px 18px;}
-.a-head{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
-.a-head h1{font-size:16px;}
-.chip{display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); font-weight:600;}
-.chip b{color:var(--blue);}
-.a-head .tgl{margin-left:auto;}
-.tglbtn{padding:7px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); font-weight:600;}
-.tglbtn.on{background:var(--redbg); border-color:#f3b7b2; color:var(--red);}
-
-.cams{display:grid; grid-template-columns:1fr 2fr 1fr; gap:14px; margin-bottom:14px;}
-.cams .cam{grid-column:2;}
-.cam{position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--line); background:#0e1116; aspect-ratio:16/8.2;}
-.cam.alert{border:2px solid var(--red); box-shadow:0 0 0 4px rgba(226,72,61,.15);}
-.cam .tag{position:absolute; left:10px; bottom:10px; padding:4px 10px; border-radius:6px; background:rgba(12,14,18,.72); color:#fff; font-size:12px;}
-.cam .tag em{font-style:normal; color:#ff8f86; font-weight:700;}
-.cam .st{position:absolute; right:10px; top:10px; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700; background:rgba(12,14,18,.72); color:#9fe8c4;}
-.cam.alert .st{color:#ffb0aa;}
-
-.a-grid{display:grid; grid-template-columns:1fr 2fr 1fr; gap:14px; align-items:start;}
-.card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px;}
-.card h3{font-size:13px; margin-bottom:10px; display:flex; align-items:center; gap:6px;}
-.card h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);}
-.stack>*+*{margin-top:12px;}
-
-select,.inp{width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); font:inherit;}
-.cal{width:100%; border-collapse:collapse; text-align:center; font-size:12px;}
-.cal th{color:var(--sub); font-weight:600; padding:4px 0;}
-.cal td{padding:5px 0; border-radius:8px; color:var(--ink);}
-.cal td.dim{color:var(--sub); opacity:.55;}
-.cal td.today{background:var(--blue); color:#fff; font-weight:700;}
-.cal caption{caption-side:top; font-weight:700; padding-bottom:6px;}
-.acct{display:flex; gap:10px; align-items:center;}
-.avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2f6fd0,#7ea8ea); color:#fff; display:flex;align-items:center;justify-content:center;font-weight:800;}
-.acct .nm{font-weight:700;} .acct .rl{font-size:11px;color:var(--sub);}
-.btn{padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font-weight:600;}
-.btn.pri{background:var(--blue); border-color:var(--blue); color:#fff;}
-.btn.warn{background:var(--red); border-color:var(--red); color:#fff;}
-.w100{width:100%;}
-
-.detrow{display:grid; grid-template-columns:1fr; gap:10px;}
-.det{border:1px solid var(--line); border-radius:10px; padding:10px;}
-.det.sel{border-color:var(--blue); box-shadow:0 0 0 3px var(--bluebg);}
-.det .cn{font-weight:800; margin-bottom:8px;}
-.det table{width:100%; font-size:12px; border-collapse:collapse;}
-.det td{padding:3px 0; color:var(--sub);}
-.det td.v{text-align:right; color:var(--ink); font-weight:600;}
-.det td.fire{color:var(--red); font-weight:800;}
-.chart{height:150px; border:1px solid var(--line); border-radius:10px; padding:6px; background:var(--card);}
-
-.ptz{display:flex; gap:16px; align-items:center;}
-/* 방향키 패드 (CCTV) — 실제 키보드 방향키(inverted-T): △ 위 / ◁ ▽ ▷ 아래 한 줄 */
-.pad{display:grid; grid-template-columns:repeat(3,44px); grid-template-rows:repeat(2,44px); gap:6px;}
-.pad span{display:block;}
-.pad button{width:44px; height:44px; border:1px solid var(--line); border-bottom-width:3px; background:var(--card); color:var(--ink); border-radius:9px; font-size:16px; font-weight:800; transition:.08s; box-shadow:0 1px 0 rgba(0,0,0,.06);}
-.pad button:active,.pad button.active{background:#6ad5ca; border-color:#5bbba0; color:#1a2027; font-weight:900; transform:translateY(1px); border-bottom-width:1px;}
-.zoom{display:flex; flex-direction:column; gap:6px;}
-.zoom button{width:40px;height:34px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;font-weight:800;}
-.ptz .meta{font-size:12px; color:var(--sub); line-height:1.8;}
-.wasd-desc{display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--sub); margin-right:10px; font-family:Consolas,monospace;}
-.wasd-desc b{color:var(--ink); display:inline-block; width:14px;}
-
-.bigthumb{border-radius:12px; overflow:hidden; border:1px solid var(--line); aspect-ratio:16/9.6; background:#0e1116; position:relative;}
-.bigthumb .cap{position:absolute; left:10px; top:10px; padding:4px 10px; border-radius:6px; background:rgba(12,14,18,.72); color:#fff; font-size:12px;}
-.livecard{background:var(--redbg); border:1px solid #f3c4bf;}
-.livecard h3{color:var(--red);}
-.live{margin-left:auto; font-size:10px; background:var(--red); color:#fff; padding:2px 8px; border-radius:999px; letter-spacing:1px;}
-.chan{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:6px;}
-.chan div{border:1px solid #f0cdc9; background:var(--card); border-radius:10px; padding:8px 4px; text-align:center; font-size:11px; color:#a35a54;}
-.chan div b{display:block; font-size:15px; margin-bottom:2px;}
-.alist{list-style:none; max-height:180px; overflow:auto;}
-.alist li{padding:8px 2px; border-bottom:1px dashed var(--line); font-size:12px; display:flex; gap:8px; cursor:pointer;}
-.alist li .t{color:var(--sub); font-family:Consolas,monospace; white-space:nowrap;}
-.alist li.fire b{color:var(--red);} .alist li.heat b{color:#c97a10;} .alist li.ok b{color:var(--green);}
 
 /* ============ 화면 4 · 순찰 로봇 관제 (다크) ============ */
 #pgB{background:var(--dk-bg); color:var(--dk-ink); padding:14px 18px;}
@@ -192,11 +96,6 @@ select,.inp{width:100%; padding:8px 10px; border:1px solid var(--line); border-r
 .maplegend{display:flex; gap:12px; font-size:10.5px; color:var(--dk-sub); margin-top:8px; flex-wrap:wrap;}
 .maplegend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
 @media (prefers-reduced-motion: reduce){ .cam.alert{box-shadow:none;} }
-
-/* ============ 달력 클릭 ============ */
-.cal td.clk{cursor:pointer;}
-.cal td.clk:hover{background:var(--bluebg);}
-.cal td.picked{outline:2px solid var(--blue); outline-offset:-2px; font-weight:700;}
 
 /* ============ 진입(Welcome) 화면 — 산업용 관제 콘솔 톤 (항상 다크) ============ */
 .welcome-wrap{
@@ -337,16 +236,3 @@ select,.inp{width:100%; padding:8px 10px; border:1px solid var(--line); border-r
 .usermenu-drop button:hover{background:#1f2632;}
 .usermenu-drop button.danger{color:#ff8d85;}
 
-/* ============ CCTV 단일 화면 맞춤 (로봇 페이지처럼 하단 끝선 정렬) ============ */
-/* .on을 붙여 활성일 때만 flex 표시 → 비활성 시 .page의 display:none 유지(로봇 페이지에서 CCTV가 안 보이게) */
-#pgA.on{display:flex; flex-direction:column; overflow:hidden;}
-.a-head{flex:none;}
-.a-grid{align-items:stretch; flex:1; min-height:0;}
-.stack{display:flex; flex-direction:column; gap:12px; min-height:0; height:100%;}
-/* 슬랙을 흡수해 하단을 맞추는 카드/캔버스 */
-.grow-card{flex:1 1 0; min-height:0; display:flex; flex-direction:column;}
-.grow-card>h3{flex:none;}
-.grow-card .alist{flex:1; min-height:0; max-height:none;}
-.grow-card .bigthumb{flex:1; min-height:0; aspect-ratio:auto;}
-.grow-card .chart{flex:1; min-height:0; height:auto;}
-.grow-cam{flex:1 1 0; min-height:0; aspect-ratio:auto;}

@@ -3,7 +3,6 @@
 // 로컬 시뮬레이션(SimContext)은 그대로 두고 그 위에 얹는다. 컴포넌트는 live 모드일 때만
 // 이쪽 값을 쓰고, mock 모드에서는 기존 시뮬 동작이 100% 유지된다.
 //
-// 주의: CCTV 관제 화면(PTZ·신뢰도 차트)은 백엔드 계약이 없어 live 모드에서도 시뮬로 동작한다.
 // 가이드가 정의하는 실서버 구간은 순찰 로봇(텔레메트리·경보·영상·제어)뿐이다.
 
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'

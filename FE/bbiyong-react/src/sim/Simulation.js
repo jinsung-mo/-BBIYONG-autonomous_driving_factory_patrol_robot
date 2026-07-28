@@ -23,9 +23,10 @@ export default class Simulation {
     this.fireOn = false
     this.heatOn = false
     this.soundOn = true
-    this.currentTab = 'robot' // 'cctv' | 'robot' — 순찰 로봇 관제가 첫 페이지
 
     // ---- CCTV / PTZ ----
+    // CCTV 관제 화면은 제거됐지만(S15P11E101-431) 렌더러(drawFactoryCam/drawConf/drawBig)는
+    // 되살릴 여지를 남겨 보존한다. 현재 tick()에서 호출되지 않는다.
     this.ptz = { x: 0, y: 0, z: 1 }
     this.conf = new Array(48).fill(0)
     this.det = { flameState: '미발생', flamePct: '0%', smokeState: '미발생', smokePct: '0%' }
@@ -126,8 +127,6 @@ export default class Simulation {
     this.logs = [{ id: ++this.logId, kind, time: nowStr(), msg }, ...this.logs].slice(0, 100)
     this.emit()
   }
-
-  setTab(tab) { this.currentTab = tab }
 
   // 결정적 유사난수 (텍스처·노이즈용, Math.random 미사용)
   _hash(a, b) { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
@@ -836,12 +835,7 @@ export default class Simulation {
       this.bt++
       if (this.bt % 20 === 0 && this.batt > 20) { this.batt-- }
     }
-    if (this.currentTab === 'cctv') {
-      if (this.canvases.cam3) this.drawFactoryCam(this.canvases.cam3, this.ptz)
-      this.drawConf()
-    } else {
-      this.drawRcam(); this.drawThermal(); this.drawMap()
-    }
+    this.drawRcam(); this.drawThermal(); this.drawMap()
     this._raf = requestAnimationFrame(this.tick)
   }
 }

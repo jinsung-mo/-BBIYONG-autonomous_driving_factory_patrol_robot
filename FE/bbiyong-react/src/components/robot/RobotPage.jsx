@@ -3,11 +3,11 @@ import StatusPanel from './StatusPanel.jsx'
 import ControlPanel from './ControlPanel.jsx'
 import MapPanel from './MapPanel.jsx'
 
-// 화면 4 · 순찰 로봇 관제 (다크 테마)
-export default function RobotPage({ active }) {
+// 순찰 로봇 관제 (다크 테마) — 단일 화면
+export default function RobotPage() {
   const { status, refs } = useSim()
   return (
-    <section id="pgB" className={`page${active ? ' on' : ''}`}>
+    <section id="pgB" className="page on">
       <div className="b-grid">
         <StatusPanel />
 
