@@ -14,8 +14,11 @@ services:
       - SPRING_DATASOURCE_PASSWORD=password
       - SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver
       - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQLDialect
+      # MySQL 은 동시 커넥션을 지원하므로 풀을 확장(SQLite 기본 1 대신)
+      - DB_POOL_SIZE=10
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
 
   mysql:
@@ -28,4 +31,11 @@ services:
       MYSQL_ROOT_PASSWORD: rootpassword
     volumes:
       - /opt/bbiyong/mysql_data:/var/lib/mysql
+    # app 이 DB 준비 전 기동해 실패하지 않도록 헬스체크로 순서 보장
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
