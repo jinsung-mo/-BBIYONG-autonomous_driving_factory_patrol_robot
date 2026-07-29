@@ -26,8 +26,6 @@ export default function ControlPanel() {
   const { enabled, connected, control, telemetry } = useLive()
   const { switches } = status
   const [gotoVal, setGotoVal] = useState(GOTO_OPTS[0].value)
-  // mock 시뮬에는 estop 필드가 없고 모드 문구로만 표현되므로 패널이 직접 기억한다
-  const [mockEstop, setMockEstop] = useState(false)
 
   // live 모드의 현재 모드는 시뮬이 아니라 텔레메트리가 정답이다
   // (발행은 성공해도 로봇이 모드를 바꾸지 못할 수 있으므로 서버 상태를 그대로 비춘다)
@@ -37,11 +35,11 @@ export default function ControlPanel() {
 
   const liveReady = enabled && connected
 
-  // E-STOP 체결 여부 — live는 텔레메트리가 정답, mock은 위 래치를 쓴다.
+  // E-STOP 체결 여부 — live는 텔레메트리가, mock은 시뮬 상태가 정답이다.
   // 텔레메트리가 아직 없으면(estop === undefined) 체결로 오해하지 않도록 명시적으로 검사한다.
   const estopEngaged = enabled
     ? (!!telemetry?.estop && telemetry.estop !== 'RELEASED')
-    : mockEstop
+    : status.estop !== 'RELEASED'
 
   // 버튼은 키보드 키 이름으로 표기 (조작은 WASD/방향키 동일)
   const glyph = { w: 'W', a: 'A', s: 'S', d: 'D' }
@@ -81,18 +79,16 @@ export default function ControlPanel() {
     </div>
   )
 
+  // mock 경로의 E-STOP 체결/해제는 Simulation 이 직접 관리한다(emergencyStop / botResume).
   const onEmergencyStop = () => {
-    if (!enabled) setMockEstop(true)
     if (liveReady) control.estop()
     else actions.emergencyStop()
   }
   const onReturnPatrol = () => {
-    if (!enabled) setMockEstop(false)
     if (liveReady) control.setMode('autonomy')
     else actions.returnPatrol()
   }
   const onSetSeg = (man) => {
-    if (!enabled && !man) setMockEstop(false)
     if (liveReady) control.setMode(man ? 'manual' : 'autonomy')
     else actions.setSeg(man)
   }

@@ -15,7 +15,7 @@ export default function StatusPanel() {
   const modeClass = live ? live.modeClass : status.modeClass
   const batt = live ? live.batt : status.batt
   const spd = live ? live.spd : status.spd
-  const estop = live ? live.estop : 'RELEASED'
+  const estop = live ? live.estop : status.estop
   const comm = live ? live.comm : '양호 · 43ms'
   const fps = live ? live.fps : '8.0'
   const name = enabled ? robotId : '삐용'
