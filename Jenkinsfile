@@ -41,7 +41,20 @@ pipeline {
         stage('Test') {
             steps {
                 dir('BE_system') {
-                    sh 'sh ./gradlew test --no-daemon'
+                    sh '''
+                        docker compose --project-name bbiyong-system-test -f compose.test.yaml up -d --wait
+                        TEST_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3307/bbiyong_test \\
+                        TEST_DATASOURCE_USERNAME=test \\
+                        TEST_DATASOURCE_PASSWORD=test \\
+                        sh ./gradlew test --no-daemon
+                    '''
+                }
+            }
+            post {
+                always {
+                    dir('BE_system') {
+                        sh 'docker compose --project-name bbiyong-system-test -f compose.test.yaml down -v --remove-orphans || true'
+                    }
                 }
             }
         }
