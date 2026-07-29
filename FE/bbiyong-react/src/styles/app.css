@@ -76,6 +76,10 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .ctl .col{display:flex; flex-direction:column; gap:8px;}
 .dbtn{padding:9px 13px; border-radius:9px; border:1px solid var(--dk-line); background:var(--dk-panel2); color:var(--dk-ink); font-weight:600; font-size:12px;}
 .dbtn:hover{border-color:#3a4452;}
+/* 단축키 뱃지 — 지금 그 키가 실행할 버튼에만 표시한다 */
+.dbtn.keyed{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.kbd{font-size:10px; font-weight:700; line-height:1; letter-spacing:.3px; padding:3px 5px; border-radius:4px; border:1px solid currentColor; opacity:.5; white-space:nowrap;}
+.seg button .kbd{margin-left:6px; vertical-align:1px;}
 .dbtn.stop{background:rgba(255,86,72,.13); border-color:rgba(255,86,72,.5); color:#ff8d85;}
 .dbtn.go{background:rgba(61,220,151,.13); border-color:rgba(61,220,151,.5); color:#7deab8;}
 /* 방향키 패드 (로봇) — 실제 키보드 배열(inverted-T): W 위 / A S D 아래 한 줄 */
