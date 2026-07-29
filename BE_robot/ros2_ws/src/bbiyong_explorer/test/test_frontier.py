@@ -5,6 +5,7 @@ from bbiyong_explorer.frontier import (
     FrontierCluster,
     GridSpec,
     detect_frontier_clusters,
+    frontier_heading,
     reachable_free_cells,
     select_frontier,
 )
@@ -87,6 +88,38 @@ class FrontierTests(unittest.TestCase):
         )
         frontier_cells = {cell for cluster in clusters for cell in cluster.cells}
         self.assertNotIn((2, 1), frontier_cells)
+
+    def test_goal_stands_back_in_known_free_space_and_faces_unknown(self):
+        grid = make_grid(
+            [
+                [100, -1, -1, -1, -1, -1, 100],
+                [100, 0, 0, 0, 0, 0, 100],
+                [100, 0, 0, 0, 0, 0, 100],
+                [100, 0, 0, 0, 0, 0, 100],
+                [100, 0, 0, 0, 0, 0, 100],
+                [100, 100, 100, 100, 100, 100, 100],
+            ]
+        )
+        clusters = detect_frontier_clusters(
+            grid,
+            (3, 4),
+            min_cluster_size=3,
+            min_obstacle_clearance_m=1.0,
+            goal_standoff_m=2.0,
+        )
+
+        self.assertEqual(len(clusters), 1)
+        cluster = clusters[0]
+        self.assertEqual(cluster.goal_cell[1], 3)
+        self.assertEqual(grid.value(cluster.goal_cell), 0)
+        self.assertAlmostEqual(cluster.unknown_normal[0], 0.0)
+        self.assertLess(cluster.unknown_normal[1], 0.0)
+        self.assertAlmostEqual(frontier_heading(grid, cluster), -pi / 2.0)
+
+    def test_frontier_heading_includes_rotated_map_origin(self):
+        grid = make_grid([[0]], origin=(0.0, 0.0, pi / 2.0))
+        cluster = FrontierCluster(((0, 0),), (0, 0), (1.0, 0.0))
+        self.assertAlmostEqual(frontier_heading(grid, cluster), pi / 2.0)
 
     def test_select_frontier_balances_gain_and_distance(self):
         grid = make_grid([[0] * 12 for _ in range(3)])

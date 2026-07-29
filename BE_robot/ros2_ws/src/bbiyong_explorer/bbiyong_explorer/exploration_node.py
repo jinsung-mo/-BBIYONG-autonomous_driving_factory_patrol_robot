@@ -9,7 +9,7 @@ from time import monotonic
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import ComputePathToPose, NavigateToPose
 from nav_msgs.msg import OccupancyGrid
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
@@ -19,7 +19,13 @@ from rclpy.time import Time
 from std_msgs.msg import Bool, String
 from tf2_ros import Buffer, TransformException, TransformListener
 
-from .frontier import GridSpec, Point, detect_frontier_clusters, select_frontier
+from .frontier import (
+    GridSpec,
+    Point,
+    detect_frontier_clusters,
+    frontier_heading,
+    select_frontier,
+)
 
 
 @dataclass
@@ -36,9 +42,12 @@ class FrontierExplorer(Node):
 
         self.declare_parameter("map_topic", "/map")
         self.declare_parameter("navigate_to_pose_action", "/navigate_to_pose")
+        self.declare_parameter("compute_path_to_pose_action", "/compute_path_to_pose")
+        self.declare_parameter("planner_id", "GridBased")
         self.declare_parameter("global_frame", "map")
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("planning_period_sec", 1.0)
+        self.declare_parameter("plan_timeout_sec", 8.0)
         self.declare_parameter("goal_timeout_sec", 90.0)
         self.declare_parameter("goal_response_timeout_sec", 5.0)
         self.declare_parameter("cancel_grace_sec", 3.0)
@@ -50,6 +59,7 @@ class FrontierExplorer(Node):
         self.declare_parameter("min_cluster_size", 5)
         self.declare_parameter("occupied_threshold", 65)
         self.declare_parameter("min_obstacle_clearance_m", 0.25)
+        self.declare_parameter("goal_standoff_m", 0.45)
         self.declare_parameter("min_frontier_distance", 0.5)
         self.declare_parameter("information_gain_weight", 2.0)
         self.declare_parameter("distance_weight", 1.0)
@@ -59,6 +69,12 @@ class FrontierExplorer(Node):
         self._global_frame = str(self.get_parameter("global_frame").value)
         self._robot_frame = str(self.get_parameter("robot_frame").value)
         self._map: OccupancyGrid | None = None
+        self._plan_pending = False
+        self._plan_handle = None
+        self._plan_point: Point | None = None
+        self._plan_heading = 0.0
+        self._plan_started_at = 0.0
+        self._plan_sequence = 0
         self._goal_pending = False
         self._goal_handle = None
         self._goal_point: Point | None = None
@@ -95,6 +111,11 @@ class FrontierExplorer(Node):
             self,
             NavigateToPose,
             str(self.get_parameter("navigate_to_pose_action").value),
+        )
+        self._planning_client = ActionClient(
+            self,
+            ComputePathToPose,
+            str(self.get_parameter("compute_path_to_pose_action").value),
         )
         self.create_timer(
             float(self.get_parameter("planning_period_sec").value), self._tick
@@ -150,6 +171,16 @@ class FrontierExplorer(Node):
         now = monotonic()
         self._blacklist = [entry for entry in self._blacklist if entry.expires_at > now]
 
+        if self._plan_pending or self._plan_handle is not None:
+            timeout = float(self.get_parameter("plan_timeout_sec").value)
+            if now - self._plan_started_at >= timeout:
+                self._plan_sequence += 1
+                if self._plan_handle is not None:
+                    self._plan_handle.cancel_goal_async()
+                self.get_logger().warning("Nav2 path validation timed out")
+                self._record_plan_failure()
+            return
+
         if self._goal_pending or self._goal_handle is not None:
             if self._goal_handle is None:
                 response_timeout = float(
@@ -204,6 +235,7 @@ class FrontierExplorer(Node):
             min_obstacle_clearance_m=float(
                 self.get_parameter("min_obstacle_clearance_m").value
             ),
+            goal_standoff_m=float(self.get_parameter("goal_standoff_m").value),
         )
         selected = select_frontier(
             grid,
@@ -246,9 +278,102 @@ class FrontierExplorer(Node):
             return
 
         self._no_frontier_since = None
-        self._send_goal(grid.cell_to_world(selected.goal_cell), robot_position)
+        self._validate_goal(
+            grid.cell_to_world(selected.goal_cell),
+            frontier_heading(grid, selected),
+        )
 
-    def _send_goal(self, point: Point, robot_position: Point) -> None:
+    def _pose(self, point: Point, heading: float) -> PoseStamped:
+        pose = PoseStamped()
+        pose.header.frame_id = self._global_frame
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.pose.position.x = point[0]
+        pose.pose.position.y = point[1]
+        pose.pose.orientation.z = sin(heading / 2.0)
+        pose.pose.orientation.w = cos(heading / 2.0)
+        return pose
+
+    def _validate_goal(self, point: Point, heading: float) -> None:
+        """Ask Nav2's configured global planner whether the goal is reachable."""
+        wait_timeout = float(self.get_parameter("server_wait_timeout_sec").value)
+        if not self._planning_client.wait_for_server(timeout_sec=wait_timeout):
+            self._publish_state("waiting_for_planner")
+            self.get_logger().warning(
+                "ComputePathToPose action server is unavailable",
+                throttle_duration_sec=5.0,
+            )
+            return
+
+        goal = ComputePathToPose.Goal()
+        goal.goal = self._pose(point, heading)
+        goal.planner_id = str(self.get_parameter("planner_id").value)
+        goal.use_start = False
+
+        self._plan_sequence += 1
+        sequence = self._plan_sequence
+        self._plan_point = point
+        self._plan_heading = heading
+        self._plan_started_at = monotonic()
+        self._plan_pending = True
+        self._publish_state("validating_goal")
+        future = self._planning_client.send_goal_async(goal)
+        future.add_done_callback(
+            lambda completed_future: self._on_plan_response(completed_future, sequence)
+        )
+
+    def _on_plan_response(self, future, sequence: int) -> None:
+        if sequence != self._plan_sequence:
+            try:
+                stale_handle = future.result()
+                if stale_handle.accepted:
+                    stale_handle.cancel_goal_async()
+            except Exception:
+                pass
+            return
+        self._plan_pending = False
+        try:
+            plan_handle = future.result()
+        except Exception as error:
+            self.get_logger().error(f"Failed to request a path to frontier: {error}")
+            self._record_plan_failure()
+            return
+        if not plan_handle.accepted:
+            self.get_logger().warning("Nav2 rejected frontier path request")
+            self._record_plan_failure()
+            return
+
+        self._plan_handle = plan_handle
+        result_future = plan_handle.get_result_async()
+        result_future.add_done_callback(
+            lambda completed_future: self._on_plan_result(completed_future, sequence)
+        )
+
+    def _on_plan_result(self, future, sequence: int) -> None:
+        if sequence != self._plan_sequence:
+            return
+        try:
+            wrapped_result = future.result()
+            path = wrapped_result.result.path
+            valid = (
+                wrapped_result.status == GoalStatus.STATUS_SUCCEEDED
+                and len(path.poses) > 0
+            )
+        except Exception as error:
+            self.get_logger().error(f"Failed to receive frontier path: {error}")
+            valid = False
+
+        point = self._plan_point
+        heading = self._plan_heading
+        self._clear_active_plan()
+        if not valid or point is None:
+            self.get_logger().warning("Frontier has no Nav2-safe path; blacklisting it")
+            if point is not None:
+                self._blacklist_point(point)
+            self._publish_state("goal_failed_planning")
+            return
+        self._send_goal(point, heading)
+
+    def _send_goal(self, point: Point, heading: float) -> None:
         wait_timeout = float(self.get_parameter("server_wait_timeout_sec").value)
         if not self._navigation_client.wait_for_server(timeout_sec=wait_timeout):
             self._publish_state("waiting_for_nav2")
@@ -259,14 +384,7 @@ class FrontierExplorer(Node):
             return
 
         goal = NavigateToPose.Goal()
-        goal.pose = PoseStamped()
-        goal.pose.header.frame_id = self._global_frame
-        goal.pose.header.stamp = self.get_clock().now().to_msg()
-        goal.pose.pose.position.x = point[0]
-        goal.pose.pose.position.y = point[1]
-        heading = atan2(point[1] - robot_position[1], point[0] - robot_position[0])
-        goal.pose.pose.orientation.z = sin(heading / 2.0)
-        goal.pose.pose.orientation.w = cos(heading / 2.0)
+        goal.pose = self._pose(point, heading)
 
         self._goal_sequence += 1
         sequence = self._goal_sequence
@@ -327,12 +445,26 @@ class FrontierExplorer(Node):
 
     def _record_goal_failure(self) -> None:
         if self._goal_point is not None:
-            ttl = float(self.get_parameter("blacklist_ttl_sec").value)
-            self._blacklist.append(
-                BlacklistedGoal(self._goal_point, monotonic() + ttl)
-            )
+            self._blacklist_point(self._goal_point)
         self._publish_state("goal_failed")
         self._clear_active_goal()
+
+    def _record_plan_failure(self) -> None:
+        if self._plan_point is not None:
+            self._blacklist_point(self._plan_point)
+        self._publish_state("goal_failed_planning")
+        self._clear_active_plan()
+
+    def _blacklist_point(self, point: Point) -> None:
+        ttl = float(self.get_parameter("blacklist_ttl_sec").value)
+        self._blacklist.append(BlacklistedGoal(point, monotonic() + ttl))
+
+    def _clear_active_plan(self) -> None:
+        self._plan_pending = False
+        self._plan_handle = None
+        self._plan_point = None
+        self._plan_heading = 0.0
+        self._plan_started_at = 0.0
 
     def _clear_active_goal(self) -> None:
         self._goal_pending = False
@@ -343,6 +475,10 @@ class FrontierExplorer(Node):
 
     def cancel_active_goal(self) -> None:
         """Request cancellation so stopping this node does not leave Nav2 driving."""
+        if self._plan_handle is not None:
+            self.get_logger().info("Cancelling active frontier path request")
+            future = self._plan_handle.cancel_goal_async()
+            rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
         if self._goal_handle is None:
             return
         self.get_logger().info("Cancelling active frontier goal before shutdown")
