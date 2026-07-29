@@ -65,6 +65,10 @@ FIRE_N, FIRE_M = 5, 3
 # 서버·대시보드가 중복 경보로 뒤덮인다.
 FIRE_REEMIT_SEC = 10.0
 
+# 맵이 변하지 않아도 이 간격마다 현재 맵을 한 번 재전송한다. STOMP 는 지난 메시지를
+# 새 구독자에게 주지 않으므로, 대시보드가 도중 접속해도 곧 맵을 받게 하는 보완책.
+MAP_REEMIT_SEC = 10.0
+
 
 def read_json(path):
     """작은 json 을 읽어 dict 로 돌려준다. 없거나 깨졌으면 None.
@@ -355,15 +359,26 @@ class Bridge:
 
         nav_map.json 은 nav_bridge 가 지도 내용이 실제로 바뀔 때만 다시 쓰므로,
         sequence 비교로 중복 전송을 막는다(대역폭 절약).
+
+        단, STOMP 는 지난 메시지를 새 구독자에게 재전송하지 않으므로, 맵이 정지
+        상태여도 MAP_REEMIT_SEC 마다 한 번은 현재 맵을 다시 보낸다 — 대시보드가
+        도중에 접속해도 곧 맵을 받게 하기 위한 초기 스냅샷 보완이다.
         """
+        last_emit = 0.0
         while True:
+            now = time.time()
             nav_map = read_json(NAV_MAP_FILE)
             packet = build_map(self.robot_id, nav_map)
-            if packet is not None and packet["sequence"] != self.map_seq_sent:
-                await ws.send(json.dumps(packet))
-                self.map_seq_sent = packet["sequence"]
-                print(f"[map] MAP 송신 sequence={packet['sequence']} "
-                      f"({packet.get('w')}x{packet.get('h')})", flush=True)
+            if packet is not None:
+                changed = packet["sequence"] != self.map_seq_sent
+                due = (now - last_emit) >= MAP_REEMIT_SEC
+                if changed or due:
+                    await ws.send(json.dumps(packet))
+                    self.map_seq_sent = packet["sequence"]
+                    last_emit = now
+                    kind = "송신" if changed else "재전송(구독자 초기화용)"
+                    print(f"[map] MAP {kind} sequence={packet['sequence']} "
+                          f"({packet.get('w')}x{packet.get('h')})", flush=True)
             await asyncio.sleep(self.map_period)
 
     async def nav_live_sender(self, ws):
