@@ -24,7 +24,6 @@ export function telemetryToStatus(t) {
     spd: typeof t?.speed === 'number' ? `${num(t.speed)} m/s` : '—',
     estop: t?.estop || '—',
     comm: typeof t?.commLatencyMs === 'number' ? `양호 · ${Math.round(t.commLatencyMs)}ms` : '—',
-    fps: typeof t?.inferenceFps === 'number' ? num(t.inferenceFps) : '—',
     location: t?.location || null,
   }
 }
