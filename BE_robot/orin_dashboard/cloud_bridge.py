@@ -46,6 +46,7 @@ except ImportError:
 # (env 로 덮어쓸 수 있게 해 두면 테스트·다른 배치에서 재사용된다)
 # ─────────────────────────────────────────────────────────────
 NAV_LIVE_FILE = os.environ.get("ORINCAR_NAV_LIVE_FILE", "/tmp/orincar_nav_live.json")
+NAV_MAP_FILE = os.environ.get("ORINCAR_NAV_MAP_FILE", "/tmp/orincar_nav_map.json")
 CAM_FILE = os.environ.get("ORINCAR_CAM_FILE", "/tmp/orincar_cam.json")
 DRIVE_FILE = os.environ.get("ORINCAR_DRIVE_FILE", "/tmp/orincar_drive.json")
 DRIVE_STATUS_FILE = os.environ.get(
@@ -141,6 +142,18 @@ def build_telemetry(robot_id, nav_live, drive_status, cam, now,
         packet["commLatencyMs"] = int(latency_ms)
     packet["estop"] = estop
     return packet
+
+
+def build_map(robot_id, nav_map):
+    """nav_map.json(RLE snapshot)을 MAP 패킷으로. 없거나 sequence 없으면 None.
+
+    nav_bridge 가 만든 원문({sequence, w, h, res, ox, oy, encoding, cells})에
+    source/type/robot_id 만 얹어 그대로 보낸다. 서버는 이 원문을 해석하지 않고
+    /topic/nav/{robot_id} 로 중계하며, RLE 디코드·렌더는 대시보드(FE)가 한다.
+    """
+    if not nav_map or nav_map.get("sequence") is None:
+        return None
+    return {**nav_map, "source": "robot", "type": "MAP", "robot_id": robot_id}
 
 
 def build_video(robot_id, cam, seq):
@@ -257,7 +270,15 @@ class Bridge:
         self.url = args.server_url
         self.robot_id = args.robot_id
         self.telemetry_period = 1.0 / args.telemetry_hz
-        self.video_period = 1.0 / args.video_hz
+        # video_hz <= 0 이면 영상 송신을 끈다. VIDEO_FRAME(base64 jpeg)은 크므로,
+        # 서버 텍스트 버퍼 한도가 작을 때(1009 message too big) 임시로 꺼 두고
+        # 텔레메트리·제어만 확인할 수 있게 한다.
+        self.video_enabled = args.video_hz > 0
+        self.video_period = (1.0 / args.video_hz) if self.video_enabled else None
+        # 맵은 sequence 가 바뀔 때만 보낸다. 이 주기는 "얼마나 자주 확인하느냐"의 상한.
+        self.map_enabled = args.map_hz > 0
+        self.map_period = (1.0 / args.map_hz) if self.map_enabled else None
+        self.map_seq_sent = None
         self.fire = FireConfirmer()
         self.estop = "RELEASED"
         self.video_seq = 0
@@ -300,6 +321,22 @@ class Bridge:
                     await ws.send(json.dumps(frame))
             await asyncio.sleep(self.video_period)
 
+    async def map_sender(self, ws):
+        """실시간 2D 점유격자 맵 송신. sequence 가 바뀐 경우에만 보낸다.
+
+        nav_map.json 은 nav_bridge 가 지도 내용이 실제로 바뀔 때만 다시 쓰므로,
+        sequence 비교로 중복 전송을 막는다(대역폭 절약).
+        """
+        while True:
+            nav_map = read_json(NAV_MAP_FILE)
+            packet = build_map(self.robot_id, nav_map)
+            if packet is not None and packet["sequence"] != self.map_seq_sent:
+                await ws.send(json.dumps(packet))
+                self.map_seq_sent = packet["sequence"]
+                print(f"[map] MAP 송신 sequence={packet['sequence']} "
+                      f"({packet.get('w')}x{packet.get('h')})", flush=True)
+            await asyncio.sleep(self.map_period)
+
     async def receiver(self, ws):
         """서버 → 로봇 제어 명령 수신."""
         async for raw in ws:
@@ -328,11 +365,15 @@ class Bridge:
             self.url, ping_interval=10, ping_timeout=10, max_size=None
         ) as ws:
             await ws.send(json.dumps(build_register(self.robot_id)))
-            print(f"[conn] 접속·REGISTER 완료 → {self.url} (robot_id={self.robot_id})",
-                  flush=True)
-            await asyncio.gather(
-                self.sender(ws), self.video_sender(ws), self.receiver(ws)
-            )
+            print(f"[conn] 접속·REGISTER 완료 → {self.url} (robot_id={self.robot_id}, "
+                  f"video={'on' if self.video_enabled else 'off'})", flush=True)
+            tasks = [self.sender(ws), self.receiver(ws)]
+            if self.video_enabled:
+                tasks.append(self.video_sender(ws))
+            if self.map_enabled:
+                self.map_seq_sent = None  # 재접속 시 현재 맵을 한 번 다시 보낸다
+                tasks.append(self.map_sender(ws))
+            await asyncio.gather(*tasks)
 
     async def run(self):
         """끊기면 백오프 후 재접속. 로봇은 계속 켜져 있고 서버가 재기동될 수 있다."""
@@ -363,7 +404,10 @@ def parse_args():
         help="서버 세션 등록에 쓸 로봇 식별자",
     )
     parser.add_argument("--telemetry-hz", type=float, default=2.0)
-    parser.add_argument("--video-hz", type=float, default=4.0)
+    parser.add_argument("--video-hz", type=float, default=4.0,
+                        help="0 이하면 영상(VIDEO_FRAME) 송신 비활성화")
+    parser.add_argument("--map-hz", type=float, default=1.0,
+                        help="맵 파일 확인 주기(상한). 0 이하면 맵(MAP) 송신 비활성화")
     return parser.parse_args()
 
 

@@ -36,6 +36,9 @@ Outbound (robot → server, `RobotPacket`):
 - `REGISTER` on connect, then `TELEMETRY` (pose/speed/inference fps/e-stop/latency)
   and `VIDEO_FRAME` (FRONT/RGB jpeg) on separate rate loops.
 - `EVENT_FIRE` when `cam.json` detections confirm fire under an N-of-M rule.
+- `MAP` (2D occupancy grid) from `nav_map.json`, sent only when its `sequence`
+  changes. The server relays the raw payload to `/topic/nav/{robot_id}`; the
+  dashboard decodes the RLE and renders it. Disable with `--map-hz 0`.
 
 Inbound (server → robot, `ControlCommand`):
 

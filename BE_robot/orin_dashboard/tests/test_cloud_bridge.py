@@ -3,6 +3,7 @@ import unittest
 from cloud_bridge import (
     FireConfirmer,
     build_fire,
+    build_map,
     build_register,
     build_telemetry,
     build_video,
@@ -115,6 +116,25 @@ class FireConfirmerTest(unittest.TestCase):
         soon, _ = fc.update(self._cam(fire=True), NOW + 1)   # 간격 미달
         later, _ = fc.update(self._cam(fire=True), NOW + 11)  # 간격 초과
         self.assertEqual((first, soon, later), (True, False, True))
+
+
+class MapTest(unittest.TestCase):
+    def _map(self, seq=5):
+        return {"schema_version": "1.0", "kind": "snapshot", "sequence": seq,
+                "w": 3, "h": 2, "res": 0.05, "ox": -1.0, "oy": -2.0,
+                "encoding": "rle-v1", "cells": [-1, 4, 0, 2]}
+
+    def test_wraps_with_type_and_id(self):
+        p = build_map("r1", self._map(seq=7))
+        self.assertEqual(p["type"], "MAP")
+        self.assertEqual(p["robot_id"], "r1")
+        self.assertEqual(p["sequence"], 7)
+        self.assertEqual(p["cells"], [-1, 4, 0, 2])   # 원문 보존
+        self.assertEqual(p["w"], 3)
+
+    def test_none_without_map_or_sequence(self):
+        self.assertIsNone(build_map("r1", None))
+        self.assertIsNone(build_map("r1", {"w": 3}))   # sequence 없음
 
 
 class FirePacketTest(unittest.TestCase):
