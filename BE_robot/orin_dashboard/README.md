@@ -19,3 +19,31 @@ content changes.
 
 The live endpoint is deliberately separate from map transfer: adding dashboard
 clients no longer multiplies full-grid serialization and bandwidth at 2 Hz.
+
+## Cloud bridge (`cloud_bridge.py`)
+
+Connects the robot to the control backend WebSocket endpoint `/ws/robot`. It is a
+standalone process that consumes the same `/tmp/*.json` files the dashboard uses,
+so ROS, `server.py`, and the bridge can each restart independently.
+
+```
+pip install websockets
+python3 cloud_bridge.py --server-url wss://i15e101.p.ssafy.io/ws/robot --robot-id orinka_01
+```
+
+Outbound (robot → server, `RobotPacket`):
+
+- `REGISTER` on connect, then `TELEMETRY` (pose/speed/inference fps/e-stop/latency)
+  and `VIDEO_FRAME` (FRONT/RGB jpeg) on separate rate loops.
+- `EVENT_FIRE` when `cam.json` detections confirm fire under an N-of-M rule.
+
+Inbound (server → robot, `ControlCommand`):
+
+- `DRIVE {linear, angular}` and `ESTOP {active}` are written to
+  `/tmp/orincar_drive.json`; `teleop_node.py` consumes it and re-clamps limits.
+- `SET_MODE`, `NAVIGATE`, `SAVE_MAP` need ROS process/action orchestration and are
+  logged but not yet acted on (stage 2).
+
+Pure mapping logic is unit-tested in `tests/test_cloud_bridge.py` (no pip deps).
+`tests/smoke_cloud_bridge.py` exercises the full asyncio/websockets path and the
+DRIVE round-trip (requires `websockets`).
