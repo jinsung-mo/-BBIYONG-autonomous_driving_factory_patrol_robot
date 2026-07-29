@@ -30,35 +30,39 @@
 
 ### 어떻게 도달하는가
 
-`ref/` 는 **아직 `fe/dev` 에 없다.** 팀 규약이 3단계 머지(`feat` → 파트 `dev` → 파트 `main` → `main`)라
-`be_robot/dev` → `be_robot/main` → `main` → `fe/main` → `fe/dev` 로 내려와야 여러분 브랜치에서 보인다.
-**그때까지는 브랜치를 직접 읽으면 된다** — 체크아웃도, 브랜치 전환도 필요 없다.
+`ref/` 는 **`main` 바로 밑에 놓인다.** 어느 파트 폴더에도 속하지 않으므로(`FE/` 변경 0건)
+파트 브랜치를 거치지 않고 `main` 으로 직접 들어간다. 머지 뒤에는 `main` → `fe/main` → `fe/dev`
+한 갈래만 타고 내려오면 여러분 브랜치에서 보인다.
+
+**머지 전에도 브랜치를 직접 읽으면 된다** — 체크아웃도, 브랜치 전환도 필요 없다.
 
 ```bash
 git fetch origin
 
 # 이 README
-git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/README.md
+git show origin/docs/S15P11E101-372-ref-for-fe-to-main:ref/README.md
 
 # 본론 — 대시보드 참조본 README
-git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/orin-dashboard/README.md
+git show origin/docs/S15P11E101-372-ref-for-fe-to-main:ref/orin-dashboard/README.md
 
 # 실제 코드
-git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/orin-dashboard/static/index.html
-git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/orin-dashboard/server.py
-git show origin/docs/S15P11E101-372-dashboard-ref-for-fe:ref/orin-dashboard/nav_protocol.py
+git show origin/docs/S15P11E101-372-ref-for-fe-to-main:ref/orin-dashboard/static/index.html
+git show origin/docs/S15P11E101-372-ref-for-fe-to-main:ref/orin-dashboard/server.py
+git show origin/docs/S15P11E101-372-ref-for-fe-to-main:ref/orin-dashboard/nav_protocol.py
 ```
+
+머지된 뒤에는 브랜치명 자리에 `main` 을 넣으면 된다 — `git show origin/main:ref/README.md`.
 
 파일을 손에 놓고 보고 싶으면 **작업 트리를 건드리지 말고** 별도 디렉터리로 빼라 —
 
 ```bash
-git worktree add ../S15P11E101-ref origin/docs/S15P11E101-372-dashboard-ref-for-fe
+git worktree add ../S15P11E101-ref origin/docs/S15P11E101-372-ref-for-fe-to-main
 # 다 보고 나면
 git worktree remove ../S15P11E101-ref
 ```
 
 GitLab 웹에서 볼 수도 있다 — 저장소 → 상단 브랜치 선택기에서
-`docs/S15P11E101-372-dashboard-ref-for-fe` 를 고르고 루트의 `ref/` 로 들어가면 된다.
+`docs/S15P11E101-372-ref-for-fe-to-main` 를 고르고 루트의 `ref/` 로 들어가면 된다.
 (이 MR 의 **Changes** 탭에서도 전체 파일이 그대로 보인다.)
 
 ### 어떤 순서로 읽는가

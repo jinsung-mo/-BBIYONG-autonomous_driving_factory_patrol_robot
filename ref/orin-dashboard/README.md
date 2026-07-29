@@ -10,7 +10,7 @@
 > 실행되는 정본은 **`BE_robot/orin_dashboard/`** 다.
 > 여기 파일을 고쳐도 로봇에는 아무 영향이 없고, 정본과 어긋나기만 한다.
 
-> 🔴 **이 사본은 `be_robot/dev` 보다 앞서 있다 (2026-07-28 기준).**
+> 🔴 **이 사본은 `main` 은 물론 `be_robot/dev` 보다도 앞서 있다 (2026-07-28 기준).**
 > `nav_protocol.py` 의 `robot_view()`(heading-up 변환)와 `index.html` 의 카메라 자기페이싱 루프는
 > **아직 `be_robot/dev` 에 머지되지 않은** `feat/S15P11E101-372-dashboard-heading-up-view` 의 내용이다.
 > 즉 **§3·§5 에서 설명하는 기능 일부는 `BE_robot/orin_dashboard/` 를 열면 아직 안 보인다.**
