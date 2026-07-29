@@ -24,10 +24,7 @@ import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.datasource.url=jdbc:sqlite:file:memdb_eq?mode=memory&cache=shared",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
-})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 @DirtiesContext
 class EquipmentTests {

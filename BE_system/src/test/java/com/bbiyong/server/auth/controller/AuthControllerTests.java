@@ -11,10 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = {
-		"spring.datasource.url=jdbc:sqlite:file:memdb_auth?mode=memory&cache=shared",
-		"spring.jpa.hibernate.ddl-auto=create-drop"
-})
+@SpringBootTest
 @AutoConfigureMockMvc
 class AuthControllerTests {
 
