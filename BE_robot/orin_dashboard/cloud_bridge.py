@@ -156,6 +156,32 @@ def build_map(robot_id, nav_map):
     return {**nav_map, "source": "robot", "type": "MAP", "robot_id": robot_id}
 
 
+def build_nav_live(robot_id, nav_live):
+    """nav_live.json 의 pose·scan 을 NAV_LIVE 패킷으로. 둘 다 없으면 None.
+
+    맵(MAP)과 같은 /topic/nav 채널로 흘러 대시보드가 실시간 자세·LiDAR 스캔을
+    지도 위에 겹쳐 그린다. scan 은 {angle_min, angle_inc, ranges} (nav_bridge 포맷).
+    """
+    if not nav_live:
+        return None
+    pose = nav_live.get("pose")
+    scan = nav_live.get("scan")
+    if pose is None and scan is None:
+        return None
+    packet = {
+        "source": "robot",
+        "type": "NAV_LIVE",
+        "robot_id": robot_id,
+        "t": nav_live.get("t"),
+        "map_sequence": nav_live.get("map_sequence"),
+    }
+    if pose is not None:
+        packet["pose"] = pose
+    if scan is not None:
+        packet["scan"] = scan
+    return packet
+
+
 def build_video(robot_id, cam, seq):
     """cam.json 의 FRONT(RGB) jpeg 를 VIDEO_FRAME 으로. 없으면 None.
 
@@ -279,6 +305,9 @@ class Bridge:
         self.map_enabled = args.map_hz > 0
         self.map_period = (1.0 / args.map_hz) if self.map_enabled else None
         self.map_seq_sent = None
+        # 라이브 자세·LiDAR 스캔(NAV_LIVE). 고정 주기로 계속 보낸다(스캔은 매 프레임 바뀜).
+        self.nav_enabled = args.nav_hz > 0
+        self.nav_period = (1.0 / args.nav_hz) if self.nav_enabled else None
         self.fire = FireConfirmer()
         self.estop = "RELEASED"
         self.video_seq = 0
@@ -337,6 +366,14 @@ class Bridge:
                       f"({packet.get('w')}x{packet.get('h')})", flush=True)
             await asyncio.sleep(self.map_period)
 
+    async def nav_live_sender(self, ws):
+        """라이브 자세·LiDAR 스캔 송신 (NAV_LIVE). 고정 주기."""
+        while True:
+            packet = build_nav_live(self.robot_id, read_json(NAV_LIVE_FILE))
+            if packet is not None:
+                await ws.send(json.dumps(packet))
+            await asyncio.sleep(self.nav_period)
+
     async def receiver(self, ws):
         """서버 → 로봇 제어 명령 수신."""
         async for raw in ws:
@@ -373,6 +410,8 @@ class Bridge:
             if self.map_enabled:
                 self.map_seq_sent = None  # 재접속 시 현재 맵을 한 번 다시 보낸다
                 tasks.append(self.map_sender(ws))
+            if self.nav_enabled:
+                tasks.append(self.nav_live_sender(ws))
             await asyncio.gather(*tasks)
 
     async def run(self):
@@ -408,6 +447,8 @@ def parse_args():
                         help="0 이하면 영상(VIDEO_FRAME) 송신 비활성화")
     parser.add_argument("--map-hz", type=float, default=1.0,
                         help="맵 파일 확인 주기(상한). 0 이하면 맵(MAP) 송신 비활성화")
+    parser.add_argument("--nav-hz", type=float, default=3.0,
+                        help="라이브 자세·스캔(NAV_LIVE) 송신 주기. 0 이하면 비활성화")
     return parser.parse_args()
 
 

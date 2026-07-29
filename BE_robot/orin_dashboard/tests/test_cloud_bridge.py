@@ -4,6 +4,7 @@ from cloud_bridge import (
     FireConfirmer,
     build_fire,
     build_map,
+    build_nav_live,
     build_register,
     build_telemetry,
     build_video,
@@ -135,6 +136,23 @@ class MapTest(unittest.TestCase):
     def test_none_without_map_or_sequence(self):
         self.assertIsNone(build_map("r1", None))
         self.assertIsNone(build_map("r1", {"w": 3}))   # sequence 없음
+
+
+class NavLiveTest(unittest.TestCase):
+    def test_carries_pose_and_scan(self):
+        nav = {"t": NOW, "map_sequence": 12,
+               "pose": {"frame": "map", "x": 1.0, "y": 2.0, "yaw": 0.5},
+               "scan": {"angle_min": -3.14, "angle_inc": 0.06, "ranges": [1.2, 0.0, 3.4]}}
+        p = build_nav_live("r1", nav)
+        self.assertEqual(p["type"], "NAV_LIVE")
+        self.assertEqual(p["robot_id"], "r1")
+        self.assertEqual(p["pose"]["x"], 1.0)
+        self.assertEqual(p["scan"]["ranges"], [1.2, 0.0, 3.4])
+        self.assertEqual(p["map_sequence"], 12)
+
+    def test_none_when_no_pose_or_scan(self):
+        self.assertIsNone(build_nav_live("r1", None))
+        self.assertIsNone(build_nav_live("r1", {"t": NOW, "pose": None, "scan": None}))
 
 
 class FirePacketTest(unittest.TestCase):

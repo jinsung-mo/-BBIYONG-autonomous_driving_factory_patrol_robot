@@ -39,6 +39,9 @@ Outbound (robot → server, `RobotPacket`):
 - `MAP` (2D occupancy grid) from `nav_map.json`, sent only when its `sequence`
   changes. The server relays the raw payload to `/topic/nav/{robot_id}`; the
   dashboard decodes the RLE and renders it. Disable with `--map-hz 0`.
+- `NAV_LIVE` (live pose + LiDAR scan) from `nav_live.json`, sent at `--nav-hz`
+  (default 3 Hz), also relayed to `/topic/nav/{robot_id}`. Lets the dashboard
+  overlay the live scan and robot marker on the map. Disable with `--nav-hz 0`.
 
 Inbound (server → robot, `ControlCommand`):
 

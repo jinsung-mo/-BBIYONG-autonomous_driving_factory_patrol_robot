@@ -42,7 +42,9 @@ def write(path, payload):
 async def main():
     import time
     now = time.time()  # fresh() 가 time.time() 기준이라 최신 타임스탬프를 넣는다
-    write(NAV, {"t": now, "pose": {"frame": "map", "x": 1.5, "y": -2.0, "yaw": 0.3}})
+    write(NAV, {"t": now, "map_sequence": 3,
+                "pose": {"frame": "map", "x": 1.5, "y": -2.0, "yaw": 0.3},
+                "scan": {"angle_min": -3.14, "angle_inc": 0.06, "ranges": [1.1, 0.0, 2.2]}})
     write(DRIVE_STATUS, {"t": now, "v": 0.11, "w": 0.0, "patrol_running": False})
     write(CAM, {"t": now, "det_fps": 8.0, "jpeg": "ZmFrZQ==", "dets": []})
     write(NAV_MAP, {"schema_version": "1.0", "kind": "snapshot", "sequence": 3,
@@ -57,7 +59,7 @@ async def main():
         await ws.send(json.dumps({"command": "DRIVE", "linear": 0.2, "angular": -0.1}))
         async for raw in ws:
             received.append(json.loads(raw))
-            if len(received) >= 8:
+            if len(received) >= 12:
                 ready.set()
 
     server = await websockets.serve(handler, "127.0.0.1", 8791)
@@ -69,6 +71,7 @@ async def main():
         telemetry_hz = 20.0
         video_hz = 20.0
         map_hz = 20.0
+        nav_hz = 20.0
 
     bridge = cloud_bridge.Bridge(Args())
     task = asyncio.create_task(bridge.run())
@@ -84,6 +87,7 @@ async def main():
     telem = next(p for p in received if p.get("type") == "TELEMETRY")
     video = next((p for p in received if p.get("type") == "VIDEO_FRAME"), None)
     mp = next((p for p in received if p.get("type") == "MAP"), None)
+    nl = next((p for p in received if p.get("type") == "NAV_LIVE"), None)
 
     assert reg["type"] == "REGISTER" and reg["robot_id"] == "orinka_test", reg
     assert telem["location"] == {"x": 1.5, "y": -2.0, "yaw": 0.3}, telem
@@ -91,6 +95,7 @@ async def main():
     assert telem["inferenceFps"] == 8.0, telem
     assert video and video["channel"] == "FRONT" and video["data"] == "ZmFrZQ==", video
     assert mp and mp["sequence"] == 3 and mp["cells"] == [-1, 4, 0, 2], mp
+    assert nl and nl["scan"]["ranges"] == [1.1, 0.0, 2.2] and nl["pose"]["x"] == 1.5, nl
 
     # DRIVE 명령이 drive.json 으로 떨어졌는지
     with open(DRIVE, encoding="utf-8") as f:
