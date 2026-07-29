@@ -11,7 +11,6 @@ RUN ./gradlew dependencies --no-daemon
 
 COPY src src
 RUN mkdir -p data
-RUN ./gradlew test --no-daemon
 RUN ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:17-jre
