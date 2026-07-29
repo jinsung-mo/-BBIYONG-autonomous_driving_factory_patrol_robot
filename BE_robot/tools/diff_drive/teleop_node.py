@@ -42,10 +42,23 @@ STATUS_FILE = "/tmp/orincar_drive_status.json"
 
 DEADMAN_S = 0.4          # 명령이 이보다 오래되면 정지
 RATE_HZ = 20.0
-V_MAX = 0.15             # m/s — 원격 조종이라 순찰(0.11)보다 조금만 높게
+V_MAX = 1.00             # m/s — 2026-07-27 0.15 → 0.50 → 1.00 상향 (사용자 결정, 실주행 확인)
+                         #   🔴 **server.py 의 DRIVE_V_MAX 와 반드시 같은 값이어야 한다.**
+                         #   한쪽만 올리면 낮은 쪽이 이겨 아무 변화가 없다(실제로 겪었다).
+                         #   참고: 모터 정격 531rpm · 유효지름 62.29mm → 이론 최대 약 1.73 m/s.
+                         #   1.00 은 그 58%다. duty_max=80 제약으로 실제 도달치는 더 낮을 수 있다.
+                         #   ⚠️ 0.4s 데드맨 동안 1.0 m/s 면 40cm 를 더 간다 — 라이다 가드
+                         #   STOP_M=0.35 보다 크다. 즉 **가드는 이 속도에서 제동을 보장하지 못한다.**
+                         #   사람이 보고 있다는 전제로 운용한다(사용자 판단 2026-07-27).
 W_MAX = 0.60             # rad/s
 STOP_M = 0.35            # 진행 방향 이 안쪽이면 전진 성분 차단
 CONE_DEG = 40.0
+RAMP_S = 2.0             # 꾹 누르면 이 시간에 걸쳐 0 → 명령속도까지 선형 가속.
+                         #   ① 조작감: 톡 누르면 안 가고 꾹 누르면 급발진하던 것을 없앤다
+                         #   ② 부수효과: 정지→최대속도 급명령이 적분을 급하게 튀게 해
+                         #      좌우가 순차로 풀리는 구간을 만든다(출발 1초가 전체 요각의
+                         #      67%). 완만히 올리면 그 구간이 줄어든다.
+                         #   회전(w)은 램프하지 않는다 — 미세 자세 조정이 둔해진다.
 
 
 class Teleop(Node):
@@ -59,6 +72,7 @@ class Teleop(Node):
         self.last_reason = ""
         self.stop_frames = 0
         self.patrol_seen = 0.0
+        self.drive_t0 = None          # 연속 전·후진이 시작된 시각 (램프 기준점)
         self.create_timer(1.0 / RATE_HZ, self.tick)
         self.create_timer(2.0, self.check_patrol)
         self.get_logger().info(
@@ -79,6 +93,12 @@ class Teleop(Node):
             pass
 
     def cone_min(self, heading_rad, half=CONE_DEG):
+        """진행방향 콘 안의 최근접점을 (거리 m, 방위 deg) 로 돌려준다.
+
+        방위는 **진행방향 기준** 상대각이다(+가 좌측). 거리만 알면
+        "어디가 막혔는지" 몰라서 빠져나갈 방향을 못 고른다 — 실제로
+        전·후진이 둘 다 막힌 줄 알고 헤맸다(2026-07-27).
+        """
         m = self.scan
         if m is None:
             return None
@@ -91,7 +111,10 @@ class Teleop(Node):
             return None
         d = np.arctan2(np.sin(a - heading_rad), np.cos(a - heading_rad))
         sel = np.abs(d) <= math.radians(half)
-        return float(r[sel].min()) if sel.any() else None
+        if not sel.any():
+            return None
+        i = int(np.argmin(r[sel]))
+        return float(r[sel][i]), float(math.degrees(d[sel][i]))
 
     def read_cmd(self):
         try:
@@ -117,13 +140,27 @@ class Teleop(Node):
         else:
             v = max(-V_MAX, min(V_MAX, float(c.get("v", 0.0))))
             w = max(-W_MAX, min(W_MAX, float(c.get("w", 0.0))))
+
+            # 램프 — 명령이 **연속으로 유지된 시간**에 비례해 0 → v 까지 올린다.
+            # 손을 떼면 데드맨이 v=0 을 만들고, 그때 기준점이 지워져 다음 출발은
+            # 다시 0 부터 시작한다. 방향이 바뀌어도 부호가 뒤집히며 자연히 재시작된다.
+            if abs(v) > 1e-3:
+                if self.drive_t0 is None:
+                    self.drive_t0 = now
+                v *= min(1.0, (now - self.drive_t0) / RAMP_S)
+            else:
+                self.drive_t0 = None
             # 라이다 가드: 진행 방향이 막혔으면 그 성분만 죽인다. 회전은 살린다
             # (막힌 데서 빠져나오려면 돌 수 있어야 한다).
             if abs(v) > 1e-3:
                 heading = 0.0 if v > 0 else math.pi
-                near = self.cone_min(heading)
-                if near is not None and near < STOP_M:
-                    reason = f"라이다 가드 — 진행방향 {near*100:.0f}cm"
+                hit = self.cone_min(heading)
+                if hit is not None and hit[0] < STOP_M:
+                    near, bear = hit
+                    where = "정면" if abs(bear) < 5 else (
+                        f"{'좌' if bear > 0 else '우'}{abs(bear):.0f}°")
+                    reason = (f"라이다 가드 — {'전진' if v > 0 else '후진'} "
+                              f"{where} {near * 100:.0f}cm")
                     v = 0.0
             if not reason:
                 reason = "주행 중" if (abs(v) > 1e-3 or abs(w) > 1e-3) else "정지"
