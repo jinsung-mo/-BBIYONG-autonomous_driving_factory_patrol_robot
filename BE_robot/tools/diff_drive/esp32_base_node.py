@@ -97,6 +97,24 @@ class Esp32Base(Node):
         #    ⚠️ 라이다 마운트를 다시 건드리면 이 값은 무효 — 재측정할 것.
         self.declare_parameter("laser_yaw", 0.0752)
 
+        # ── 🆕 펌웨어 게인 (`k` 명령으로 기동 시 전송) ──────────────
+        # 🔴 기본값은 **speed_pid.ino 컴파일 기본값과 동일**하다
+        #    (speed_pid.ino:43-50). 파라미터를 안 건드리면 거동이 100%
+        #    지금과 같다 — 이것이 이 변경의 안전 근거다.
+        # 포트를 열면 DTR 로 ESP32 가 리셋되어 `k` 값이 RAM 에서 날아가므로,
+        # **노드가 열고 나서 다시 보내는 것**만이 재기동에도 유지된다.
+        self.declare_parameter("send_tunables", True)
+        self.declare_parameter("kp", 25.0)
+        self.declare_parameter("ki", 60.0)
+        self.declare_parameter("ff_slope", 0.0196)
+        self.declare_parameter("ff_dead", 2.24)
+        self.declare_parameter("i_limit", 40.0)
+        # 🔒 80 유지 — 2026-07-27 사용자 결정 "80부터 가자".
+        #    올려도 duty100 → 0.125 m/s 뿐이고(실측_데이터 §L-5-1 외삽),
+        #    포화점만 옮길 뿐 제어 여유는 안 생긴다. 상세 설계문서 §3.
+        self.declare_parameter("duty_max", 80.0)
+        self.declare_parameter("v_alpha", 0.30)
+
         # ── 🆕 주행로그 (docs/주행로그_설계_2026-07-27.md) ───────────
         self.declare_parameter("trace_dir", os.path.expanduser("~/drivelog"))
         self.declare_parameter("purpose", "")      # ⭐ 빈 값이면 로깅 비활성
@@ -152,7 +170,12 @@ class Esp32Base(Node):
         # ── 시리얼 ──────────────────────────────────────────────────
         self.ser = serial.Serial(g("port"), int(g("baud")), timeout=0.2)
         time.sleep(2.0)                       # ESP32 리셋 대기
-        self.ser.reset_input_buffer()
+        # 🔑 버리지 말고 회수한다 — 부팅 배너(speed_pid.ino:225-227)가
+        #    meta.json 의 fw_banner 다. 지금까지 매 기동 폐기돼 왔다.
+        self.fw_banner = self._drain_boot_banner()
+        # 🔑 게인 전송은 **리더 스레드 시작 전**이어야 한다.
+        #    여기서는 self.ser 를 단독·동기적으로 쓸 수 있어 경합이 없다.
+        self.fw_tunables = self._send_tunables()
         self.get_logger().info(f"ESP32 연결 {g('port')} · 윤거 {self.track:.4f} m")
 
         # ── ROS 인터페이스 ──────────────────────────────────────────
@@ -195,6 +218,87 @@ class Esp32Base(Node):
         # encoder telemetry arrives, using the MCU acquisition timestamp.
         self.create_timer(1.0 / command_rate_hz, self.command_tick)
         self.create_timer(1.0 / diagnostics_rate_hz, self.publish_diagnostics)
+
+    # ══════════════════════════════════════════════════════════════
+    # 게인 전송 (설계문서 §2)
+    # ══════════════════════════════════════════════════════════════
+    # ROS 파라미터명 → speed_pid.ino:190-197 의 `k` 서브키
+    TUNABLE_KEYS = (
+        ("kp", "p"), ("ki", "i"), ("ff_slope", "f"), ("ff_dead", "z"),
+        ("i_limit", "l"), ("duty_max", "x"), ("v_alpha", "a"),
+    )
+
+    def _read_lines(self, budget_s):
+        """budget_s 동안 도착한 줄을 모은다. 예외를 밖으로 내보내지 않는다."""
+        out, end = [], time.time() + budget_s
+        while time.time() < end:
+            try:
+                line = self.ser.readline().decode(errors="replace").strip()
+            except Exception:
+                break
+            if line:
+                out.append(line)
+        return out
+
+    def _drain_boot_banner(self):
+        """부팅 배너를 회수하고 입력버퍼를 비운다 (reset_input_buffer 대체)."""
+        try:
+            lines = self._read_lines(0.3)
+            self.ser.reset_input_buffer()
+        except Exception as e:
+            self.get_logger().warn(f"배너 회수 실패: {e}")
+            return None
+        for line in lines:
+            self.get_logger().info(f"펌웨어 {line}")
+        return " | ".join(lines) if lines else None
+
+    def _send_tunables(self):
+        """기동 시 펌웨어 게인을 밀어 넣고 `k?` 로 확인한다.
+
+        🔴 `k` 파서 버그 — speed_pid.ino:186 이 'k' **다음 한 글자**를 그대로
+           서브키로 읽는다. 공백을 넣으면 서브키가 ' ' 가 되어 무시된다.
+           → 반드시 `kx80.000000` 처럼 **붙여서** 보낼 것. `k x 80` 은 안 된다.
+        🔴 한 줄을 반드시 **단일 write** 로 보낸다 (설계문서 §2-3).
+           'k' 만 버퍼에 들어간 순간 ESP32 가 진입하면 Serial.read() 가 -1 을
+           반환해 게인이 조용히 유실된다.
+        🔴 지수표기 금지 — parseFloat 이 `1e-05` 를 파싱하지 못한다. `%.6f` 고정.
+        🔴 실패해도 예외를 올리지 않는다. 게인 전송 때문에 로봇이 안 뜨면 안 된다.
+
+        반환: `k?` 응답 원문(str) 또는 None. 이 값이 meta.json 의 fw_tunables 다.
+        """
+        if not bool(self.get_parameter("send_tunables").value):
+            self.get_logger().info("게인 전송 생략 (send_tunables:=false)")
+            return None
+
+        sent = []
+        for name, key in self.TUNABLE_KEYS:
+            val = float(self.get_parameter(name).value)
+            try:
+                self.ser.write(f"k{key}{val:.6f}\n".encode())   # ← 공백 없음
+                self.ser.flush()
+            except Exception as e:
+                self.get_logger().warn(
+                    f"게인 전송 실패 {name}: {e} — 펌웨어 기본값으로 주행한다")
+                return None
+            time.sleep(0.05)                 # 명령끼리 배치가 뭉치지 않게
+            self._read_lines(0.05)           # 에코(# kp=...) 를 비운다
+            sent.append(f"{name}={val:g}")
+        self.get_logger().info("게인 전송 " + " ".join(sent))
+
+        # 적용 확인 — 이 한 줄이 meta.json 의 fw_tunables ⭐ 가 된다
+        try:
+            self.ser.write(b"k?\n")          # 🔴 `k ?` 는 동작하지 않는다
+            self.ser.flush()
+        except Exception as e:
+            self.get_logger().warn(f"k? 조회 실패: {e}")
+            return None
+        for line in self._read_lines(0.5):
+            if line.startswith("# kp="):
+                self.get_logger().info(f"펌웨어 적용 확인 {line}")
+                return line
+        self.get_logger().warn(
+            "k? 응답 없음 — 게인 적용을 확인하지 못했다 (주행은 계속한다)")
+        return None
 
     # ══════════════════════════════════════════════════════════════
     # 주행로그 tee (docs/주행로그_설계_2026-07-27.md §4-2·§5)
