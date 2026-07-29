@@ -28,11 +28,13 @@ export default function ControlPanel() {
   const { enabled, connected, control, telemetry, speed, setSpeed } = useLive()
   const [gotoVal, setGotoVal] = useState(GOTO_OPTS[0].value)
 
-  // live 모드의 현재 모드는 시뮬이 아니라 텔레메트리가 정답이다
-  // (발행은 성공해도 로봇이 모드를 바꾸지 못할 수 있으므로 서버 상태를 그대로 비춘다)
-  const seg = enabled
-    ? (telemetry?.status === 'MANUAL_CONTROL' ? 'manual' : 'patrol')
-    : status.seg
+  // 모드 토글은 '사용자가 고른 제어 모드'다 — 버튼을 누를 때만 바뀐다.
+  //
+  // 예전에는 telemetry.status 로 매 텔레메트리마다 다시 계산했는데, 로봇 브리지의 status 는
+  // 움직임 기준(움직이면 MANUAL_CONTROL, 멈추면 AUTO_PATROL)이라 WASD 를 떼는 순간
+  // 토글이 '순찰'로 튀어 돌아갔다. 로봇의 현재 상태는 상태 패널 pill 이 따로 보여주므로,
+  // 토글과 status 는 별개 축으로 둔다.
+  const [seg, setSeg] = useState('patrol')
 
   const liveReady = enabled && connected
 
@@ -70,10 +72,13 @@ export default function ControlPanel() {
     else actions.emergencyStop()
   }
   const onReturnPatrol = () => {
+    // 순찰 복귀도 SET_MODE autonomy 를 보내므로 '순찰 모드'를 고른 것과 같다 — 토글도 함께 맞춘다
+    setSeg('patrol')
     if (liveReady) control.setMode('autonomy')
     else actions.returnPatrol()
   }
   const onSetSeg = (man) => {
+    setSeg(man ? 'manual' : 'patrol')
     if (liveReady) control.setMode(man ? 'manual' : 'autonomy')
     else actions.setSeg(man)
   }

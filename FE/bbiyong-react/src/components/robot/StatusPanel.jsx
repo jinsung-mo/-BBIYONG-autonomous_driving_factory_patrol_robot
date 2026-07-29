@@ -11,7 +11,8 @@ export default function StatusPanel() {
   const { enabled, connected, telemetry, robotId } = useLive()
 
   const live = enabled ? telemetryToStatus(telemetry) : null
-  const modeText = live ? live.modeText : status.modeText
+  // 연결이 끊겼을 때만 '연결 대기'로 말한다. 연결돼 있는데 status 만 없는 경우는 매퍼의 '대기'를 쓴다.
+  const modeText = live ? (connected ? live.modeText : '연결 대기') : status.modeText
   const modeClass = live ? live.modeClass : status.modeClass
   const batt = live ? live.batt : status.batt
   const spd = live ? live.spd : status.spd
