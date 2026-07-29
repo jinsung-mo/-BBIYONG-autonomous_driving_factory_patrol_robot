@@ -12,7 +12,7 @@ export default function RobotPage() {
         <StatusPanel />
 
         <div className="panel" id="pCam">
-          <h3>순찰 로봇 카메라 <span className="k">FRONT · YOLOv8</span></h3>
+          <h3>순찰 로봇 카메라 <span className="k">FRONT · YOLOv11n</span></h3>
           <div className="vwrap">
             <canvas ref={refs.rcam} />
             <span className="hud">{status.rcamHud}</span>

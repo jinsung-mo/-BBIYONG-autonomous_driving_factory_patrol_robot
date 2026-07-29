@@ -78,7 +78,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .dbtn:hover{border-color:#3a4452;}
 .dbtn.stop{background:rgba(255,86,72,.13); border-color:rgba(255,86,72,.5); color:#ff8d85;}
 .dbtn.go{background:rgba(61,220,151,.13); border-color:rgba(61,220,151,.5); color:#7deab8;}
-/* 방향키 패드 (로봇) — 실제 키보드 방향키(inverted-T): △ 위 / ◁ ▽ ▷ 아래 한 줄 */
+/* 방향키 패드 (로봇) — 실제 키보드 배열(inverted-T): W 위 / A S D 아래 한 줄 */
 .dpad{display:grid; grid-template-columns:repeat(3,52px); grid-template-rows:repeat(2,52px); gap:6px; justify-content:center;}
 .dpad button{border:1px solid var(--dk-line); border-bottom-width:3px; background:var(--dk-panel2); color:var(--dk-ink); border-radius:11px; font-size:18px; font-weight:800; transition:.08s; box-shadow:0 1px 0 rgba(0,0,0,.35);}
 .dpad button:active,.dpad button.active{background:#24466e; color:#dce9fb; border-color:#3a5a86; transform:translateY(1px); border-bottom-width:1px;}

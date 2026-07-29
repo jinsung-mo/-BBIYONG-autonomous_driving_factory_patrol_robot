@@ -7,8 +7,7 @@ import { cellToWorld } from '../../live/config.js'
 const GOTO_OPTS = [
   { value: '4,0', label: '분전반 A' },
   { value: '11,4', label: '분전반 B' },
-  { value: '7,7', label: '전기 판넬 C' },
-  { value: '8,2', label: 'C구역 하역장 (CCTV)' },
+  { value: '7,7', label: '분전반 C' },
 ]
 
 // 순찰 로봇 수동 조작 패널 (WASD 이동 · 모드 · 지점이동)
@@ -32,8 +31,9 @@ export default function ControlPanel() {
 
   const liveReady = enabled && connected
 
-  // 버튼은 키보드 방향키 기호로 표기 (조작은 WASD/방향키 동일)
-  const glyph = { w: '△', a: '◁', s: '▽', d: '▷' }
+  // 버튼은 키보드 키 이름으로 표기 (조작은 WASD/방향키 동일)
+  const glyph = { w: 'W', a: 'A', s: 'S', d: 'D' }
+  const dirLabel = { w: '전진', a: '좌회전', s: '후진', d: '우회전' }
   const key = (k) => {
     // live: 누르는 동안 주행, 떼면 정지 / mock: 기존처럼 클릭당 한 칸 이동
     const live = {
@@ -44,7 +44,7 @@ export default function ControlPanel() {
     return (
       <button
         className={activeKeys[k] ? 'active' : ''}
-        aria-label={k}
+        aria-label={`${dirLabel[k]} (${glyph[k]})`}
         disabled={enabled && !connected}
         {...(enabled ? live : { onClick: () => actions.dpadMove(k) })}
       >
