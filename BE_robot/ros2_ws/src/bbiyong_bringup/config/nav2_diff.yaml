@@ -1,0 +1,294 @@
+# Nav2 파라미터 — 차동구동(differential drive) 차체용
+#
+# nav2_ackermann.template.yaml 에서 파생. 아래 5개 블록만 다르고 나머지는 동일하다.
+#   1. planner_server   SmacPlannerHybrid(DUBIN) -> SmacPlanner2D   (최소 회전반경 제약 제거)
+#   2. controller_server  RPP 제자리회전 활성화   (use_rotate_to_heading)
+#   3. behavior_server  spin 복구동작 추가 + 회전 속도 0 -> 실제값
+#   4. velocity_smoother  각속도 상한 0.30 -> 0.60 rad/s
+#   5. amcl  변경 없음 (원본이 이미 DifferentialMotionModel)
+#
+# 하드웨어 근거: MDD10A 듀얼채널 + 좌/우 엔코더(ESP32 GPIO32/33, 25/26) + 캐스터.
+#                조향 서보 없음 -> 제자리 회전 가능, 최소 회전반경 없음.
+
+amcl:
+  ros__parameters:
+    use_sim_time: false
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: base_link
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: map
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 9.5
+    laser_min_range: 0.12
+    laser_model_type: likelihood_field
+    max_beams: 120
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: odom
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: nav2_amcl::DifferentialMotionModel
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.10
+    update_min_d: 0.10
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+    scan_topic: /scan_filtered
+
+map_server:
+  ros__parameters:
+    use_sim_time: false
+    yaml_filename: ""
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: false
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    navigators: [navigate_to_pose, navigate_through_poses]
+    navigate_to_pose:
+      plugin: nav2_bt_navigator/NavigateToPoseNavigator
+    navigate_through_poses:
+      plugin: nav2_bt_navigator/NavigateThroughPosesNavigator
+    # default_nav_to_pose_bt_xml 을 지정하지 않으면 Nav2 기본 동작트리
+    # (navigate_to_pose_w_replanning_and_recovery.xml)가 쓰인다. 여기에는 Spin
+    # 복구동작이 포함되어 있다. navigate_to_pose_ackermann.xml 은 Spin 을 제거한
+    # 버전이므로 차동구동에서는 절대 지정하지 말 것.
+
+controller_server:
+  ros__parameters:
+    use_sim_time: false
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    progress_checker_plugin: progress_checker
+    goal_checker_plugins: [general_goal_checker]
+    controller_plugins: [FollowPath]
+    progress_checker:
+      plugin: nav2_controller::SimpleProgressChecker
+      required_movement_radius: 0.20
+      movement_time_allowance: 15.0
+    general_goal_checker:
+      stateful: true
+      plugin: nav2_controller::SimpleGoalChecker
+      xy_goal_tolerance: 0.20
+      yaw_goal_tolerance: 0.35
+    FollowPath:
+      plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
+      desired_linear_vel: 0.10
+      lookahead_dist: 0.35
+      min_lookahead_dist: 0.20
+      max_lookahead_dist: 0.60
+      lookahead_time: 1.5
+      transform_tolerance: 0.2
+      use_velocity_scaled_lookahead_dist: true
+      min_approach_linear_velocity: 0.03
+      approach_velocity_scaling_dist: 0.40
+      use_collision_detection: true
+      max_allowed_time_to_collision_up_to_carrot: 1.0
+      use_regulated_linear_velocity_scaling: true
+      use_cost_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 0.50
+      regulated_linear_scaling_min_speed: 0.03
+      # --- 차동구동 변경점 ---
+      # 경로 시작 방향과 로봇 방향이 크게 어긋나면 먼저 제자리에서 돌고 출발한다.
+      # Ackermann 판에서는 둘 다 0/false 였다 (조향차는 제자리 회전 불가).
+      use_rotate_to_heading: true
+      rotate_to_heading_angular_vel: 0.60      # rad/s. 180도 회전에 약 5초
+      rotate_to_heading_min_angle: 0.785       # 45도 이상 어긋나면 제자리 회전
+      max_angular_accel: 1.0
+      allow_reversing: false                   # RPP 제약: rotate_to_heading 과 동시 true 불가
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: false
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_link
+      rolling_window: true
+      width: 4
+      height: 4
+      resolution: 0.05
+      robot_radius: 0.30
+      plugins: [obstacle_layer, denoise_layer, inflation_layer]
+      obstacle_layer:
+        plugin: nav2_costmap_2d::ObstacleLayer
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic: /scan_filtered
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: LaserScan
+          raytrace_max_range: 4.0
+          raytrace_min_range: 0.15
+          obstacle_max_range: 3.5
+          obstacle_min_range: 0.15
+      denoise_layer:
+        plugin: nav2_costmap_2d::DenoiseLayer
+        enabled: true
+        minimal_group_size: 2
+        group_connectivity_type: 8
+      inflation_layer:
+        plugin: nav2_costmap_2d::InflationLayer
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.40
+      always_send_full_costmap: true
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: false
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_link
+      resolution: 0.05
+      track_unknown_space: true
+      robot_radius: 0.30
+      plugins: [static_layer, obstacle_layer, denoise_layer, inflation_layer]
+      static_layer:
+        plugin: nav2_costmap_2d::StaticLayer
+        map_subscribe_transient_local: true
+      obstacle_layer:
+        plugin: nav2_costmap_2d::ObstacleLayer
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic: /scan_filtered
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: LaserScan
+          raytrace_max_range: 8.0
+          raytrace_min_range: 0.15
+          obstacle_max_range: 7.5
+          obstacle_min_range: 0.15
+      denoise_layer:
+        plugin: nav2_costmap_2d::DenoiseLayer
+        enabled: true
+        minimal_group_size: 2
+        group_connectivity_type: 8
+      inflation_layer:
+        plugin: nav2_costmap_2d::InflationLayer
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.40
+      always_send_full_costmap: true
+
+planner_server:
+  ros__parameters:
+    use_sim_time: false
+    expected_planner_frequency: 2.0
+    planner_plugins: [GridBased]
+    GridBased:
+      # --- 차동구동 변경점 ---
+      # SmacPlannerHybrid + DUBIN 은 최소 회전반경을 갖는 비홀로노믹 차량용이다.
+      # 차동구동은 제자리 회전이 되므로 그 제약이 없고, 2D 격자 플래너가 맞다.
+      # (Hybrid 를 유지하면 minimum_turning_radius 0.40 때문에 좁은 실내에서
+      #  경로를 못 찾고 Frontier 탐색이 도달 가능한 지점을 blacklist 에 넣는다.)
+      plugin: nav2_smac_planner/SmacPlanner2D
+      tolerance: 0.25
+      downsample_costmap: false
+      downsampling_factor: 1
+      allow_unknown: true
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 5.0
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: false
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: false
+    smoother_plugins: [simple_smoother]
+    simple_smoother:
+      plugin: nav2_smoother::SimpleSmoother
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: true
+
+behavior_server:
+  ros__parameters:
+    use_sim_time: false
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    # --- 차동구동 변경점 ---
+    # spin 추가. 구석에 몰렸을 때 제자리에서 돌아 빠져나오는 복구동작으로,
+    # 차동구동에서 가장 유용한 수단이다. Ackermann 판에서는 불가능해서 빠져 있었다.
+    behavior_plugins: [spin, backup, drive_on_heading, wait]
+    spin:
+      plugin: nav2_behaviors/Spin
+    backup:
+      plugin: nav2_behaviors/BackUp
+    drive_on_heading:
+      plugin: nav2_behaviors/DriveOnHeading
+    wait:
+      plugin: nav2_behaviors/Wait
+    global_frame: odom
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+    simulate_ahead_time: 2.0
+    # Ackermann 판에서는 셋 다 0.0 이었다. 0 이면 Spin 이 등록돼도 실제로 돌지 않는다.
+    max_rotational_vel: 0.60
+    min_rotational_vel: 0.20
+    rotational_acc_lim: 1.0
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: false
+    loop_rate: 20
+    stop_on_failure: false
+    waypoint_task_executor_plugin: wait_at_waypoint
+    wait_at_waypoint:
+      plugin: nav2_waypoint_follower::WaitAtWaypoint
+      enabled: true
+      waypoint_pause_duration: 0
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: false
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: OPEN_LOOP
+    # --- 차동구동 변경점 ---
+    # 각속도 상한을 0.30 -> 0.60 rad/s 로. 위 rotate_to_heading_angular_vel 과 맞춘다.
+    # 여기가 낮으면 컨트롤러가 0.60 을 명령해도 잘려서 제자리 회전이 기어간다.
+    # 선속도 0.10 m/s 는 원본 그대로 유지 (첫 실차 주행용 보수적 값).
+    max_velocity: [0.10, 0.0, 0.60]
+    min_velocity: [-0.05, 0.0, -0.60]
+    max_accel: [0.20, 0.0, 1.0]
+    max_decel: [-0.30, 0.0, -1.0]
+    odom_topic: odom
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 0.5
