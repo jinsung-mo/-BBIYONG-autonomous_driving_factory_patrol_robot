@@ -17,10 +17,17 @@
    따라서 여기서는 **양쪽 다 + = 전진**이며 right_wheel_direction 같은
    반전 파라미터를 두지 않는다. 두면 이중 반전이 된다.
 """
+import hashlib
+import json
 import math
+import os
+import shutil
+import socket
+import sys
 import threading
 import time
 from collections import deque
+from datetime import datetime
 
 import rclpy
 import serial
@@ -90,6 +97,11 @@ class Esp32Base(Node):
         #    ⚠️ 라이다 마운트를 다시 건드리면 이 값은 무효 — 재측정할 것.
         self.declare_parameter("laser_yaw", 0.0752)
 
+        # ── 🆕 주행로그 (docs/주행로그_설계_2026-07-27.md) ───────────
+        self.declare_parameter("trace_dir", os.path.expanduser("~/drivelog"))
+        self.declare_parameter("purpose", "")      # ⭐ 빈 값이면 로깅 비활성
+        self.declare_parameter("chassis_id", "")   # ⭐ 〃
+
         g = lambda k: self.get_parameter(k).value            # noqa: E731
         self.mm_per_count = float(g("mm_per_count"))
         self.track = float(g("track_width_m"))
@@ -127,6 +139,15 @@ class Esp32Base(Node):
         self.scan_count = 0
         self.scan_tf_available = 0
         self.last_scan_tf_age_ms = None
+        self.last_diag_values = None
+        # 주행로그 상태 — serial_loop 스레드 전용. 락을 걸지 않는다
+        self.trace_root = str(g("trace_dir"))
+        self.trace_fp = None
+        self.trace_dir = None
+        self.trace_meta = None
+        self.trace_pending = 0
+        self.fw_banner = None
+        self.fw_tunables = None
 
         # ── 시리얼 ──────────────────────────────────────────────────
         self.ser = serial.Serial(g("port"), int(g("baud")), timeout=0.2)
@@ -165,12 +186,196 @@ class Esp32Base(Node):
             f"정적 TF {self.base_frame}→{g('laser_frame')} "
             f"x={g('laser_x'):+.4f} y={g('laser_y'):+.4f} [실측]")
 
+        # 🔑 fw_tunables 가 확보된 뒤에 열어야 meta 에 **실제 적용값**이 들어간다
+        self._open_trace()
+
         self.reader = threading.Thread(target=self.serial_loop, daemon=True)
         self.reader.start()
         # Command/watchdog output stays periodic. Odometry is emitted only when
         # encoder telemetry arrives, using the MCU acquisition timestamp.
         self.create_timer(1.0 / command_rate_hz, self.command_tick)
         self.create_timer(1.0 / diagnostics_rate_hz, self.publish_diagnostics)
+
+    # ══════════════════════════════════════════════════════════════
+    # 주행로그 tee (docs/주행로그_설계_2026-07-27.md §4-2·§5)
+    # ══════════════════════════════════════════════════════════════
+    TRACE_SCHEMA = 1
+
+    def _load_session_meta(self):
+        """~/drivelog/session.json — 사람이 미리 적어 두는 물리 상태.
+
+        Q1 권고 ①: 노드는 stack_up.sh 가 백그라운드로 띄우므로 대화형 입력이
+        불가능하다. 파일 경유가 이 저장소의 기존 패턴이다(teleop_node.py:40).
+        """
+        path = os.path.join(self.trace_root, "session.json")
+        try:
+            with open(path, encoding="utf-8") as fp:
+                return json.load(fp)
+        except FileNotFoundError:
+            return {}
+        except Exception as e:
+            self.get_logger().warn(f"session.json 읽기 실패: {e}")
+            return {}
+
+    def _prune_trace_sessions(self, retain_days=14, max_total_mb=2048):
+        """Q6 — 14일 + 총량 2GB 이중 상한. 조용히 디스크를 채우지 않는다."""
+        try:
+            entries = []
+            for name in os.listdir(self.trace_root):
+                d = os.path.join(self.trace_root, name)
+                if not os.path.isdir(d):
+                    continue
+                size = sum(
+                    os.path.getsize(os.path.join(d, f))
+                    for f in os.listdir(d)
+                    if os.path.isfile(os.path.join(d, f))
+                )
+                entries.append((os.path.getmtime(d), size, d))
+            entries.sort()
+            cutoff = time.time() - retain_days * 86400
+            total = sum(e[1] for e in entries)
+            for mtime, size, d in entries:          # 오래된 것부터
+                if not (mtime < cutoff or total > max_total_mb * 1024 * 1024):
+                    break
+                shutil.rmtree(d, ignore_errors=True)
+                total -= size
+                self.get_logger().info(f"오래된 주행로그 삭제 {os.path.basename(d)}")
+        except Exception as e:
+            self.get_logger().warn(f"주행로그 정리 실패: {e}")
+
+    def _open_trace(self):
+        """세션 디렉터리를 만들고 trace.csv 를 연다. 실패해도 주행은 계속한다."""
+        if not self.trace_root:
+            return                                   # trace_dir:='' → 비활성
+        meta_in = self._load_session_meta()
+        purpose = str(self.get_parameter("purpose").value
+                      or meta_in.get("purpose") or "")
+        chassis = str(self.get_parameter("chassis_id").value
+                      or meta_in.get("chassis_id") or "")
+        # ⭐ 이 둘이 없으면 나중에 데이터를 못 믿는다 (설계문서 §4-2)
+        if not purpose or not chassis:
+            self.get_logger().warn(
+                "주행로그 비활성 — purpose·chassis_id 가 비어 있다. "
+                f"{os.path.join(self.trace_root, 'session.json')} 에 적거나 "
+                "-p purpose:=... -p chassis_id:=... 로 줄 것 (주행은 계속한다)")
+            return
+        try:
+            os.makedirs(self.trace_root, exist_ok=True)
+            self._prune_trace_sessions()
+            self.trace_dir = os.path.join(
+                self.trace_root, time.strftime("%Y-%m-%d_%H%M%S"))
+            os.makedirs(self.trace_dir, exist_ok=True)
+            self.trace_fp = open(os.path.join(self.trace_dir, "trace.csv"),
+                                 "w", encoding="utf-8", buffering=1 << 16)
+            # 스키마가 바뀌어도 옛 파일을 읽을 수 있게 첫 줄에 박는다
+            self.trace_fp.write(
+                f"# schema={self.TRACE_SCHEMA} fw=speed_pid_v1 tele_hz=10 "
+                "fields=t_host_ns,T,t_mcu_ms,mode,l_tgt,l_v,l_duty,"
+                "r_tgt,r_v,r_duty,l_cnt,r_cnt\n")
+        except Exception as e:
+            self.get_logger().error(f"주행로그 열기 실패 — 로깅 없이 주행한다: {e}")
+            self.trace_fp = None
+            return
+
+        try:
+            node_md5 = hashlib.md5(
+                open(__file__, "rb").read()).hexdigest()
+        except Exception:
+            node_md5 = None
+        self.trace_meta = {
+            "schema_version": self.TRACE_SCHEMA,
+            "started_iso": datetime.now().astimezone().isoformat(),
+            "ended_iso": None, "duration_s": None,
+            "purpose": purpose,                            # ⭐
+            "chassis_id": chassis,                         # ⭐
+            "floor": meta_in.get("floor"),                 # ⭐
+            "vbat_start_v": meta_in.get("vbat_start_v"),   # ⭐
+            "vbat_end_v": meta_in.get("vbat_end_v"),       # ⭐
+            "wheel_note": meta_in.get("wheel_note"),
+            "payload_note": meta_in.get("payload_note"),
+            "cmd_source": meta_in.get("cmd_source"),
+            "fw_banner": self.fw_banner,
+            "fw_tunables": self.fw_tunables,               # ⭐ k? 원문
+            "tele_hz": 10,
+            # 선언 파라미터 전량 dump. get_parameters_by_prefix('') 는 공개 API 다
+            # (self._parameters 는 rclpy 내부 속성이라 쓰지 않는다)
+            "params": {
+                name: p.value
+                for name, p in sorted(self.get_parameters_by_prefix("").items())
+            },
+            "cmdline": " ".join(sys.argv),
+            "hostname": socket.gethostname(),
+            "node_md5": node_md5,          # ~/calib 은 git repo 가 아니다
+            "lines": 0, "t_lines": 0, "event_lines": 0, "bytes": 0,
+            "stop_reason": None, "diag_final": None,
+        }
+        self._started_mono = time.time()
+        for key in ("floor", "vbat_start_v", "fw_tunables"):
+            if self.trace_meta.get(key) in (None, ""):
+                self.get_logger().warn(f"⭐ meta 필드가 비어 있다: {key}")
+        self._write_meta()
+        self.get_logger().info(f"주행로그 {self.trace_dir}  purpose={purpose}")
+
+    def _write_meta(self):
+        try:
+            with open(os.path.join(self.trace_dir, "meta.json"),
+                      "w", encoding="utf-8") as fp:
+                json.dump(self.trace_meta, fp, ensure_ascii=False,
+                          indent=2, default=str)
+        except Exception as e:
+            self.get_logger().warn(f"meta.json 쓰기 실패: {e}")
+
+    def _trace_write(self, arrival_ns, raw):
+        """원문 그대로 tee.
+
+        🔑 T 줄만 거르지 **않는다** — '#' 줄이 이벤트(`# auto-stop (deadman)`),
+           게인, 펌웨어 배너를 싣는다. 필터링을 **안 해서** 얻는 이득이다.
+        🔴 오도메트리 스레드 안이다. 어떤 예외도 밖으로 내보내지 않고,
+           실패하면 로깅만 끈다 (재시도하지 않는다 — 50Hz 예외 폭주 방지).
+        """
+        try:
+            self.trace_fp.write(f"{arrival_ns},{raw}\n")
+            m = self.trace_meta
+            m["lines"] += 1
+            m["bytes"] += len(raw) + 21
+            if raw.startswith("T,"):
+                m["t_lines"] += 1
+            else:
+                m["event_lines"] += 1
+            self.trace_pending += 1
+            if self.trace_pending >= 200:      # Q5 — 줄마다 flush 는 낭비다
+                self.trace_fp.flush()
+                self.trace_pending = 0
+        except Exception as e:
+            self.get_logger().error(f"주행로그 기록 실패 — 로깅 중단: {e}")
+            try:
+                self.trace_fp.close()
+            except Exception:
+                pass
+            self.trace_fp = None
+
+    def _close_trace(self, reason):
+        if self.trace_fp is None:
+            return
+        try:
+            self.trace_fp.flush()
+            self.trace_fp.close()
+        except Exception:
+            pass
+        self.trace_fp = None
+        try:
+            self.trace_meta["ended_iso"] = datetime.now().astimezone().isoformat()
+            self.trace_meta["duration_s"] = round(
+                time.time() - self._started_mono, 1)
+            self.trace_meta["stop_reason"] = reason
+            self.trace_meta["diag_final"] = self.last_diag_values
+            self._write_meta()
+            self.get_logger().info(
+                f"주행로그 종료 {self.trace_dir} "
+                f"({self.trace_meta['t_lines']} T줄 / "
+                f"{self.trace_meta['event_lines']} 이벤트줄)")
+        except Exception as e:
+            self.get_logger().warn(f"주행로그 마감 실패: {e}")
 
     # ── /cmd_vel → 바퀴 목표속도 ────────────────────────────────────
     def on_cmd(self, msg):
@@ -190,6 +395,10 @@ class Esp32Base(Node):
                 self.get_logger().error(f"시리얼 오류: {e}")
                 time.sleep(0.5)
                 continue
+            # 🔑 arrival_ns 를 T줄 필터 **앞으로** 옮긴다 — '#' 줄에도 시각이 필요하다
+            arrival_ns = self.get_clock().now().nanoseconds
+            if self.trace_fp is not None and raw:
+                self._trace_write(arrival_ns, raw)
             if not raw.startswith("T,"):
                 continue
             try:
@@ -199,7 +408,6 @@ class Esp32Base(Node):
                     self.malformed_telemetry += 1
                 continue
 
-            arrival_ns = self.get_clock().now().nanoseconds
             with self.lock:
                 self.telemetry_received += 1
                 timing = self.mcu_clock.update(sample.acquisition_ms, arrival_ns)
@@ -396,6 +604,7 @@ class Esp32Base(Node):
                 f"{scan_tf_age_ms:.3f}" if scan_tf_age_ms is not None else "n/a"
             ),
         }
+        self.last_diag_values = dict(values)   # meta.json 의 diag_final
         status = DiagnosticStatus(
             level=level,
             name="esp32_odometry/timing",
@@ -419,6 +628,7 @@ class Esp32Base(Node):
             self.ser.close()
         except Exception:
             pass
+        self._close_trace("shutdown")
 
 
 def main():
