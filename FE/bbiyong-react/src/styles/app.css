@@ -94,6 +94,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .seg{display:flex; border:1px solid var(--dk-line); border-radius:9px; overflow:hidden;}
 .seg button{flex:1; padding:8px 0; background:var(--dk-panel2); color:var(--dk-sub); border:0; font-weight:700; font-size:12px;}
 .seg button.on{background:#24466e; color:#dce9fb;}
+/* 주행 속도 게이지 — 좁은 좌측 열에 들어가므로 값은 위 캡션에, 아래는 − / 게이지 / + */
+.spd{display:flex; flex-direction:column; gap:6px; margin-top:4px;}
+.spdlab{display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--dk-sub); gap:8px;}
+.spdlab b{font-size:12px; color:var(--dk-ink);}
+.spdr{display:flex; gap:6px; align-items:stretch;}
+/* .ctl .col .dbtn 의 큰 패딩을 덮어써야 하므로 선택자를 더 길게 잡는다 */
+.ctl .col .spdr .dbtn{width:32px; padding:0; font-size:16px; font-weight:800; line-height:1; flex:none;}
+.spdbar{flex:1; position:relative; min-height:30px; border:1px solid var(--dk-line); border-radius:9px; background:var(--dk-panel2); overflow:hidden;}
+.spdbar i{position:absolute; left:0; top:0; bottom:0; background:rgba(61,220,151,.22); border-right:1px solid rgba(61,220,151,.5); transition:width .12s;}
 .gotor{display:flex; gap:8px; margin-top:10px;}
 .gotor select{flex:1; background:var(--dk-panel2); color:var(--dk-ink); border:1px solid var(--dk-line); border-radius:9px; padding:8px 10px;}
 .maplegend{display:flex; gap:12px; font-size:10.5px; color:var(--dk-sub); margin-top:8px; flex-wrap:wrap;}

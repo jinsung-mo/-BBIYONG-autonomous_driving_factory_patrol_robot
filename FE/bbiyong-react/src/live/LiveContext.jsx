@@ -8,6 +8,7 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ROBOT_ID, getDataSource, saveDataSource } from './config.js'
 import { connect, disconnect, subscribe, publish, onState, setToken } from './stompClient.js'
+import { DEFAULT_DRIVE_SPEED } from './mappers.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 
 const LiveContext = createContext(null)
@@ -114,10 +115,18 @@ export function LiveProvider({ children }) {
   }, [])
 
   // ---- 제어 발행 (가이드 §4) ----
+  // 주행 속도는 ref로 들고 control 객체의 정체성을 고정한다. state로 바로 읽으면 속도를 바꿀 때마다
+  // control 이 새로 만들어져 LiveSimBridge 의 키보드 effect 가 재등록되고 주행이 끊긴다.
+  const speedRef = useRef(DEFAULT_DRIVE_SPEED)
+  const [speed, setSpeedState] = useState(DEFAULT_DRIVE_SPEED)
+  const setSpeed = useCallback((v) => { speedRef.current = v; setSpeedState(v) }, [])
+
   const control = useMemo(() => {
     const send = (dest, body) => publish(dest, { robot_id: ROBOT_ID, ...body })
+    // 방향 단위벡터 × 주행 속도 — 부동소수 잔값이 payload에 남지 않게 소수 2자리로 정리한다
+    const scale = (v) => Number((v * speedRef.current).toFixed(2))
     return {
-      drive: (linear, angular) => send('/app/control/drive', { command: 'DRIVE', linear, angular }),
+      drive: (linear, angular) => send('/app/control/drive', { command: 'DRIVE', linear: scale(linear), angular: scale(angular) }),
       stop: () => send('/app/control/drive', { command: 'DRIVE', linear: 0, angular: 0 }),
       // mode: autonomy | manual | disabled 만 유효
       setMode: (mode) => send('/app/control/mode', { command: 'SET_MODE', mode }),
@@ -132,8 +141,9 @@ export function LiveProvider({ children }) {
     dataSource, setDataSource, toggleDataSource,
     telemetry, alerts, dismissAlert,
     onVideoFrame, control, robotId: ROBOT_ID,
+    speed, setSpeed,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
-      toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, control])
+      toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, control, speed, setSpeed])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }
