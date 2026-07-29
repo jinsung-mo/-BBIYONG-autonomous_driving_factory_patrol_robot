@@ -44,13 +44,21 @@ export default function ControlPanel() {
     ? (!!telemetry?.estop && telemetry.estop !== 'RELEASED')
     : status.estop !== 'RELEASED'
 
+  // 주행을 시작하는 것도 사용자가 수동 조작을 고른 행위다 — 토글을 수동으로 맞춘다.
+  // 표시만 바꾸고 SET_MODE 는 보내지 않는다(모드 전환은 모드 버튼의 몫).
+  // 키를 떼거나 텔레메트리가 바뀌는 것으로는 되돌아가지 않는다(S15P11E101-448).
+  const markManual = () => setSeg('manual')
+
   // 버튼은 키보드 키 이름으로 표기 (조작은 WASD/방향키 동일)
   const glyph = { w: 'W', a: 'A', s: 'S', d: 'D' }
   const dirLabel = { w: '전진', a: '좌회전', s: '후진', d: '우회전' }
   const key = (k) => {
     // live: 누르는 동안 주행, 떼면 정지 / mock: 기존처럼 클릭당 한 칸 이동
     const live = {
-      onPointerDown: () => control.drive(DRIVE_VECTORS[k].linear, DRIVE_VECTORS[k].angular),
+      onPointerDown: () => {
+        markManual()
+        control.drive(DRIVE_VECTORS[k].linear, DRIVE_VECTORS[k].angular)
+      },
       onPointerUp: () => control.stop(),
       onPointerLeave: () => control.stop(),
     }
@@ -59,7 +67,7 @@ export default function ControlPanel() {
         className={activeKeys[k] ? 'active' : ''}
         aria-label={`${dirLabel[k]} (${glyph[k]})`}
         disabled={enabled && !connected}
-        {...(enabled ? live : { onClick: () => actions.dpadMove(k) })}
+        {...(enabled ? live : { onClick: () => { markManual(); actions.dpadMove(k) } })}
       >
         {glyph[k]}
       </button>
@@ -105,7 +113,7 @@ export default function ControlPanel() {
   // 리스너는 enabled/connected 가 바뀔 때만 다시 걸고, 그때그때의 상태·핸들러는 ref로 읽는다
   // (핸들러가 매 렌더 새로 만들어지므로 의존성에 넣으면 리스너를 계속 재등록하게 된다).
   const latest = useRef(null)
-  latest.current = { estopEngaged, onEmergencyStop, onReturnPatrol, onSetSeg }
+  latest.current = { estopEngaged, onEmergencyStop, onReturnPatrol, onSetSeg, markManual }
 
   useEffect(() => {
     if (enabled && !connected) return undefined // 버튼 disabled 와 같은 게이트
@@ -114,10 +122,16 @@ export default function ControlPanel() {
     // 조합키를 누르는 순간에도 긴급 정지가 나가버리므로, 사이에 다른 키가 없었을 때만 keyup에서 실행한다.
     let shiftAlone = false
     const isTyping = (el) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
+    // 주행 키 — 방향키도 WASD 와 같은 조작이다(useSimulation · LiveSimBridge 의 매핑과 동일)
+    const DRIVE_KEYS = /^([wasd]|arrow(up|down|left|right))$/
 
     const onDown = (e) => {
       if (e.key === 'Shift') { if (!e.repeat && !isTyping(e.target)) shiftAlone = true; return }
       shiftAlone = false
+      if (DRIVE_KEYS.test(e.key.toLowerCase())) {
+        if (!isTyping(e.target)) latest.current.markManual()
+        return
+      }
       if (e.code !== 'Space') return
       if (isTyping(e.target)) return
       // 포커스된 버튼의 기본 활성화(=중복 실행)와 페이지 스크롤을 막는다

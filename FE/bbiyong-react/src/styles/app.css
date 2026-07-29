@@ -67,7 +67,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .env div{background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:10px; padding:9px; text-align:center;}
 .env b{display:block; font-size:16px; font-family:Consolas,monospace;}
 .env span{font-size:10px; color:var(--dk-sub);}
-.elog{flex:1; overflow:auto; margin-top:10px; list-style:none;}
+/* ul 기본 padding-left(40px)를 지워 항목 너비를 위 상태·환경 박스와 맞춘다 */
+.elog{flex:1; overflow:auto; margin-top:10px; padding-left:0; list-style:none;}
 .elog li{list-style:none; padding:7px 8px; border-radius:8px; background:var(--dk-panel2); border:1px solid var(--dk-line); margin-bottom:6px; font-size:11.5px; display:flex; gap:8px;}
 .elog li .t{color:var(--dk-sub); font-family:Consolas,monospace; white-space:nowrap;}
 .elog li.fire b{color:var(--dk-red);} .elog li.heat b{color:var(--dk-amber);} .elog li.ok b{color:var(--dk-green);}
