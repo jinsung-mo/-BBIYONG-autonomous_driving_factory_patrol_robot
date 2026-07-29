@@ -24,7 +24,10 @@ const GOTO_OPTS = [
 export default function ControlPanel() {
   const { status, activeKeys, actions } = useSim()
   const { enabled, connected, control, telemetry } = useLive()
+  const { switches } = status
   const [gotoVal, setGotoVal] = useState(GOTO_OPTS[0].value)
+  // mock 시뮬에는 estop 필드가 없고 모드 문구로만 표현되므로 패널이 직접 기억한다
+  const [mockEstop, setMockEstop] = useState(false)
 
   // live 모드의 현재 모드는 시뮬이 아니라 텔레메트리가 정답이다
   // (발행은 성공해도 로봇이 모드를 바꾸지 못할 수 있으므로 서버 상태를 그대로 비춘다)
@@ -34,11 +37,11 @@ export default function ControlPanel() {
 
   const liveReady = enabled && connected
 
-  // E-STOP 체결 여부 — live는 텔레메트리가, mock은 시뮬 상태가 정답이다.
+  // E-STOP 체결 여부 — live는 텔레메트리가 정답, mock은 위 래치를 쓴다.
   // 텔레메트리가 아직 없으면(estop === undefined) 체결로 오해하지 않도록 명시적으로 검사한다.
   const estopEngaged = enabled
     ? (!!telemetry?.estop && telemetry.estop !== 'RELEASED')
-    : status.estop !== 'RELEASED'
+    : mockEstop
 
   // 버튼은 키보드 키 이름으로 표기 (조작은 WASD/방향키 동일)
   const glyph = { w: 'W', a: 'A', s: 'S', d: 'D' }
@@ -62,16 +65,34 @@ export default function ControlPanel() {
     )
   }
 
-  // mock 경로의 E-STOP 체결/해제는 Simulation 이 직접 관리한다(emergencyStop / botResume).
+  const Switch = ({ label, name }) => (
+    <div className="sw">
+      {label}
+      <span
+        className={`swb${switches[name] ? ' on' : ''}`}
+        role="switch"
+        aria-checked={switches[name]}
+        tabIndex={0}
+        onClick={() => actions.toggleSwitch(name)}
+        onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); actions.toggleSwitch(name) } }}
+      >
+        <i />
+      </span>
+    </div>
+  )
+
   const onEmergencyStop = () => {
+    if (!enabled) setMockEstop(true)
     if (liveReady) control.estop()
     else actions.emergencyStop()
   }
   const onReturnPatrol = () => {
+    if (!enabled) setMockEstop(false)
     if (liveReady) control.setMode('autonomy')
     else actions.returnPatrol()
   }
   const onSetSeg = (man) => {
+    if (!enabled && !man) setMockEstop(false)
     if (liveReady) control.setMode(man ? 'manual' : 'autonomy')
     else actions.setSeg(man)
   }
@@ -140,8 +161,8 @@ export default function ControlPanel() {
         </span>}
       </h3>
       <div className="ctl">
-        {/* 비상·복구 조작은 이동 조작(방향 버튼·모드·지점 이동)과 떼어 놓는다 — 조작 중 오클릭 방지 */}
         <div className="col">
+          <Switch label="로봇 제어" name="power" />
           {/* Shift 뱃지는 지금 그 키가 실행할 버튼에만 붙인다 — 어느 쪽으로 토글되는지 화면으로 알 수 있게 */}
           <button
             className="dbtn stop keyed"
@@ -185,7 +206,6 @@ export default function ControlPanel() {
               <kbd className="kbd">WASD · 방향키</kbd>
             </button>
           </div>
-
           <div className="gotor">
             <select value={gotoVal} onChange={(e) => setGotoVal(e.target.value)}>
               {GOTO_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

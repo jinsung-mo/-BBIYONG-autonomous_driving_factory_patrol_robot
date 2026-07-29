@@ -15,8 +15,9 @@ export default function StatusPanel() {
   const modeClass = live ? live.modeClass : status.modeClass
   const batt = live ? live.batt : status.batt
   const spd = live ? live.spd : status.spd
-  const estop = live ? live.estop : status.estop
+  const estop = live ? live.estop : 'RELEASED'
   const comm = live ? live.comm : '양호 · 43ms'
+  const fps = live ? live.fps : '8.0'
   const name = enabled ? robotId : '삐용'
 
   const okColor = { color: 'var(--dk-green)' }
@@ -31,6 +32,7 @@ export default function StatusPanel() {
         <div className="kv"><span>속도</span><b className="mono">{spd}</b></div>
         <div className="kv"><span>E-STOP</span><b style={estop === 'RELEASED' ? okColor : undefined}>{estop}</b></div>
         <div className="kv"><span>통신 감도</span><b style={live && !connected ? undefined : okColor}>{comm}</b></div>
+        <div className="kv"><span>추론 FPS</span><b className="mono">{fps}</b></div>
         {live?.location && (
           // 미터 단위 원시 좌표 — 지도 격자 변환과 무관하게 서버 값 그대로 확인할 수 있도록 노출
           <div className="kv"><span>위치 (m)</span><b className="mono">
