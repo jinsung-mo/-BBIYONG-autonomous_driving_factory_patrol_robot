@@ -113,7 +113,7 @@ export default function ControlPanel() {
   // 리스너는 enabled/connected 가 바뀔 때만 다시 걸고, 그때그때의 상태·핸들러는 ref로 읽는다
   // (핸들러가 매 렌더 새로 만들어지므로 의존성에 넣으면 리스너를 계속 재등록하게 된다).
   const latest = useRef(null)
-  latest.current = { estopEngaged, onEmergencyStop, onReturnPatrol, onSetSeg, markManual }
+  latest.current = { estopEngaged, seg, onEmergencyStop, onReturnPatrol, onSetSeg, markManual }
 
   useEffect(() => {
     if (enabled && !connected) return undefined // 버튼 disabled 와 같은 게이트
@@ -137,7 +137,8 @@ export default function ControlPanel() {
       // 포커스된 버튼의 기본 활성화(=중복 실행)와 페이지 스크롤을 막는다
       e.preventDefault()
       if (e.repeat) return
-      latest.current.onSetSeg(false)
+      // 순찰 ↔ 수동 토글 — Shift(긴급 정지 ↔ 순찰 복귀)와 같은 규칙
+      latest.current.onSetSeg(latest.current.seg !== 'manual')
     }
     const onUp = (e) => {
       if (e.key !== 'Shift') return
@@ -239,13 +240,20 @@ export default function ControlPanel() {
               className={seg === 'patrol' ? 'on' : ''}
               onClick={() => onSetSeg(false)}
               disabled={enabled && !connected}
-              aria-keyshortcuts="Space"
+              aria-keyshortcuts={seg === 'manual' ? 'Space' : undefined}
             >
               순찰 모드
-              <kbd className="kbd">Space</kbd>
+              {/* Space 뱃지는 지금 그 키가 전환할 대상 버튼에만 붙인다 (Shift 뱃지와 같은 규칙) */}
+              {seg === 'manual' && <kbd className="kbd">Space</kbd>}
             </button>
-            <button className={seg === 'manual' ? 'on' : ''} onClick={() => onSetSeg(true)} disabled={enabled && !connected}>
+            <button
+              className={seg === 'manual' ? 'on' : ''}
+              onClick={() => onSetSeg(true)}
+              disabled={enabled && !connected}
+              aria-keyshortcuts={seg === 'patrol' ? 'Space' : undefined}
+            >
               수동 모드
+              {seg === 'patrol' && <kbd className="kbd">Space</kbd>}
               {/* 단축키가 아니라 조작 안내 — 수동 모드에서 무엇으로 움직이는지 알려준다 */}
               <kbd className="kbd">WASD · 방향키</kbd>
             </button>
