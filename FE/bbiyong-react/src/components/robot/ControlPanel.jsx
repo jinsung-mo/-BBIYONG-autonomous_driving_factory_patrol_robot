@@ -254,8 +254,6 @@ export default function ControlPanel() {
             >
               수동 모드
               {seg === 'patrol' && <kbd className="kbd">Space</kbd>}
-              {/* 단축키가 아니라 조작 안내 — 수동 모드에서 무엇으로 움직이는지 알려준다 */}
-              <kbd className="kbd">WASD · 방향키</kbd>
             </button>
           </div>
 
