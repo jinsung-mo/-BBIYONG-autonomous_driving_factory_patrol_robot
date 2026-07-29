@@ -87,12 +87,13 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                     eventPublisher.publishEvent(new RobotInspectionEvent(this, packet));
                     break;
                 case "MAP":
-                    // 실시간 2D 점유격자 맵. cells(RLE)가 크고 서버가 해석할 필요가 없으므로
-                    // 수신 원문을 그대로 /topic/nav/{robotId} 로 중계한다.
+                case "NAV_LIVE":
+                    // 실시간 내비게이션 데이터: MAP(2D 점유격자 RLE) / NAV_LIVE(pose·scan).
+                    // 서버가 해석할 필요 없이 수신 원문을 그대로 /topic/nav/{robotId} 로 중계한다.
                     if (robotId != null && !robotId.trim().isEmpty()) {
                         eventPublisher.publishEvent(new RobotNavEvent(this, robotId, payload));
                     } else {
-                        log.warn("Dropping MAP packet with missing robot_id");
+                        log.warn("Dropping {} packet with missing robot_id", packet.getType());
                     }
                     break;
                 default:
