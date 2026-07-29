@@ -9,6 +9,7 @@ import { createContext, useContext, useCallback, useEffect, useMemo, useRef, use
 import { ROBOT_ID, getDataSource, saveDataSource } from './config.js'
 import { connect, disconnect, subscribe, publish, onState, setToken } from './stompClient.js'
 import { DEFAULT_DRIVE_SPEED } from './mappers.js'
+import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 
 const LiveContext = createContext(null)
@@ -42,6 +43,14 @@ export function LiveProvider({ children }) {
 
   const telemetryRef = useRef(null)
 
+  // 실시간 SLAM 맵(가이드 §5). NAV_LIVE 가 3Hz 로 오고 scan 배열이 커서 영상 프레임과 같은
+  // 방식으로 다룬다 — React state 로 올리지 않고 ref 에 최신값만 두고 리스너가 직접 받아간다.
+  const navRef = useRef({ map: null, mapCanvas: null, pose: null, scan: null, trail: [] })
+  const navListeners = useRef(new Set())
+  const emitNav = useCallback(() => {
+    navListeners.current.forEach((fn) => fn(navRef.current))
+  }, [])
+
   const setDataSource = useCallback((value) => {
     saveDataSource(value)
     setDataSourceState(value)
@@ -64,6 +73,8 @@ export function LiveProvider({ children }) {
       setConnected(false); setLastError(null); setAuthError(false)
       setTelemetry(null); telemetryRef.current = null
       videoRef.current = { FRONT: null, THERMAL: null }
+      navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [] }
+      emitNav()
       disconnect()
       return undefined
     }
@@ -86,6 +97,31 @@ export function LiveProvider({ children }) {
       videoListeners.current.forEach((fn) => fn(ch, frame))
     })
 
+    // 실시간 SLAM 맵 — 한 토픽에 MAP/NAV_LIVE 두 종류가 오고 type 으로 갈린다(가이드 §1).
+    const offNav = subscribe(`/topic/nav/${ROBOT_ID}`, (msg) => {
+      const nav = navRef.current
+      if (msg?.type === 'MAP') {
+        // 서버는 snapshot 만 보낸다(patch 없음). sequence 가 바뀔 때만 다시 굽는다.
+        if (nav.map && nav.map.seq === msg.sequence) return
+        try {
+          nav.map = decodeMapSnapshot(msg)
+          nav.mapCanvas = bakeMap(nav.map)
+        } catch (e) {
+          // 크기가 안 맞는 맵은 버리고 직전 맵을 유지한다 — 깨진 화면보다 낫다
+          console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', e.message)
+          return
+        }
+      } else if (msg?.type === 'NAV_LIVE') {
+        nav.pose = msg.pose || null
+        nav.scan = msg.scan || null
+        if (msg.pose) {
+          nav.trail = [...nav.trail, [msg.pose.x, msg.pose.y]]
+          if (nav.trail.length > TRAIL_MAX) nav.trail = nav.trail.slice(-TRAIL_MAX)
+        }
+      } else return
+      emitNav()
+    })
+
     const flush = setInterval(() => {
       if (telemetryRef.current) setTelemetry(telemetryRef.current)
     }, TELEMETRY_FLUSH_MS)
@@ -96,10 +132,10 @@ export function LiveProvider({ children }) {
 
     return () => {
       clearInterval(flush)
-      offRobots(); offAlerts(); offVideo(); offState()
+      offRobots(); offAlerts(); offVideo(); offNav(); offState()
       disconnect()
     }
-  }, [canConnect])
+  }, [canConnect, emitNav])
 
   const dismissAlert = useCallback((id) => {
     setAlerts((prev) => prev.filter((a) => a._id !== id))
@@ -112,6 +148,13 @@ export function LiveProvider({ children }) {
     if (cur.FRONT) fn('FRONT', cur.FRONT)
     if (cur.THERMAL) fn('THERMAL', cur.THERMAL)
     return () => videoListeners.current.delete(fn)
+  }, [])
+
+  // 맵 캔버스가 구독한다. 구독 시점에 이미 받아둔 맵이 있으면 즉시 1회 전달해 공백을 막는다.
+  const onNavUpdate = useCallback((fn) => {
+    navListeners.current.add(fn)
+    fn(navRef.current)
+    return () => navListeners.current.delete(fn)
   }, [])
 
   // ---- 제어 발행 (가이드 §4) ----
@@ -140,10 +183,11 @@ export function LiveProvider({ children }) {
     enabled, connected, lastError, authError, hasToken: !!accessToken,
     dataSource, setDataSource, toggleDataSource,
     telemetry, alerts, dismissAlert,
-    onVideoFrame, control, robotId: ROBOT_ID,
+    onVideoFrame, onNavUpdate, control, robotId: ROBOT_ID,
     speed, setSpeed,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
-      toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, control, speed, setSpeed])
+      toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
+      control, speed, setSpeed])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }
