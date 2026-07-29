@@ -25,8 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 맵 이미지 업로드 -> 저장 -> 최신 조회 -> 이미지 서빙 왕복 검증. (S15P11E101-426)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.datasource.url=jdbc:sqlite:file:memdb_map?mode=memory&cache=shared",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
         "bbiyong.map.storage-dir=${java.io.tmpdir}/bbiyong-test-map-store"
 })
 @AutoConfigureTestRestTemplate

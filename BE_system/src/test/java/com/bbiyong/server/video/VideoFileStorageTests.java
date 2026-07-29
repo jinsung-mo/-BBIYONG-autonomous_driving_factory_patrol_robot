@@ -28,8 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 영상 파일 업로드 -> 저장 -> 재생 스트리밍(Range 포함) 왕복 검증. (S15P11E101-412)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "spring.datasource.url=jdbc:sqlite:file:memdb_vidfile?mode=memory&cache=shared",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
         "bbiyong.video.storage-dir=${java.io.tmpdir}/bbiyong-test-video-store"
 })
 @AutoConfigureTestRestTemplate
