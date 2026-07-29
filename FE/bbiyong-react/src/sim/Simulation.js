@@ -34,6 +34,10 @@ export default class Simulation {
     // ---- 로봇 ----
     this.bot = { pos: { c: 0, r: 0 }, seg: 0, prog: 0, mode: 'patrol', route: [], rs: 0, rp: 0, hd: 0 }
     this.seg = 'patrol' // 순찰 모드 세그먼트 표시용
+    // E-STOP 체결 여부. 실서버는 텔레메트리 estop 필드가 정답이지만 시뮬에는 없어
+    // 여기서 직접 들고 있는다. 체결 시 문자열은 가이드에 명시가 없어 ENGAGED 로 두었다
+    // (가이드 §3.1 예시에는 "RELEASED" 만 나온다) — 실서버 값 확인되면 맞출 것.
+    this.estop = false
     this.modeText = '순찰 중'
     this.modeClass = ''
     this.spd = '0.6 m/s'
@@ -104,6 +108,7 @@ export default class Simulation {
       ptz: { ...this.ptz },
       det: { ...this.det },
       seg: this.seg,
+      estop: this.estop ? 'ENGAGED' : 'RELEASED',
       modeText: this.modeText,
       modeClass: this.modeClass,
       spd: this.spd,
@@ -429,6 +434,8 @@ export default class Simulation {
   }
 
   botResume() {
+    // 순찰 복귀·순찰 모드가 모두 이 경로를 지난다 — 로봇이 다시 달리므로 E-STOP 도 함께 풀린다
+    this.estop = false
     const bot = this.bot
     let bi = 0, bd = 1e9
     loop.forEach((p, i) => {
@@ -809,7 +816,7 @@ export default class Simulation {
   }
 
   dpStop() { this.segSet(true) }
-  emergencyStop() { this.bot.mode = 'manual'; this.setMode('긴급 정지', 'emg'); this.pushLog('heat', '수동 긴급 정지 (E-STOP)') }
+  emergencyStop() { this.estop = true; this.bot.mode = 'manual'; this.setMode('긴급 정지', 'emg'); this.pushLog('heat', '수동 긴급 정지 (E-STOP)') }
   reset() { this.segSet(true); this.pushLog('ok', '제어 리셋') }
   returnPatrol() { this.botResume(); this.pushLog('ok', '순찰 복귀 명령') }
 
