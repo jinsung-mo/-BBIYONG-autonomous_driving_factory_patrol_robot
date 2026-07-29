@@ -2,6 +2,7 @@ package com.bbiyong.server.stomp;
 
 import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.wss.event.RobotFireEvent;
+import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import com.bbiyong.server.wss.event.RobotVideoEvent;
@@ -46,6 +47,17 @@ public class RobotEventListener {
             messagingTemplate.convertAndSend("/topic/video/" + robotId, jsonStr);
         } catch (Exception e) {
             log.error("Failed to serialize/relay video frame for robot [{}]", robotId, e);
+        }
+    }
+
+    @EventListener
+    public void handleNavEvent(RobotNavEvent event) {
+        // 맵 원문(raw JSON)을 그대로 중계한다 — cells(RLE) 재직렬화 없이.
+        String robotId = event.getRobotId();
+        try {
+            messagingTemplate.convertAndSend("/topic/nav/" + robotId, event.getRawPayload());
+        } catch (Exception e) {
+            log.error("Failed to relay nav/map for robot [{}]", robotId, e);
         }
     }
 

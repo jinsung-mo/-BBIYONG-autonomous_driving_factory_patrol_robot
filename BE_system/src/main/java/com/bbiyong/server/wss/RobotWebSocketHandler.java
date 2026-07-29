@@ -3,6 +3,7 @@ package com.bbiyong.server.wss;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
+import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import com.bbiyong.server.wss.event.RobotVideoEvent;
@@ -84,6 +85,15 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                 case "INSPECTION":
                     // 분전반 정상 점검 리포트 (경보 아님) - 설비 최근점검 상태 갱신용
                     eventPublisher.publishEvent(new RobotInspectionEvent(this, packet));
+                    break;
+                case "MAP":
+                    // 실시간 2D 점유격자 맵. cells(RLE)가 크고 서버가 해석할 필요가 없으므로
+                    // 수신 원문을 그대로 /topic/nav/{robotId} 로 중계한다.
+                    if (robotId != null && !robotId.trim().isEmpty()) {
+                        eventPublisher.publishEvent(new RobotNavEvent(this, robotId, payload));
+                    } else {
+                        log.warn("Dropping MAP packet with missing robot_id");
+                    }
                     break;
                 default:
                     log.warn("Unknown WSS packet type [{}] in message: {}", packet.getType(), payload);
