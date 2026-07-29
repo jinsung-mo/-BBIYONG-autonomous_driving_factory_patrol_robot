@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSim } from '../../SimContext.js'
 import { useLive } from '../../live/LiveContext.jsx'
-import { DRIVE_VECTORS } from '../../live/mappers.js'
+import {
+  DRIVE_VECTORS, DRIVE_SPEED_MIN, DRIVE_SPEED_MAX, DRIVE_SPEED_STEP, clampDriveSpeed,
+} from '../../live/mappers.js'
 import { cellToWorld } from '../../live/config.js'
 
 const GOTO_OPTS = [
@@ -23,7 +25,7 @@ const GOTO_OPTS = [
 // 두 동작을 한 키에 토글로 얹는 것이 프로토콜과 그대로 맞는다.
 export default function ControlPanel() {
   const { status, activeKeys, actions } = useSim()
-  const { enabled, connected, control, telemetry } = useLive()
+  const { enabled, connected, control, telemetry, speed, setSpeed } = useLive()
   const [gotoVal, setGotoVal] = useState(GOTO_OPTS[0].value)
 
   // live 모드의 현재 모드는 시뮬이 아니라 텔레메트리가 정답이다
@@ -75,6 +77,14 @@ export default function ControlPanel() {
     if (liveReady) control.setMode(man ? 'manual' : 'autonomy')
     else actions.setSeg(man)
   }
+  // 속도는 live(발행 배율)와 mock(표시 속도) 양쪽에 함께 반영한다 — 어느 모드에서도 죽은 버튼이 되지 않게
+  const onSetSpeed = (v) => {
+    const next = clampDriveSpeed(v)
+    setSpeed(next)
+    actions.setManualSpeed(next)
+  }
+  const speedPct = ((speed - DRIVE_SPEED_MIN) / (DRIVE_SPEED_MAX - DRIVE_SPEED_MIN)) * 100
+
   const onGoto = () => {
     const label = GOTO_OPTS.find((o) => o.value === gotoVal)?.label
     if (liveReady) {
@@ -161,6 +171,42 @@ export default function ControlPanel() {
             <span>⇤ 순찰 복귀</span>
             {estopEngaged && <kbd className="kbd">Shift</kbd>}
           </button>
+
+          {/* 주행 속도 — 방향 단위벡터에 이 값을 곱해 발행한다 */}
+          <div className="spd">
+            <div className="spdlab">
+              <span>주행 속도</span><b className="mono">{speed.toFixed(2)} m/s</b>
+            </div>
+            <div className="spdr">
+              <button
+                className="dbtn"
+                onClick={() => onSetSpeed(speed - DRIVE_SPEED_STEP)}
+                disabled={(enabled && !connected) || speed <= DRIVE_SPEED_MIN}
+                aria-label="주행 속도 낮추기"
+              >
+                −
+              </button>
+              <div
+                className="spdbar"
+                role="slider"
+                aria-label="주행 속도"
+                aria-valuemin={DRIVE_SPEED_MIN}
+                aria-valuemax={DRIVE_SPEED_MAX}
+                aria-valuenow={speed}
+                aria-valuetext={`${speed.toFixed(2)} m/s`}
+              >
+                <i style={{ width: `${speedPct}%` }} />
+              </div>
+              <button
+                className="dbtn"
+                onClick={() => onSetSpeed(speed + DRIVE_SPEED_STEP)}
+                disabled={(enabled && !connected) || speed >= DRIVE_SPEED_MAX}
+                aria-label="주행 속도 높이기"
+              >
+                +
+              </button>
+            </div>
+          </div>
         </div>
 
         <div>

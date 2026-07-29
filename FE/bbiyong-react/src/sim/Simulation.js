@@ -41,6 +41,7 @@ export default class Simulation {
     this.modeText = '순찰 중'
     this.modeClass = ''
     this.spd = '0.6 m/s'
+    this.manualSpeed = 0.5 // 수동 주행 속도 — 조작 패널의 속도 단계와 연동된다
     this.rcamHud = 'MODE PATROL · MAP OK'
     this.batt = 87
     this.bt = 0
@@ -447,7 +448,8 @@ export default class Simulation {
   setMode(txt, cls) {
     this.modeText = txt; this.modeClass = cls
     const m = this.bot.mode
-    this.spd = (m === 'patrol' ? '0.6' : (m === 'manual' ? '0.0' : '1.2')) + ' m/s'
+    // 수동 주행만 2자리 — 0.25 를 0.3 으로 반올림하면 실제 발행값과 어긋나 보인다
+    this.spd = (m === 'patrol' ? '0.6' : (m === 'manual' ? this.manualSpeed.toFixed(2) : '1.2')) + ' m/s'
     this.rcamHud = 'MODE ' + (m === 'patrol' ? 'PATROL' : m === 'dispatch' ? 'EMERGENCY' : m === 'goto' ? 'GOTO' : 'MANUAL') + ' · MAP OK'
     this.emit()
   }
@@ -814,6 +816,12 @@ export default class Simulation {
   }
 
   dpStop() { this.segSet(true) }
+  // 수동 주행 속도 변경 — 현재 표시 중인 속도를 곧바로 갱신한다
+  setManualSpeed(v) {
+    this.manualSpeed = v
+    this.setMode(this.modeText, this.modeClass)
+  }
+
   emergencyStop() { this.estop = true; this.bot.mode = 'manual'; this.setMode('긴급 정지', 'emg'); this.pushLog('heat', '수동 긴급 정지 (E-STOP)') }
   reset() { this.segSet(true); this.pushLog('ok', '제어 리셋') }
   returnPatrol() { this.botResume(); this.pushLog('ok', '순찰 복귀 명령') }

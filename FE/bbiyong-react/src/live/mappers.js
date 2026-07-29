@@ -60,12 +60,25 @@ export function alertToLog(a) {
   }
 }
 
-// WASD → 선속도/각속도 (가이드 §4 매핑표). 로봇이 자체 max로 클램핑한다.
+// WASD → 방향 단위벡터 (가이드 §4 매핑표).
+// 실제 발행값은 여기에 아래 주행 속도를 곱한 것이다 — 로봇이 자체 max로 클램핑한다.
 export const DRIVE_VECTORS = {
-  w: { linear: 0.5, angular: 0 },   // 전진
-  s: { linear: -0.5, angular: 0 },  // 후진
-  a: { linear: 0, angular: 0.5 },   // 좌회전
-  d: { linear: 0, angular: -0.5 },  // 우회전
+  w: { linear: 1, angular: 0 },   // 전진
+  s: { linear: -1, angular: 0 },  // 후진
+  a: { linear: 0, angular: 1 },   // 좌회전
+  d: { linear: 0, angular: -1 },  // 우회전
+}
+
+// 수동 주행 속도 — 선속도(m/s)이자 각속도(rad/s) 배율로 함께 쓴다.
+// 기본값은 기존 발행값(0.5)을 그대로 유지해 이번 변경으로 주행 속도가 달라지지 않게 한다.
+export const DEFAULT_DRIVE_SPEED = 0.5
+export const DRIVE_SPEED_MIN = 0.1
+export const DRIVE_SPEED_MAX = 1.0
+export const DRIVE_SPEED_STEP = 0.05
+
+// 0.1 + 0.05 = 0.15000000000000002 같은 잔값이 payload 로 나가지 않도록 정리한다
+export function clampDriveSpeed(v) {
+  return Number(Math.min(DRIVE_SPEED_MAX, Math.max(DRIVE_SPEED_MIN, v)).toFixed(2))
 }
 
 // 서버는 ISO8601(UTC)로 내려준다 — 화면은 기존과 동일하게 로컬 HH:MM:SS로 표시.
