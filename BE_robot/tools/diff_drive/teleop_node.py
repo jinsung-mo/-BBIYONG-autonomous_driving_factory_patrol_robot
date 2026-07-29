@@ -59,6 +59,18 @@ RAMP_S = 2.0             # 꾹 누르면 이 시간에 걸쳐 0 → 명령속도
                          #      좌우가 순차로 풀리는 구간을 만든다(출발 1초가 전체 요각의
                          #      67%). 완만히 올리면 그 구간이 줄어든다.
                          #   회전(w)은 램프하지 않는다 — 미세 자세 조정이 둔해진다.
+DECEL_MPS2 = 0.3         # 🆕 감속 기울기 m/s². 0.3m/s → 1.0초, 1.0m/s → 3.3초에 정지.
+                         #   손을 떼면 펌웨어 PID 가 목표 0 을 맞추려 **역토크를 걸어**
+                         #   툭 선다(전원이 끊겨 미끄러지는 게 아니다. MDD10A 는 duty 0
+                         #   에서 모터 양단을 단락시키는 단락제동이라 coast 도 아니다).
+                         #   목표속도를 완만히 내려 그 역토크를 없앤다.
+                         #
+                         # 🔴 **의도적 정지에만 적용한다.** v=0 에 도달하는 경로는 넷인데
+                         #    ① 명령없음 ② armed=false ③ 데드맨 ④ 순찰차단 은 전부
+                         #    "로봇이 통제 밖"이라는 뜻이라 즉시 서야 한다. 거기에 램프를
+                         #    걸면 통신이 끊겼을 때 로봇이 더 굴러간다 — 안전장치 무력화다.
+                         #    버튼을 뗀 경우만 armed=true·신선한 ts·v=0 으로 들어오므로
+                         #    아래 else 분기에서만 감속시킨다.
 
 
 class Teleop(Node):
@@ -73,6 +85,10 @@ class Teleop(Node):
         self.stop_frames = 0
         self.patrol_seen = 0.0
         self.drive_t0 = None          # 연속 전·후진이 시작된 시각 (램프 기준점)
+        self.v_out = 0.0              # 🆕 직전에 실제로 발행한 v. 감속 램프의 출발점이다.
+                                      #    항상 "마지막으로 내보낸 값"과 같게 유지한다 —
+                                      #    라이다 가드가 v 를 0 으로 죽인 경우도 포함해야
+                                      #    다음 틱이 있지도 않은 속도에서 감속을 시작하지 않는다.
         self.create_timer(1.0 / RATE_HZ, self.tick)
         self.create_timer(2.0, self.check_patrol)
         self.get_logger().info(
@@ -129,14 +145,20 @@ class Teleop(Node):
         c = self.read_cmd()
         now = time.time()
 
+        # 🔴 아래 네 분기는 전부 **안전 경로**다 — v_out 을 즉시 0 으로 버린다.
+        #    감속 램프를 태우면 안 된다(DECEL_MPS2 주석 참조).
         if c is None:
             reason = "명령 없음"
+            self.v_out = 0.0
         elif not c.get("armed"):
             reason = "비활성 (armed=false)"
+            self.v_out = 0.0
         elif now - float(c.get("ts", 0)) > DEADMAN_S:
             reason = f"데드맨 — 명령이 {now - float(c.get('ts', 0)):.1f}s 지났다"
+            self.v_out = 0.0
         elif now - self.patrol_seen < 5.0:
             reason = "순찰 실행 중 — 수동 차단 (같은 토픽 충돌 방지)"
+            self.v_out = 0.0
         else:
             v = max(-V_MAX, min(V_MAX, float(c.get("v", 0.0))))
             w = max(-W_MAX, min(W_MAX, float(c.get("w", 0.0))))
@@ -149,7 +171,13 @@ class Teleop(Node):
                     self.drive_t0 = now
                 v *= min(1.0, (now - self.drive_t0) / RAMP_S)
             else:
+                # 🆕 감속 램프. 여기 오는 v=0 은 **버튼을 뗀 것**이다
+                #    (armed=true · 신선한 ts · 값만 0). 안전 정지는 위 elif 에서
+                #    이미 걸러졌으므로 여기서 완만히 내려도 안전장치를 깎지 않는다.
                 self.drive_t0 = None
+                step = DECEL_MPS2 / RATE_HZ
+                decayed = max(0.0, abs(self.v_out) - step)
+                v = math.copysign(decayed, self.v_out) if decayed > 0 else 0.0
             # 라이다 가드: 진행 방향이 막혔으면 그 성분만 죽인다. 회전은 살린다
             # (막힌 데서 빠져나오려면 돌 수 있어야 한다).
             if abs(v) > 1e-3:
@@ -164,6 +192,11 @@ class Teleop(Node):
                     v = 0.0
             if not reason:
                 reason = "주행 중" if (abs(v) > 1e-3 or abs(w) > 1e-3) else "정지"
+
+        # 🆕 v_out 은 **실제로 내보낸 값**과 항상 같아야 한다. 라이다 가드가 v 를
+        #    0 으로 죽인 경우도 여기서 반영되므로, 다음 틱이 있지도 않은 속도에서
+        #    감속을 시작하는 일이 없다(가드 정지는 즉시 정지로 남는다).
+        self.v_out = v
 
         # 🔴 **명령하지 않을 때는 발행하지 않는다.**
         #    같은 토픽에 퍼블리셔가 둘이면 마지막 메시지가 이긴다. 여기서
