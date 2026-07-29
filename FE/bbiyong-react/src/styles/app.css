@@ -54,14 +54,14 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .vwrap .hud2{position:absolute; right:10px; top:8px; font-size:11px; font-family:Consolas,monospace; color:#ffd9a8; text-shadow:0 1px 2px #000;}
 .vwrap .rec{position:absolute; right:10px; bottom:8px; font-size:10px; color:#ff7d74; font-family:Consolas,monospace;}
 
-.stat-card{background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:10px; padding:11px; margin-bottom:10px;}
-.stat-card .rid{display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px;}
+.stat-card{background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:10px; padding:13px; margin-bottom:10px;}
+.stat-card .rid{display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; margin-bottom:6px;}
 .pillm{margin-left:auto; font-size:11px; font-weight:800; padding:3px 10px; border-radius:999px; background:rgba(61,220,151,.14); color:var(--dk-green); border:1px solid rgba(61,220,151,.4);}
 .pillm.emg{background:rgba(255,86,72,.14); color:var(--dk-red); border-color:rgba(255,86,72,.45);}
 .pillm.man{background:rgba(245,166,35,.14); color:var(--dk-amber); border-color:rgba(245,166,35,.45);}
-.kv{display:flex; justify-content:space-between; font-size:12px; padding:4px 0; color:var(--dk-sub);}
+.kv{display:flex; justify-content:space-between; align-items:center; font-size:12px; line-height:1.4; padding:7px 0; color:var(--dk-sub);}
 .kv b{color:var(--dk-ink); font-weight:600;}
-.bar{height:8px; border-radius:5px; background:var(--dk-line); overflow:hidden; margin-top:4px;}
+.bar{height:8px; border-radius:5px; background:var(--dk-line); overflow:hidden; margin:2px 0 4px;}
 .bar i{display:block; height:100%; background:linear-gradient(90deg,#2fbf82,#3ddc97);}
 .env{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
 .env div{background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:10px; padding:9px; text-align:center;}
@@ -72,8 +72,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .elog li .t{color:var(--dk-sub); font-family:Consolas,monospace; white-space:nowrap;}
 .elog li.fire b{color:var(--dk-red);} .elog li.heat b{color:var(--dk-amber);} .elog li.ok b{color:var(--dk-green);}
 
-.ctl{display:grid; grid-template-columns:auto 1fr auto; gap:18px; align-items:center; flex:1;}
-.ctl .col{display:flex; flex-direction:column; gap:8px;}
+/* 좌: 비상·복구 / 우: 이동·모드·지점이동 — 두 열을 세로 중앙에 맞춘다 */
+.ctl{display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:center; flex:1;}
+/* 비상·복구 열 — 두 버튼의 크기·글자를 맞추고 라벨을 가운데로 모은다 */
+.ctl .col{display:flex; flex-direction:column; gap:10px; min-width:158px;}
+.ctl .col .dbtn{padding:14px 13px; font-size:13px;}
+.ctl .col .dbtn.keyed{justify-content:center; gap:9px;}
 .dbtn{padding:9px 13px; border-radius:9px; border:1px solid var(--dk-line); background:var(--dk-panel2); color:var(--dk-ink); font-weight:600; font-size:12px;}
 .dbtn:hover{border-color:#3a4452;}
 /* 단축키 뱃지 — 지금 그 키가 실행할 버튼에만 표시한다 */
@@ -90,11 +94,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .seg{display:flex; border:1px solid var(--dk-line); border-radius:9px; overflow:hidden;}
 .seg button{flex:1; padding:8px 0; background:var(--dk-panel2); color:var(--dk-sub); border:0; font-weight:700; font-size:12px;}
 .seg button.on{background:#24466e; color:#dce9fb;}
-.sw{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--dk-sub); gap:10px;}
-.swb{width:40px; height:22px; border-radius:999px; background:#2a3140; border:1px solid var(--dk-line); position:relative; cursor:pointer;}
-.swb i{position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#8b93a3; transition:.15s;}
-.swb.on{background:rgba(61,220,151,.25); border-color:rgba(61,220,151,.5);}
-.swb.on i{left:20px; background:var(--dk-green);}
 .gotor{display:flex; gap:8px; margin-top:10px;}
 .gotor select{flex:1; background:var(--dk-panel2); color:var(--dk-ink); border:1px solid var(--dk-line); border-radius:9px; padding:8px 10px;}
 .maplegend{display:flex; gap:12px; font-size:10.5px; color:var(--dk-sub); margin-top:8px; flex-wrap:wrap;}
