@@ -6,6 +6,8 @@ import { MAP, RS, CSn, astar, loop, PANELS, FIREC, speed } from './mapData.js'
 
 // 캔버스를 부모 크기에 맞추고 2D 컨텍스트를 반환
 function fit(cv) {
+  // 화면에서 떨어져 나간 캔버스는 그리지 않는다(부모가 없으면 크기를 잴 수 없다)
+  if (!cv.parentElement) return null
   const r = cv.parentElement.getBoundingClientRect()
   if (cv.width !== Math.round(r.width) || cv.height !== Math.round(r.height)) {
     cv.width = Math.round(r.width)
@@ -140,7 +142,8 @@ export default class Simulation {
   // 3D 투영으로 재현 — 공장 전체를 비스듬히 내려다보며 압출 박스(분전반·로봇·설비)와
   // 원거리 벽·순찰 경로·화재를 깊이 정렬로 그린다. PTZ(off)로 회전/틸트/줌.
   drawFactoryCam(cv, off) {
-    const g = fit(cv), Wc = cv.width, Hc = cv.height, t = this.t
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height, t = this.t
     const zoom = off ? Math.min(2.4, Math.max(1, off.z)) : 1
     const yaw = 0.66 + (off ? off.x * 0.05 : 0) + Math.sin(t * 0.0004) * 0.05 // 코너각 + 팬 + 완만한 회전
     const pitch = Math.max(0.42, Math.min(0.95, 0.62 - (off ? off.y * 0.02 : 0)))
@@ -342,7 +345,8 @@ export default class Simulation {
   // ---------- 신뢰도 차트 ----------
   drawConf() {
     const cv = this.canvases.conf; if (!cv) return
-    const g = fit(cv), Wc = cv.width, Hc = cv.height
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height
     g.clearRect(0, 0, Wc, Hc)
     const L = 34, B = 18, T = 8
     g.strokeStyle = '#e7ebf1'; g.lineWidth = 1; g.fillStyle = '#98a2b0'; g.font = '10px Consolas,monospace'
@@ -371,7 +375,7 @@ export default class Simulation {
   // ---------- 확대 화면 ----------
   drawBig() {
     const cv = this.canvases.bigcam; if (!cv) return
-    const g = fit(cv)
+    const g = fit(cv); if (!g) return
     const src = this.canvases.cam3
     if (src && src.width > 0) g.drawImage(src, 0, 0, cv.width, cv.height)
   }
@@ -457,7 +461,8 @@ export default class Simulation {
   // ---------- 로봇 지도 (SLAM 스타일) ----------
   drawMap() {
     const cv = this.canvases.map2d; if (!cv) return
-    const g = fit(cv), Wc = cv.width, Hc = cv.height
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height
     const t = this.t
     g.fillStyle = '#0a0c10'; g.fillRect(0, 0, Wc, Hc)
     const m = 14, cw = (Wc - m * 2) / CSn, ch = (Hc - m * 2) / RS
@@ -508,7 +513,8 @@ export default class Simulation {
   // ---------- 로봇 전면 카메라 (현실적 산업용 카메라 피드) ----------
   drawRcam() {
     const cv = this.canvases.rcam; if (!cv) return
-    const g = fit(cv), Wc = cv.width, Hc = cv.height, t = this.t
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height, t = this.t
 
     // live: 로봇이 보내온 실제 전면 카메라 프레임 (YOLO 오버레이는 로봇 쪽에서 이미 합성됨)
     const front = this.externalFrames.FRONT
@@ -644,7 +650,8 @@ export default class Simulation {
   // 그 위에 FLIR 측정 오버레이(스팟·박스·min/max·팔레트)를 얹는다.
   drawThermal() {
     const cv = this.canvases.tcam; if (!cv) return
-    const g = fit(cv), Wc = cv.width, Hc = cv.height, t = this.t
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height, t = this.t
     const bx = this.bot.pos.c, br = this.bot.pos.r
     const vx = Wc / 2, vy = Hc * 0.47
 

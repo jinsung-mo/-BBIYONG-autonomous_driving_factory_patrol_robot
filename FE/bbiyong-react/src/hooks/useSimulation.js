@@ -54,7 +54,9 @@ export default function useSimulation() {
   }, [sim])
 
   // 캔버스 콜백 ref (마운트 시 sim에 등록)
-  const canvasRef = useCallback((name) => (el) => { if (el) sim.registerCanvas(name, el) }, [sim])
+  // 언마운트 시 el 이 null 로 들어온다 — 그대로 넘겨 등록을 해제한다.
+  // (live 모드에서 2D 맵 캔버스가 빠질 때 떨어져 나간 엘리먼트를 계속 그리려 하면 안 된다)
+  const canvasRef = useCallback((name) => (el) => sim.registerCanvas(name, el), [sim])
   const refs = useMemo(() => ({
     rcam: canvasRef('rcam'),
     tcam: canvasRef('tcam'),
