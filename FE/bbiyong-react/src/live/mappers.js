@@ -16,7 +16,9 @@ const num = (v, digits = 1) => (typeof v === 'number' && Number.isFinite(v) ? v.
 
 // 텔레메트리 → StatusPanel 표시값. 값이 없으면 '—' 로 비운다(0으로 위장하지 않는다).
 export function telemetryToStatus(t) {
-  const label = STATUS_LABEL[t?.status] || { text: t?.status || '연결 대기', cls: '' }
+  // status 미상은 '대기'로만 말한다 — 연결 여부는 이 매퍼가 알 수 없으므로 표시하는 쪽(connected)이 판단한다.
+  // 예전 폴백이 '연결 대기'라 연결이 멀쩡해도 텔레메트리에 status 가 없으면 끊긴 것처럼 보였다.
+  const label = STATUS_LABEL[t?.status] || { text: t?.status || '대기', cls: '' }
   return {
     modeText: label.text,
     modeClass: label.cls,
