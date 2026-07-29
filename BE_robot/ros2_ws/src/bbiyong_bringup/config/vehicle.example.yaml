@@ -5,7 +5,7 @@ vehicle:
   hardware_enabled: false
   # ackermann | differential. The current chassis is differential
   # (two driven wheels + caster, no steering servo).
-  drive_type: ackermann
+  drive_type: differential
   # The generated rectangular footprint assumes base_link is at the chassis center.
   base_link_reference: geometric_center
   wheelbase_m: null

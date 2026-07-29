@@ -1,5 +1,31 @@
 # bbiyong_explorer
 
+## Current robot startup
+
+`~/calib/stack_up.sh` is the only owner of the physical mapping stack. It
+starts the LiDAR, scan filter, `/odom`, `odom -> base_link`, the ESP32
+`/cmd_vel` bridge, and `slam_toolbox`.
+
+After `stack_up.sh` reports healthy `/scan_filtered`, `/odom`, `/map`, and TF,
+start `bbiyong_bringup/launch/exploration.launch.py`. The exploration launch
+starts Nav2, Collision Monitor, `cmd_mux`, the frontier explorer, and the map
+saver only. It must not start `mapping.launch.py` or a second hardware adapter.
+
+The command path is:
+
+```text
+Nav2 -> velocity_smoother -> Collision Monitor -> cmd_mux -> /cmd_vel
+     -> stack_up.sh's esp32_base_node.py
+```
+
+`cmd_mux` intentionally starts with emergency stop active and mode `disabled`.
+An operator or supervisor must explicitly publish `estop=false` and select
+`autonomy` after checking the robot and its surroundings.
+
+Frontier goals are placed back inside known free space rather than directly on
+the free/unknown boundary. Their final heading faces the unknown region, and
+the explorer calls Nav2 `ComputePathToPose` before it sends `NavigateToPose`.
+
 `slam_toolbox`가 발행하는 미완성 `/map`에서 frontier(탐색한 빈 공간과 미탐색
 공간의 경계)를 찾고, 가장 가치가 높은 지점을 Nav2 `NavigateToPose` 목표로
 전송하는 ROS 2 Humble 패키지입니다.
