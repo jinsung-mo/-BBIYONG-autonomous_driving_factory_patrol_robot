@@ -18,7 +18,7 @@ export default function StatusPanel() {
   const estop = live ? live.estop : 'RELEASED'
   const comm = live ? live.comm : '양호 · 43ms'
   const fps = live ? live.fps : '8.0'
-  const name = enabled ? robotId : '오린카-01'
+  const name = enabled ? robotId : '삐용'
 
   const okColor = { color: 'var(--dk-green)' }
 
@@ -26,7 +26,7 @@ export default function StatusPanel() {
     <div className="panel" id="pStatus">
       <h3>순찰 로봇 상태 <span className="k">ORINCA FLEET</span></h3>
       <div className="stat-card">
-        <div className="rid">🤖 {name} <span className={`pillm ${modeClass}`}>{modeText}</span></div>
+        <div className="rid">{name} <span className={`pillm ${modeClass}`}>{modeText}</span></div>
         <div className="kv"><span>배터리</span><b className="mono">{batt == null ? '—' : `${batt}%`}</b></div>
         <div className="bar"><i style={{ width: `${batt ?? 0}%` }} /></div>
         <div className="kv"><span>속도</span><b className="mono">{spd}</b></div>
