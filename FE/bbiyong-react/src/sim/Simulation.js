@@ -46,7 +46,6 @@ export default class Simulation {
     this.bt = 0
     this.envT = '24.6°C'
     this.envH = '41%'
-    this.switches = { power: true, light: false, ultra: true, siren: false }
 
     // ---- 열화상 ----
     this.heatT = 38.4
@@ -116,7 +115,6 @@ export default class Simulation {
       batt: this.batt,
       envT: this.envT,
       envH: this.envH,
-      switches: { ...this.switches },
       thermalMax: this.thermalMax,
       thermalColor: this.thermalColor,
       logs: this.logs,
@@ -824,11 +822,6 @@ export default class Simulation {
     const [c, r] = value.split(',').map(Number)
     this.botGoto({ c, r }, 'goto'); this.setMode('지점 이동', 'man')
     this.pushLog('ok', '지점 이동: ' + label)
-  }
-
-  toggleSwitch(name) {
-    this.switches[name] = !this.switches[name]
-    this.emit()
   }
 
   // ---------- 메인 루프 ----------
