@@ -69,6 +69,8 @@
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 let view = {x:0, y:0, s:60, init:false};   // s = 픽셀/미터
 let nav = null, trail = [], lastSeq = -1, mapCanvas = null, fails = 0;
+const LIDAR_MOUNT_YAW = -3.06639;           // backward mount + measured correction
+const ROBOT_ROUTE_COLOR = '#d9564f';
 
 function resize(){ cv.width = innerWidth; cv.height = innerHeight; draw(); }
 addEventListener('resize', resize);
@@ -147,7 +149,7 @@ function draw(){
 
   const p = nav.pose;
   if (document.getElementById('cTrail').checked && trail.length > 1){
-    ctx.strokeStyle = 'rgba(240,201,138,0.55)'; ctx.lineWidth = 2;
+    ctx.strokeStyle = ROBOT_ROUTE_COLOR; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(sx(trail[0][0]), sy(trail[0][1]));
     for (const t of trail) ctx.lineTo(sx(t[0]), sy(t[1]));
     ctx.stroke();
@@ -159,18 +161,18 @@ function draw(){
     for (let i = 0; i < s.ranges.length; i++){
       const r = s.ranges[i];
       if (!r) continue;
-      // 스캔은 laser 기준이지만 여기서는 base_link 근사로 그린다
-      // (오프셋 6cm 는 화면 축척에서 1px 미만인 경우가 대부분)
-      const a = p.yaw + s.angle_min + i * s.angle_inc;
+      // Match the backward-facing base_link -> laser_frame yaw used by ROS.
+      // The 6 cm translation offset is normally below one screen pixel.
+      const a = p.yaw + LIDAR_MOUNT_YAW + s.angle_min + i * s.angle_inc;
       ctx.fillRect(sx(p.x + r*Math.cos(a)) - 1, sy(p.y + r*Math.sin(a)) - 1, 2, 2);
     }
   }
 
   if (p){
     const X = sx(p.x), Y = sy(p.y), R = Math.max(5, view.s * 0.10);
-    ctx.fillStyle = '#f0c98a';
+    ctx.fillStyle = ROBOT_ROUTE_COLOR;
     ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill();
-    ctx.strokeStyle = '#f0c98a'; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = ROBOT_ROUTE_COLOR; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(X, Y);
     ctx.lineTo(X + Math.cos(p.yaw)*R*2.4, Y - Math.sin(p.yaw)*R*2.4);
     ctx.stroke();

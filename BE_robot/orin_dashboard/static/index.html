@@ -1109,6 +1109,8 @@ addEventListener('hashchange', () => {
    지도 뷰 — 캔버스별 인스턴스
    ══════════════════════════════════════════════════════════════ */
 const NAV = { data:null, age:null, err:null, trail:[] };
+const LIDAR_MOUNT_YAW = -3.06639; // backward mount + measured correction
+const ROBOT_ROUTE_COLOR = '#d9564f';
 
 function MapView(canvas, opt){
   opt = opt || {};
@@ -1206,7 +1208,7 @@ function MapView(canvas, opt){
       }
     }
     if(flags.trail && NAV.trail.length > 1){
-      ctx.strokeStyle = 'rgba(232,234,237,.32)'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = ROBOT_ROUTE_COLOR; ctx.lineWidth = 1.5;
       const first = point(NAV.trail[0][0], NAV.trail[0][1]);
       ctx.beginPath(); ctx.moveTo(first[0], first[1]);
       for(const t of NAV.trail){
@@ -1221,8 +1223,9 @@ function MapView(canvas, opt){
       for(let i=0;i<s.ranges.length;i++){
         const r = s.ranges[i];
         if(!r) continue;
-        // 스캔은 laser 기준이나 base_link 근사로 그린다(오프셋 6cm 는 대개 1px 미만)
-        const a = p.yaw + s.angle_min + i*s.angle_inc;
+        // Match the backward-facing base_link -> laser_frame yaw used by ROS.
+        // The 6 cm translation offset is normally below one screen pixel.
+        const a = p.yaw + LIDAR_MOUNT_YAW + s.angle_min + i*s.angle_inc;
         const q = point(p.x + r*Math.cos(a), p.y + r*Math.sin(a));
         ctx.fillRect(q[0]-1, q[1]-1, 2, 2);
       }
@@ -1234,8 +1237,8 @@ function MapView(canvas, opt){
       ctx.beginPath(); ctx.arc(X, Y, rad*2.6, 0, 7);
       ctx.fillStyle = 'rgba(232,234,237,.09)'; ctx.fill();
       ctx.beginPath(); ctx.arc(X, Y, rad, 0, 7);
-      ctx.fillStyle = '#e8eaed'; ctx.fill();
-      ctx.strokeStyle = '#e8eaed'; ctx.lineWidth = 2;
+      ctx.fillStyle = ROBOT_ROUTE_COLOR; ctx.fill();
+      ctx.strokeStyle = ROBOT_ROUTE_COLOR; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(X,Y);
       if(viewPose) ctx.lineTo(X, Y-rad*2.8);
       else ctx.lineTo(X + Math.cos(p.yaw)*rad*2.8, Y - Math.sin(p.yaw)*rad*2.8);
