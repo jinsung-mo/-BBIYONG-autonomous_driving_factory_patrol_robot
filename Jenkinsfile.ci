@@ -23,7 +23,7 @@ def sendMattermostNotification(boolean success) {
         returnStdout: true
     ).trim() ?: '커밋 메시지 정보 없음'
     def statusText = success ? '[CI] System MR 검증 성공' : '[CI] System MR 검증 실패'
-    def iconEmoji = success ? ':jenkins:1' : ':angry_jenkins:'
+    def iconEmoji = success ? ':jenkins1:' : ':angry_jenkins:'
     def text = "## ${iconEmoji} ${statusText}\n" +
         "**MR source 브랜치:** `${branch}`\n" +
         "**최신 커밋:** ${commitMessage}"
