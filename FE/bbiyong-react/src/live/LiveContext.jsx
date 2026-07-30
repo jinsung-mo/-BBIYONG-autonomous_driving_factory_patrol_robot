@@ -40,6 +40,9 @@ export function LiveProvider({ children }) {
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
   const videoRef = useRef({ FRONT: null, THERMAL: null })
   const videoListeners = useRef(new Set())
+  // 채널별로 프레임을 한 번이라도 받았는지. capabilities 가 online 이어도 프레임이 안 오면
+  // 캔버스에는 시뮬 화면이 그대로 남아 실데이터처럼 보인다(S15P11E101-462).
+  const [videoSeen, setVideoSeen] = useState({ FRONT: false, THERMAL: false })
 
   const telemetryRef = useRef(null)
 
@@ -73,6 +76,7 @@ export function LiveProvider({ children }) {
       setConnected(false); setLastError(null); setAuthError(false)
       setTelemetry(null); telemetryRef.current = null
       videoRef.current = { FRONT: null, THERMAL: null }
+      setVideoSeen({ FRONT: false, THERMAL: false })
       navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [] }
       emitNav()
       disconnect()
@@ -94,6 +98,7 @@ export function LiveProvider({ children }) {
       const ch = frame?.channel
       if (ch !== 'FRONT' && ch !== 'THERMAL') return
       videoRef.current[ch] = frame
+      setVideoSeen((prev) => (prev[ch] ? prev : { ...prev, [ch]: true }))
       videoListeners.current.forEach((fn) => fn(ch, frame))
     })
 
@@ -183,11 +188,11 @@ export function LiveProvider({ children }) {
     enabled, connected, lastError, authError, hasToken: !!accessToken,
     dataSource, setDataSource, toggleDataSource,
     telemetry, alerts, dismissAlert,
-    onVideoFrame, onNavUpdate, control, robotId: ROBOT_ID,
+    onVideoFrame, onNavUpdate, videoSeen, control, robotId: ROBOT_ID,
     speed, setSpeed,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
-      control, speed, setSpeed])
+      videoSeen, control, speed, setSpeed])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }

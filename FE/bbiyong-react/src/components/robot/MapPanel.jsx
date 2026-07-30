@@ -1,18 +1,25 @@
 import { useSim } from '../../SimContext.js'
 import { useLive } from '../../live/LiveContext.jsx'
+import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.js'
 import LiveNavMap from './LiveNavMap.jsx'
+import CapBadge from './CapBadge.jsx'
 
 // 2D 맵핑 지도 (SLAM · LiDAR)
 // live 모드에서는 시뮬 맵 대신 로봇이 보내는 실제 SLAM 맵을 그린다(S15P11E101-450).
 export default function MapPanel() {
   const { refs } = useSim()
-  const { enabled } = useLive()
+  const { enabled, telemetry } = useLive()
+  const mapDown = enabled && isDown(capOf(telemetry, CAP_KEYS.map))
 
   return (
     <div className="panel" id="pMap">
-      <h3>2D 맵핑 지도 <span className="k">SLAM · LiDAR</span></h3>
-      <div className="vwrap" style={{ background: '#0a0c10' }}>
+      <h3>
+        2D 맵핑 지도 <span className="k">SLAM · LiDAR</span>
+        <CapBadge capKey={CAP_KEYS.map} />
+      </h3>
+      <div className={`vwrap${mapDown ? ' down' : ''}`} style={{ background: '#0a0c10' }}>
         {enabled ? <LiveNavMap /> : <canvas ref={refs.map2d} />}
+        {mapDown && <span className="nodata">SLAM 맵 데이터 없음</span>}
       </div>
       <div className="maplegend">
         {enabled ? (
