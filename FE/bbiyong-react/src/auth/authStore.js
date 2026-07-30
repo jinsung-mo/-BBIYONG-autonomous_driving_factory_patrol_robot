@@ -24,10 +24,10 @@ export function findUser(email) {
   return getUsers().find((u) => u.email === email.toLowerCase())
 }
 
-export function addUser({ email, password, name, role = '관제 권한' }) {
+export function addUser({ email, password, name, phone, birth, gender, role = '관제 권한' }) {
   const users = getUsers()
   if (users.some((u) => u.email === email.toLowerCase())) throw new Error('이미 가입된 이메일입니다.')
-  const nu = { email: email.toLowerCase(), password, name, role }
+  const nu = { email: email.toLowerCase(), password, name, phone, birth, gender, role }
   users.push(nu); writeUsers(users)
   return nu
 }

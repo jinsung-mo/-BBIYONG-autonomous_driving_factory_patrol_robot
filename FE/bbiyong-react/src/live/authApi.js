@@ -29,8 +29,16 @@ export function loginRequest(email, password) {
   return post('/api/auth/login', { email, password })
 }
 
-export function signupRequest({ email, password, name }) {
-  return post('/api/auth/signup', { email, password, name })
+// phone·birth·gender 는 S15P11E101-493 에서 추가된 필수 입력이다.
+// 서버 스키마(명세 1.1)에는 아직 없어 지금은 무시되지만, BE 반영 시 FE 수정 없이 바로 저장되도록
+// 처음부터 실어 보낸다. 값이 없으면 필드를 빼서 보낸다(빈 문자열로 덮어쓰지 않는다).
+export function signupRequest({ email, password, name, phone, birth, gender }) {
+  return post('/api/auth/signup', {
+    email, password, name,
+    ...(phone ? { phone } : {}),
+    ...(birth ? { birth } : {}),
+    ...(gender ? { gender } : {}),
+  })
 }
 
 // 인가가 필요한 조회 API 공통 호출부

@@ -239,6 +239,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .auth-card .form-row input{background:#0e1116; border-color:#262b34; color:#e6e9ef;}
 .auth-card .form-row input::placeholder{color:#59616e;}
 .auth-card .form-row input:focus{border-color:#3ddc97;}
+/* 날짜 입력의 달력 아이콘이 어두운 배경에서 안 보인다 */
+.auth-card .form-row input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.7);}
+/* 성별 선택 — 조작 패널의 .seg 를 인증 카드 톤으로 덮어쓴다 */
+.auth-card .seg.gender{border-color:#262b34; border-radius:8px;}
+.auth-card .seg.gender button{padding:9px 0; background:#0e1116; color:#828b98; font-size:12px; font-weight:600;}
+.auth-card .seg.gender button.on{background:rgba(120,160,255,.14); color:#9dbcff;}
 .auth-card :focus-visible{outline-color:#3ddc97;}
 .auth-card .form-msg.err{background:rgba(255,86,72,.12); color:#ff8079; border-color:rgba(255,86,72,.35);}
 

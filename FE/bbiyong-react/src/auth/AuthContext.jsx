@@ -50,14 +50,17 @@ export function AuthProvider({ children }) {
     setState({ user: nu, accessToken: res.accessToken })
   }
 
-  const signup = async ({ email, password, name }) => {
+  // 휴대전화번호·생년월일·성별은 S15P11E101-493 에서 추가됐다.
+  // 서버 /api/auth/signup 스키마에는 아직 없어 지금은 전송돼도 무시된다(BE 반영 후 저장).
+  // 시뮬 모드는 localStorage 라 곧바로 저장된다.
+  const signup = async ({ email, password, name, phone, birth, gender }) => {
     if (getDataSource() !== 'live') {
-      const u = addUser({ email, password, name })
+      const u = addUser({ email, password, name, phone, birth, gender })
       setSession(u.email)
       setState({ user: publicUser(u), accessToken: null })
       return
     }
-    await signupRequest({ email: email.trim().toLowerCase(), password, name })
+    await signupRequest({ email: email.trim().toLowerCase(), password, name, phone, birth, gender })
     // 가입 직후 바로 로그인해 토큰을 확보한다
     const res = await loginRequest(email.trim().toLowerCase(), password)
     const nu = { email: email.trim().toLowerCase(), name, role: roleLabel(res?.role) }
