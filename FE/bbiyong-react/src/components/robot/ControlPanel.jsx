@@ -5,6 +5,8 @@ import {
   DRIVE_VECTORS, DRIVE_SPEED_MIN, DRIVE_SPEED_MAX, DRIVE_SPEED_STEP, clampDriveSpeed,
 } from '../../live/mappers.js'
 import { cellToWorld } from '../../live/config.js'
+import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.js'
+import CapBadge from './CapBadge.jsx'
 
 const GOTO_OPTS = [
   { value: '4,0', label: '분전반 A' },
@@ -38,6 +40,11 @@ export default function ControlPanel() {
 
   const liveReady = enabled && connected
 
+  // 로봇 주행 노드가 죽어 있으면 조작을 막는다 — 받을 쪽이 없는데 DRIVE 를 쏘면
+  // 화면만 반응하고 로봇은 그대로라 조작자가 오해한다(S15P11E101-462).
+  const driveDown = enabled && isDown(capOf(telemetry, CAP_KEYS.drive))
+  const ctlOff = (enabled && !connected) || driveDown
+
   // E-STOP 체결 여부 — live는 텔레메트리가, mock은 시뮬 상태가 정답이다.
   // 텔레메트리가 아직 없으면(estop === undefined) 체결로 오해하지 않도록 명시적으로 검사한다.
   const estopEngaged = enabled
@@ -66,7 +73,7 @@ export default function ControlPanel() {
       <button
         className={activeKeys[k] ? 'active' : ''}
         aria-label={`${dirLabel[k]} (${glyph[k]})`}
-        disabled={enabled && !connected}
+        disabled={ctlOff}
         {...(enabled ? live : { onClick: () => { markManual(); actions.dpadMove(k) } })}
       >
         {glyph[k]}
@@ -116,7 +123,7 @@ export default function ControlPanel() {
   latest.current = { estopEngaged, seg, onEmergencyStop, onReturnPatrol, onSetSeg, markManual }
 
   useEffect(() => {
-    if (enabled && !connected) return undefined // 버튼 disabled 와 같은 게이트
+    if (ctlOff) return undefined // 버튼 disabled 와 같은 게이트
 
     // Shift 단독 탭만 단축키로 인정한다. keydown 시점에 실행하면 Shift+A 같은
     // 조합키를 누르는 순간에도 긴급 정지가 나가버리므로, 사이에 다른 키가 없었을 때만 keyup에서 실행한다.
@@ -159,7 +166,7 @@ export default function ControlPanel() {
       window.removeEventListener('keyup', onUp)
       window.removeEventListener('blur', onBlur)
     }
-  }, [enabled, connected])
+  }, [ctlOff])
 
   return (
     <div className="panel" id="pControl">
@@ -168,6 +175,7 @@ export default function ControlPanel() {
         {enabled && <span className="k" style={{ marginLeft: 8, color: connected ? '#3ddc97' : '#f5a623' }}>
           {connected ? 'LIVE' : 'DISCONNECTED'}
         </span>}
+        <CapBadge capKey={CAP_KEYS.drive} />
       </h3>
       <div className="ctl">
         {/* 비상·복구 조작은 이동 조작(방향 버튼·모드·지점 이동)과 떼어 놓는다 — 조작 중 오클릭 방지 */}
@@ -176,7 +184,7 @@ export default function ControlPanel() {
           <button
             className="dbtn stop keyed"
             onClick={onEmergencyStop}
-            disabled={enabled && !connected}
+            disabled={ctlOff}
             aria-keyshortcuts={estopEngaged ? undefined : 'Shift'}
           >
             <span>■ 긴급 정지</span>
@@ -185,7 +193,7 @@ export default function ControlPanel() {
           <button
             className="dbtn go keyed"
             onClick={onReturnPatrol}
-            disabled={enabled && !connected}
+            disabled={ctlOff}
             aria-keyshortcuts={estopEngaged ? 'Shift' : undefined}
           >
             <span>⇤ 순찰 복귀</span>
@@ -201,7 +209,7 @@ export default function ControlPanel() {
               <button
                 className="dbtn"
                 onClick={() => onSetSpeed(speed - DRIVE_SPEED_STEP)}
-                disabled={(enabled && !connected) || speed <= DRIVE_SPEED_MIN}
+                disabled={ctlOff || speed <= DRIVE_SPEED_MIN}
                 aria-label="주행 속도 낮추기"
               >
                 −
@@ -220,7 +228,7 @@ export default function ControlPanel() {
               <button
                 className="dbtn"
                 onClick={() => onSetSpeed(speed + DRIVE_SPEED_STEP)}
-                disabled={(enabled && !connected) || speed >= DRIVE_SPEED_MAX}
+                disabled={ctlOff || speed >= DRIVE_SPEED_MAX}
                 aria-label="주행 속도 높이기"
               >
                 +
@@ -239,7 +247,7 @@ export default function ControlPanel() {
             <button
               className={seg === 'patrol' ? 'on' : ''}
               onClick={() => onSetSeg(false)}
-              disabled={enabled && !connected}
+              disabled={ctlOff}
               aria-keyshortcuts={seg === 'manual' ? 'Space' : undefined}
             >
               순찰 모드
@@ -249,7 +257,7 @@ export default function ControlPanel() {
             <button
               className={seg === 'manual' ? 'on' : ''}
               onClick={() => onSetSeg(true)}
-              disabled={enabled && !connected}
+              disabled={ctlOff}
               aria-keyshortcuts={seg === 'patrol' ? 'Space' : undefined}
             >
               수동 모드
@@ -261,7 +269,7 @@ export default function ControlPanel() {
             <select value={gotoVal} onChange={(e) => setGotoVal(e.target.value)}>
               {GOTO_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <button className="dbtn go" onClick={onGoto} disabled={enabled && !connected}>지점 이동</button>
+            <button className="dbtn go" onClick={onGoto} disabled={ctlOff}>지점 이동</button>
           </div>
         </div>
       </div>

@@ -42,7 +42,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .b-grid{display:grid; grid-template-columns:290px 1.15fr 1fr; grid-template-rows:1.7fr 1fr;
   grid-template-areas:"status cam right" "status control right"; gap:12px; height:100%;}
 .panel{background:var(--dk-panel); border:1px solid var(--dk-line); border-radius:12px; padding:13px; min-height:0; display:flex; flex-direction:column;}
-.panel h3{font-size:12px; letter-spacing:1px; color:var(--dk-sub); margin-bottom:10px; text-transform:uppercase;}
+/* 헤더는 flex — 우측 끝에 서브시스템 상태 배지를 밀어 붙이기 위함 */
+.panel h3{display:flex; align-items:center; gap:6px; font-size:12px; letter-spacing:1px; color:var(--dk-sub); margin-bottom:10px; text-transform:uppercase;}
 .panel h3 .k{color:var(--dk-ink); font-size:13px; letter-spacing:0;}
 #pStatus{grid-area:status;} #pCam{grid-area:cam;} #pControl{grid-area:control;}
 /* 우측 열: 열화상 + 2D 맵을 50/50 동일 높이로 */
@@ -53,6 +54,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .vwrap .hud{position:absolute; left:10px; top:8px; font-size:11px; color:#b9e8ff; font-family:Consolas,monospace; text-shadow:0 1px 2px #000;}
 .vwrap .hud2{position:absolute; right:10px; top:8px; font-size:11px; font-family:Consolas,monospace; color:#ffd9a8; text-shadow:0 1px 2px #000;}
 .vwrap .rec{position:absolute; right:10px; bottom:8px; font-size:10px; color:#ff7d74; font-family:Consolas,monospace;}
+/* 로봇 서브시스템이 죽은 패널 — 흐리게 덮고 '데이터 없음'을 명시한다.
+   특히 열화상은 로봇이 생산하지 않아, 시뮬 화면이 실데이터로 오인되면 안 된다. */
+.vwrap.down > canvas{opacity:.12; filter:grayscale(1);}
+.vwrap.down .hud,.vwrap.down .hud2,.vwrap.down .rec{display:none;}
+.vwrap .nodata{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700; letter-spacing:.5px; color:var(--dk-sub); text-align:center; padding:0 12px;}
+/* 서브시스템 상태 배지 — 패널 헤더 우측 끝 */
+.capb{margin-left:auto; display:inline-flex; align-items:center; gap:5px; flex:none;
+  font-size:10px; font-weight:700; letter-spacing:0; padding:2px 7px; border-radius:999px;
+  border:1px solid currentColor; text-transform:none;}
+.capb i{width:6px; height:6px; border-radius:50%; background:currentColor;}
+.capb.online{color:var(--dk-green);}
+.capb.stale{color:var(--dk-amber);}
+.capb.offline{color:var(--dk-sub);}
 
 .stat-card{background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:10px; padding:13px; margin-bottom:10px;}
 .stat-card .rid{display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; margin-bottom:6px;}
