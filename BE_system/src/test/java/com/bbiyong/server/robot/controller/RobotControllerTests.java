@@ -31,16 +31,17 @@ class RobotControllerTests {
 	@Autowired
 	private RobotWebSocketSessionManager sessionManager;
 
+	private String adminToken() {
+		return jwtTokenProvider.generate("admin@bbiyong.io", "ROLE_ADMIN");
+	}
+
 	@Test
-	void getRobotsReturnsRobotSummary() throws Exception {
-		String token = jwtTokenProvider.generate("admin@bbiyong.io", "ROLE_ADMIN");
-		mockMvc.perform(get("/api/robots").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+	void getRobotsEmptyWhenNoRobotConnected() throws Exception {
+		// 가짜 프리로드 제거 후: 실제 연결/텔레메트리 없으면 로봇 목록은 비어 있어야 한다.
+		mockMvc.perform(get("/api/robots").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].robotId").value("orinka_01"))
-				.andExpect(jsonPath("$[0].status").value("AUTO_PATROL"))
-				.andExpect(jsonPath("$[0].battery").value(92.5))
-				// WSS 세션이 없으면 offline
-				.andExpect(jsonPath("$[0].online").value(false));
+				.andExpect(jsonPath("$").isArray())
+				.andExpect(jsonPath("$.length()").value(0));
 	}
 
 	@Test
@@ -50,11 +51,12 @@ class RobotControllerTests {
 		when(mockSession.isOpen()).thenReturn(true);
 		sessionManager.register("orinka_01", mockSession);
 		try {
-			String token = jwtTokenProvider.generate("admin@bbiyong.io", "ROLE_ADMIN");
-			mockMvc.perform(get("/api/robots").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+			mockMvc.perform(get("/api/robots").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken()))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$[0].robotId").value("orinka_01"))
-					.andExpect(jsonPath("$[0].online").value(true));
+					.andExpect(jsonPath("$[0].online").value(true))
+					// 세션은 열렸지만 텔레메트리 수신 전이므로 status 는 OFFLINE(미확인)
+					.andExpect(jsonPath("$[0].status").value("OFFLINE"));
 		} finally {
 			sessionManager.unregisterBySessionId("sess-online-test");
 		}

@@ -1,6 +1,7 @@
 package com.bbiyong.server.stomp;
 
 import com.bbiyong.server.event.dto.AlertMessage;
+import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
@@ -10,6 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -31,6 +35,23 @@ public class RobotEventListener {
             messagingTemplate.convertAndSend("/topic/robots", jsonStr);
         } catch (Exception e) {
             log.error("Failed to serialize telemetry event", e);
+        }
+    }
+
+    /** 로봇 오프라인 전환을 /topic/robots 로 즉시 알린다(구독자가 stale live 표시를 내리도록). */
+    @EventListener
+    public void handleDisconnect(RobotDisconnectedEvent event) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("type", "STATE_UPDATE");
+            payload.put("robot_id", event.getRobotId());
+            payload.put("status", "OFFLINE");
+            payload.put("online", false);
+            String jsonStr = objectMapper.writeValueAsString(payload);
+            log.info("Broadcasting OFFLINE for robot [{}] to /topic/robots", event.getRobotId());
+            messagingTemplate.convertAndSend("/topic/robots", jsonStr);
+        } catch (Exception e) {
+            log.error("Failed to broadcast disconnect for robot [{}]", event.getRobotId(), e);
         }
     }
 
