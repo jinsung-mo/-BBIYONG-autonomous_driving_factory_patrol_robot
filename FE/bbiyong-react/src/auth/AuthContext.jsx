@@ -5,6 +5,7 @@ import {
 } from './authStore.js'
 import { getDataSource } from '../live/config.js'
 import { loginRequest, signupRequest } from '../live/authApi.js'
+import { phoneDigits } from './signupRules.js'
 
 // mock 모드: localStorage 목 저장소로 인증 흐름만 재현.
 // live 모드: 실서버 REST(§2)로 로그인하고 accessToken을 보관한다.
@@ -50,14 +51,19 @@ export function AuthProvider({ children }) {
     setState({ user: nu, accessToken: res.accessToken })
   }
 
-  const signup = async ({ email, password, name }) => {
+  // 휴대전화번호·생년월일·성별은 S15P11E101-493 에서 추가됐다.
+  // 서버 /api/auth/signup 스키마에는 아직 없어 지금은 전송돼도 무시된다(BE 반영 후 저장).
+  // 시뮬 모드는 localStorage 라 곧바로 저장된다.
+  const signup = async ({ email, password, name, phone, birth, gender }) => {
+    // 화면은 하이픈으로 보여주고 저장·전송은 숫자만 한다 — 이 경계에서 한 번만 정규화한다
+    const tel = phoneDigits(phone)
     if (getDataSource() !== 'live') {
-      const u = addUser({ email, password, name })
+      const u = addUser({ email, password, name, phone: tel, birth, gender })
       setSession(u.email)
       setState({ user: publicUser(u), accessToken: null })
       return
     }
-    await signupRequest({ email: email.trim().toLowerCase(), password, name })
+    await signupRequest({ email: email.trim().toLowerCase(), password, name, phone: tel, birth, gender })
     // 가입 직후 바로 로그인해 토큰을 확보한다
     const res = await loginRequest(email.trim().toLowerCase(), password)
     const nu = { email: email.trim().toLowerCase(), name, role: roleLabel(res?.role) }
