@@ -102,19 +102,30 @@ export const DRIVE_VECTORS = {
 // 슬라이더 표시만 거짓이 되므로, 화면 범위를 로봇에 맞추는 것이 맞다(S15P11E101-463).
 const r2 = (v) => Number(v.toFixed(2))
 
-export const DRIVE_SPEED_MAX = r2(ROBOT_V_MAX)
-export const DRIVE_SPEED_MIN = Math.max(0.01, r2(ROBOT_V_MAX * 0.1))
-export const DRIVE_SPEED_STEP = Math.max(0.01, r2(ROBOT_V_MAX / 20))  // 20단계
-export const DEFAULT_DRIVE_SPEED = r2(ROBOT_V_MAX * 0.5)
-
-// 0.1 + 0.05 = 0.15000000000000002 같은 잔값이 payload 로 나가지 않도록 정리한다
-export function clampDriveSpeed(v) {
-  return r2(Math.min(DRIVE_SPEED_MAX, Math.max(DRIVE_SPEED_MIN, v)))
+// 상한은 설정 탭에서 바꿀 수 있다(S15P11E101-475) — 값을 받아 그때그때 계산한다.
+// env 의 ROBOT_V_MAX 는 설정이 없을 때의 기본값 역할만 한다.
+export function speedParams(vMax = ROBOT_V_MAX) {
+  const max = r2(vMax)
+  return {
+    max,
+    min: Math.max(0.01, r2(vMax * 0.1)),
+    step: Math.max(0.01, r2(vMax / 20)),   // 20단계
+    def: r2(vMax * 0.5),
+  }
 }
 
-// 선속도 배율을 각속도에 그대로 쓰면 안 된다 — 로봇 상한이 서로 다르다(V 1.00 / W 0.60).
+// 0.1 + 0.05 = 0.15000000000000002 같은 잔값이 payload 로 나가지 않도록 정리한다
+export function clampDriveSpeed(v, vMax = ROBOT_V_MAX) {
+  const p = speedParams(vMax)
+  return r2(Math.min(p.max, Math.max(p.min, v)))
+}
+
+// 선속도 배율을 각속도에 그대로 쓰면 안 된다 — 로봇 상한이 서로 다르다(V / W).
 // 슬라이더가 상한의 몇 %인지를 각속도 상한에 같은 비율로 적용한다.
-export const angularFor = (speed) => r2((speed / ROBOT_V_MAX) * ROBOT_W_MAX)
+export const angularFor = (speed, vMax = ROBOT_V_MAX) => r2((speed / vMax) * ROBOT_W_MAX)
+
+// 기본 주행 속도 — LiveContext 의 초기값
+export const DEFAULT_DRIVE_SPEED = speedParams().def
 
 // 서버는 ISO8601(UTC)로 내려준다 — 화면은 기존과 동일하게 로컬 HH:MM:SS로 표시.
 function formatTime(iso) {

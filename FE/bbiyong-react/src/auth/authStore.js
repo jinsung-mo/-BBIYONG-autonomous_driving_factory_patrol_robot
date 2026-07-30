@@ -1,12 +1,15 @@
 // 목(mock) 회원 저장소 — localStorage 기반. 백엔드 없이 인증 흐름을 재현한다.
 // 실제 배포 시 Spring 메인서버(FN-M01/M02) 인증으로 교체하는 것을 전제로 한 자리표시자.
 
+import { ROLE_ADMIN, ROLE_VIEWER } from './roles.js'
+
 const USERS_KEY = 'bbiyong.users'
 const SESSION_KEY = 'bbiyong.session'
 const TOKEN_KEY = 'bbiyong.token'
 
 // 데모용 기본 관리자 계정
-const SEED = [{ email: 'safety@bbiyong.io', password: 'bbiyong', name: 'E101 관리자', role: '관제 권한' }]
+// 데모용 기본 관리자 계정 — 시뮬 모드에서 운영/설정 탭까지 둘러볼 수 있게 관리자로 둔다.
+const SEED = [{ email: 'safety@bbiyong.io', password: 'bbiyong', name: 'E101 관리자', role: ROLE_ADMIN }]
 
 function readUsers() {
   try { return JSON.parse(localStorage.getItem(USERS_KEY)) } catch { return null }
@@ -24,7 +27,8 @@ export function findUser(email) {
   return getUsers().find((u) => u.email === email.toLowerCase())
 }
 
-export function addUser({ email, password, name, phone, birth, gender, role = '관제 권한' }) {
+// 스스로 가입한 계정은 뷰어로 시작한다 — 관리자 승격은 운영 정책의 몫이다(S15P11E101-475).
+export function addUser({ email, password, name, phone, birth, gender, role = ROLE_VIEWER }) {
   const users = getUsers()
   if (users.some((u) => u.email === email.toLowerCase())) throw new Error('이미 가입된 이메일입니다.')
   const nu = { email: email.toLowerCase(), password, name, phone, birth, gender, role }

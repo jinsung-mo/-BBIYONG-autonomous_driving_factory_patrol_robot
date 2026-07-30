@@ -8,7 +8,8 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ROBOT_ID, getDataSource, saveDataSource } from './config.js'
 import { connect, disconnect, subscribe, publish, onState, setToken } from './stompClient.js'
-import { DEFAULT_DRIVE_SPEED, angularFor } from './mappers.js'
+import { DEFAULT_DRIVE_SPEED, angularFor, clampDriveSpeed } from './mappers.js'
+import { useSettings } from '../settings/SettingsContext.jsx'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 
@@ -27,6 +28,10 @@ let alertUid = 0
 
 export function LiveProvider({ children }) {
   const { accessToken } = useAuth()
+  // 주행 상한은 설정 탭에서 바뀔 수 있다 — ref 로 들고 control 의 정체성은 고정한다
+  const { settings } = useSettings()
+  const vMaxRef = useRef(settings.vMax)
+  vMaxRef.current = settings.vMax
   const [dataSource, setDataSourceState] = useState(getDataSource)
   const enabled = dataSource === 'live'
 
@@ -169,6 +174,13 @@ export function LiveProvider({ children }) {
   const [speed, setSpeedState] = useState(DEFAULT_DRIVE_SPEED)
   const setSpeed = useCallback((v) => { speedRef.current = v; setSpeedState(v) }, [])
 
+  // 설정에서 상한을 낮추면 지금 속도가 범위를 벗어난다 — 새 범위 안으로 끌어온다.
+  // 그대로 두면 슬라이더는 상한을 넘은 값을 표시하고 발행도 그 값으로 나간다.
+  useEffect(() => {
+    const clamped = clampDriveSpeed(speedRef.current, settings.vMax)
+    if (clamped !== speedRef.current) setSpeed(clamped)
+  }, [settings.vMax, setSpeed])
+
   const control = useMemo(() => {
     const send = (dest, body) => publish(dest, { robot_id: ROBOT_ID, ...body })
     // 방향 단위벡터 × 축별 속도. 선속도는 슬라이더 값 그대로, 각속도는 같은 비율을
@@ -179,7 +191,7 @@ export function LiveProvider({ children }) {
       drive: (linear, angular) => send('/app/control/drive', {
         command: 'DRIVE',
         linear: r2(linear * speedRef.current),
-        angular: r2(angular * angularFor(speedRef.current)),
+        angular: r2(angular * angularFor(speedRef.current, vMaxRef.current)),
       }),
       stop: () => send('/app/control/drive', { command: 'DRIVE', linear: 0, angular: 0 }),
       // mode: autonomy | manual | disabled 만 유효
@@ -187,6 +199,8 @@ export function LiveProvider({ children }) {
       // fail-safe — active:true 만 허용(해제 명령 없음)
       estop: () => send('/app/control/mode', { command: 'ESTOP', active: true }),
       navigate: (x, y, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
+      // 지금 만들어진 맵을 이름 붙여 저장한다(가이드 §5 SAVE_MAP) — 운영 탭에서 쓴다
+      saveMap: (name) => send('/app/control/operation', { command: 'SAVE_MAP', name }),
     }
   }, [])
 

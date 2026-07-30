@@ -76,6 +76,7 @@ export default function useSimulation() {
     returnPatrol: () => sim.returnPatrol(),
     goto: (value, label) => sim.goto(value, label),
     setManualSpeed: (v) => sim.setManualSpeed(v),
+    setTempThresholds: (w, c) => sim.setTempThresholds(w, c),
     // live 모드 외부 입력 (LiveSimBridge 가 텔레메트리·영상 프레임을 밀어 넣는다)
     setExternalPose: (pose) => sim.setExternalPose(pose),
     setExternalFrame: (ch, img, maxTemp) => sim.setExternalFrame(ch, img, maxTemp),

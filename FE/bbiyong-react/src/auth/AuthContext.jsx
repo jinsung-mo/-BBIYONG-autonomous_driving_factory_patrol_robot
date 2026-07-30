@@ -6,6 +6,7 @@ import {
 import { getDataSource } from '../live/config.js'
 import { loginRequest, signupRequest } from '../live/authApi.js'
 import { phoneDigits } from './signupRules.js'
+import { isAdminRole, ROLE_VIEWER } from './roles.js'
 
 // mock 모드: localStorage 목 저장소로 인증 흐름만 재현.
 // live 모드: 실서버 REST(§2)로 로그인하고 accessToken을 보관한다.
@@ -23,7 +24,8 @@ export function useAuth() {
 const publicUser = (u) => (u ? { email: u.email, name: u.name, role: u.role } : null)
 
 // 서버는 role만 내려준다 — 이름은 가입 시 입력값, 없으면 이메일 로컬파트로 채운다.
-const roleLabel = (role) => (role === 'ROLE_ADMIN' ? '관제 권한' : role || '관제 권한')
+// 서버가 준 role 원문을 그대로 보관한다 — 표시 문구로 바꿔 저장하면 권한 판정을 잃는다.
+const rawRole = (role) => role || ROLE_VIEWER
 
 function restoreUser() {
   const saved = getAuth()
@@ -46,7 +48,7 @@ export function AuthProvider({ children }) {
     }
     const res = await loginRequest(email.trim().toLowerCase(), password)
     if (!res?.accessToken) throw new Error('로그인 응답에 accessToken이 없습니다.')
-    const nu = { email: email.trim().toLowerCase(), name: email.split('@')[0], role: roleLabel(res.role) }
+    const nu = { email: email.trim().toLowerCase(), name: email.split('@')[0], role: rawRole(res.role) }
     setAuth({ accessToken: res.accessToken, user: nu })
     setState({ user: nu, accessToken: res.accessToken })
   }
@@ -66,7 +68,7 @@ export function AuthProvider({ children }) {
     await signupRequest({ email: email.trim().toLowerCase(), password, name, phone: tel, birth, gender })
     // 가입 직후 바로 로그인해 토큰을 확보한다
     const res = await loginRequest(email.trim().toLowerCase(), password)
-    const nu = { email: email.trim().toLowerCase(), name, role: roleLabel(res?.role) }
+    const nu = { email: email.trim().toLowerCase(), name, role: rawRole(res?.role) }
     setAuth({ accessToken: res.accessToken, user: nu })
     setState({ user: nu, accessToken: res.accessToken })
   }
@@ -88,7 +90,10 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, login, signup, logout, changePassword, updateProfile }}>
+    <AuthContext.Provider value={{
+      user, accessToken, login, signup, logout, changePassword, updateProfile,
+      isAdmin: isAdminRole(user?.role),
+    }}>
       {children}
     </AuthContext.Provider>
   )
