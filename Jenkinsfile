@@ -5,7 +5,7 @@ def sendMattermostNotification(boolean success) {
         returnStdout: true
     ).trim() ?: '커밋 메시지 정보 없음'
     def statusText = success ? '[CD] System 배포 성공' : '[CD] System 배포 실패'
-    def iconEmoji = success ? ':jenkins:' : ':angry_jenkins:'
+    def iconEmoji = success ? ':jenkins:1' : ':angry_jenkins:'
     def text = "## ${iconEmoji} ${statusText}\n" +
         "**대상 브랜치:** `${branch}`\n" +
         "**최신 커밋:** ${commitMessage}"
