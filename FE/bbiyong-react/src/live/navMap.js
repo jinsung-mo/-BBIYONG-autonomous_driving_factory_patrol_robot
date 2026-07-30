@@ -72,13 +72,27 @@ export function fitCanvas(cv) {
 }
 
 // 맵 + 궤적 + 스캔 + 로봇 — nav.html 그대로
-export function drawNav(g, cv, nav, view) {
+//
+// headingUp: 로봇 진행 방향이 항상 위를 향하도록 화면을 돌린다(주행 시 방향 감각 유지).
+// 끄면 북향(+y 위) 고정 — ROS map 프레임 그대로다.
+export function drawNav(g, cv, nav, view, headingUp = false) {
   g.fillStyle = '#15171c'
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
 
   const sx = (mx) => view.x + mx * view.s
   const sy = (my) => view.y - my * view.s   // 화면 y 는 아래로 증가 → 부호 반전
+
+  // heading-up: 로봇 화면 위치를 축으로 (yaw - 90°) 만큼 돌리면 진행 방향이 위가 된다.
+  // 회전은 캔버스 변환으로만 걸고 좌표 계산(sx/sy)은 건드리지 않는다.
+  const rotating = headingUp && nav.pose
+  if (rotating) {
+    const px = sx(nav.pose.x), py = sy(nav.pose.y)
+    g.save()
+    g.translate(px, py)
+    g.rotate(nav.pose.yaw - Math.PI / 2)
+    g.translate(-px, -py)
+  }
 
   const m = nav.map
   if (m && nav.mapCanvas) {
@@ -119,4 +133,29 @@ export function drawNav(g, cv, nav, view) {
     g.lineTo(X + Math.cos(p.yaw) * R * 2.4, Y - Math.sin(p.yaw) * R * 2.4)
     g.stroke()
   }
+
+  if (rotating) g.restore()
+
+  // 방위 표시 — 회전 여부와 무관하게 북쪽이 어디인지 항상 알 수 있게 화면 좌표계에 그린다
+  drawCompass(g, cv, rotating ? nav.pose.yaw - Math.PI / 2 : 0)
+}
+
+// 우상단 나침반. angle 만큼 돌아간 화면에서 북(+y)이 향하는 방향을 가리킨다.
+function drawCompass(g, cv, angle) {
+  const cx = cv.width - 26, cy = 26, r = 13
+  g.save()
+  g.fillStyle = 'rgba(6,9,14,.62)'
+  g.beginPath(); g.arc(cx, cy, r + 3, 0, Math.PI * 2); g.fill()
+  g.translate(cx, cy)
+  g.rotate(-angle)
+  g.strokeStyle = '#cfd6e4'; g.lineWidth = 2
+  g.beginPath(); g.moveTo(0, r); g.lineTo(0, -r); g.stroke()
+  g.fillStyle = '#ff7d74'
+  g.beginPath(); g.moveTo(0, -r); g.lineTo(-4, -r + 7); g.lineTo(4, -r + 7); g.closePath(); g.fill()
+  g.restore()
+  g.fillStyle = '#cfd6e4'
+  g.font = 'bold 9px Consolas, monospace'
+  g.textAlign = 'center'
+  g.fillText('N', cx, cy + r + 12)
+  g.textAlign = 'start'
 }

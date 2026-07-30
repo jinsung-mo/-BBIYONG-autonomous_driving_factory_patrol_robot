@@ -54,12 +54,34 @@ export function alertToToast(a) {
   return { kind: 'heat', title: a?.type || '경보', sub: a?.message || '', time }
 }
 
+// GET /api/events 의 한 건 → 이벤트 로그 한 줄.
+// 실시간 경보(AlertMessage)와 필드 이름이 달라(eventId/timestamp/temperature) 여기서 흡수한다.
+export function eventToLog(e) {
+  const kind = e?.type === 'FIRE' ? 'fire' : (e?.type === 'OVERHEAT' ? 'heat' : 'ok')
+  const detail = e?.type === 'FIRE'
+    ? `신뢰도 ${e.confidence != null ? `${Math.round(e.confidence * 100)}%` : '—'}`
+    : (e?.temperature != null ? `${num(e.temperature)}℃` : '')
+  return {
+    id: `ev-${e?.eventId}`,
+    time: formatTime(e?.timestamp),
+    date: formatDate(e?.timestamp),
+    kind,
+    type: e?.type || 'SYSTEM',
+    msg: [TYPE_LABEL[e?.type] || e?.type || '이벤트', e?.robotId, detail].filter(Boolean).join(' · '),
+  }
+}
+
+export const TYPE_LABEL = { FIRE: '화재', OVERHEAT: '과열', SYSTEM: '시스템' }
+
 // AlertMessage → 이벤트 로그 한 줄 (LogList 공용 형태)
 export function alertToLog(a) {
   return {
     id: a._id,
     time: formatTime(a?.timestamp),
+    date: formatDate(a?.timestamp),
     kind: a?.type === 'FIRE' ? 'fire' : 'heat',
+    type: a?.type || 'SYSTEM',
+    live: true,   // 실시간 수신분 — 히스토리와 구분해 표시한다
     msg: a?.message || alertToToast(a).sub,
   }
 }
@@ -99,4 +121,14 @@ function formatTime(iso) {
   if (!iso) return new Date().toTimeString().slice(0, 8)
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? String(iso) : d.toTimeString().slice(0, 8)
+}
+
+// 과거 이력은 날짜가 있어야 언제 일인지 알 수 있다. 오늘 것은 날짜를 생략해 줄을 아낀다.
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const today = new Date()
+  if (d.toDateString() === today.toDateString()) return ''
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
