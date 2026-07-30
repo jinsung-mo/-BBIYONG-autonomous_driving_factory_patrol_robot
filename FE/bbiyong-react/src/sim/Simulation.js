@@ -52,6 +52,9 @@ export default class Simulation {
 
     // ---- 열화상 ----
     this.heatT = 38.4
+    // 열화상 경고·임계 기준 — 설정 탭에서 바꾼다(S15P11E101-475)
+    this.tempWarn = 52
+    this.tempCritical = 60
     this.thermalMax = 'MAX 38.4°C'
     this.thermalColor = '#b9ffe0'
 
@@ -660,8 +663,8 @@ export default class Simulation {
     if (thermal) {
       this._drawFrame(g, thermal.img, Wc, Hc)
       if (typeof thermal.maxTemp === 'number') {
-        this.thermalMax = 'MAX ' + thermal.maxTemp.toFixed(1) + '°C' + (thermal.maxTemp > 60 ? ' ⚠ 임계 초과' : '')
-        this.thermalColor = thermal.maxTemp > 60 ? '#ff8d85' : (thermal.maxTemp > 52 ? '#ffd9a8' : '#b9ffe0')
+        this.thermalMax = 'MAX ' + thermal.maxTemp.toFixed(1) + '°C' + (thermal.maxTemp > this.tempCritical ? ' ⚠ 임계 초과' : '')
+        this.thermalColor = thermal.maxTemp > this.tempCritical ? '#ff8d85' : (thermal.maxTemp > this.tempWarn ? '#ffd9a8' : '#b9ffe0')
       }
       g.fillStyle = 'rgba(255,220,180,.9)'; g.font = '11px Consolas,monospace'
       g.fillText('THERMAL · LIVE', 10, 18)
@@ -752,8 +755,8 @@ export default class Simulation {
     g.textAlign = 'left'
 
     // HUD 라벨 갱신 + 코너 라벨
-    this.thermalMax = 'MAX ' + this.heatT.toFixed(1) + '°C' + (this.heatT > 60 ? ' ⚠ 임계 초과' : '')
-    this.thermalColor = this.heatT > 60 ? '#ff8d85' : (this.heatT > 52 ? '#ffd9a8' : '#b9ffe0')
+    this.thermalMax = 'MAX ' + this.heatT.toFixed(1) + '°C' + (this.heatT > this.tempCritical ? ' ⚠ 임계 초과' : '')
+    this.thermalColor = this.heatT > this.tempCritical ? '#ff8d85' : (this.heatT > this.tempWarn ? '#ffd9a8' : '#b9ffe0')
     g.fillStyle = 'rgba(255,220,180,.9)'; g.font = '11px Consolas,monospace'
     g.fillText('THERMAL · FLIR · 640×480 · ε0.95', 10, 18)
   }
@@ -824,6 +827,11 @@ export default class Simulation {
 
   dpStop() { this.segSet(true) }
   // 수동 주행 속도 변경 — 현재 표시 중인 속도를 곧바로 갱신한다
+  setTempThresholds(warn, critical) {
+    this.tempWarn = warn
+    this.tempCritical = critical
+  }
+
   setManualSpeed(v) {
     this.manualSpeed = v
     this.setMode(this.modeText, this.modeClass)

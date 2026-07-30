@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.jsx'
+import { roleText } from '../../auth/roles.js'
 import Modal from '../ui/Modal.jsx'
 
 const initials = (name) => (name || '?').replace(/\s/g, '').slice(0, 2)
@@ -8,11 +9,12 @@ const initials = (name) => (name || '?').replace(/\s/g, '').slice(0, 2)
 function MyPageModal({ onClose }) {
   const { user, updateProfile } = useAuth()
   const [name, setName] = useState(user.name)
-  const [role, setRole] = useState(user.role)
+
   const [msg, setMsg] = useState('')
   const save = (e) => {
     e.preventDefault()
-    updateProfile({ name: name.trim() || user.name, role: role.trim() || user.role })
+    // 권한은 본인이 바꿀 수 없다 — 편집 가능하면 권한 게이트가 무의미해진다(S15P11E101-475)
+    updateProfile({ name: name.trim() || user.name })
     setMsg('저장되었습니다.')
   }
   return (
@@ -20,7 +22,7 @@ function MyPageModal({ onClose }) {
       <form onSubmit={save}>
         <div className="form-row"><label>이메일</label><input value={user.email} disabled /></div>
         <div className="form-row"><label>이름</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div className="form-row"><label>권한</label><input value={role} onChange={(e) => setRole(e.target.value)} /></div>
+        <div className="form-row"><label>권한</label><input value={roleText(user.role)} disabled /></div>
         {msg && <div className="form-msg ok">{msg}</div>}
         <div className="form-actions">
           <button type="button" className="btn-ghost" onClick={onClose}>닫기</button>

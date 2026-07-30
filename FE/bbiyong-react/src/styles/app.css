@@ -31,6 +31,42 @@ canvas{display:block; width:100%; height:100%;}
 #nav .theme-btn{padding:6px 12px; border-radius:8px; border:1px solid #3a445a; background:#1a2030; color:#dfe4ec; font-size:12px; margin-right:4px;}
 #nav .theme-btn:hover{background:#232a38;}
 #nav .sp{flex:1;}
+/* 섹션 탭 — 관제 / 운영 / 설정 (S15P11E101-475) */
+.navtabs{display:flex; gap:4px; margin-left:18px;}
+.navtabs button{padding:6px 14px; border-radius:8px; border:1px solid transparent; background:transparent;
+  color:#8b93a3; font-size:12.5px; font-weight:700;}
+.navtabs button:hover{color:#dfe4ec;}
+.navtabs button.on{background:#1a2030; border-color:#3a445a; color:#dfe4ec;}
+#nav .navrole{font-size:11px; font-weight:700; color:#8b93a3; border:1px solid #3a445a;
+  border-radius:999px; padding:3px 9px; margin-right:6px;}
+
+/* 운영·설정 화면 */
+.section-page{background:var(--dk-bg); color:var(--dk-ink); padding:16px 18px; overflow:auto;}
+.cfg-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; align-items:start;}
+.cfg-grid .panel{display:block;}
+.cfg-help{font-size:12px; color:var(--dk-sub); line-height:1.6; margin-bottom:12px;}
+.cfg-note{font-size:11.5px; color:var(--dk-sub); line-height:1.7; margin-top:10px;
+  background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:9px; padding:9px 11px;}
+.cfg-note .kv{padding:3px 0;}
+.section-page .form-row input{width:100%; background:var(--dk-panel2); color:var(--dk-ink);
+  border:1px solid var(--dk-line); border-radius:9px; padding:8px 10px;}
+.section-page .form-row input:focus{border-color:#3ddc97; outline:none;}
+.section-page .gotor input{flex:1; background:var(--dk-panel2); color:var(--dk-ink);
+  border:1px solid var(--dk-line); border-radius:9px; padding:8px 10px;}
+/* 순찰 지점 편집 */
+.pt-list{list-style:none; padding:0; margin:0;}
+.pt-list li{display:grid; grid-template-columns:1fr 78px 78px auto; gap:6px; margin-bottom:6px;}
+.pt-list input{background:var(--dk-panel2); color:var(--dk-ink); border:1px solid var(--dk-line);
+  border-radius:8px; padding:7px 9px; font-size:12px; min-width:0;}
+.pt-list .dbtn{padding:7px 10px; font-size:11px;}
+/* 저장된 맵 목록 */
+.map-list{list-style:none; padding:0; margin:10px 0 0;}
+.map-list li{display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:6px;
+  background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:9px; font-size:12px;}
+.map-list li .t{color:var(--dk-sub); font-size:11px; margin-left:auto;}
+.map-list li .tag{font-size:9px; font-weight:700; color:var(--dk-green);
+  border:1px solid rgba(61,220,151,.5); border-radius:4px; padding:1px 5px;}
+.form-msg.ok{color:var(--dk-green); font-size:12px; margin-top:8px;}
 #nav .clock{font-size:13px; color:#c6cdd9;}
 /* 실서버 모드에서 사용할 수 없는 조작(미연결 · 로봇 프로토콜 미지원) */
 button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}

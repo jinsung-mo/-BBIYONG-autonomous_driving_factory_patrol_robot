@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { useSim } from '../../SimContext.js'
+import { useSettings } from '../../settings/SettingsContext.jsx'
 import { useLive } from '../../live/LiveContext.jsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.js'
 import StatusPanel from './StatusPanel.jsx'
@@ -8,8 +10,14 @@ import CapBadge from './CapBadge.jsx'
 
 // 순찰 로봇 관제 (다크 테마) — 단일 화면
 export default function RobotPage() {
-  const { status, refs } = useSim()
+  const { status, refs, actions } = useSim()
   const { enabled, telemetry, videoSeen } = useLive()
+  const { settings } = useSettings()
+
+  // 열화상 경고·임계 기준을 설정 값으로 맞춘다(S15P11E101-475 설정 탭)
+  useEffect(() => {
+    actions.setTempThresholds(settings.tempWarn, settings.tempCritical)
+  }, [actions, settings.tempWarn, settings.tempCritical])
 
   // live 모드에서 로봇 서브시스템이 죽어 있거나 프레임이 한 번도 오지 않았으면
   // 그 패널을 흐리게 하고 안내를 덮는다. 캔버스에는 시뮬 화면이 남아 있어서,

@@ -1,18 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSim } from '../../SimContext.js'
 import { useLive } from '../../live/LiveContext.jsx'
-import {
-  DRIVE_VECTORS, DRIVE_SPEED_MIN, DRIVE_SPEED_MAX, DRIVE_SPEED_STEP, clampDriveSpeed,
-} from '../../live/mappers.js'
-import { cellToWorld } from '../../live/config.js'
+import { DRIVE_VECTORS, speedParams, clampDriveSpeed } from '../../live/mappers.js'
+import { worldToCell } from '../../live/config.js'
+import { useSettings } from '../../settings/SettingsContext.jsx'
+import { useAuth } from '../../auth/AuthContext.jsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.js'
 import CapBadge from './CapBadge.jsx'
-
-const GOTO_OPTS = [
-  { value: '4,0', label: '분전반 A' },
-  { value: '11,4', label: '분전반 B' },
-  { value: '7,7', label: '분전반 C' },
-]
 
 // 순찰 로봇 수동 조작 패널 (WASD 이동 · 모드 · 지점이동)
 //
@@ -28,7 +22,13 @@ const GOTO_OPTS = [
 export default function ControlPanel() {
   const { status, activeKeys, actions } = useSim()
   const { enabled, connected, control, telemetry, speed, setSpeed } = useLive()
-  const [gotoVal, setGotoVal] = useState(GOTO_OPTS[0].value)
+  const { settings } = useSettings()
+  const { isAdmin } = useAuth()
+  // 순찰 지점은 설정 탭에서 등록/편집한다(S15P11E101-475). 관제에서는 실행만 한다.
+  const points = settings.points
+  const [gotoId, setGotoId] = useState(points[0]?.id)
+  const goal = points.find((p) => p.id === gotoId) || points[0]
+  const spd = speedParams(settings.vMax)
 
   // 모드 토글은 '사용자가 고른 제어 모드'다 — 버튼을 누를 때만 바뀐다.
   //
@@ -43,7 +43,10 @@ export default function ControlPanel() {
   // 로봇 주행 노드가 죽어 있으면 조작을 막는다 — 받을 쪽이 없는데 DRIVE 를 쏘면
   // 화면만 반응하고 로봇은 그대로라 조작자가 오해한다(S15P11E101-462).
   const driveDown = enabled && isDown(capOf(telemetry, CAP_KEYS.drive))
-  const ctlOff = (enabled && !connected) || driveDown
+  // 뷰어는 조작할 수 없다 — 버튼을 숨기지 않고 회색으로 남겨 '권한 없음'이 드러나게 한다.
+  const ctlOff = (enabled && !connected) || driveDown || !isAdmin
+  // 안전 예외: 긴급 정지는 권한과 무관하게 로그인만 하면 누구나 즉시 누를 수 있어야 한다.
+  const estopOff = (enabled && !connected) || driveDown
 
   // E-STOP 체결 여부 — live는 텔레메트리가, mock은 시뮬 상태가 정답이다.
   // 텔레메트리가 아직 없으면(estop === undefined) 체결로 오해하지 않도록 명시적으로 검사한다.
@@ -99,20 +102,19 @@ export default function ControlPanel() {
   }
   // 속도는 live(발행 배율)와 mock(표시 속도) 양쪽에 함께 반영한다 — 어느 모드에서도 죽은 버튼이 되지 않게
   const onSetSpeed = (v) => {
-    const next = clampDriveSpeed(v)
+    const next = clampDriveSpeed(v, settings.vMax)
     setSpeed(next)
     actions.setManualSpeed(next)
   }
-  const speedPct = ((speed - DRIVE_SPEED_MIN) / (DRIVE_SPEED_MAX - DRIVE_SPEED_MIN)) * 100
+  const speedPct = ((speed - spd.min) / (spd.max - spd.min)) * 100
 
   const onGoto = () => {
-    const label = GOTO_OPTS.find((o) => o.value === gotoVal)?.label
-    if (liveReady) {
-      const [c, r] = gotoVal.split(',').map(Number)
-      const { x, y } = cellToWorld(c, r)
-      control.navigate(x, y, 0)
-    } else {
-      actions.goto(gotoVal, label)
+    if (!goal) return
+    // 저장값은 미터(map 프레임)다. 실서버는 그대로 보내고, 시뮬은 격자로 환산해 넘긴다.
+    if (liveReady) control.navigate(goal.x, goal.y, 0)
+    else {
+      const { c, r } = worldToCell(goal.x, goal.y)
+      actions.goto(`${c},${r}`, goal.label)
     }
   }
 
@@ -184,7 +186,7 @@ export default function ControlPanel() {
           <button
             className="dbtn stop keyed"
             onClick={onEmergencyStop}
-            disabled={ctlOff}
+            disabled={estopOff}
             aria-keyshortcuts={estopEngaged ? undefined : 'Shift'}
           >
             <span>■ 긴급 정지</span>
@@ -208,8 +210,8 @@ export default function ControlPanel() {
             <div className="spdr">
               <button
                 className="dbtn"
-                onClick={() => onSetSpeed(speed - DRIVE_SPEED_STEP)}
-                disabled={ctlOff || speed <= DRIVE_SPEED_MIN}
+                onClick={() => onSetSpeed(speed - spd.step)}
+                disabled={ctlOff || speed <= spd.min}
                 aria-label="주행 속도 낮추기"
               >
                 −
@@ -218,8 +220,8 @@ export default function ControlPanel() {
                 className="spdbar"
                 role="slider"
                 aria-label="주행 속도"
-                aria-valuemin={DRIVE_SPEED_MIN}
-                aria-valuemax={DRIVE_SPEED_MAX}
+                aria-valuemin={spd.min}
+                aria-valuemax={spd.max}
                 aria-valuenow={speed}
                 aria-valuetext={`${speed.toFixed(2)} m/s`}
               >
@@ -227,8 +229,8 @@ export default function ControlPanel() {
               </div>
               <button
                 className="dbtn"
-                onClick={() => onSetSpeed(speed + DRIVE_SPEED_STEP)}
-                disabled={ctlOff || speed >= DRIVE_SPEED_MAX}
+                onClick={() => onSetSpeed(speed + spd.step)}
+                disabled={ctlOff || speed >= spd.max}
                 aria-label="주행 속도 높이기"
               >
                 +
@@ -266,8 +268,8 @@ export default function ControlPanel() {
           </div>
 
           <div className="gotor">
-            <select value={gotoVal} onChange={(e) => setGotoVal(e.target.value)}>
-              {GOTO_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            <select value={gotoId} onChange={(e) => setGotoId(e.target.value)} disabled={ctlOff}>
+              {points.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
             <button className="dbtn go" onClick={onGoto} disabled={ctlOff}>지점 이동</button>
           </div>
