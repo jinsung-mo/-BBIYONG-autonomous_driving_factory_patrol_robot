@@ -13,6 +13,18 @@ export const REST_BASE = env.VITE_REST_BASE_URL || 'https://i15e101.p.ssafy.io'
 // 현재 편성된 순찰 로봇 1대. 제어 payload의 robot_id / 영상 토픽 경로에 쓰인다.
 export const ROBOT_ID = env.VITE_ROBOT_ID || 'orinka_01'
 
+// ---- 로봇 수동 주행 상한 (S15P11E101-463) ----
+// 관제가 보내는 DRIVE 는 BE_robot/tools/diff_drive/teleop_node.py 의 V_MAX/W_MAX 로 잘린다.
+// 이 값보다 큰 수를 보내면 로봇이 조용히 클램프해 슬라이더 표시와 실제 속도가 어긋난다.
+//
+// 선속도와 각속도의 상한이 서로 다르다는 점이 중요하다 — 하나의 배율을 양쪽에 그대로
+// 곱하면 회전만 먼저 상한에 걸린다. 슬라이더 값은 선속도(m/s)로 읽고, 각속도는
+// 같은 비율(speed / V_MAX)을 W_MAX 에 적용한다.
+//
+// 로봇 상한이 바뀌면 여기(또는 env)만 고치면 슬라이더 범위·증감·기본값이 함께 따라간다.
+export const ROBOT_V_MAX = Number(env.VITE_ROBOT_V_MAX ?? 1.0)   // m/s
+export const ROBOT_W_MAX = Number(env.VITE_ROBOT_W_MAX ?? 0.6)   // rad/s
+
 // ---- 좌표 변환 (미확정 · BE/로봇 파트 확인 필요) ----
 // 시뮬 지도는 12x8 격자 정수 좌표({c,r})이고, 실서버 텔레메트리는 미터 단위 실수 좌표(x,y)다.
 // 실제 공장 맵의 원점과 스케일이 확정되기 전까지는 아래 기본값(원점 0,0 · 1m = 1칸)으로

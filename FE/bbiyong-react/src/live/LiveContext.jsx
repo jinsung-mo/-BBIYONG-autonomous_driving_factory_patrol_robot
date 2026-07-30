@@ -8,7 +8,7 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ROBOT_ID, getDataSource, saveDataSource } from './config.js'
 import { connect, disconnect, subscribe, publish, onState, setToken } from './stompClient.js'
-import { DEFAULT_DRIVE_SPEED } from './mappers.js'
+import { DEFAULT_DRIVE_SPEED, angularFor } from './mappers.js'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 
@@ -171,10 +171,16 @@ export function LiveProvider({ children }) {
 
   const control = useMemo(() => {
     const send = (dest, body) => publish(dest, { robot_id: ROBOT_ID, ...body })
-    // 방향 단위벡터 × 주행 속도 — 부동소수 잔값이 payload에 남지 않게 소수 2자리로 정리한다
-    const scale = (v) => Number((v * speedRef.current).toFixed(2))
+    // 방향 단위벡터 × 축별 속도. 선속도는 슬라이더 값 그대로, 각속도는 같은 비율을
+    // 각속도 상한에 적용한다 — 로봇 상한이 서로 달라(V/W) 한 배율을 공유하면 안 된다.
+    // 부동소수 잔값이 payload 에 남지 않게 소수 2자리로 정리한다.
+    const r2 = (v) => Number(v.toFixed(2))
     return {
-      drive: (linear, angular) => send('/app/control/drive', { command: 'DRIVE', linear: scale(linear), angular: scale(angular) }),
+      drive: (linear, angular) => send('/app/control/drive', {
+        command: 'DRIVE',
+        linear: r2(linear * speedRef.current),
+        angular: r2(angular * angularFor(speedRef.current)),
+      }),
       stop: () => send('/app/control/drive', { command: 'DRIVE', linear: 0, angular: 0 }),
       // mode: autonomy | manual | disabled 만 유효
       setMode: (mode) => send('/app/control/mode', { command: 'SET_MODE', mode }),
