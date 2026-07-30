@@ -112,7 +112,9 @@ export function drawNav(g, cv, nav, view, headingUp = false) {
   }
 
   // LiDAR 스캔 — ranges[i] === 0 은 무효 측정이라 건너뛴다
-  if (p && nav.scan) {
+  // scan 은 {ranges, angle_min, angle_inc} 객체다. 모양이 다르면 그리지 않고 넘어간다 —
+  // 3Hz 로 들어오는 값이라 여기서 던지면 콘솔이 초당 3건씩 쌓인다.
+  if (p && nav.scan?.ranges?.length) {
     const s = nav.scan
     g.fillStyle = 'rgba(122,162,210,0.85)'
     for (let i = 0; i < s.ranges.length; i++) {

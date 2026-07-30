@@ -51,3 +51,29 @@ export async function authedGet(path, accessToken) {
   if (!res.ok) throw new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
   return data
 }
+
+// 인가가 필요한 변경 API 공통 호출부(POST/PATCH/PUT).
+// 호출부가 상태 코드로 분기할 수 있게 error.status 를 실어 던진다 —
+// 예를 들어 404/405 는 "요청 실패" 가 아니라 "서버에 아직 그 API 가 없다" 이다.
+export async function authedSend(path, accessToken, { method = 'POST', body } = {}) {
+  let res
+  try {
+    res = await fetch(`${REST_BASE}${path}`, {
+      method,
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    })
+  } catch {
+    throw new Error('실서버에 연결할 수 없습니다. 네트워크를 확인하세요.')
+  }
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    const err = new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
+    err.status = res.status
+    throw err
+  }
+  return data
+}
