@@ -46,6 +46,7 @@ except ImportError:
 # (env 로 덮어쓸 수 있게 해 두면 테스트·다른 배치에서 재사용된다)
 # ─────────────────────────────────────────────────────────────
 NAV_LIVE_FILE = os.environ.get("ORINCAR_NAV_LIVE_FILE", "/tmp/orincar_nav_live.json")
+NAV_MAP_FILE = os.environ.get("ORINCAR_NAV_MAP_FILE", "/tmp/orincar_nav_map.json")
 CAM_FILE = os.environ.get("ORINCAR_CAM_FILE", "/tmp/orincar_cam.json")
 DRIVE_FILE = os.environ.get("ORINCAR_DRIVE_FILE", "/tmp/orincar_drive.json")
 DRIVE_STATUS_FILE = os.environ.get(
@@ -56,6 +57,11 @@ DRIVE_STATUS_FILE = os.environ.get(
 # 오래된 pose 를 살아있는 값처럼 올리면 관제 지도에 로봇이 유령처럼 남는다.
 STALE_SEC = 5.0
 
+# 서브시스템 capability 판정 — 파일 mtime 이 얼마나 최근이냐로 생존을 본다.
+# online: 활발히 갱신 중 / stale: 잠깐 끊김 / offline: 멈춤·미기동.
+CAP_FRESH_SEC = 3.0
+CAP_STALE_SEC = 10.0
+
 # 화재 확정 — camera_node 와 같은 논리(N 프레임 중 M 회 이상). 브리지는 cam.json
 # 을 폴링하므로 프레임 단위가 아니라 폴링 단위 확정이다. 그래도 단발 오탐을
 # 한 번에 경보로 올리지 않기 위한 최소 안전장치다.
@@ -63,6 +69,10 @@ FIRE_N, FIRE_M = 5, 3
 # 확정 상태가 지속되는 동안 재경보 간격. 매 폴링마다 EVENT_FIRE 를 쏘면
 # 서버·대시보드가 중복 경보로 뒤덮인다.
 FIRE_REEMIT_SEC = 10.0
+
+# 맵이 변하지 않아도 이 간격마다 현재 맵을 한 번 재전송한다. STOMP 는 지난 메시지를
+# 새 구독자에게 주지 않으므로, 대시보드가 도중 접속해도 곧 맵을 받게 하는 보완책.
+MAP_REEMIT_SEC = 10.0
 
 
 def read_json(path):
@@ -84,6 +94,45 @@ def fresh(payload, now):
         return False
     stamp = payload.get("t")
     return stamp is not None and (now - float(stamp)) <= STALE_SEC
+
+
+def file_mtime(path):
+    """파일 수정 시각(epoch). 없으면 None."""
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
+def cap_state(mtime, now, fresh_sec=CAP_FRESH_SEC, stale_sec=CAP_STALE_SEC):
+    """mtime 기준 서브시스템 상태: online / stale / offline."""
+    if mtime is None:
+        return "offline"
+    age = now - mtime
+    if age <= fresh_sec:
+        return "online"
+    if age <= stale_sec:
+        return "stale"
+    return "offline"
+
+
+def compute_capabilities(mtimes, det_fps, now):
+    """로봇 서브시스템 능력/생존 상태 맵.
+
+    관제가 각 패널(맵·영상·주행)을 반응형으로 켜고/끄고 상태 배지를 표시하는 근거.
+    mtimes: {lidar_map, nav, camera, drive} 각 /tmp 파일의 mtime(없으면 None).
+    fire: 카메라가 살아있고 추론(det_fps)이 돌면 online.
+    """
+    caps = {}
+    for name in ("lidar_map", "nav", "camera", "drive"):
+        caps[name] = cap_state(mtimes.get(name), now)
+    if caps["camera"] == "offline":
+        caps["fire"] = "offline"
+    elif det_fps and det_fps > 0:
+        caps["fire"] = caps["camera"]  # 카메라 상태를 따라감(online/stale)
+    else:
+        caps["fire"] = "stale"         # 카메라는 있으나 추론 미가동
+    return caps
 
 
 def infer_status(drive_status, now):
@@ -111,7 +160,7 @@ def build_register(robot_id):
 
 
 def build_telemetry(robot_id, nav_live, drive_status, cam, now,
-                    latency_ms=None, estop="RELEASED"):
+                    latency_ms=None, estop="RELEASED", capabilities=None):
     """RobotPacket TELEMETRY 를 조립한다. 없는 값은 아예 넣지 않는다.
 
     필드를 null 로 채우기보다 생략한다 — 서버 DTO 는 unknown 무시라서
@@ -140,6 +189,46 @@ def build_telemetry(robot_id, nav_live, drive_status, cam, now,
     if latency_ms is not None:
         packet["commLatencyMs"] = int(latency_ms)
     packet["estop"] = estop
+    if capabilities:
+        packet["capabilities"] = capabilities
+    return packet
+
+
+def build_map(robot_id, nav_map):
+    """nav_map.json(RLE snapshot)을 MAP 패킷으로. 없거나 sequence 없으면 None.
+
+    nav_bridge 가 만든 원문({sequence, w, h, res, ox, oy, encoding, cells})에
+    source/type/robot_id 만 얹어 그대로 보낸다. 서버는 이 원문을 해석하지 않고
+    /topic/nav/{robot_id} 로 중계하며, RLE 디코드·렌더는 대시보드(FE)가 한다.
+    """
+    if not nav_map or nav_map.get("sequence") is None:
+        return None
+    return {**nav_map, "source": "robot", "type": "MAP", "robot_id": robot_id}
+
+
+def build_nav_live(robot_id, nav_live):
+    """nav_live.json 의 pose·scan 을 NAV_LIVE 패킷으로. 둘 다 없으면 None.
+
+    맵(MAP)과 같은 /topic/nav 채널로 흘러 대시보드가 실시간 자세·LiDAR 스캔을
+    지도 위에 겹쳐 그린다. scan 은 {angle_min, angle_inc, ranges} (nav_bridge 포맷).
+    """
+    if not nav_live:
+        return None
+    pose = nav_live.get("pose")
+    scan = nav_live.get("scan")
+    if pose is None and scan is None:
+        return None
+    packet = {
+        "source": "robot",
+        "type": "NAV_LIVE",
+        "robot_id": robot_id,
+        "t": nav_live.get("t"),
+        "map_sequence": nav_live.get("map_sequence"),
+    }
+    if pose is not None:
+        packet["pose"] = pose
+    if scan is not None:
+        packet["scan"] = scan
     return packet
 
 
@@ -257,7 +346,18 @@ class Bridge:
         self.url = args.server_url
         self.robot_id = args.robot_id
         self.telemetry_period = 1.0 / args.telemetry_hz
-        self.video_period = 1.0 / args.video_hz
+        # video_hz <= 0 이면 영상 송신을 끈다. VIDEO_FRAME(base64 jpeg)은 크므로,
+        # 서버 텍스트 버퍼 한도가 작을 때(1009 message too big) 임시로 꺼 두고
+        # 텔레메트리·제어만 확인할 수 있게 한다.
+        self.video_enabled = args.video_hz > 0
+        self.video_period = (1.0 / args.video_hz) if self.video_enabled else None
+        # 맵은 sequence 가 바뀔 때만 보낸다. 이 주기는 "얼마나 자주 확인하느냐"의 상한.
+        self.map_enabled = args.map_hz > 0
+        self.map_period = (1.0 / args.map_hz) if self.map_enabled else None
+        self.map_seq_sent = None
+        # 라이브 자세·LiDAR 스캔(NAV_LIVE). 고정 주기로 계속 보낸다(스캔은 매 프레임 바뀜).
+        self.nav_enabled = args.nav_hz > 0
+        self.nav_period = (1.0 / args.nav_hz) if self.nav_enabled else None
         self.fire = FireConfirmer()
         self.estop = "RELEASED"
         self.video_seq = 0
@@ -274,9 +374,18 @@ class Bridge:
             if ws.latency:  # websockets 가 ping/pong 으로 관측한 왕복(초)
                 latency_ms = ws.latency * 1000.0
 
+            mtimes = {
+                "lidar_map": file_mtime(NAV_MAP_FILE),
+                "nav": file_mtime(NAV_LIVE_FILE),
+                "camera": file_mtime(CAM_FILE),
+                "drive": file_mtime(DRIVE_STATUS_FILE),
+            }
+            det_fps = (cam or {}).get("det_fps")
+            caps = compute_capabilities(mtimes, det_fps, now)
+
             packet = build_telemetry(
                 self.robot_id, nav_live, drive_status, cam, now,
-                latency_ms=latency_ms, estop=self.estop,
+                latency_ms=latency_ms, estop=self.estop, capabilities=caps,
             )
             await ws.send(json.dumps(packet))
 
@@ -299,6 +408,41 @@ class Bridge:
                 if frame:
                     await ws.send(json.dumps(frame))
             await asyncio.sleep(self.video_period)
+
+    async def map_sender(self, ws):
+        """실시간 2D 점유격자 맵 송신. sequence 가 바뀐 경우에만 보낸다.
+
+        nav_map.json 은 nav_bridge 가 지도 내용이 실제로 바뀔 때만 다시 쓰므로,
+        sequence 비교로 중복 전송을 막는다(대역폭 절약).
+
+        단, STOMP 는 지난 메시지를 새 구독자에게 재전송하지 않으므로, 맵이 정지
+        상태여도 MAP_REEMIT_SEC 마다 한 번은 현재 맵을 다시 보낸다 — 대시보드가
+        도중에 접속해도 곧 맵을 받게 하기 위한 초기 스냅샷 보완이다.
+        """
+        last_emit = 0.0
+        while True:
+            now = time.time()
+            nav_map = read_json(NAV_MAP_FILE)
+            packet = build_map(self.robot_id, nav_map)
+            if packet is not None:
+                changed = packet["sequence"] != self.map_seq_sent
+                due = (now - last_emit) >= MAP_REEMIT_SEC
+                if changed or due:
+                    await ws.send(json.dumps(packet))
+                    self.map_seq_sent = packet["sequence"]
+                    last_emit = now
+                    kind = "송신" if changed else "재전송(구독자 초기화용)"
+                    print(f"[map] MAP {kind} sequence={packet['sequence']} "
+                          f"({packet.get('w')}x{packet.get('h')})", flush=True)
+            await asyncio.sleep(self.map_period)
+
+    async def nav_live_sender(self, ws):
+        """라이브 자세·LiDAR 스캔 송신 (NAV_LIVE). 고정 주기."""
+        while True:
+            packet = build_nav_live(self.robot_id, read_json(NAV_LIVE_FILE))
+            if packet is not None:
+                await ws.send(json.dumps(packet))
+            await asyncio.sleep(self.nav_period)
 
     async def receiver(self, ws):
         """서버 → 로봇 제어 명령 수신."""
@@ -328,11 +472,17 @@ class Bridge:
             self.url, ping_interval=10, ping_timeout=10, max_size=None
         ) as ws:
             await ws.send(json.dumps(build_register(self.robot_id)))
-            print(f"[conn] 접속·REGISTER 완료 → {self.url} (robot_id={self.robot_id})",
-                  flush=True)
-            await asyncio.gather(
-                self.sender(ws), self.video_sender(ws), self.receiver(ws)
-            )
+            print(f"[conn] 접속·REGISTER 완료 → {self.url} (robot_id={self.robot_id}, "
+                  f"video={'on' if self.video_enabled else 'off'})", flush=True)
+            tasks = [self.sender(ws), self.receiver(ws)]
+            if self.video_enabled:
+                tasks.append(self.video_sender(ws))
+            if self.map_enabled:
+                self.map_seq_sent = None  # 재접속 시 현재 맵을 한 번 다시 보낸다
+                tasks.append(self.map_sender(ws))
+            if self.nav_enabled:
+                tasks.append(self.nav_live_sender(ws))
+            await asyncio.gather(*tasks)
 
     async def run(self):
         """끊기면 백오프 후 재접속. 로봇은 계속 켜져 있고 서버가 재기동될 수 있다."""
@@ -363,7 +513,12 @@ def parse_args():
         help="서버 세션 등록에 쓸 로봇 식별자",
     )
     parser.add_argument("--telemetry-hz", type=float, default=2.0)
-    parser.add_argument("--video-hz", type=float, default=4.0)
+    parser.add_argument("--video-hz", type=float, default=4.0,
+                        help="0 이하면 영상(VIDEO_FRAME) 송신 비활성화")
+    parser.add_argument("--map-hz", type=float, default=1.0,
+                        help="맵 파일 확인 주기(상한). 0 이하면 맵(MAP) 송신 비활성화")
+    parser.add_argument("--nav-hz", type=float, default=3.0,
+                        help="라이브 자세·스캔(NAV_LIVE) 송신 주기. 0 이하면 비활성화")
     return parser.parse_args()
 
 

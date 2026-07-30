@@ -2,7 +2,11 @@ import unittest
 
 from cloud_bridge import (
     FireConfirmer,
+    cap_state,
+    compute_capabilities,
     build_fire,
+    build_map,
+    build_nav_live,
     build_register,
     build_telemetry,
     build_video,
@@ -115,6 +119,67 @@ class FireConfirmerTest(unittest.TestCase):
         soon, _ = fc.update(self._cam(fire=True), NOW + 1)   # 간격 미달
         later, _ = fc.update(self._cam(fire=True), NOW + 11)  # 간격 초과
         self.assertEqual((first, soon, later), (True, False, True))
+
+
+class MapTest(unittest.TestCase):
+    def _map(self, seq=5):
+        return {"schema_version": "1.0", "kind": "snapshot", "sequence": seq,
+                "w": 3, "h": 2, "res": 0.05, "ox": -1.0, "oy": -2.0,
+                "encoding": "rle-v1", "cells": [-1, 4, 0, 2]}
+
+    def test_wraps_with_type_and_id(self):
+        p = build_map("r1", self._map(seq=7))
+        self.assertEqual(p["type"], "MAP")
+        self.assertEqual(p["robot_id"], "r1")
+        self.assertEqual(p["sequence"], 7)
+        self.assertEqual(p["cells"], [-1, 4, 0, 2])   # 원문 보존
+        self.assertEqual(p["w"], 3)
+
+    def test_none_without_map_or_sequence(self):
+        self.assertIsNone(build_map("r1", None))
+        self.assertIsNone(build_map("r1", {"w": 3}))   # sequence 없음
+
+
+class NavLiveTest(unittest.TestCase):
+    def test_carries_pose_and_scan(self):
+        nav = {"t": NOW, "map_sequence": 12,
+               "pose": {"frame": "map", "x": 1.0, "y": 2.0, "yaw": 0.5},
+               "scan": {"angle_min": -3.14, "angle_inc": 0.06, "ranges": [1.2, 0.0, 3.4]}}
+        p = build_nav_live("r1", nav)
+        self.assertEqual(p["type"], "NAV_LIVE")
+        self.assertEqual(p["robot_id"], "r1")
+        self.assertEqual(p["pose"]["x"], 1.0)
+        self.assertEqual(p["scan"]["ranges"], [1.2, 0.0, 3.4])
+        self.assertEqual(p["map_sequence"], 12)
+
+    def test_none_when_no_pose_or_scan(self):
+        self.assertIsNone(build_nav_live("r1", None))
+        self.assertIsNone(build_nav_live("r1", {"t": NOW, "pose": None, "scan": None}))
+
+
+class CapabilityTest(unittest.TestCase):
+    def test_cap_state_by_age(self):
+        self.assertEqual(cap_state(NOW - 1, NOW), "online")
+        self.assertEqual(cap_state(NOW - 5, NOW), "stale")
+        self.assertEqual(cap_state(NOW - 60, NOW), "offline")
+        self.assertEqual(cap_state(None, NOW), "offline")
+
+    def test_compute_all_online_with_fire(self):
+        mt = {"lidar_map": NOW, "nav": NOW, "camera": NOW, "drive": NOW}
+        caps = compute_capabilities(mt, 9.0, NOW)
+        self.assertEqual(caps["lidar_map"], "online")
+        self.assertEqual(caps["camera"], "online")
+        self.assertEqual(caps["fire"], "online")
+
+    def test_fire_stale_when_no_inference(self):
+        mt = {"camera": NOW}
+        caps = compute_capabilities(mt, 0, NOW)
+        self.assertEqual(caps["fire"], "stale")   # 카메라는 있으나 추론 미가동
+
+    def test_offline_when_files_missing(self):
+        caps = compute_capabilities({}, None, NOW)
+        for v in caps.values():
+            self.assertEqual(v, "offline")
 
 
 class FirePacketTest(unittest.TestCase):

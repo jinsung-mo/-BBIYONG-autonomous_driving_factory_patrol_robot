@@ -19,11 +19,13 @@ import websockets
 
 TMP = tempfile.mkdtemp(prefix="orincar_smoke_")
 NAV = os.path.join(TMP, "nav_live.json")
+NAV_MAP = os.path.join(TMP, "nav_map.json")
 CAM = os.path.join(TMP, "cam.json")
 DRIVE = os.path.join(TMP, "drive.json")
 DRIVE_STATUS = os.path.join(TMP, "drive_status.json")
 
 os.environ["ORINCAR_NAV_LIVE_FILE"] = NAV
+os.environ["ORINCAR_NAV_MAP_FILE"] = NAV_MAP
 os.environ["ORINCAR_CAM_FILE"] = CAM
 os.environ["ORINCAR_DRIVE_FILE"] = DRIVE
 os.environ["ORINCAR_DRIVE_STATUS"] = DRIVE_STATUS
@@ -40,9 +42,14 @@ def write(path, payload):
 async def main():
     import time
     now = time.time()  # fresh() 가 time.time() 기준이라 최신 타임스탬프를 넣는다
-    write(NAV, {"t": now, "pose": {"frame": "map", "x": 1.5, "y": -2.0, "yaw": 0.3}})
+    write(NAV, {"t": now, "map_sequence": 3,
+                "pose": {"frame": "map", "x": 1.5, "y": -2.0, "yaw": 0.3},
+                "scan": {"angle_min": -3.14, "angle_inc": 0.06, "ranges": [1.1, 0.0, 2.2]}})
     write(DRIVE_STATUS, {"t": now, "v": 0.11, "w": 0.0, "patrol_running": False})
     write(CAM, {"t": now, "det_fps": 8.0, "jpeg": "ZmFrZQ==", "dets": []})
+    write(NAV_MAP, {"schema_version": "1.0", "kind": "snapshot", "sequence": 3,
+                    "w": 3, "h": 2, "res": 0.05, "ox": -1.0, "oy": -2.0,
+                    "encoding": "rle-v1", "cells": [-1, 4, 0, 2]})
 
     received = []
     ready = asyncio.Event()
@@ -52,7 +59,7 @@ async def main():
         await ws.send(json.dumps({"command": "DRIVE", "linear": 0.2, "angular": -0.1}))
         async for raw in ws:
             received.append(json.loads(raw))
-            if len(received) >= 6:
+            if len(received) >= 12:
                 ready.set()
 
     server = await websockets.serve(handler, "127.0.0.1", 8791)
@@ -63,6 +70,8 @@ async def main():
         robot_id = "orinka_test"
         telemetry_hz = 20.0
         video_hz = 20.0
+        map_hz = 20.0
+        nav_hz = 20.0
 
     bridge = cloud_bridge.Bridge(Args())
     task = asyncio.create_task(bridge.run())
@@ -77,12 +86,16 @@ async def main():
     reg = received[0]
     telem = next(p for p in received if p.get("type") == "TELEMETRY")
     video = next((p for p in received if p.get("type") == "VIDEO_FRAME"), None)
+    mp = next((p for p in received if p.get("type") == "MAP"), None)
+    nl = next((p for p in received if p.get("type") == "NAV_LIVE"), None)
 
     assert reg["type"] == "REGISTER" and reg["robot_id"] == "orinka_test", reg
     assert telem["location"] == {"x": 1.5, "y": -2.0, "yaw": 0.3}, telem
     assert telem["speed"] == 0.11, telem
     assert telem["inferenceFps"] == 8.0, telem
     assert video and video["channel"] == "FRONT" and video["data"] == "ZmFrZQ==", video
+    assert mp and mp["sequence"] == 3 and mp["cells"] == [-1, 4, 0, 2], mp
+    assert nl and nl["scan"]["ranges"] == [1.1, 0.0, 2.2] and nl["pose"]["x"] == 1.5, nl
 
     # DRIVE 명령이 drive.json 으로 떨어졌는지
     with open(DRIVE, encoding="utf-8") as f:
