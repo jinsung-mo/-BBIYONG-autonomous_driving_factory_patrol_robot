@@ -11,6 +11,7 @@ import { connect, disconnect, subscribe, publish, onState, setToken } from './st
 import { DEFAULT_DRIVE_SPEED, angularFor, clampDriveSpeed } from './mappers.js'
 import { useSettings } from '../settings/SettingsContext.jsx'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.js'
+import { isMappingComplete } from './mapping.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 
 const LiveContext = createContext(null)
@@ -40,6 +41,9 @@ export function LiveProvider({ children }) {
   const [authError, setAuthError] = useState(false)
   const [telemetry, setTelemetry] = useState(null)
   const [alerts, setAlerts] = useState([])
+  // 맵 모델링 완료 이벤트(S15P11E101-483). 마지막 1건만 들고 있으면 충분하다 —
+  // 운영 탭이 '이 맵 사용?' 안내를 띄우고 사용자가 확인하면 지운다.
+  const [mappingComplete, setMappingComplete] = useState(null)
 
   // 영상 프레임은 초당 수십 장이 들어올 수 있어 React state로 올리지 않는다.
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
@@ -55,8 +59,12 @@ export function LiveProvider({ children }) {
   // 방식으로 다룬다 — React state 로 올리지 않고 ref 에 최신값만 두고 리스너가 직접 받아간다.
   const navRef = useRef({ map: null, mapCanvas: null, pose: null, scan: null, trail: [] })
   const navListeners = useRef(new Set())
+  // 구독자를 서로 격리한다. 한 리스너가 던지면 forEach 가 거기서 끊겨 뒤쪽 구독자는
+  // 갱신을 못 받는다 — 관제 캔버스가 실패했다고 운영 탭 진행 표시까지 멈추면 안 된다.
   const emitNav = useCallback(() => {
-    navListeners.current.forEach((fn) => fn(navRef.current))
+    navListeners.current.forEach((fn) => {
+      try { fn(navRef.current) } catch (e) { console.warn('[nav] 구독자 오류 — 나머지는 계속', e) }
+    })
   }, [])
 
   const setDataSource = useCallback((value) => {
@@ -80,6 +88,7 @@ export function LiveProvider({ children }) {
     if (!canConnect) {
       setConnected(false); setLastError(null); setAuthError(false)
       setTelemetry(null); telemetryRef.current = null
+      setMappingComplete(null)
       videoRef.current = { FRONT: null, THERMAL: null }
       setVideoSeen({ FRONT: false, THERMAL: false })
       navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [] }
@@ -95,6 +104,9 @@ export function LiveProvider({ children }) {
     const offRobots = subscribe('/topic/robots', (msg) => { telemetryRef.current = msg })
 
     const offAlerts = subscribe('/topic/alerts', (msg) => {
+      // 맵 모델링 완료는 위험 경보가 아니다 — 화재/과열 토스트로 흘리면
+      // alertToToast 가 타입 문자열을 그대로 띄운다. 운영 탭 전용 상태로 뺀다.
+      if (isMappingComplete(msg)) { setMappingComplete({ ...msg, _at: Date.now() }); return }
       // 서버 경보는 one-shot — 대응하는 "해제" 이벤트가 없다(가이드 §4).
       setAlerts((prev) => [...prev, { ...msg, _id: ++alertUid }])
     })
@@ -121,6 +133,10 @@ export function LiveProvider({ children }) {
           console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', e.message)
           return
         }
+      } else if (isMappingComplete(msg)) {
+        // 완료 이벤트가 어느 토픽으로 올지 계약에 없다. 맵과 같은 토픽으로 올 수도 있어 여기서도 받는다.
+        setMappingComplete({ ...msg, _at: Date.now() })
+        return
       } else if (msg?.type === 'NAV_LIVE') {
         nav.pose = msg.pose || null
         nav.scan = msg.scan || null
@@ -199,10 +215,15 @@ export function LiveProvider({ children }) {
       // fail-safe — active:true 만 허용(해제 명령 없음)
       estop: () => send('/app/control/mode', { command: 'ESTOP', active: true }),
       navigate: (x, y, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
+      // 자율 주행하며 2D 맵 생성 시작(S15P11E101-483).
+      // BE 는 /app/control/operation 에서 이 명령을 로봇으로 릴레이한다.
+      startMapping: () => send('/app/control/operation', { command: 'START_MAPPING' }),
       // 지금 만들어진 맵을 이름 붙여 저장한다(가이드 §5 SAVE_MAP) — 운영 탭에서 쓴다
       saveMap: (name) => send('/app/control/operation', { command: 'SAVE_MAP', name }),
     }
   }, [])
+
+  const clearMappingComplete = useCallback(() => setMappingComplete(null), [])
 
   const value = useMemo(() => ({
     enabled, connected, lastError, authError, hasToken: !!accessToken,
@@ -210,9 +231,10 @@ export function LiveProvider({ children }) {
     telemetry, alerts, dismissAlert,
     onVideoFrame, onNavUpdate, videoSeen, control, robotId: ROBOT_ID,
     speed, setSpeed,
+    mappingComplete, clearMappingComplete,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
-      videoSeen, control, speed, setSpeed])
+      videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }
