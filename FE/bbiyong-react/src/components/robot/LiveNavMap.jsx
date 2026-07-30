@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.jsx'
 import { makeView, fitView, fitCanvas, drawNav } from '../../live/navMap.js'
 
@@ -9,6 +9,10 @@ export default function LiveNavMap() {
   const cvRef = useRef(null)
   const viewRef = useRef(makeView())
   const lastRef = useRef(null)
+  // 북향 고정(기본) ↔ heading-up. 주행 중에는 진행 방향이 위를 향하는 편이 방향 감각을 유지하기 쉽다.
+  const [headingUp, setHeadingUp] = useState(false)
+  const headingUpRef = useRef(false)
+  headingUpRef.current = headingUp
 
   useEffect(() => {
     const cv = cvRef.current
@@ -20,7 +24,7 @@ export default function LiveNavMap() {
       if (!fitted) return // 패널이 아직 0 크기 — 다음 갱신에 다시 시도한다
       // 첫 맵이거나 캔버스 크기가 바뀌었으면 맵을 화면에 다시 맞춘다
       if (nav?.map && (!viewRef.current.init || fitted.resized)) fitView(viewRef.current, cv, nav.map)
-      drawNav(fitted.g, cv, nav, viewRef.current)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current)
     }
 
     const off = onNavUpdate(render)
@@ -31,9 +35,26 @@ export default function LiveNavMap() {
     return () => { off(); ro.disconnect() }
   }, [onNavUpdate])
 
+  // 토글 즉시 다시 그린다 (다음 NAV_LIVE 를 기다리면 최대 0.3초 늦다)
+  useEffect(() => {
+    const cv = cvRef.current
+    if (!cv || !lastRef.current) return
+    const fitted = fitCanvas(cv)
+    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUp)
+  }, [headingUp])
+
   return (
     <>
       <canvas ref={cvRef} />
+      <button
+        type="button"
+        className="mapview"
+        onClick={() => setHeadingUp((v) => !v)}
+        aria-pressed={headingUp}
+        title="지도 방향 전환"
+      >
+        {headingUp ? '진행 방향 위' : '북향 고정'}
+      </button>
       {!connected && <span className="hud">연결 대기</span>}
     </>
   )

@@ -13,9 +13,12 @@ export default function CapBadge({ capKey }) {
   const state = capOf(telemetry, capKey)
   if (state === CAP_UNKNOWN) return null
 
+  // 색만으로 구분하지 않는다 — 상태마다 기호를 달리해 색각 이상에서도 읽히게 한다
+  const mark = { online: '●', stale: '▲', offline: '■' }[state]
+
   return (
     <span className={`capb ${state}`} title={`로봇 서브시스템 ${capLabel(state)}`}>
-      <i />{capLabel(state)}
+      <i aria-hidden="true">{mark}</i>{capLabel(state)}
     </span>
   )
 }

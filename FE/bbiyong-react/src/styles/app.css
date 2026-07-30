@@ -51,9 +51,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .b-right > .panel{flex:1 1 0; min-height:0;}
 
 .vwrap{position:relative; flex:1; border-radius:9px; overflow:hidden; background:#05070a; border:1px solid var(--dk-line); min-height:0;}
-.vwrap .hud{position:absolute; left:10px; top:8px; font-size:11px; color:#b9e8ff; font-family:Consolas,monospace; text-shadow:0 1px 2px #000;}
-.vwrap .hud2{position:absolute; right:10px; top:8px; font-size:11px; font-family:Consolas,monospace; color:#ffd9a8; text-shadow:0 1px 2px #000;}
-.vwrap .rec{position:absolute; right:10px; bottom:8px; font-size:10px; color:#ff7d74; font-family:Consolas,monospace;}
+/* 영상 오버레이 — 밝은 화면에서도 읽히도록 반투명 배경을 깐다.
+   text-shadow 만으로는 흰 벽·조명이 잡힌 프레임에서 글자가 묻힌다. */
+.vwrap .hud,.vwrap .hud2,.vwrap .rec{position:absolute; font-family:Consolas,monospace;
+  background:rgba(6,9,14,.62); padding:3px 7px; border-radius:6px; backdrop-filter:blur(2px);}
+.vwrap .hud{left:10px; top:8px; font-size:11px; color:#cfeeff;}
+.vwrap .hud2{right:10px; top:8px; font-size:11px; color:#ffd9a8;}
+.vwrap .rec{right:10px; bottom:8px; font-size:10px; color:#ff9a92;}
 /* 로봇 서브시스템이 죽은 패널 — 흐리게 덮고 '데이터 없음'을 명시한다.
    특히 열화상은 로봇이 생산하지 않아, 시뮬 화면이 실데이터로 오인되면 안 된다. */
 .vwrap.down > canvas{opacity:.12; filter:grayscale(1);}
@@ -64,7 +68,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .capb{margin-left:auto; display:inline-flex; align-items:center; gap:5px; flex:none;
   font-size:10px; font-weight:700; letter-spacing:0; padding:2px 7px; border-radius:999px;
   border:1px solid currentColor; text-transform:none;}
-.capb i{width:6px; height:6px; border-radius:50%; background:currentColor;}
+.capb i{font-style:normal; font-size:7px; line-height:1;}
 .capb.online{color:var(--dk-green);}
 .capb.stale{color:var(--dk-amber);}
 .capb.offline{color:var(--dk-sub);}
@@ -76,6 +80,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .pillm.man{background:rgba(245,166,35,.14); color:var(--dk-amber); border-color:rgba(245,166,35,.45);}
 .kv{display:flex; justify-content:space-between; align-items:center; font-size:12px; line-height:1.4; padding:7px 0; color:var(--dk-sub);}
 .kv b{color:var(--dk-ink); font-weight:600;}
+/* 숫자는 폭이 고정된 자형으로 — 값이 바뀔 때 자릿수가 흔들리지 않는다 */
+.kv b.num{font-family:Consolas,'Courier New',monospace; font-variant-numeric:tabular-nums; text-align:right;}
+/* 상태값은 색 외에 기호(✓ ▲ ⚠)와 문구로도 구분한다 — 색각 이상 고려 */
+.kv b.st{display:inline-flex; align-items:center; gap:4px; white-space:nowrap;}
+.kv b.st.ok{color:var(--dk-green);}
+.kv b.st.warn{color:var(--dk-amber);}
+.kv b.st.danger{color:#ff2d1d; font-weight:800; animation:estopblink 1s steps(1,end) infinite;}
+@keyframes estopblink{50%{opacity:.35;}}
+@media (prefers-reduced-motion: reduce){ .kv b.st.danger{animation:none;} }
 .bar{height:8px; border-radius:5px; background:var(--dk-line); overflow:hidden; margin:2px 0 4px;}
 .bar i{display:block; height:100%; background:linear-gradient(90deg,#2fbf82,#3ddc97);}
 .env{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
@@ -87,6 +100,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .elog li{list-style:none; padding:7px 8px; border-radius:8px; background:var(--dk-panel2); border:1px solid var(--dk-line); margin-bottom:6px; font-size:11.5px; display:flex; gap:8px;}
 .elog li .t{color:var(--dk-sub); font-family:Consolas,monospace; white-space:nowrap;}
 .elog li.fire b{color:var(--dk-red);} .elog li.heat b{color:var(--dk-amber);} .elog li.ok b{color:var(--dk-green);}
+/* 이벤트 종류 필터 */
+.logfilter{display:flex; gap:6px; margin-top:8px;}
+.logfilter button{flex:1; padding:4px 0; font-size:11px; font-weight:700; border-radius:7px;
+  border:1px solid var(--dk-line); background:var(--dk-panel2); color:var(--dk-sub);}
+.logfilter button.on{background:#24466e; color:#dce9fb; border-color:#3a5a86;}
+.elog li .tag{margin-left:auto; font-size:9px; font-weight:700; color:var(--dk-sub);
+  border:1px solid var(--dk-line); border-radius:4px; padding:1px 4px; align-self:center; white-space:nowrap;}
+.elog li.loadmore{background:none; border:0; padding:0; margin-top:2px;}
+.elog li.loadmore button{width:100%; padding:6px 0; font-size:11px; border-radius:8px;
+  border:1px dashed var(--dk-line); background:transparent; color:var(--dk-sub);}
+.elog li.loadmore button:hover{border-color:#3a4452; color:var(--dk-ink);}
 
 /* 좌: 비상·복구 / 우: 이동·모드·지점이동 — 두 열을 세로 중앙에 맞춘다 */
 .ctl{display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:center; flex:1;}
@@ -121,6 +145,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .spdbar i{position:absolute; left:0; top:0; bottom:0; background:rgba(61,220,151,.22); border-right:1px solid rgba(61,220,151,.5); transition:width .12s;}
 .gotor{display:flex; gap:8px; margin-top:10px;}
 .gotor select{flex:1; background:var(--dk-panel2); color:var(--dk-ink); border:1px solid var(--dk-line); border-radius:9px; padding:8px 10px;}
+/* 지도 방향 토글 — 오버레이라 영상 오버레이와 같은 반투명 배경 규칙을 따른다 */
+.mapview{position:absolute; left:10px; bottom:8px; font-size:10px; font-weight:700;
+  color:#cfeeff; background:rgba(6,9,14,.62); border:1px solid rgba(255,255,255,.18);
+  padding:4px 8px; border-radius:6px; backdrop-filter:blur(2px);}
+.mapview:hover{border-color:rgba(255,255,255,.4);}
 .maplegend{display:flex; gap:12px; font-size:10.5px; color:var(--dk-sub); margin-top:8px; flex-wrap:wrap;}
 .maplegend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
 @media (prefers-reduced-motion: reduce){ .cam.alert{box-shadow:none;} }

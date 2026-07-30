@@ -1,33 +1,117 @@
+import { useCallback, useEffect, useState } from 'react'
 import { useSim } from '../SimContext.js'
 import { useLive } from '../live/LiveContext.jsx'
-import { alertToLog } from '../live/mappers.js'
+import { useAuth } from '../auth/AuthContext.jsx'
+import { alertToLog, eventToLog, TYPE_LABEL } from '../live/mappers.js'
+import { authedGet } from '../live/authApi.js'
 
 // 이벤트 로그 (순찰 로봇 관제의 .elog).
 //
-// live 모드에서는 /topic/alerts 수신 내역을 최신순으로 보여준다.
-// (서버에 로그 스트리밍 토픽이 없다 — 과거 이력은 REST `GET /api/events` 소관이라 별도 작업.)
+// live 모드에서는 실시간 수신분(/topic/alerts)과 과거 이력(GET /api/events)을 함께 보여준다.
+// 실시간 경보는 one-shot 이라 화면을 새로 열면 사라지므로, 이력 조회가 있어야
+// "아까 무슨 일이 있었나"를 볼 수 있다(S15P11E101-464).
+const FILTERS = [
+  { key: 'ALL', label: '전체' },
+  { key: 'FIRE', label: '화재' },
+  { key: 'OVERHEAT', label: '과열' },
+  { key: 'SYSTEM', label: '시스템' },
+]
+const PAGE_SIZE = 20
+
 export default function LogList({ variant = 'elog' }) {
   const { status } = useSim()
   const { enabled, connected, alerts } = useLive()
+  const { accessToken } = useAuth()
 
-  const logs = enabled ? alerts.map(alertToLog).reverse() : status.logs
+  const [filter, setFilter] = useState('ALL')
+  const [history, setHistory] = useState([])
+  const [page, setPage] = useState(0)
+  const [more, setMore] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  if (enabled && logs.length === 0) {
+  const load = useCallback(async (nextPage, reset) => {
+    if (!enabled || !accessToken) return
+    setLoading(true)
+    setError(null)
+    try {
+      const q = new URLSearchParams({ page: String(nextPage), size: String(PAGE_SIZE) })
+      if (filter !== 'ALL') q.set('type', filter)
+      const res = await authedGet(`/api/events?${q}`, accessToken)
+      const rows = (res?.content || []).map(eventToLog)
+      setHistory((prev) => (reset ? rows : [...prev, ...rows]))
+      setPage(nextPage)
+      setMore(nextPage + 1 < (res?.totalPages ?? 0))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [enabled, accessToken, filter])
+
+  // 필터가 바뀌면 처음부터 다시 받는다
+  useEffect(() => {
+    if (!enabled) { setHistory([]); setMore(false); setError(null); return }
+    load(0, true)
+  }, [enabled, filter, load])
+
+  if (!enabled) {
+    // 시뮬 모드 — 기존 시뮬 로그를 그대로 보여준다(필터·이력 없음)
     return (
       <ul className={variant}>
-        <li className="ok"><b>{connected ? '경보 없음 — 수신 대기 중' : '실서버 연결 중…'}</b></li>
+        {status.logs.map((log) => (
+          <li key={log.id} className={log.kind}>
+            <span className="t mono">{log.time}</span>
+            <b>{log.msg}</b>
+          </li>
+        ))}
       </ul>
     )
   }
 
+  const liveRows = alerts.map(alertToLog).reverse()
+    .filter((l) => filter === 'ALL' || l.type === filter)
+  const rows = [...liveRows, ...history]
+
   return (
-    <ul className={variant}>
-      {logs.map((log) => (
-        <li key={log.id} className={log.kind}>
-          <span className="t mono">{log.time}</span>
-          <b>{log.msg}</b>
-        </li>
-      ))}
-    </ul>
+    <>
+      <div className="logfilter" role="group" aria-label="이벤트 종류 필터">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            className={filter === f.key ? 'on' : ''}
+            aria-pressed={filter === f.key}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <ul className={variant}>
+        {rows.length === 0 && (
+          <li className="ok">
+            <b>{loading ? '이력 불러오는 중…' : (connected ? '경보 없음 — 수신 대기 중' : '실서버 연결 중…')}</b>
+          </li>
+        )}
+        {rows.map((log) => (
+          <li key={log.id} className={log.kind}>
+            <span className="t mono">{log.date ? `${log.date} ` : ''}{log.time}</span>
+            <b>{log.msg}</b>
+            {log.live && <span className="tag">실시간</span>}
+          </li>
+        ))}
+        {error && <li className="heat"><b>이력 조회 실패 — {error}</b></li>}
+        {more && (
+          <li className="loadmore">
+            <button type="button" onClick={() => load(page + 1, false)} disabled={loading}>
+              {loading ? '불러오는 중…' : '이전 기록 더 보기'}
+            </button>
+          </li>
+        )}
+      </ul>
+    </>
   )
 }
+
+export { TYPE_LABEL }

@@ -20,22 +20,34 @@ export default function StatusPanel() {
   const comm = live ? live.comm : '양호 · 43ms'
   const name = enabled ? robotId : '삐용'
 
-  const okColor = { color: 'var(--dk-green)' }
+  // 상태를 색만으로 구분하지 않는다 — 색각 이상에서도 읽히도록 기호와 문구를 함께 준다.
+  const estopReleased = estop === 'RELEASED'
+  const estopUnknown = estop === '—'
+  const commOk = !live || connected
 
   return (
     <div className="panel" id="pStatus">
       <h3>순찰 로봇 상태 <span className="k">ORINCA FLEET</span></h3>
       <div className="stat-card">
         <div className="rid">{name} <span className={`pillm ${modeClass}`}>{modeText}</span></div>
-        <div className="kv"><span>배터리</span><b className="mono">{batt == null ? '—' : `${batt}%`}</b></div>
+        <div className="kv"><span>배터리</span><b className="num">{batt == null ? '—' : `${batt} %`}</b></div>
         <div className="bar"><i style={{ width: `${batt ?? 0}%` }} /></div>
-        <div className="kv"><span>속도</span><b className="mono">{spd}</b></div>
-        <div className="kv"><span>E-STOP</span><b style={estop === 'RELEASED' ? okColor : undefined}>{estop}</b></div>
-        <div className="kv"><span>통신 감도</span><b style={live && !connected ? undefined : okColor}>{comm}</b></div>
+        <div className="kv"><span>속도</span><b className="num">{spd}</b></div>
+        <div className="kv">
+          <span>E-STOP</span>
+          {/* 체결은 즉시 눈에 띄어야 한다 — 강한 빨강 + 깜빡임 + 경고 기호 */}
+          <b className={estopUnknown ? '' : (estopReleased ? 'st ok' : 'st danger')}>
+            {estopUnknown ? '—' : (estopReleased ? '✓ 해제' : `⚠ 체결 (${estop})`)}
+          </b>
+        </div>
+        <div className="kv">
+          <span>통신 감도</span>
+          <b className={`st ${commOk ? 'ok' : 'warn'}`}>{commOk ? '✓' : '▲'} {comm}</b>
+        </div>
         {live?.location && (
           // 미터 단위 원시 좌표 — 지도 격자 변환과 무관하게 서버 값 그대로 확인할 수 있도록 노출
-          <div className="kv"><span>위치 (m)</span><b className="mono">
-            {live.location.x?.toFixed(2)}, {live.location.y?.toFixed(2)}
+          <div className="kv"><span>위치</span><b className="num">
+            {live.location.x?.toFixed(2)}, {live.location.y?.toFixed(2)} m
           </b></div>
         )}
       </div>
