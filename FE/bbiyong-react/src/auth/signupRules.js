@@ -18,6 +18,10 @@ export function formatPhone(raw) {
 // 010-0000-0000 형태. 가운데 자리는 구형 번호(3자리)도 받는다.
 const PHONE_RE = /^01[016789]-\d{3,4}-\d{4}$/
 
+// 저장·전송용 값 — 화면에는 하이픈을 두되 서버에는 숫자만 보낸다(BE 협의).
+// 표기 방식이 바뀌어도 저장된 값은 그대로 남도록 경계에서 한 번 정규화한다.
+export const phoneDigits = (v) => String(v || '').replace(/\D/g, '')
+
 // 비밀번호 — 8자 이상 + 영문·숫자·특수문자 각 1자 이상.
 // 무엇이 빠졌는지 그대로 알려주려고 항목별로 검사한다.
 export function passwordProblems(pw) {
