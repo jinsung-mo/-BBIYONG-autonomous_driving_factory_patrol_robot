@@ -57,6 +57,11 @@ DRIVE_STATUS_FILE = os.environ.get(
 # 오래된 pose 를 살아있는 값처럼 올리면 관제 지도에 로봇이 유령처럼 남는다.
 STALE_SEC = 5.0
 
+# 서브시스템 capability 판정 — 파일 mtime 이 얼마나 최근이냐로 생존을 본다.
+# online: 활발히 갱신 중 / stale: 잠깐 끊김 / offline: 멈춤·미기동.
+CAP_FRESH_SEC = 3.0
+CAP_STALE_SEC = 10.0
+
 # 화재 확정 — camera_node 와 같은 논리(N 프레임 중 M 회 이상). 브리지는 cam.json
 # 을 폴링하므로 프레임 단위가 아니라 폴링 단위 확정이다. 그래도 단발 오탐을
 # 한 번에 경보로 올리지 않기 위한 최소 안전장치다.
@@ -91,6 +96,45 @@ def fresh(payload, now):
     return stamp is not None and (now - float(stamp)) <= STALE_SEC
 
 
+def file_mtime(path):
+    """파일 수정 시각(epoch). 없으면 None."""
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
+def cap_state(mtime, now, fresh_sec=CAP_FRESH_SEC, stale_sec=CAP_STALE_SEC):
+    """mtime 기준 서브시스템 상태: online / stale / offline."""
+    if mtime is None:
+        return "offline"
+    age = now - mtime
+    if age <= fresh_sec:
+        return "online"
+    if age <= stale_sec:
+        return "stale"
+    return "offline"
+
+
+def compute_capabilities(mtimes, det_fps, now):
+    """로봇 서브시스템 능력/생존 상태 맵.
+
+    관제가 각 패널(맵·영상·주행)을 반응형으로 켜고/끄고 상태 배지를 표시하는 근거.
+    mtimes: {lidar_map, nav, camera, drive} 각 /tmp 파일의 mtime(없으면 None).
+    fire: 카메라가 살아있고 추론(det_fps)이 돌면 online.
+    """
+    caps = {}
+    for name in ("lidar_map", "nav", "camera", "drive"):
+        caps[name] = cap_state(mtimes.get(name), now)
+    if caps["camera"] == "offline":
+        caps["fire"] = "offline"
+    elif det_fps and det_fps > 0:
+        caps["fire"] = caps["camera"]  # 카메라 상태를 따라감(online/stale)
+    else:
+        caps["fire"] = "stale"         # 카메라는 있으나 추론 미가동
+    return caps
+
+
 def infer_status(drive_status, now):
     """로봇에는 깔끔한 FSM 상태가 없다. drive_status 로 최선의 추정을 한다.
 
@@ -116,7 +160,7 @@ def build_register(robot_id):
 
 
 def build_telemetry(robot_id, nav_live, drive_status, cam, now,
-                    latency_ms=None, estop="RELEASED"):
+                    latency_ms=None, estop="RELEASED", capabilities=None):
     """RobotPacket TELEMETRY 를 조립한다. 없는 값은 아예 넣지 않는다.
 
     필드를 null 로 채우기보다 생략한다 — 서버 DTO 는 unknown 무시라서
@@ -145,6 +189,8 @@ def build_telemetry(robot_id, nav_live, drive_status, cam, now,
     if latency_ms is not None:
         packet["commLatencyMs"] = int(latency_ms)
     packet["estop"] = estop
+    if capabilities:
+        packet["capabilities"] = capabilities
     return packet
 
 
@@ -328,9 +374,18 @@ class Bridge:
             if ws.latency:  # websockets 가 ping/pong 으로 관측한 왕복(초)
                 latency_ms = ws.latency * 1000.0
 
+            mtimes = {
+                "lidar_map": file_mtime(NAV_MAP_FILE),
+                "nav": file_mtime(NAV_LIVE_FILE),
+                "camera": file_mtime(CAM_FILE),
+                "drive": file_mtime(DRIVE_STATUS_FILE),
+            }
+            det_fps = (cam or {}).get("det_fps")
+            caps = compute_capabilities(mtimes, det_fps, now)
+
             packet = build_telemetry(
                 self.robot_id, nav_live, drive_status, cam, now,
-                latency_ms=latency_ms, estop=self.estop,
+                latency_ms=latency_ms, estop=self.estop, capabilities=caps,
             )
             await ws.send(json.dumps(packet))
 

@@ -44,6 +44,11 @@ Outbound (robot → server, `RobotPacket`):
 - `NAV_LIVE` (live pose + LiDAR scan) from `nav_live.json`, sent at `--nav-hz`
   (default 3 Hz), also relayed to `/topic/nav/{robot_id}`. Lets the dashboard
   overlay the live scan and robot marker on the map. Disable with `--nav-hz 0`.
+- `TELEMETRY.capabilities`: per-subsystem health derived from `/tmp` file mtimes —
+  `lidar_map` / `nav` / `camera` / `drive` / `fire`, each `online` | `stale` |
+  `offline`. The dashboard uses it to enable/disable panels reactively (a node
+  coming up flips it to `online`, a dead node to `offline`). See
+  `docs/439_live_nav_map_fe_porting.md` for the FE contract.
 
 Inbound (server → robot, `ControlCommand`):
 

@@ -2,6 +2,8 @@ import unittest
 
 from cloud_bridge import (
     FireConfirmer,
+    cap_state,
+    compute_capabilities,
     build_fire,
     build_map,
     build_nav_live,
@@ -153,6 +155,31 @@ class NavLiveTest(unittest.TestCase):
     def test_none_when_no_pose_or_scan(self):
         self.assertIsNone(build_nav_live("r1", None))
         self.assertIsNone(build_nav_live("r1", {"t": NOW, "pose": None, "scan": None}))
+
+
+class CapabilityTest(unittest.TestCase):
+    def test_cap_state_by_age(self):
+        self.assertEqual(cap_state(NOW - 1, NOW), "online")
+        self.assertEqual(cap_state(NOW - 5, NOW), "stale")
+        self.assertEqual(cap_state(NOW - 60, NOW), "offline")
+        self.assertEqual(cap_state(None, NOW), "offline")
+
+    def test_compute_all_online_with_fire(self):
+        mt = {"lidar_map": NOW, "nav": NOW, "camera": NOW, "drive": NOW}
+        caps = compute_capabilities(mt, 9.0, NOW)
+        self.assertEqual(caps["lidar_map"], "online")
+        self.assertEqual(caps["camera"], "online")
+        self.assertEqual(caps["fire"], "online")
+
+    def test_fire_stale_when_no_inference(self):
+        mt = {"camera": NOW}
+        caps = compute_capabilities(mt, 0, NOW)
+        self.assertEqual(caps["fire"], "stale")   # 카메라는 있으나 추론 미가동
+
+    def test_offline_when_files_missing(self):
+        caps = compute_capabilities({}, None, NOW)
+        for v in caps.values():
+            self.assertEqual(v, "offline")
 
 
 class FirePacketTest(unittest.TestCase):
