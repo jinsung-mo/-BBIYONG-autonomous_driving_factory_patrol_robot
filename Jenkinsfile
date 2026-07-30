@@ -1,4 +1,41 @@
-def sendMattermostNotification(boolean success) {
+def extractJiraIssueKey() {
+    def sourceBranch = env.gitlabSourceBranch ?: ''
+    def matcher = sourceBranch =~ /([A-Z][A-Z0-9]+-\d+)/
+    return matcher.find() ? matcher.group(1) : null
+}
+
+def completeJiraTaskAfterDeployment() {
+    def jiraIssueKey = extractJiraIssueKey()
+
+    if (!jiraIssueKey) {
+        return '대상 Jira 키 없음 (GitLab MR source branch에 Jira 키 필요)'
+    }
+
+    try {
+        withCredentials([usernamePassword(
+            credentialsId: 'jira-api',
+            usernameVariable: 'JIRA_EMAIL',
+            passwordVariable: 'JIRA_API_TOKEN'
+        )]) {
+            sh(
+                label: "Complete Jira task ${jiraIssueKey}",
+                script: """
+                    curl --silent --show-error --fail --request POST \\
+                      --user \"\$JIRA_EMAIL:\$JIRA_API_TOKEN\" \\
+                      --header 'Content-Type: application/json' \\
+                      --data '{\"transition\":{\"id\":\"31\"}}' \\
+                      \"https://ssafy.atlassian.net/rest/api/3/issue/${jiraIssueKey}/transitions\"
+                """
+            )
+        }
+        return "${jiraIssueKey} 완료 처리 성공"
+    } catch (error) {
+        echo "Jira 완료 처리 실패 (${jiraIssueKey}): ${error.getMessage()}"
+        return "${jiraIssueKey} 완료 처리 실패 (Jenkins 로그 확인)"
+    }
+}
+
+def sendMattermostNotification(boolean success, String jiraStatus = '') {
     def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: '브랜치 정보 없음'
     def commitMessage = sh(
         script: 'git log -1 --pretty=%s 2>/dev/null || true',
@@ -8,7 +45,8 @@ def sendMattermostNotification(boolean success) {
     def iconEmoji = success ? ':jenkins1:' : ':angry_jenkins:'
     def text = "## ${iconEmoji} ${statusText}\n" +
         "**대상 브랜치:** `${branch}`\n" +
-        "**최신 커밋:** ${commitMessage}"
+        "**최신 커밋:** ${commitMessage}" +
+        (jiraStatus ? "\n**Jira:** ${jiraStatus}" : '')
 
     writeFile(
         file: 'mattermost-payload.json',
@@ -85,7 +123,8 @@ pipeline {
     post {
         success {
             script {
-                sendMattermostNotification(true)
+                def jiraStatus = completeJiraTaskAfterDeployment()
+                sendMattermostNotification(true, jiraStatus)
             }
         }
         failure {
