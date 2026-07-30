@@ -2,6 +2,8 @@
 // 컴포넌트가 서버 스키마를 직접 알지 않도록 이 파일에 매핑을 모은다.
 // 계약 원본: docs/fe_backend_integration_guide.md §3.1 (텔레메트리) · §3.2 (경보)
 
+import { ROBOT_V_MAX, ROBOT_W_MAX } from './config.js'
+
 // /topic/robots 의 status → 상태 pill 문구/색
 // (modeClass: '' 정상 · 'emg' 긴급 · 'man' 수동 — 기존 CSS 클래스를 그대로 쓴다)
 const STATUS_LABEL = {
@@ -71,17 +73,26 @@ export const DRIVE_VECTORS = {
   d: { linear: 0, angular: -1 },  // 우회전
 }
 
-// 수동 주행 속도 — 선속도(m/s)이자 각속도(rad/s) 배율로 함께 쓴다.
-// 기본값은 기존 발행값(0.5)을 그대로 유지해 이번 변경으로 주행 속도가 달라지지 않게 한다.
-export const DEFAULT_DRIVE_SPEED = 0.5
-export const DRIVE_SPEED_MIN = 0.1
-export const DRIVE_SPEED_MAX = 1.0
-export const DRIVE_SPEED_STEP = 0.05
+// 수동 주행 속도(선속도, m/s). 슬라이더가 다루는 값이 곧 로봇에 나가는 linear 다.
+//
+// 범위·증감·기본값을 모두 로봇 상한에서 끌어낸다 — 상한이 바뀌면 config 의 ROBOT_V_MAX
+// 하나만 고치면 슬라이더가 통째로 따라온다. 상한을 넘겨 보내도 로봇이 잘라버려
+// 슬라이더 표시만 거짓이 되므로, 화면 범위를 로봇에 맞추는 것이 맞다(S15P11E101-463).
+const r2 = (v) => Number(v.toFixed(2))
+
+export const DRIVE_SPEED_MAX = r2(ROBOT_V_MAX)
+export const DRIVE_SPEED_MIN = Math.max(0.01, r2(ROBOT_V_MAX * 0.1))
+export const DRIVE_SPEED_STEP = Math.max(0.01, r2(ROBOT_V_MAX / 20))  // 20단계
+export const DEFAULT_DRIVE_SPEED = r2(ROBOT_V_MAX * 0.5)
 
 // 0.1 + 0.05 = 0.15000000000000002 같은 잔값이 payload 로 나가지 않도록 정리한다
 export function clampDriveSpeed(v) {
-  return Number(Math.min(DRIVE_SPEED_MAX, Math.max(DRIVE_SPEED_MIN, v)).toFixed(2))
+  return r2(Math.min(DRIVE_SPEED_MAX, Math.max(DRIVE_SPEED_MIN, v)))
 }
+
+// 선속도 배율을 각속도에 그대로 쓰면 안 된다 — 로봇 상한이 서로 다르다(V 1.00 / W 0.60).
+// 슬라이더가 상한의 몇 %인지를 각속도 상한에 같은 비율로 적용한다.
+export const angularFor = (speed) => r2((speed / ROBOT_V_MAX) * ROBOT_W_MAX)
 
 // 서버는 ISO8601(UTC)로 내려준다 — 화면은 기존과 동일하게 로컬 HH:MM:SS로 표시.
 function formatTime(iso) {
