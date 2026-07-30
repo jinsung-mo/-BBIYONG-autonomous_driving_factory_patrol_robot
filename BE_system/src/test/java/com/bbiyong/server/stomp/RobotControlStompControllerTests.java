@@ -137,6 +137,19 @@ class RobotControlStompControllerTests {
     }
 
     @Test
+    void startMappingRelaysCommand() {
+        when(sessionManager.sendCommand(any(), any())).thenReturn(true);
+        ControlCommand cmd = new ControlCommand();
+        cmd.setRobotId("orinka_01");
+        cmd.setCommand("START_MAPPING");
+
+        controller.operation(cmd);
+
+        Map<String, Object> p = capturePayload("orinka_01");
+        assertThat(p).containsEntry("command", "START_MAPPING");
+    }
+
+    @Test
     void saveMapSanitizesName() {
         when(sessionManager.sendCommand(any(), any())).thenReturn(true);
         ControlCommand cmd = new ControlCommand();

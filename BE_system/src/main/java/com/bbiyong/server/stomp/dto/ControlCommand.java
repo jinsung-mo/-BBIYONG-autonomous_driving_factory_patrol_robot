@@ -15,7 +15,7 @@ public class ControlCommand {
     @JsonProperty("robot_id")
     private String robotId;
 
-    private String command; // DRIVE | SET_MODE | ESTOP | NAVIGATE | SAVE_MAP
+    private String command; // DRIVE | SET_MODE | ESTOP | NAVIGATE | SAVE_MAP | START_MAPPING
 
     // DRIVE
     private Double linear;
