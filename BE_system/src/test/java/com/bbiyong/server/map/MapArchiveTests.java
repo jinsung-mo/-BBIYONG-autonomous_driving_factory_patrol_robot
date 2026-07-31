@@ -101,6 +101,45 @@ class MapArchiveTests {
     }
 
     @Test
+    void setActiveThenGetActive() {
+        // 맵 2개 업로드 후 하나를 활성 지정 → GET /active 가 그 맵을 반환
+        MapResponses.RegisterResult first = upload("MAP-1".getBytes(), "m1.png");
+        MapResponses.RegisterResult second = upload("MAP-2".getBytes(), "m2.png");
+
+        // 활성 없을 땐 404
+        assertThat(restTemplate.getForEntity("/api/maps/active", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+
+        // first 활성 지정
+        ResponseEntity<MapResponses.Detail> put1 = restTemplate.exchange(
+                org.springframework.http.RequestEntity.put(java.net.URI.create("/api/maps/" + first.id() + "/active")).build(),
+                MapResponses.Detail.class);
+        assertThat(put1.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(put1.getBody().active()).isTrue();
+
+        ResponseEntity<MapResponses.Detail> active1 =
+                restTemplate.getForEntity("/api/maps/active", MapResponses.Detail.class);
+        assertThat(active1.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(active1.getBody().id()).isEqualTo(first.id());
+
+        // second 로 전환 → 단일 활성(first 는 해제)
+        restTemplate.exchange(
+                org.springframework.http.RequestEntity.put(java.net.URI.create("/api/maps/" + second.id() + "/active")).build(),
+                MapResponses.Detail.class);
+        ResponseEntity<MapResponses.Detail> active2 =
+                restTemplate.getForEntity("/api/maps/active", MapResponses.Detail.class);
+        assertThat(active2.getBody().id()).isEqualTo(second.id());
+    }
+
+    @Test
+    void setActiveMissingMapReturns404() {
+        ResponseEntity<String> resp = restTemplate.exchange(
+                org.springframework.http.RequestEntity.put(java.net.URI.create("/api/maps/nope/active")).build(),
+                String.class);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
     void latestMissingReturns404() {
         ResponseEntity<String> resp = restTemplate.getForEntity("/api/maps/latest?robotId=nope", String.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);

@@ -3,6 +3,7 @@ package com.bbiyong.server.stomp;
 import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
+import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
@@ -79,6 +80,17 @@ public class RobotEventListener {
             messagingTemplate.convertAndSend("/topic/nav/" + robotId, event.getRawPayload());
         } catch (Exception e) {
             log.error("Failed to relay nav/map for robot [{}]", robotId, e);
+        }
+    }
+
+    @EventListener
+    public void handleMappingCompleteEvent(RobotMappingCompleteEvent event) {
+        // 매핑 완료 원문을 /topic/mapping 으로 관제에 relay (진행/완료 알림 UI).
+        try {
+            log.info("Relaying mapping complete for robot [{}] to /topic/mapping", event.getRobotId());
+            messagingTemplate.convertAndSend("/topic/mapping", event.getRawPayload());
+        } catch (Exception e) {
+            log.error("Failed to relay mapping complete for robot [{}]", event.getRobotId(), e);
         }
     }
 
