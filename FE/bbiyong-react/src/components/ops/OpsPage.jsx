@@ -3,6 +3,7 @@ import { useLive } from '../../live/LiveContext.jsx'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { ROBOT_ID } from '../../live/config.js'
 import Modal from '../ui/Modal.jsx'
+import RoutePanel from './RoutePanel.jsx'
 import {
   MAPPING_STATUS, activateMap, activatePath, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
   waitForSavedMap, NotImplementedError,
@@ -213,6 +214,9 @@ export default function OpsPage() {
           )}
         </div>
       </div>
+
+      {/* 맵을 만든 뒤 그 위에 순찰 경로를 그리는 흐름이라 같은 탭에 둔다(S15P11E101-514) */}
+      <RoutePanel />
 
       {confirming && (
         <Modal title="맵 모델링을 시작할까요?" onClose={() => setConfirming(false)} width={420}>

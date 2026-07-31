@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.jsx'
-import { makeView, fitView, fitCanvas, drawNav } from '../../live/navMap.js'
+import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap } from '../../live/navMap.js'
 
 // live 모드의 2D 맵 캔버스 — 로봇이 보내는 실제 SLAM 맵/스캔/자세를 그린다.
 // 렌더 로직은 navMap.js(로봇팀 nav.html 포팅)에 있고, 여기서는 캔버스 수명주기만 다룬다.
-export default function LiveNavMap() {
+//
+// route/onPick 을 주면 순찰 경로를 겹쳐 그리고 클릭으로 지점을 찍을 수 있다(S15P11E101-514).
+// 관제 화면은 이 두 값을 주지 않으므로 기존과 똑같이 동작한다.
+export default function LiveNavMap({ route = null, onPick = null }) {
   const { onNavUpdate, connected } = useLive()
   const cvRef = useRef(null)
   const viewRef = useRef(makeView())
@@ -13,6 +16,18 @@ export default function LiveNavMap() {
   const [headingUp, setHeadingUp] = useState(false)
   const headingUpRef = useRef(false)
   headingUpRef.current = headingUp
+  // 경로는 자주 바뀌므로 ref 로 읽는다 — 구독을 다시 걸지 않기 위해서다.
+  const routeRef = useRef(route)
+  routeRef.current = route
+  const pickRef = useRef(onPick)
+  pickRef.current = onPick
+
+  const redraw = () => {
+    const cv = cvRef.current
+    if (!cv || !lastRef.current) return
+    const fitted = fitCanvas(cv)
+    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current)
+  }
 
   useEffect(() => {
     const cv = cvRef.current
@@ -24,7 +39,7 @@ export default function LiveNavMap() {
       if (!fitted) return // 패널이 아직 0 크기 — 다음 갱신에 다시 시도한다
       // 첫 맵이거나 캔버스 크기가 바뀌었으면 맵을 화면에 다시 맞춘다
       if (nav?.map && (!viewRef.current.init || fitted.resized)) fitView(viewRef.current, cv, nav.map)
-      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current)
     }
 
     const off = onNavUpdate(render)
@@ -35,17 +50,31 @@ export default function LiveNavMap() {
     return () => { off(); ro.disconnect() }
   }, [onNavUpdate])
 
-  // 토글 즉시 다시 그린다 (다음 NAV_LIVE 를 기다리면 최대 0.3초 늦다)
-  useEffect(() => {
+  // 토글·경로 변경 즉시 다시 그린다 (다음 NAV_LIVE 를 기다리면 최대 0.3초 늦다)
+  useEffect(redraw, [headingUp, route])
+
+  // 지도 클릭 → map 프레임 미터. 맵 밖은 로봇이 갈 수 없는 좌표라 받지 않는다.
+  const onClick = (e) => {
+    const pick = pickRef.current
+    const nav = lastRef.current
     const cv = cvRef.current
-    if (!cv || !lastRef.current) return
-    const fitted = fitCanvas(cv)
-    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUp)
-  }, [headingUp])
+    if (!pick || !nav?.map || !cv) return
+    const r = cv.getBoundingClientRect()
+    // 캔버스 내부 해상도와 표시 크기가 다를 수 있다(ResizeObserver 사이 시점) — 비율로 환산한다
+    const px = (e.clientX - r.left) * (cv.width / r.width)
+    const py = (e.clientY - r.top) * (cv.height / r.height)
+    const { x, y } = canvasToWorld(viewRef.current, nav, headingUpRef.current, px, py)
+    if (!insideMap(nav.map, x, y)) { pick(null); return }
+    pick({ x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) })
+  }
 
   return (
     <>
-      <canvas ref={cvRef} />
+      <canvas
+        ref={cvRef}
+        onClick={onPick ? onClick : undefined}
+        style={onPick ? { cursor: 'crosshair' } : undefined}
+      />
       <button
         type="button"
         className="mapview"
