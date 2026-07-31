@@ -186,6 +186,12 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 {"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "location": {"x": 15.0, "y": 8.2}, "timestamp": 1781778200}
 ```
 
+#### [MVP] 2-1) 온디맨드 매핑 완료 이벤트 (Robot $\rightarrow$ Spring Boot) — S15P11E101-482
+* **설명**: 관제의 `START_MAPPING`으로 시작한 자율탐색 매핑을 로봇이 끝내면 전송한다. 서버는 수신 원문을 STOMP `/topic/mapping` 으로 relay 한다.
+```json
+{"source": "robot", "type": "EVENT_MAPPING_COMPLETE", "robot_id": "orinka_01", "name": "factory_01", "timestamp": 1781778400}
+```
+
 #### [미확정/Deferred] 3) 2D 도면 매핑 점유 격자 스트리밍 (Robot $\rightarrow$ Spring Boot)
 * ⚠️ **로봇 프로토콜 미지원 항목**: 현재 로봇 명령 계약에는 맵 스트리밍이 없고 `SAVE_MAP`(맵 저장)만 존재한다. 아래 `MAP_UPDATE` occupancy grid 실시간 스트리밍은 **로봇의 맵 상향 스트리밍 능력이 확인된 뒤** 확정한다(현재는 미확정). 확정 시 백엔드가 STOMP `/topic/map` 으로 중계한다.
 ```json
@@ -217,7 +223,14 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 {"command": "DRIVE", "linear": 0.5, "angular": -0.1}
 ```
 
-##### [후속/Deferred] 6) 그 외 로봇 지원 명령 (Spring Boot $\rightarrow$ Robot)
+##### [MVP] 6) 온디맨드 매핑·임계값 명령 (Spring Boot $\rightarrow$ Robot) — S15P11E101-495·482·499
+| command | 페이로드 | 설명 |
+| :--- | :--- | :--- |
+| `START_MAPPING` | `{"command": "START_MAPPING"}` | 자율주행하며 2D 맵 생성 시작(맵 모델링) |
+| `STOP_MAPPING` | `{"command": "STOP_MAPPING"}` | 진행 중인 자율탐색 매핑 중단 |
+| `SET_THRESHOLD` | `{"equipmentId": "panel_A", "threshold": 55.0}` | 설비 과열 임계값을 로봇에 반영(`PUT /api/equipments/{id}` 수정 시 서버가 중계) |
+
+##### [후속/Deferred] 7) 그 외 로봇 지원 명령 (Spring Boot $\rightarrow$ Robot)
 * 로봇 프로토콜에 정의되어 있으나 관제 UI 연결은 MVP 이후.
 
 | command | 페이로드 | 설명 |
@@ -245,9 +258,14 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 | MVP | **GET** | `/api/videos` | 영상 아카이브 목록 조회 (필터·페이징, 최근순) | `?robotId=&clipType=&from=&to=&page=0&size=10` | `{"content":[{"id":"<uuid>","clipType":"EVENT","thumbnailUrl":"..."}],"totalElements":1}` |
 | MVP | **GET** | `/api/videos/{id}` | 영상 클립 상세 + 재생 URL | None | `{"id":"<uuid>","playbackUrl":"...","startedAt":"..."}` |
 | MVP | **GET** | `/api/events/{eventId}/video` | 이벤트 연관 클립 목록 | None | `[{"id":"<uuid>","clipType":"EVENT"}]` |
-| MVP | **PUT** | `/api/equipments/{id}` | 설비 임계 온도(표시용 참고값) 수정. 없는 설비는 404, `threshold`는 양수 필수 | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
+| MVP | **PUT** | `/api/equipments/{id}` | 설비 임계 온도 수정. 없는 설비는 404, `threshold`는 양수 필수. 수정 시 로봇으로 `SET_THRESHOLD` 중계(S15P11E101-499) | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
+| MVP | **PATCH** | `/api/events/{eventId}` | 이벤트 상태 전이 (`UNRESOLVED`→`RESOLVED`) | `{"status": "RESOLVED"}` | `{"status": "SUCCESS"}` |
+| MVP | **POST** | `/api/maps/upload` | 2D SLAM 맵 이미지 업로드(로봇/게이트웨이) | multipart: `file`, `robotId`, `name`, `resolution`, `originX/Y/Yaw` | `{"id":"<uuid>","status":"REGISTERED"}` |
+| MVP | **GET** | `/api/maps` · `/api/maps/latest` · `/api/maps/{id}` | 맵 목록 / 최신 / 상세 (메타 + `imageUrl` + `active`) | `?robotId=` | `{"id":"<uuid>","imageUrl":"...","resolution":0.05,"originX":-10.0,"active":true}` |
+| MVP | **GET** | `/api/maps/{id}/image` | 맵 이미지 바이트 서빙 | None | (image/*) |
+| MVP | **GET/PUT** | `/api/maps/active` · `/api/maps/{id}/active` | 활성 맵 조회 / 지정(단일 활성) (S15P11E101-482) | None | `{"id":"<uuid>","active":true}` |
 
-> **인증 주의**: 회원가입/로그인은 이메일 기반이며, 로그인 성공 시 JWT를 발급합니다. (인가 필터 적용은 후속 — 현재는 엔드포인트 오픈)
+> **인증**: 회원가입/로그인은 이메일 기반. **JWT 인증·인가 필터 적용됨(S15P11E101-401)** — `/api/auth/**` 공개, 그 외 `/api/**`는 `Authorization: Bearer <JWT>` 필수(미인증 401). STOMP CONNECT도 JWT 필수(S15P11E101-418).
 
 ---
 
@@ -258,6 +276,8 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
   * `/topic/robots`: 실시간 로봇 텔레메트리(위치, `status`, 배터리, 속도, E-STOP, 통신 지연, 추론 FPS) 갱신
   * `/topic/alerts`: 로봇이 확정한 **화재(FIRE)·분전반 과열(OVERHEAT)** 경보 통합 푸시(표준 `AlertMessage`, `source: ROBOT`). 과열은 `equipmentId`/`threshold`/`thermalImage`(열화상 base64, 중계만·미저장) 포함
   * `/topic/video/{robotId}`: 로봇 듀얼 카메라 프레임 중계 — `channel`(`FRONT`/`THERMAL`)로 구분되는 base64 JPEG 프레임
+  * `/topic/mapping`: 온디맨드 매핑 완료(`EVENT_MAPPING_COMPLETE`) relay (S15P11E101-482)
+  * `/topic/nav/{robotId}`: 로봇 `MAP`(2D 점유격자 RLE)·`NAV_LIVE`(pose·scan) 원문 중계 (로봇 지원 시)
   * `/topic/map` *(미확정/후속)*: 로봇 맵 스트리밍 능력 확인 시 2D 점유 격자 중계
 * **발행 목적지 (Pub, `/app/control/*`)** — 백엔드가 payload를 검증(`validate`) 후 로봇 WSS 명령으로 중계. `robot_id` 는 payload에 포함(기본 `orinka_01`):
   * `/app/control/drive` → `DRIVE` (수동 주행, `manual` 모드에서 유효)
@@ -268,7 +288,7 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
     ```json
     {"robot_id": "orinka_01", "command": "SET_MODE", "mode": "autonomy"}
     ```
-  * `/app/control/operation` → `SAVE_MAP`(`name`) 또는 `NAVIGATE`(`x`,`y`,`yaw`) *(후속)*
+  * `/app/control/operation` → `START_MAPPING` / `STOP_MAPPING` / `SAVE_MAP`(`name`) / `NAVIGATE`(`x`,`y`,`yaw`)
 
 ---
 

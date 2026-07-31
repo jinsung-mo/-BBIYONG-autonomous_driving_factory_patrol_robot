@@ -14,12 +14,15 @@ Spring Boot 백엔드는 REST API, STOMP WebSocket, 로봇 WSS 연결을 제공�
 | `POST` | `/api/auth/login` | 로그인 및 JWT 발급 |
 | `GET` | `/api/robots` | 로봇 상태 요약 조회 |
 | `GET` | `/api/equipments` | 설비와 최근 점검 상태 조회 |
-| `PUT` | `/api/equipments/{equipmentId}` | 설비 표시용 임계 온도 수정 |
+| `PUT` | `/api/equipments/{equipmentId}` | 설비 임계 온도 수정 (수정 시 로봇으로 `SET_THRESHOLD` 중계) |
 | `GET` | `/api/events` | 이벤트 이력 조회 |
-| `POST` | `/api/videos` | 영상 메타데이터 등록 |
-| `GET` | `/api/videos` | 영상 목록 조회 |
-| `GET` | `/api/videos/{id}` | 영상 상세와 재생 경로 조회 |
+| `PATCH` | `/api/events/{eventId}` | 이벤트 상태 전이 (`UNRESOLVED`→`RESOLVED`) |
+| `POST` | `/api/videos` · `/api/videos/upload` | 영상 메타 등록 / 파일 업로드(multipart) |
+| `GET` | `/api/videos` · `/api/videos/{id}` · `/{id}/stream` · `/{id}/thumbnail` | 영상 목록/상세/스트리밍(Range)/썸네일 |
 | `GET` | `/api/events/{eventId}/video` | 이벤트 연관 영상 조회 |
+| `POST` | `/api/maps/upload` | 2D SLAM 맵 이미지 업로드(로봇/게이트웨이) |
+| `GET` | `/api/maps` · `/api/maps/latest` · `/api/maps/{id}` · `/{id}/image` | 맵 목록/최신/상세/이미지 서빙 |
+| `GET/PUT` | `/api/maps/active` · `/api/maps/{id}/active` | 활성 맵 조회 / 지정(단일 활성) |
 
 ### 주요 요청 예시
 
@@ -64,11 +67,14 @@ GET /api/events?page=0&size=10&type=FIRE
 
 | 구분 | Destination | 내용 |
 | --- | --- | --- |
-| 구독 | `/topic/robots` | 위치, 상태, 배터리 등 로봇 텔레메트리 |
+| 구독 | `/topic/robots` | 위치, 상태, 배터리 등 로봇 텔레메트리 (끊김 시 `status:OFFLINE` 브로드캐스트) |
 | 구독 | `/topic/alerts` | 화재·과열 경보 |
 | 구독 | `/topic/video/{robotId}` | RGB 또는 열화상 JPEG 프레임 |
+| 구독 | `/topic/mapping` | 온디맨드 매핑 완료(`EVENT_MAPPING_COMPLETE`) relay |
+| 구독 | `/topic/nav/{robotId}` | `MAP`(점유격자)·`NAV_LIVE`(pose·scan) 원문 중계 |
 | 발행 | `/app/control/drive` | 수동 주행 `DRIVE` 명령 |
-| 발행 | `/app/control/mode` | 모드 전환 `SET_MODE` 명령 |
+| 발행 | `/app/control/mode` | 모드 전환 `SET_MODE` / `ESTOP` |
+| 발행 | `/app/control/operation` | `START_MAPPING` / `STOP_MAPPING` / `NAVIGATE` / `SAVE_MAP` |
 
 ### 제어 메시지
 
@@ -98,6 +104,9 @@ GET /api/events?page=0&size=10&type=FIRE
 | `NAV_LIVE` | 실시간 자세·스캔 전송 | `pose`, `scan` |
 | `VIDEO_FRAME` | RGB·열화상 프레임 전송 | `channel`, `data`, `maxTemp` |
 | `EVENT_FIRE` | 화재 확정 경보 | `confidence`, `temperature`, `location` |
+| `EVENT_OVERHEAT` | 설비 과열 경보 | `equipment_id`, `temperature`, `threshold`, `thermalImage` |
+| `INSPECTION` | 분전반 정상 점검 리포트 | `equipment_id`, `temperature` |
+| `EVENT_MAPPING_COMPLETE` | 온디맨드 매핑 완료 → `/topic/mapping` relay | `robot_id`, `name` |
 
 ```json
 {
@@ -117,4 +126,9 @@ GET /api/events?page=0&size=10&type=FIRE
 | Command | Payload | 설명 |
 | --- | --- | --- |
 | `SET_MODE` | `{ "command": "SET_MODE", "mode": "manual" }` | `autonomy`, `manual`, `disabled` 모드 전환 |
-| `DRIVE` | `{ "command": "DRIVE", "linear": 0.5, "angular": -0.2 }` | 수동 주행 |
+| `DRIVE` | `{ "command": "DRIVE", "linear": 0.5, "angular": -0.2 }` | 수동 주행 (`manual` 모드) |
+| `ESTOP` | `{ "command": "ESTOP", "active": true }` | 긴급 정지 (활성화만, fail-safe) |
+| `NAVIGATE` | `{ "command": "NAVIGATE", "x": 15.0, "y": 8.2, "yaw": 0.0 }` | 지정 좌표 이동 |
+| `START_MAPPING` / `STOP_MAPPING` | `{ "command": "START_MAPPING" }` | 자율탐색 맵 모델링 시작/중단 |
+| `SAVE_MAP` | `{ "command": "SAVE_MAP", "name": "factory_01" }` | 현재 SLAM 맵 저장 |
+| `SET_THRESHOLD` | `{ "command": "SET_THRESHOLD", "equipmentId": "panel_A", "threshold": 55.0 }` | 설비 과열 임계값 반영 |
