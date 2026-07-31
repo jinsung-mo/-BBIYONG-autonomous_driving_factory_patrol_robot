@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { getDataSource, saveDataSource } from '../../live/config.js'
 import { GENDERS, formatPhone, validateSignup, todayISO, MIN_BIRTH_ISO } from '../../auth/signupRules.js'
+import { REASON_TEXT } from '../../auth/sessionPolicy.js'
 
 // 로그인 / 회원가입 게이트 (로그아웃 상태에서 표시)
 //
@@ -11,7 +12,7 @@ import { GENDERS, formatPhone, validateSignup, todayISO, MIN_BIRTH_ISO } from '.
 const EMPTY = { email: '', password: '', password2: '', name: '', phone: '', birth: '', gender: '' }
 
 export default function AuthScreen({ onBack }) {
-  const { login, signup } = useAuth()
+  const { login, signup, logoutReason } = useAuth()
   const [mode, setMode] = useState('login') // 'login' | 'signup'
   const [form, setForm] = useState(EMPTY)
   const [err, setErr] = useState('')
@@ -119,6 +120,10 @@ export default function AuthScreen({ onBack }) {
                 </div>
               </div>
             </>
+          )}
+          {/* 자동 로그아웃 사유. 입력 오류(err)와 구분해서 보여준다(S15P11E101-508) */}
+          {!err && logoutReason && REASON_TEXT[logoutReason] && (
+            <div className="form-msg warn" id="logoutReason">{REASON_TEXT[logoutReason]}</div>
           )}
           {err && <div className="form-msg err">{err}</div>}
           <button type="submit" className="auth-submit" disabled={busy}>

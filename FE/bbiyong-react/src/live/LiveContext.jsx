@@ -13,6 +13,7 @@ import { useSettings } from '../settings/SettingsContext.jsx'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.js'
 import { isMappingComplete } from './mapping.js'
 import { useAuth } from '../auth/AuthContext.jsx'
+import { REASON } from '../auth/sessionPolicy.js'
 
 const LiveContext = createContext(null)
 
@@ -28,7 +29,7 @@ const TELEMETRY_FLUSH_MS = 250
 let alertUid = 0
 
 export function LiveProvider({ children }) {
-  const { accessToken } = useAuth()
+  const { accessToken, logout } = useAuth()
   // 주행 상한은 설정 탭에서 바뀔 수 있다 — ref 로 들고 control 의 정체성은 고정한다
   const { settings } = useSettings()
   const vMaxRef = useRef(settings.vMax)
@@ -162,6 +163,12 @@ export function LiveProvider({ children }) {
       disconnect()
     }
   }, [canConnect, emitNav])
+
+  // STOMP 가 인증을 거부하면 토큰이 죽은 것이다. 지금까지는 문구만 띄우고 화면에 남았다 —
+  // 아무 데이터도 오지 않는 관제 화면을 계속 보여주는 것보다 로그인으로 보내는 편이 정직하다(S15P11E101-508).
+  useEffect(() => {
+    if (authError && accessToken) logout(REASON.EXPIRED)
+  }, [authError, accessToken, logout])
 
   const dismissAlert = useCallback((id) => {
     setAlerts((prev) => prev.filter((a) => a._id !== id))

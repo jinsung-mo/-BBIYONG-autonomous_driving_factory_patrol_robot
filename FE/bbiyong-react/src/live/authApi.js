@@ -4,6 +4,15 @@
 
 import { REST_BASE } from './config.js'
 
+// 인증이 깨졌을 때(401/403) 알릴 곳. AuthProvider 가 등록해 세션을 정리한다(S15P11E101-508).
+// 조회 함수마다 로그아웃을 부르면 순환 참조가 생겨서 이 한 지점으로 모은다.
+let onUnauthorized = null
+export function setUnauthorizedHandler(fn) { onUnauthorized = fn }
+
+function checkAuthFailure(status) {
+  if (status === 401 || status === 403) onUnauthorized?.()
+}
+
 async function post(path, body) {
   let res
   try {
@@ -48,7 +57,10 @@ export async function authedGet(path, accessToken) {
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   })
   const data = await res.json().catch(() => null)
-  if (!res.ok) throw new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
+  if (!res.ok) {
+    checkAuthFailure(res.status)
+    throw new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
+  }
   return data
 }
 
@@ -71,6 +83,7 @@ export async function authedSend(path, accessToken, { method = 'POST', body } = 
   }
   const data = await res.json().catch(() => null)
   if (!res.ok) {
+    checkAuthFailure(res.status)
     const err = new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
     err.status = res.status
     throw err

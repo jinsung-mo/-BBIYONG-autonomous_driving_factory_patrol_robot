@@ -2,6 +2,7 @@
 // 실제 배포 시 Spring 메인서버(FN-M01/M02) 인증으로 교체하는 것을 전제로 한 자리표시자.
 
 import { ROLE_ADMIN, ROLE_VIEWER } from './roles.js'
+import { clearActivity } from './sessionPolicy.js'
 
 const USERS_KEY = 'bbiyong.users'
 const SESSION_KEY = 'bbiyong.session'
@@ -48,15 +49,18 @@ export function getSession() {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY)) } catch { return null }
 }
 export function setSession(email) { localStorage.setItem(SESSION_KEY, JSON.stringify({ email })) }
-export function clearSession() { localStorage.removeItem(SESSION_KEY); clearToken() }
+export function clearSession() {
+  localStorage.removeItem(SESSION_KEY); clearToken(); clearActivity()
+}
 
 // ---- 실서버 세션 (JWT) ----
 // STOMP CONNECT 헤더와 REST 조회 헤더에 함께 쓰인다.
 // 저장된 user는 서버 응답(role)과 로그인 폼 값(email·name)을 합친 공개 정보다.
+// expiresAt 은 로그인 응답의 expiresIn 으로 계산한 절대 만료 시각이다(S15P11E101-508).
 export function getAuth() {
   try { return JSON.parse(localStorage.getItem(TOKEN_KEY)) } catch { return null }
 }
-export function setAuth({ accessToken, user }) {
-  localStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, user }))
+export function setAuth({ accessToken, user, expiresAt = null }) {
+  localStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, user, expiresAt }))
 }
 export function clearToken() { localStorage.removeItem(TOKEN_KEY) }
