@@ -71,6 +71,18 @@ export function fitCanvas(cv) {
   return { g: cv.getContext('2d'), resized }
 }
 
+// 지도 배경을 하나로 정한다 (S15P11E101-524).
+// 정제 도면이 있으면 그것을, 없으면 원본 점유격자를 쓴다. 둘 다 원점(m)과 m/px 로
+// 배치가 정해지므로 그리기·화면 맞춤이 같은 식을 쓸 수 있다.
+// 이미지 행 0 이 위(+y 끝)라 좌상단은 (ox, oy + h*res) 다 — 두 경우 모두 동일하다.
+export function backgroundOf(nav, showPlan = true) {
+  const ok = (o) => !!o?.img && [o.w, o.h, o.res, o.ox, o.oy].every(Number.isFinite)
+  const plan = showPlan ? nav?.plan : null
+  if (ok(plan)) return { ...plan, isPlan: true }
+  const raw = nav?.mapCanvas ? { ...nav.map, img: nav.mapCanvas } : null
+  return ok(raw) ? { ...raw, isPlan: false } : null
+}
+
 // 화면 픽셀 → map 프레임 미터 (S15P11E101-514).
 // drawNav 의 sx/sy 를 그대로 뒤집는다. heading-up 일 때는 캔버스가 로봇 화면 위치를 축으로
 // (yaw - 90°) 만큼 돌아가 있으므로, 클릭 지점을 같은 축에서 반대로 돌린 뒤 환산한다.
@@ -98,7 +110,8 @@ export function insideMap(m, x, y) {
 // headingUp: 로봇 진행 방향이 항상 위를 향하도록 화면을 돌린다(주행 시 방향 감각 유지).
 // 끄면 북향(+y 위) 고정 — ROS map 프레임 그대로다.
 // route: 순찰 경로(S15P11E101-514). [{x, y, name}] 순서대로 선으로 잇고 번호를 붙인다.
-export function drawNav(g, cv, nav, view, headingUp = false, route = null) {
+// showPlan: 정제 도면(S15P11E101-524)을 원본 점유격자 대신 배경으로 쓴다.
+export function drawNav(g, cv, nav, view, headingUp = false, route = null, showPlan = true) {
   g.fillStyle = '#15171c'
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
@@ -117,11 +130,12 @@ export function drawNav(g, cv, nav, view, headingUp = false, route = null) {
     g.translate(-px, -py)
   }
 
-  const m = nav.map
-  if (m && nav.mapCanvas) {
-    g.imageSmoothingEnabled = false
-    g.drawImage(nav.mapCanvas, sx(m.ox), sy(m.oy + m.h * m.res),
-      m.w * m.res * view.s, m.h * m.res * view.s)
+  const bg = backgroundOf(nav, showPlan)
+  if (bg) {
+    // 도면은 이미 정제된 그림이라 확대 시 부드럽게, 점유격자는 셀 경계를 살려 또렷하게
+    g.imageSmoothingEnabled = bg.isPlan
+    g.drawImage(bg.img, sx(bg.ox), sy(bg.oy + bg.h * bg.res),
+      bg.w * bg.res * view.s, bg.h * bg.res * view.s)
   }
 
   const p = nav.pose

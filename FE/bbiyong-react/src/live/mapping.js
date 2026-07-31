@@ -59,14 +59,17 @@ export async function waitForSavedMap(name, accessToken, { signal } = {}) {
   return null
 }
 
-// 활성 맵 지정. BE 에 아직 없는 API 라 경로를 여기 한 줄로 고정해 둔다.
+// 활성 맵 지정 — PUT /api/maps/{id}/active (MapController, S15P11E101-482).
+// 483 당시에는 API 가 없어 PATCH 로 잠정 구현했는데, 실제 계약은 PUT 이라 그대로 두면
+// 405 가 난다(S15P11E101-524 에서 확인).
 export const activatePath = (id) => `/api/maps/${id}/active`
+export const ACTIVATE_METHOD = 'PUT'
 
 export class NotImplementedError extends Error {}
 
 export async function activateMap(id, accessToken) {
   try {
-    return await authedSend(activatePath(id), accessToken, { method: 'PATCH' })
+    return await authedSend(activatePath(id), accessToken, { method: ACTIVATE_METHOD })
   } catch (e) {
     // 404/405 는 "서버에 그 API 가 없다" 는 뜻 — 사용자에게 실패가 아니라 미구현으로 알린다.
     if (e.status === 404 || e.status === 405) throw new NotImplementedError(e.message)

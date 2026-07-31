@@ -199,6 +199,7 @@ export default function OpsPage() {
                   <li key={mapIdOf(m) ?? i}>
                     <b>{mapNameOf(m) || mapIdOf(m)}</b>
                     <span className="t mono">
+                      {m.kind ? `${m.kind === 'FLOORPLAN' ? '도면' : '원본'} · ` : ''}
                       {m.widthPx && m.heightPx ? `${m.widthPx}×${m.heightPx}` : ''}
                       {m.resolution ? ` · ${m.resolution} m/px` : ''}
                     </span>
@@ -207,8 +208,8 @@ export default function OpsPage() {
                 ))}
               </ul>
               <div className="cfg-note">
-                <b>이 맵 사용</b>을 누르면 저장 후 <b className="mono">PATCH {activatePath('{id}')}</b> 로 활성 맵을 지정합니다.
-                BE 에 이 API 가 아직 없어, 없으면 <b className="mono">GET /api/maps/latest</b> 기준 최신 맵을 활성으로 표시합니다.
+                <b>이 맵 사용</b>을 누르면 저장 후 <b className="mono">PUT {activatePath('{id}')}</b> 로 활성 맵을 지정합니다.
+                매핑이 끝나면 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 만들어 활성화하고, 관제 지도에 자동으로 표시됩니다.
               </div>
             </>
           )}

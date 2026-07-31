@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.jsx'
-import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap } from '../../live/navMap.js'
+import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgroundOf } from '../../live/navMap.js'
 
 // live 모드의 2D 맵 캔버스 — 로봇이 보내는 실제 SLAM 맵/스캔/자세를 그린다.
 // 렌더 로직은 navMap.js(로봇팀 nav.html 포팅)에 있고, 여기서는 캔버스 수명주기만 다룬다.
@@ -8,7 +8,7 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap } from 
 // route/onPick 을 주면 순찰 경로를 겹쳐 그리고 클릭으로 지점을 찍을 수 있다(S15P11E101-514).
 // 관제 화면은 이 두 값을 주지 않으므로 기존과 똑같이 동작한다.
 export default function LiveNavMap({ route = null, onPick = null }) {
-  const { onNavUpdate, connected } = useLive()
+  const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef(null)
   const viewRef = useRef(makeView())
   const lastRef = useRef(null)
@@ -19,6 +19,11 @@ export default function LiveNavMap({ route = null, onPick = null }) {
   // 경로는 자주 바뀌므로 ref 로 읽는다 — 구독을 다시 걸지 않기 위해서다.
   const routeRef = useRef(route)
   routeRef.current = route
+  // 정제 도면이 있으면 기본으로 보여준다(S15P11E101-524). 원본 점유격자로 되돌릴 수도 있어야 한다 —
+  // 도면이 실제와 어긋나 보일 때 원본으로 확인할 방법이 없으면 곤란하다.
+  const [showPlan, setShowPlan] = useState(true)
+  const showPlanRef = useRef(true)
+  showPlanRef.current = showPlan
   const pickRef = useRef(onPick)
   pickRef.current = onPick
 
@@ -26,7 +31,7 @@ export default function LiveNavMap({ route = null, onPick = null }) {
     const cv = cvRef.current
     if (!cv || !lastRef.current) return
     const fitted = fitCanvas(cv)
-    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current)
+    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current)
   }
 
   useEffect(() => {
@@ -38,8 +43,10 @@ export default function LiveNavMap({ route = null, onPick = null }) {
       const fitted = fitCanvas(cv)
       if (!fitted) return // 패널이 아직 0 크기 — 다음 갱신에 다시 시도한다
       // 첫 맵이거나 캔버스 크기가 바뀌었으면 맵을 화면에 다시 맞춘다
-      if (nav?.map && (!viewRef.current.init || fitted.resized)) fitView(viewRef.current, cv, nav.map)
-      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current)
+      // 배경(도면 또는 원본) 기준으로 맞춘다 — 도면만 있고 원본이 없을 수도 있다
+      const bg = backgroundOf(nav, showPlanRef.current)
+      if (bg && (!viewRef.current.init || fitted.resized)) fitView(viewRef.current, cv, bg)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current)
     }
 
     const off = onNavUpdate(render)
@@ -52,6 +59,15 @@ export default function LiveNavMap({ route = null, onPick = null }) {
 
   // 토글·경로 변경 즉시 다시 그린다 (다음 NAV_LIVE 를 기다리면 최대 0.3초 늦다)
   useEffect(redraw, [headingUp, route])
+
+  // 도면 ↔ 원본 전환, 새 도면 도착 — 크기·원점이 다를 수 있어 화면을 다시 맞춘다
+  useEffect(() => {
+    const cv = cvRef.current
+    if (!cv || !lastRef.current) return
+    const bg = backgroundOf(lastRef.current, showPlan)
+    if (bg) fitView(viewRef.current, cv, bg)
+    redraw()
+  }, [showPlan, plan])
 
   // 지도 클릭 → map 프레임 미터. 맵 밖은 로봇이 갈 수 없는 좌표라 받지 않는다.
   const onClick = (e) => {
@@ -84,6 +100,17 @@ export default function LiveNavMap({ route = null, onPick = null }) {
       >
         {headingUp ? '진행 방향 위' : '북향 고정'}
       </button>
+      {plan && (
+        <button
+          type="button"
+          className="mapview mapkind"
+          onClick={() => setShowPlan((v) => !v)}
+          aria-pressed={showPlan}
+          title={showPlan ? '원본 점유격자로 보기' : '정제 도면으로 보기'}
+        >
+          {showPlan ? `도면${plan.kind === 'FLOORPLAN' ? '' : ' (원본)'}` : '원본 격자'}
+        </button>
+      )}
       {!connected && <span className="hud">연결 대기</span>}
     </>
   )
