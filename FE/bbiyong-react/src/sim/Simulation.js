@@ -817,15 +817,21 @@ export default class Simulation {
   }
 
   // dir: 'w'|'a'|'s'|'d'  (전진/좌/후진/우) — 원본 data-m 매핑과 동일
+  //
+  // 주행 입력은 모드를 바꾸지 않는다(S15P11E101-513). 예전에는 여기서 segSet(true) 를 불러
+  // 순찰 중 WASD 한 번에 수동으로 넘어갔다 — 조작자가 화면을 잠깐 건드린 것만으로 순찰이
+  // 멈추는 셈이라 위험하다. 모드 전환은 스페이스바(또는 모드 버튼)의 몫이다.
   dpadMove(dir) {
-    if (this.bot.mode !== 'manual') this.segSet(true)
+    if (this.bot.mode !== 'manual') return
     const map = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] }
     const [dc, dr] = map[dir] || [0, 0]
     const nc = Math.round(this.bot.pos.c) + dc, nr = Math.round(this.bot.pos.r) + dr
     if (nc >= 0 && nr >= 0 && nc < CSn && nr < RS && MAP[nr][nc] === 0) this.bot.pos = { c: nc, r: nr }
   }
 
-  dpStop() { this.segSet(true) }
+  // 주행 입력을 뗐다는 신호일 뿐이다. mock 은 한 번에 한 칸씩 움직여 멈출 것이 없고,
+  // 여기서 모드를 건드리면 키를 떼는 순간 수동으로 고정된다(S15P11E101-513).
+  dpStop() {}
   // 수동 주행 속도 변경 — 현재 표시 중인 속도를 곧바로 갱신한다
   setTempThresholds(warn, critical) {
     this.tempWarn = warn

@@ -20,7 +20,7 @@ const DRIVE_REPEAT_MS = 100
 
 export default function LiveSimBridge() {
   const { actions } = useSim()
-  const { enabled, connected, telemetry, onVideoFrame, control } = useLive()
+  const { enabled, connected, telemetry, onVideoFrame, control, driveMode } = useLive()
 
   // 채널별로 Image 하나를 재사용한다 (프레임마다 새로 만들면 GC 부담이 크다)
   const imgs = useRef({ FRONT: null, THERMAL: null })
@@ -94,6 +94,9 @@ export default function LiveSimBridge() {
     const onDown = (e) => {
       const k = resolve(e)
       if (!k || held.current.has(k)) return
+      // 순찰 모드에서는 주행 명령이 무효다 — 모드 전환은 스페이스바만 한다(S15P11E101-513).
+      // 여기서 막지 않으면 순찰 중 WASD 가 그대로 DRIVE 로 나간다.
+      if (driveMode !== 'manual') return
       held.current.add(k)
       sendCurrent() // 첫 명령은 타이머를 기다리지 않고 즉시 보낸다
       startRepeat()
@@ -124,7 +127,7 @@ export default function LiveSimBridge() {
       onBlur()    // 정지 발행 (눌린 키가 있을 때만)
       stopRepeat() // 눌린 키가 없어도 타이머는 확실히 해제한다
     }
-  }, [enabled, connected, control])
+  }, [enabled, connected, control, driveMode])
 
   return null
 }
