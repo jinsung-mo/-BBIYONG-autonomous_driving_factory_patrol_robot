@@ -264,8 +264,16 @@ void loop() {
     // 데드맨 — 명령이 끊기면 정지. 오픈루프는 벤치 작업용이라 5초로 관대하게.
     uint32_t limit = (mode == MODE_VELOCITY) ? deadman_ms : 5000;
     if (mode != MODE_IDLE && now - lastCmdMs > limit) {
-      stopAll();
-      Serial.println("# auto-stop (deadman)");
+      if (mode == MODE_VELOCITY) {
+        if (wl.target != 0.0f || wr.target != 0.0f) {
+          wl.target = 0.0f;
+          wr.target = 0.0f;
+          Serial.println("# auto-stop (deadman brake)");
+        }
+      } else {
+        stopAll();
+        Serial.println("# auto-stop (deadman stopAll)");
+      }
     }
   }
 
