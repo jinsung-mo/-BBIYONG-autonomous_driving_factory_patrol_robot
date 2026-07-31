@@ -285,23 +285,27 @@ const py = map.heightPx - (worldY - map.originY) / map.resolution
 
 ---
 
-## 9. 순찰 지점 · 주행 속도 설정 · 이벤트 삭제 (REST)
+## 9. 순찰 경로 · 주행 속도 설정 · 이벤트 삭제 (REST)
 
-### 9.1 순찰 지점 (지도 클릭 → `/api/waypoints`, S15P11E101-509)
-2D 지도에서 클릭한 지점을 순찰 경로로 저장한다. **클릭 픽셀은 §8.4 역변환으로 미터/월드 좌표로 바꿔** 전송한다(BE는 이미 변환된 월드 좌표를 받는다).
+### 9.1 순찰 경로 (지도 클릭 → `/api/patrol-route`, S15P11E101-509·520)
+**순찰 경로 = 순서 있는 순찰 지점(waypoint)들의 집합.** 지점과 경로는 별개 기능이 아니라 하나이며,
+**단일 화면(순찰 경로 설정)에서 경로 편집과 지점 추가/삭제를 모두** 다룬다.
+클릭 픽셀은 §8.4 역변환으로 미터/월드 좌표로 바꿔 전송한다(BE는 변환된 월드 좌표를 받음).
 ```js
 // 픽셀 → 월드(m)  (§8.4의 역변환)
 const worldX = map.originX + px * map.resolution
 const worldY = map.originY + (map.heightPx - py) * map.resolution
 
-await authedPost('/api/waypoints', { x: worldX, y: worldY, yaw: 0, name: '지점1' }, token) // 1개 추가
-await authedGet('/api/waypoints', token)                       // 순서대로 조회
-await authedPut('/api/waypoints', [ /* WaypointRequest[] */ ], token) // 경로 일괄 저장(교체)
-await authedDelete('/api/waypoints/{id}', token)               // 1개 삭제
-await authedPost('/api/waypoints/apply', {}, token)            // 로봇에 경로 하달(SET_PATROL_ROUTE)
+await authedGet('/api/patrol-route', token)                    // 경로 전체 { robotId, count, waypoints:[...] }
+await authedPost('/api/patrol-route/points', { x: worldX, y: worldY, yaw: 0, name: '지점1' }, token) // 지점 추가
+await authedDelete('/api/patrol-route/points/{id}', token)     // 지점 삭제
+await authedPut('/api/patrol-route', { waypoints: [ /* WaypointRequest[] */ ] }, token) // 경로 일괄 저장(교체)
+await authedPost('/api/patrol-route/apply', {}, token)         // 로봇에 경로 하달(SET_PATROL_ROUTE)
 ```
-- 응답 항목: `{id, robotId, name, x, y, yaw, seq, createdAt}` (seq=순찰 순서)
+- 경로 응답: `{ robotId, count, waypoints:[{id, name, x, y, yaw, seq, createdAt}] }` (seq=순찰 순서)
 - `apply` 응답: `{status, delivered, count}` — `delivered:false`면 로봇 미연결(저장은 유지, 재연결 후 재적용)
+- **IA**: 설정=경로 편집(지점 추가/순서/삭제), 운영=경로 확인+실행(apply). 데이터 소스는 하나.
+- 기존 `/api/waypoints`(509)는 동일 데이터로 호환 유지되나, **신규 화면은 `/api/patrol-route`로 통일** 권장.
 
 ### 9.2 주행 속도 상한 (설정 화면 → `/api/settings/drive-speed`, S15P11E101-512)
 ```js
