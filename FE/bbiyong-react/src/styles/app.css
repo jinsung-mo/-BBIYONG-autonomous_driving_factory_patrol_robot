@@ -167,6 +167,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .logfilter button.on{background:#24466e; color:#dce9fb; border-color:#3a5a86;}
 .elog li .tag{margin-left:auto; font-size:9px; font-weight:700; color:var(--dk-sub);
   border:1px solid var(--dk-line); border-radius:4px; padding:1px 4px; align-self:center; white-space:nowrap;}
+/* 카메라 상하 각도 (S15P11E101-521) — 수동 조작 패널 좌측 열, 주행 속도와 같은 배치 */
+.camtilt{margin-top:10px;}
+.camtilt-val{display:inline-flex; align-items:baseline; gap:5px;}
+/* 각도 문자열은 0° ~ -30° 로 길이가 변한다. .ctl 좌측 열이 auto(내용 폭)라
+   그대로 두면 각도를 바꿀 때마다 열 너비가 흔들리고 우측 방향 버튼까지 밀린다.
+   자리를 고정해 폭이 변하지 않게 한다. */
+.camtilt-val b{font-size:12px; color:var(--dk-ink); min-width:38px; display:inline-block;
+  text-align:right; font-variant-numeric:tabular-nums;}
+.camtilt-val i{min-width:22px; display:inline-block;}
+.camtilt-val i{font-style:normal; font-size:10px; color:var(--dk-sub);}
+.camtilt-range{font-style:normal; font-size:9.5px; color:var(--dk-sub); margin-left:4px; white-space:nowrap;}
 /* 이벤트 삭제/닫기 (S15P11E101-516) — 평소엔 눈에 띄지 않다가 행에 올리면 드러난다.
    상시로 붉게 두면 이벤트 로그가 '지우는 화면'처럼 읽힌다. */
 .elog li .logdel{margin-left:auto; font-size:10px; font-weight:700; padding:2px 6px; border-radius:5px;

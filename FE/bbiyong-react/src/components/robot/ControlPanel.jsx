@@ -7,6 +7,7 @@ import { useSettings } from '../../settings/SettingsContext.jsx'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.js'
 import CapBadge from './CapBadge.jsx'
+import CameraTilt from './CameraTilt.jsx'
 
 // 순찰 로봇 수동 조작 패널 (WASD 이동 · 모드 · 지점이동)
 //
@@ -245,6 +246,9 @@ export default function ControlPanel() {
               </button>
             </div>
           </div>
+
+          {/* 카메라 상하 각도 — 주행 속도와 같은 '− 게이지 +' 배치(S15P11E101-521) */}
+          <CameraTilt />
         </div>
 
         <div>
