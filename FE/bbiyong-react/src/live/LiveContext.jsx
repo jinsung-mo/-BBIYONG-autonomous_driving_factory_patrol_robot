@@ -12,6 +12,7 @@ import { DEFAULT_DRIVE_SPEED, angularFor, clampDriveSpeed } from './mappers.js'
 import { useSettings } from '../settings/SettingsContext.jsx'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.js'
 import { isMappingComplete } from './mapping.js'
+import { authedGet } from './authApi.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { REASON } from '../auth/sessionPolicy.js'
 
@@ -25,6 +26,10 @@ export function useLive() {
 
 // 텔레메트리는 연속 변동값 → 기존 시뮬(400ms emit)과 같은 취지로 주기 플러시해 리렌더를 억제한다.
 const TELEMETRY_FLUSH_MS = 250
+
+// 로봇 가동 여부 조회 주기. 서버의 OFFLINE 판정 자체가 무수신 임계 시간 기반이라
+// 더 자주 물어도 얻을 것이 없다.
+const ROBOT_POLL_MS = 15000
 
 let alertUid = 0
 
@@ -45,6 +50,10 @@ export function LiveProvider({ children }) {
   // 맵 모델링 완료 이벤트(S15P11E101-483). 마지막 1건만 들고 있으면 충분하다 —
   // 운영 탭이 '이 맵 사용?' 안내를 띄우고 사용자가 확인하면 지운다.
   const [mappingComplete, setMappingComplete] = useState(null)
+  // 로봇 가동 여부(S15P11E101-510). STOMP 연결은 '관제↔서버'만 말해준다 —
+  // 로봇이 꺼져 있어도 connected 는 true 라서, 서버가 판정한 online 을 따로 받아야 한다.
+  // null = 아직 모름(조회 전·실패). 모름을 offline 으로 위장하지 않는다.
+  const [robotOnline, setRobotOnline] = useState(null)
 
   // 영상 프레임은 초당 수십 장이 들어올 수 있어 React state로 올리지 않는다.
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
@@ -112,6 +121,12 @@ export function LiveProvider({ children }) {
       setAlerts((prev) => [...prev, { ...msg, _id: ++alertUid }])
     })
 
+    // 매핑 완료 전용 토픽(S15P11E101-482 · 510). 서버가 로봇 원문을 그대로 relay 하므로
+    // 도착 자체가 완료 신호다 — 타입 문자열에 의존하지 않는다.
+    const offMapping = subscribe('/topic/mapping', (msg) => {
+      setMappingComplete({ ...(typeof msg === 'object' && msg ? msg : {}), _at: Date.now() })
+    })
+
     const offVideo = subscribe(`/topic/video/${ROBOT_ID}`, (frame) => {
       const ch = frame?.channel
       if (ch !== 'FRONT' && ch !== 'THERMAL') return
@@ -159,10 +174,33 @@ export function LiveProvider({ children }) {
 
     return () => {
       clearInterval(flush)
-      offRobots(); offAlerts(); offVideo(); offNav(); offState()
+      offRobots(); offAlerts(); offMapping(); offVideo(); offNav(); offState()
       disconnect()
     }
   }, [canConnect, emitNav])
+
+  // 로봇 가동 여부는 서버가 판정한다 — 텔레메트리가 끊긴 지 일정 시간이 지나면 OFFLINE
+  // (RobotService). 관제는 그 결과를 GET /api/robots 로 받아온다(가이드 · S15P11E101-510).
+  // 텔레메트리 스트림만 보면 "한 번도 안 온 것"과 "오다가 끊긴 것"을 구별하지 못한다.
+  useEffect(() => {
+    if (!canConnect) { setRobotOnline(null); return undefined }
+    let alive = true
+    const poll = async () => {
+      try {
+        const rows = await authedGet('/api/robots', accessToken)
+        if (!alive) return
+        const list = Array.isArray(rows) ? rows : (rows?.content || [])
+        const me = list.find((r) => r?.robotId === ROBOT_ID)
+        // 필드가 없으면 status 로 보조 판정한다 — online 을 안 주는 서버 버전이 있다.
+        setRobotOnline(me ? (me.online ?? (me.status !== 'OFFLINE')) : false)
+      } catch {
+        if (alive) setRobotOnline(null)   // 조회 실패는 '꺼짐'이 아니라 '모름'이다
+      }
+    }
+    poll()
+    const id = setInterval(poll, ROBOT_POLL_MS)
+    return () => { alive = false; clearInterval(id) }
+  }, [canConnect, accessToken])
 
   // STOMP 가 인증을 거부하면 토큰이 죽은 것이다. 지금까지는 문구만 띄우고 화면에 남았다 —
   // 아무 데이터도 오지 않는 관제 화면을 계속 보여주는 것보다 로그인으로 보내는 편이 정직하다(S15P11E101-508).
@@ -238,10 +276,10 @@ export function LiveProvider({ children }) {
     telemetry, alerts, dismissAlert,
     onVideoFrame, onNavUpdate, videoSeen, control, robotId: ROBOT_ID,
     speed, setSpeed,
-    mappingComplete, clearMappingComplete,
+    mappingComplete, clearMappingComplete, robotOnline,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
-      videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete])
+      videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }

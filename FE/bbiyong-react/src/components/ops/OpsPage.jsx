@@ -49,6 +49,13 @@ export default function OpsPage() {
   // 로봇이 매핑에 들어갔거나 끝났으면 '대기 중' 딱지는 역할이 끝났다
   useEffect(() => { if (running || mappingComplete) setRequested(false) }, [running, mappingComplete])
 
+  // 완료 이벤트는 로봇이 붙인 맵 이름을 함께 보낸다(EVENT_MAPPING_COMPLETE { robot_id, name }).
+  // 비어 있을 때만 채운다 — 사용자가 입력하던 이름을 덮어쓰지 않는다.
+  useEffect(() => {
+    const suggested = mappingComplete?.name
+    if (suggested) setName((prev) => (prev.trim() ? prev : suggested))
+  }, [mappingComplete])
+
   const onStart = () => {
     setConfirming(false)
     setMsg(null)

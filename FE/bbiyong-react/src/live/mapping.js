@@ -7,7 +7,10 @@
 //                   나머지는 "알 수 없는 command" 로 떨어뜨린다 → 실로봇 동작은 로봇 파트 구현 이후.
 // - 진행 표시    : 텔레메트리 status === 'MAPPING'. 서버 DTO 는 이 값을 기대하지만
 //                   현재 cloud_bridge.infer_status() 는 AUTO_PATROL/MANUAL_CONTROL/None 만 반환한다.
-// - 완료 이벤트  : 타입 문자열이 계약에 아직 없다. 아래 후보를 모두 받아들인다(관대하게 수신).
+// - 완료 이벤트  : /topic/mapping 으로 확정됐다(S15P11E101-482).
+//                   서버가 로봇 원문을 그대로 relay 한다(RobotEventListener#91) — payload 는
+//                   EVENT_MAPPING_COMPLETE { robot_id, name }. 전용 토픽이라 도착 자체가 완료다.
+//                   alerts·nav 수신도 보조로 남긴다 — 계약 이전 경로로 오는 경우를 버리지 않는다.
 // - 활성 맵 지정 : 엔드포인트가 아직 없다. 경로를 한 곳에 두고 404/405 를 "미구현"으로 구분해 알린다.
 
 import { authedGet, authedSend } from './authApi.js'
