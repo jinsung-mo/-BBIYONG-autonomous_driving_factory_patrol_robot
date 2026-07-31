@@ -52,6 +52,10 @@ public class MapArtifact {
     // 활성 맵 지정(단일 활성). null/false=비활성. 마이그레이션 안전 위해 nullable wrapper 사용. (S15P11E101-482)
     private Boolean active;
 
+    // 산출물 종류: RAW(원본 점유격자) | FLOORPLAN(정제 도면). null=RAW 취급. (S15P11E101-518)
+    private String kind;
+    private String sourceMapId;  // FLOORPLAN 이 파생된 원본 RAW 맵 id
+
     @Column(nullable = false)
     private Instant createdAt;
 }

@@ -26,11 +26,15 @@ public final class MapResponses {
         return Boolean.TRUE.equals(m.getActive());
     }
 
+    private static String kindOf(MapArtifact m) {
+        return m.getKind() != null ? m.getKind() : "RAW";
+    }
+
     public record Summary(String id, String name, String robotId, String imageUrl,
-                          boolean active, String createdAt) {
+                          boolean active, String kind, String createdAt) {
         public static Summary of(MapArtifact m) {
             return new Summary(m.getId(), m.getName(), m.getRobotId(), imageUrlFor(m),
-                    isActive(m),
+                    isActive(m), kindOf(m),
                     m.getCreatedAt() != null ? m.getCreatedAt().toString() : null);
         }
     }
@@ -38,12 +42,13 @@ public final class MapResponses {
     public record Detail(String id, String name, String robotId, String imageUrl,
                          Integer widthPx, Integer heightPx, Double resolution,
                          Double originX, Double originY, Double originYaw,
-                         Long fileSizeBytes, boolean active, String createdAt) {
+                         Long fileSizeBytes, boolean active, String kind, String sourceMapId,
+                         String createdAt) {
         public static Detail of(MapArtifact m) {
             return new Detail(m.getId(), m.getName(), m.getRobotId(), imageUrlFor(m),
                     m.getWidthPx(), m.getHeightPx(), m.getResolution(),
                     m.getOriginX(), m.getOriginY(), m.getOriginYaw(),
-                    m.getFileSizeBytes(), isActive(m),
+                    m.getFileSizeBytes(), isActive(m), kindOf(m), m.getSourceMapId(),
                     m.getCreatedAt() != null ? m.getCreatedAt().toString() : null);
         }
     }
