@@ -25,6 +25,7 @@ OrinCar 개발 대시보드 — Orin 측 데이터 수집·서빙 서버
   GET  /api/cam     카메라 영상·검출 (camera_node.py 가 떨군 것)
   GET  /api/drive   수동 조종 상태 (teleop_node.py 가 떨군 것)
   POST /api/drive   🔴 **수동 조종 명령 — 유일하게 로봇을 움직이는 경로**
+  POST /api/power   🆕 출력 제한(duty_max) 0~100% — **제어권자만**
   GET /*            static/ 아래 정적 파일
 """
 
@@ -66,6 +67,155 @@ STATE = {
     },
     "errors": {},            # 수집기별 마지막 오류 메시지
 }
+
+
+# ─────────────────────────────────────────────────────────────
+# 🆕 조종 제어권(리스) + 출력 제한
+# ─────────────────────────────────────────────────────────────
+# STATE 와 **별도 락**을 쓴다. STATE_LOCK 은 수집 스레드가 초당 수십 번 잡고
+# WS/SSE 송신이 그 안에서 json.dumps 까지 한다. 10Hz 조종 POST 가 그 뒤에
+# 줄을 서면 데드맨(0.4s)이 걸릴 수 있다 — 조종 경로는 짧은 전용 락으로 분리한다.
+CTL_LOCK = threading.Lock()
+DRIVE_LEASE_S = 2.0        # 🔴 리스 2초. 조종은 10Hz(100ms)로 갱신되므로
+                           #    2초면 20발을 연속으로 놓쳐야 만료된다 = 오탈취 없음.
+                           #    동시에 브라우저를 그냥 닫아도 2초 뒤 자동 반납된다
+                           #    (닫힘 통지는 못 받는다 — POST 기반이라 소켓이 없다).
+                           #    더 짧으면 와이파이 한 번 끊길 때 조종권을 뺏기고,
+                           #    더 길면 사고 뒤 다른 사람이 잡기까지 오래 기다린다.
+DEFAULT_POWER_PCT = 30     # base_relog.sh / stack_up.sh 의 -p duty_max:=30.0 과 같은 값.
+                           # 콜드 부팅 기본값과 서버 기본값을 일부러 일치시킨다.
+CTL = {
+    "power_pct": DEFAULT_POWER_PCT,
+    "drive_owner": None,       # 조종권을 쥔 client_id (원문)
+    "owner_expires": 0.0,      # epoch 초. 이 시각이 지나면 자동 반납
+    "owner_since": 0.0,        # 현재 소유자가 잡기 시작한 시각
+}
+# esp32_base_node.py 가 1Hz 로 읽어 펌웨어에 `kx<pct>` 로 밀어 넣는다.
+# 프로세스 간 결합을 파일 하나로 끝낸다 — server.py 는 ROS 를 모른다.
+POWER_FILE = os.environ.get("ORINCAR_POWER_FILE", "/tmp/orincar_power.json")
+# 🆕 되읽기 — esp32_base_node 가 펌웨어 `k?` 회신에서 뽑아 떨구는 **실제** duty_max.
+#    🔴 왜 필요한가: CTL["power_pct"] 는 이 프로세스가 기억하는 **명령값**이지
+#       펌웨어에 물어본 결과가 아니다. esp32_base_node 가 죽어 있으면
+#       POWER_FILE 은 갱신되는데 펌웨어는 못 받는다 — 그런데 지금까지 화면은
+#       새 값을 그대로 표시했다. **로봇은 옛 값으로 달리는데 화면은 거짓말을 한다.**
+#       그 한 방향 신뢰를 끊으려고 반대 방향 파일을 하나 더 읽는다.
+POWER_ACK_FILE = os.environ.get("ORINCAR_POWER_ACK_FILE",
+                                "/tmp/orincar_power_ack.json")
+# 회신을 몇 초까지 "살아 있는 것"으로 볼 것인가.
+# 🔑 생산자가 5초 주기이므로 15초 = 3회 연속 실패해야 stale 로 떨어진다.
+#    더 짧으면 스케줄 지터 한 번에 경고가 깜빡이고, 더 길면 노드가 죽은 뒤에도
+#    한참 동안 화면이 "동기됨"이라고 안심시킨다 — 그게 바로 막으려는 상황이다.
+POWER_ACK_FRESH_S = 15.0
+
+
+def _mask(client_id):
+    """소유자 표시용 짧은 식별자. 원문 client_id 를 그대로 뿌리지 않는다."""
+    if not client_id:
+        return None
+    return str(client_id)[:4] + "…"
+
+
+def _write_power_file(pct):
+    """출력 제한을 파일로 떨군다.
+
+    🔴 **원자적으로** 쓴다 — `.tmp` 에 다 쓴 뒤 os.replace.
+       소비자(esp32_base_node)가 1Hz 로 읽는데, 같은 파일에 직접 쓰면
+       반쯤 쓰인 JSON 을 읽는 순간이 반드시 생긴다. 그쪽은 그걸 '깨짐'으로
+       보고 무시하도록 돼 있지만, 애초에 그 창을 만들지 않는 게 맞다.
+       os.replace 는 같은 파일시스템에서 원자적이라 읽는 쪽은 옛 값 아니면
+       새 값만 본다.
+    """
+    tmp = POWER_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump({"pct": int(pct), "ts": time.time()}, f)
+    os.replace(tmp, POWER_FILE)
+
+
+def _read_power_ack(now=None):
+    """기기가 회신한 duty_max 를 읽는다. 표준 라이브러리만 쓴다.
+
+    반환: (pct|None, age_s|None)
+    🔑 파일이 없거나 깨졌으면 (None, None) — "모른다"이지 "0" 이 아니다.
+       0 으로 돌려주면 화면이 '기기 0%' 라는 **틀린 사실**을 단언하게 된다.
+    🔴 예외를 올리지 않는다. 이 함수는 GET /api/drive 경로에서 불리므로
+       실패하면 조종 상태 조회 전체가 500 이 된다.
+    """
+    now = now or time.time()
+    try:
+        with open(POWER_ACK_FILE) as f:
+            data = json.load(f)
+        pct = int(round(float(data["pct"])))
+        age = max(0.0, now - float(data["ts"]))
+    except Exception:      # noqa: BLE001 — 없음/깨짐/권한/타입 전부 "모른다"
+        return None, None
+    return pct, age
+
+
+def _lease_acquire(client_id, now=None):
+    """조종 리스를 잡거나 갱신한다. **선점(preempt) 불가.**
+
+    반환: (허용여부, 거절정보)
+      - 주인이 없거나 만료 → 요청자에게 부여
+      - 주인 == 요청자      → 갱신 (now + DRIVE_LEASE_S)
+      - 주인 != 요청자 & 유효 → 거절. 호출부가 409 를 낸다
+    """
+    now = now or time.time()
+    with CTL_LOCK:
+        owner, exp = CTL["drive_owner"], CTL["owner_expires"]
+        free = owner is None or now >= exp
+        if free or owner == client_id:
+            if free and owner != client_id:
+                CTL["owner_since"] = now         # 주인이 바뀐 시점만 갱신
+            CTL["drive_owner"] = client_id
+            CTL["owner_expires"] = now + DRIVE_LEASE_S
+            return True, None
+        return False, {
+            "error": "locked",
+            "owner": _mask(owner),
+            "owner_since": CTL["owner_since"],
+            "lease_left": round(exp - now, 2),
+            "detail": "다른 사용자가 조종 중입니다",
+        }
+
+
+def _ctl_snapshot(client_id=None, now=None):
+    """모든 시청자가 **같은 값**을 보도록 하는 공통 필드.
+
+    GET /api/drive 응답에 얹는다. client_id 를 주면 `you_own` 이 붙는다 —
+    마스킹된 owner 만으로는 브라우저가 "그게 나인지"를 알 수 없기 때문이다.
+    """
+    now = now or time.time()
+    # 🔑 파일 읽기는 CTL_LOCK **밖**에서 한다. 이 락은 10Hz 조종 POST 가
+    #    지나가는 길이라 디스크 I/O 를 넣으면 데드맨(0.4s)에 영향을 줄 수 있다.
+    ack_pct, ack_age = _read_power_ack(now)
+    with CTL_LOCK:
+        owner, exp = CTL["drive_owner"], CTL["owner_expires"]
+        active = owner is not None and now < exp
+        commanded = CTL["power_pct"]
+        # 🆕 동기 판정 — **두 조건이 모두** 필요하다.
+        #    ① 값이 같다        : 명령 == 기기
+        #    ② 회신이 신선하다  : 값이 같아도 회신이 늙었으면 그건 '동기'가
+        #       아니라 '옛날에 동기였던 흔적'이다. 노드가 죽은 채 우연히
+        #       같은 값이 남아 있는 경우를 참으로 만들면 안 된다.
+        synced = (ack_pct is not None
+                  and ack_age is not None
+                  and ack_pct == commanded
+                  and ack_age <= POWER_ACK_FRESH_S)
+        return {
+            "power_pct": commanded,
+            # 🆕 아래 3개는 **추가**다. 기존 필드는 하나도 건드리지 않았다 —
+            #    index.html 이 t,v,w,reason,v_max,w_max,stop_m,patrol_running,
+            #    power_pct,owner,owner_active,owner_since,lease_left,you_own 를 쓴다.
+            "power_pct_actual": ack_pct,                       # int | null
+            "power_ack_age": (round(ack_age, 2)
+                              if ack_age is not None else None),  # float | null
+            "power_synced": synced,                            # bool
+            "owner": _mask(owner) if active else None,
+            "owner_active": active,
+            "owner_since": CTL["owner_since"] if active else None,
+            "lease_left": round(max(0.0, exp - now), 2) if active else 0.0,
+            "you_own": bool(active and client_id and owner == client_id),
+        }
 
 
 def _set(path, value):
@@ -455,12 +605,28 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/drive":
             # 조종 상태 조회 (teleop_node 가 쓴 것). 없으면 미실행이다.
+            # 🆕 여기에 제어권·출력제한을 **얹기만** 한다.
+            #    기존 필드(t,v,w,reason,v_max,w_max,stop_m,patrol_running)는
+            #    index.html 이 전부 쓰므로 하나도 건드리지 않는다.
+            client_id = (parse_qs(request.query).get("client_id") or [None])[0]
+            extra = _ctl_snapshot(client_id)
             try:
                 with open(DRIVE_STATUS_FILE) as f:
                     body = f.read()
             except OSError:
+                # 🆕 503 본문에도 제어권 정보를 넣는다. teleop 이 죽어 있어도
+                #    "누가 잡고 있는지"는 여전히 서버가 아는 사실이다.
                 return self._json({"error": "teleop_node 가 실행 중이 아닙니다",
-                                   "hint": "python3 teleop_node.py"}, 503)
+                                   "hint": "python3 teleop_node.py", **extra}, 503)
+            try:
+                merged = json.loads(body)
+                if not isinstance(merged, dict):
+                    raise ValueError("dict 가 아님")
+                merged.update(extra)
+                body = json.dumps(merged, ensure_ascii=False)
+            except (ValueError, TypeError):
+                # 파일이 깨졌으면 **원문 그대로** 흘려보낸다. 진단을 가리지 않는다.
+                pass
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body.encode())))
@@ -525,7 +691,7 @@ class Handler(BaseHTTPRequestHandler):
            검사를 다시 한다. 방어를 한 곳에 몰지 않는다.
         """
         path = self.path.split("?")[0]
-        if path != "/api/drive":
+        if path not in ("/api/drive", "/api/power"):
             return self._json({"error": "not found"}, 404)
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -534,6 +700,21 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(n).decode("utf-8"))
         except (ValueError, OSError) as exc:
             return self._json({"error": f"본문 파싱 실패: {exc}"}, 400)
+
+        # client_id 가 없으면 "anon" 한 명으로 취급한다. curl 로 두드리는 구형
+        # 호출을 400 으로 끊지 않으면서도, 익명끼리는 **서로 경쟁하지 않는다**
+        # (각 요청에 새 id 를 붙이면 익명 요청이 자기 자신에게 409 를 낸다).
+        client_id = str(data.get("client_id") or "anon")[:64]
+
+        if path == "/api/power":
+            return self._power(client_id, data)
+
+        # ── 조종 리스 ───────────────────────────────────────────────
+        # 🔴 거절이면 **파일에 쓰지 않는다.** 여기서 쓰면 남의 조종을 덮어써
+        #    로봇이 두 사람 명령을 번갈아 받는다 — 배타 제어의 존재 이유가 사라진다.
+        granted, deny = _lease_acquire(client_id)
+        if not granted:
+            return self._json(deny, 409)
 
         try:
             v = max(-DRIVE_V_MAX, min(DRIVE_V_MAX, float(data.get("v", 0.0))))
@@ -556,7 +737,36 @@ class Handler(BaseHTTPRequestHandler):
         #    상태로 오해해 `reason` 이 사라진다 — 실제로 그 버그가 났다.
         #    받아들인 명령을 `accepted` 안에 넣어 **상태가 아님을 형태로 표시**한다.
         return self._json({"ok": True, "accepted": cmd,
-                           "note": "상태는 GET /api/drive 로 따로 조회할 것"})
+                           "note": "상태는 GET /api/drive 로 따로 조회할 것",
+                           **_ctl_snapshot(client_id)})
+
+    def _power(self, client_id, data):
+        """🆕 출력 제한(펌웨어 duty_max) 설정. **제어권자만.**
+
+        조종과 같은 리스를 쓴다. 아무도 안 잡고 있으면 요청자가 잡고(그래서
+        조종 전에도 슬라이더를 쓸 수 있다), 남이 잡고 있으면 409 다.
+        — 별도 리스를 두면 "조종은 A, 출력은 B" 같은 상태가 생겨
+          A 가 달리는 도중 B 가 duty 를 0 으로 내릴 수 있다.
+        """
+        granted, deny = _lease_acquire(client_id)
+        if not granted:
+            return self._json(deny, 409)
+        try:
+            pct = int(round(float(data.get("pct"))))
+        except (TypeError, ValueError):
+            return self._json({"error": "pct 는 숫자여야 합니다"}, 400)
+        pct = max(0, min(100, pct))          # 0~100 으로 잘라 넣는다
+
+        with CTL_LOCK:
+            changed = pct != CTL["power_pct"]
+            CTL["power_pct"] = pct
+        if changed:
+            try:
+                _write_power_file(pct)
+            except OSError as exc:
+                return self._json({"error": f"출력 파일 쓰기 실패: {exc}"}, 500)
+        return self._json({"ok": True, "pct": pct, "changed": changed,
+                           **_ctl_snapshot(client_id)})
 
     # ── WebSocket ────────────────────────────────────────────
     def _websocket(self):
@@ -656,6 +866,16 @@ def main():
     ap.add_argument("--host", default="127.0.0.1",
                     help="기본은 루프백. 터널로만 노출하므로 외부 바인딩은 하지 않는다")
     args = ap.parse_args()
+
+    # 🆕 기동하자마자 출력 제한 파일을 한 번 쓴다.
+    #    esp32_base_node 와 **기동 순서에 무관**하게 값이 맞도록 하기 위해서다.
+    #    노드가 먼저 떠 있으면 다음 1Hz 틱에서 이 값을 집어 펌웨어에 밀어 넣고,
+    #    나중에 뜨면 첫 틱에서 집는다. 어느 쪽이든 화면과 펌웨어가 일치한다.
+    try:
+        _write_power_file(CTL["power_pct"])
+        print(f"출력 제한 기본값 {CTL['power_pct']}% → {POWER_FILE}")
+    except OSError as exc:
+        print(f"출력 제한 파일 쓰기 실패(무시하고 계속): {exc}")
 
     for fn in (collect_tegrastats, collect_slow, collect_ros_topics,
                collect_scan_hz, collect_esp32):
