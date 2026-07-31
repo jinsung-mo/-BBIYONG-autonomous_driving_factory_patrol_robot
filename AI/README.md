@@ -173,6 +173,30 @@ holdout into model development. Use `--comparison-split val` for exploratory
 runs where test-set access is inappropriate. The extra baseline evaluation can
 be disabled for a quick memory-only pilot with `--no-eval-before-train`.
 
+### Fine-tune a D-Fire checkpoint on FASDD-CV
+
+Use `--init-checkpoint` with a D-Fire `best.pt` to start a new FASDD-CV run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\train.py `
+  --data data\fasdd_cv\data.yaml `
+  --init-checkpoint artifacts\runs\<dfire-run>\weights\best.pt `
+  --epochs 100 `
+  --batch 8 `
+  --device 0 `
+  --comparison-split val `
+  --name fasdd-dfire-finetune
+```
+
+The checkpoint must store the BBIYONG class contract `0: smoke, 1: fire`.
+Before training, the wrapper validates the FASDD dataset and checkpoint class
+order. With the default `--eval-before-train`, it also records the D-Fire
+checkpoint's baseline metrics on FASDD validation data before the first
+fine-tuning update.
+
+Do not use `--resume` to change datasets. `--resume` is only for continuing an
+interrupted run from `last.pt` with that run's original dataset and options.
+
 Train all project candidates sequentially:
 
 ```powershell

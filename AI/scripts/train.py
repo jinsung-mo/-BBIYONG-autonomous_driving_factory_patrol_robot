@@ -15,6 +15,7 @@ from training_progress import attach_progress_callbacks
 AI_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROJECT = AI_ROOT / "artifacts" / "runs"
 SUPPORTED_MODELS = ("yolo11n.pt", "yolo11s.pt", "yolo26n.pt", "yolo26s.pt")
+EXPECTED_CLASSES = ["smoke", "fire"]
 AUGMENTATION_PRESETS = {
     "fire-smoke": {
         "degrees": 5.0,
@@ -58,7 +59,18 @@ AUGMENTATION_PRESETS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a BBIYONG fire/smoke detector")
     parser.add_argument("--data", default=str(AI_ROOT / "data" / "fire_smoke" / "data.yaml"))
-    parser.add_argument("--model", choices=SUPPORTED_MODELS, default="yolo11n.pt")
+    initialization = parser.add_mutually_exclusive_group()
+    initialization.add_argument("--model", choices=SUPPORTED_MODELS, default="yolo11n.pt")
+    initialization.add_argument(
+        "--init-checkpoint",
+        type=Path,
+        help="D-Fire best.pt used to initialize a new fine-tuning run",
+    )
+    initialization.add_argument(
+        "--resume",
+        type=Path,
+        help="last.pt from an interrupted run; restores that run's original configuration",
+    )
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=8)
@@ -102,7 +114,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--project", type=Path, default=DEFAULT_PROJECT)
     parser.add_argument("--name", help="Run name; defaults to the checkpoint stem")
-    parser.add_argument("--resume", type=Path, help="Path to last.pt from an interrupted run")
     return parser.parse_args()
 
 
@@ -114,6 +125,43 @@ def resolve_device(requested: str) -> str:
 
 def augmentation_args(preset: str) -> dict[str, float]:
     return dict(AUGMENTATION_PRESETS[preset])
+
+
+def normalized_model_names(model: YOLO) -> list[str]:
+    names = model.names
+    if isinstance(names, dict):
+        return [str(names[index]).strip().lower() for index in range(len(names))]
+    return [str(name).strip().lower() for name in names]
+
+
+def validate_checkpoint_classes(model: YOLO) -> list[str]:
+    names = normalized_model_names(model)
+    if names != EXPECTED_CLASSES:
+        raise SystemExit(
+            f"Initialization checkpoint has classes {names}; expected {EXPECTED_CLASSES}"
+        )
+    return names
+
+
+def resolve_initial_weights(
+    model_name: str,
+    init_checkpoint: Path | None,
+) -> tuple[str, str, bool]:
+    if init_checkpoint is None:
+        return model_name, Path(model_name).stem, False
+
+    checkpoint = init_checkpoint.expanduser().resolve()
+    if not checkpoint.is_file():
+        raise SystemExit(f"Initialization checkpoint does not exist: {checkpoint}")
+    if checkpoint.suffix.lower() != ".pt":
+        raise SystemExit(f"Initialization checkpoint must be a .pt file: {checkpoint}")
+
+    source_run_name = (
+        checkpoint.parent.parent.name
+        if checkpoint.parent.name.lower() == "weights"
+        else checkpoint.stem
+    )
+    return str(checkpoint), f"{source_run_name}-finetune", True
 
 
 def main() -> int:
@@ -151,7 +199,13 @@ def main() -> int:
     if device != "cpu" and not torch.cuda.is_available():
         raise SystemExit("A CUDA device was requested, but CUDA is unavailable")
 
-    model = YOLO(args.model)
+    initial_weights, default_run_name, custom_checkpoint = resolve_initial_weights(
+        args.model,
+        args.init_checkpoint,
+    )
+    model = YOLO(initial_weights)
+    if custom_checkpoint:
+        validate_checkpoint_classes(model)
     attach_progress_callbacks(model)
     if args.eval_before_train:
         attach_before_after_evaluation(
@@ -179,7 +233,7 @@ def main() -> int:
         "amp": True,
         "plots": True,
         "project": str(args.project.resolve()),
-        "name": args.name or Path(args.model).stem,
+        "name": args.name or default_run_name,
         "exist_ok": False,
         **augmentation_args(args.augment_preset),
     }
@@ -191,6 +245,7 @@ def main() -> int:
                 "augment_preset": args.augment_preset,
                 "eval_before_train": args.eval_before_train,
                 "comparison_split": args.comparison_split,
+                "initial_weights": initial_weights,
             },
             sort_keys=True,
             ensure_ascii=False,
