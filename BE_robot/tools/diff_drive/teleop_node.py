@@ -22,7 +22,10 @@
      실제로 충돌을 막는다. 회전은 허용한다(빠져나와야 하므로).
      STOP_M 안쪽에 이미 들어와 있으면, **완전 정차 + 조작 중립 통과** 후에
      ESCAPE_V 저속 탈출을 허용한다 — 갇히지 않게.
-  ⑤ **순찰 동시실행 거부** — patrol.py 도 /cmd_vel 을 낸다. 둘이 같이 쏘면
+  ⑤ **회전 우선 배분** — 직진과 회전을 같이 명령하면 그 순간의 v_ceil(도달 가능
+     속도 천장) 안에서 최대한 타이트하게 돈다. 고정 반경을 두지 않는다 — 속도를
+     희생해서 방향을 먼저 돌리되, 얼마나 희생할지는 실측 능력에 맡긴다.
+  ⑥ **순찰 동시실행 거부** — patrol.py 도 /cmd_vel 을 낸다. 둘이 같이 쏘면
      서로 다른 명령이 번갈아 나가 예측 불가능해진다. 순찰이 돌면 수동을 막는다
 
 명령 파일 형식 (server.py 가 POST /api/drive 로 받아 쓴다)
@@ -96,6 +99,21 @@ STOPPED_V = 0.02         # m/s odom 실측이 이보다 느리면 멈춘 것으�
 STOPPED_S = 0.4          # s 그 상태가 이만큼 유지되면 "완전 정차"
 ODOM_STALE_S = 1.0       # s odom 이 이보다 끊기면 명령값 기준으로 폴백한다
 
+# ── 회전 우선 배분 (2026-07-30 신설, 2026-07-30 고정반경 → 동적으로 교체) ──
+#  🔴 첫 버전은 고정 반경 TURN_R_MAX=0.45m 였다(|v| ≤ |w|×0.45).
+#  사용자 지적대로 **틀린 설계였다** — 출력을 올려 실제로 더 타이트하게 돌 수
+#  있을 때도 0.45m 가 상한으로 눌러버리고, 출력이 약해 0.45m 도 못 낼 때는
+#  계속 그 반경을 요구했다. 방향이 반대인 두 경우 모두에서 틀렸다.
+#  → 고정 반경을 버리고 **그 순간 낼 수 있는 최선의 회전**을 한다: 회피가
+#  실측으로 추정해 둔 v_ceil(도달 가능한 속도 천장)을 그대로 써서,
+#  "빠른 쪽 바퀴가 v_ceil 을 넘지 않는 한도"까지만 v 를 허용한다.
+#    half = 0.5 × TRACK_M × w        (좌우 목표 차이의 절반, 아래 tick() 참조)
+#    cap  = max(0, v_ceil − half)    (빠른 쪽 바퀴 목표 = v+half 가 v_ceil 이하)
+#  출력을 올리면 v_ceil 이 올라가 자동으로 더 타이트하게 돌고, 출력이 약하면
+#  자동으로 완만해진다 — 상수를 안 둬도 된다.
+TRACK_M = 0.2091         # m 윤거. 🔴 정본은 esp32_base_node 의 track_width_m 이다.
+                         #   새 차체(윤거 ~310mm)로 옮기면 **여기도 같이 고쳐야 한다.**
+
 
 class Teleop(Node):
     def __init__(self, cmd_file):
@@ -115,6 +133,7 @@ class Teleop(Node):
         self.still_t0 = None          # 멈춰 있기 시작한 시각
         self.escape_armed = False     # 정차 후 "제어권 반환" 래치
         self.block_head = None        # 막힌 방향(0=앞, π=뒤). 중립일 때도 계속 본다
+        self.v_ceil = V_MAX           # 추정한 도달 가능 속도 천장
         self.create_timer(1.0 / RATE_HZ, self.tick)
         self.create_timer(2.0, self.check_patrol)
         self.get_logger().info(
@@ -213,7 +232,9 @@ class Teleop(Node):
         near = None                   # 진행 방향 최근접 거리 (m)
         v_allow = None                # 제동 곡선이 허용한 상한 (m/s)
         escaping = False              # 탈출 모드로 움직이는 중인가
+        turn_cut = False              # 회전 우선 때문에 v 를 깎았나
         brake_cut = False             # 제동 곡선 때문에 v 를 깎았나
+        reason_soft = False           # reason 이 정보성인가(안전 사유면 덮어쓰지 않는다)
         hard = True                   # 즉시 0 (비상). 정상 명령이면 아래에서 해제된다
         coast_a = None                # 목표 0 으로 슬루할 때 쓸 감속도 (데드맨용)
         c = self.read_cmd()
@@ -235,6 +256,18 @@ class Teleop(Node):
             w = max(-W_MAX, min(W_MAX, float(c.get("w", 0.0))))
             neutral = abs(v) < 1e-3
             is_stopped = self.stopped(now)
+
+            # ① 회전 우선 — 고정 반경이 아니라 **그 순간 낼 수 있는 최선의 회전**.
+            #    v_ceil(도달 가능 속도 천장)을 그대로 써서, 빠른 쪽 바퀴 목표(v+half)가
+            #    v_ceil 을 넘지 않는 한도까지만 v 를 허용한다. 출력을 올리면 v_ceil 이
+            #    올라가 자동으로 타이트해지고, 출력이 약하면 자동으로 완만해진다 —
+            #    고정 상수를 안 둔다.
+            if abs(w) > 1e-3 and not neutral:
+                half = 0.5 * TRACK_M * abs(w)
+                cap = max(0.0, self.v_ceil - half)
+                if abs(v) > cap:
+                    v = math.copysign(cap, v)
+                    turn_cut = True
 
             # 진행 방향 최근접점. 중립일 때도 **직전에 막혔던 쪽**을 계속 본다 —
             # 안 보면 손을 뗀 순간 blocked 가 풀려 탈출 래치를 걸 수 없다.
@@ -281,6 +314,11 @@ class Teleop(Node):
             elif brake_cut:
                 reason = (f"제동 곡선 — {where} {near * 100:.0f}cm · "
                           f"v ≤ {v_allow:.2f}m/s")
+            elif turn_cut:
+                r = abs(v) / abs(w) if abs(w) > 1e-6 else float("inf")
+                reason = (f"회전 우선 — v ≤ {abs(v):.2f}m/s "
+                          f"(반경 {r:.2f}m · 천장 {self.v_ceil:.2f}m/s)")
+                reason_soft = True
 
             if not reason:
                 reason = "주행 중" if (abs(v) > 1e-3 or abs(w) > 1e-3) else "정지"
@@ -335,9 +373,11 @@ class Teleop(Node):
               # 아래는 2026-07-30 신설 — "왜 느려졌는지"를 화면에 보이게 한다
               "near": round(near, 3) if near is not None else None,
               "v_allow": round(v_allow, 3) if v_allow is not None else None,
-              "brake": brake_cut, "escape": escaping,
+              "brake": brake_cut, "turn_cut": turn_cut, "escape": escaping,
               "escape_armed": self.escape_armed, "deadman_coast": coast_a is not None,
+              "turn_radius": round(abs(v) / abs(w), 3) if abs(w) > 1e-6 else None,
               "a_dec": A_DEC, "react_s": REACT_S,
+              "v_ceil": round(self.v_ceil, 3),
               "odom_v": round(self.odom_v, 3) if self.odom_fresh(now) else None}
         self.pub_status.publish(String(data=json.dumps(st)))
         tmp = STATUS_FILE + ".tmp"
