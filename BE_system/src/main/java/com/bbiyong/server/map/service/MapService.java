@@ -44,6 +44,7 @@ public class MapService {
         artifact.setOriginY(meta.originY());
         artifact.setOriginYaw(meta.originYaw());
         artifact.setFileSizeBytes(file.getSize());
+        artifact.setKind("RAW");
         artifact.setCreatedAt(Instant.now());
         return MapResponses.RegisterResult.of(mapRepository.save(artifact));
     }

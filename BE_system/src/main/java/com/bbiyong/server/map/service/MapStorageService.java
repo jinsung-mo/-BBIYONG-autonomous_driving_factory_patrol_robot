@@ -51,6 +51,27 @@ public class MapStorageService {
         return baseDir.relativize(target).toString().replace('\\', '/');
     }
 
+    /** 생성한 이미지 바이트를 저장하고 상대 경로를 반환한다(도면 산출물 등). */
+    public String storeBytes(byte[] data, String prefix, String ext) {
+        if (data == null || data.length == 0) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "저장할 데이터가 비어 있습니다.");
+        }
+        String suffix = (ext != null && ext.matches("\\.[A-Za-z0-9]{1,10}")) ? ext.toLowerCase() : "";
+        String fileName = UUID.randomUUID() + suffix;
+        Path dir = (prefix == null || prefix.isBlank()) ? baseDir : baseDir.resolve(sanitize(prefix));
+        Path target = dir.resolve(fileName).normalize();
+        if (!target.startsWith(baseDir)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 저장 경로입니다.");
+        }
+        try {
+            Files.createDirectories(target.getParent());
+            Files.write(target, data);
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "도면 파일 저장에 실패했습니다.", e);
+        }
+        return baseDir.relativize(target).toString().replace('\\', '/');
+    }
+
     public Resource load(String relativePath) {
         if (relativePath == null || relativePath.isBlank()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "파일 경로가 없습니다.");
