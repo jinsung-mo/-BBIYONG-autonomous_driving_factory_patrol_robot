@@ -24,6 +24,10 @@ public final class WaypointResponses {
         return list.stream().map(Item::of).toList();
     }
 
+    /** 순찰 경로 = 순서 있는 지점(waypoint)들의 집합. (S15P11E101-520) */
+    public record Route(String robotId, int count, List<Item> waypoints) {
+    }
+
     /** 로봇 경로 하달(apply) 결과. delivered=false 는 로봇 미연결(DB는 저장돼 있음). */
     public record ApplyResult(String status, boolean delivered, int count) {
     }
