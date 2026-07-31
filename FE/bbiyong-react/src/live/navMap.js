@@ -71,11 +71,34 @@ export function fitCanvas(cv) {
   return { g: cv.getContext('2d'), resized }
 }
 
+// 화면 픽셀 → map 프레임 미터 (S15P11E101-514).
+// drawNav 의 sx/sy 를 그대로 뒤집는다. heading-up 일 때는 캔버스가 로봇 화면 위치를 축으로
+// (yaw - 90°) 만큼 돌아가 있으므로, 클릭 지점을 같은 축에서 반대로 돌린 뒤 환산한다.
+export function canvasToWorld(view, nav, headingUp, px, py) {
+  let x = px, y = py
+  if (headingUp && nav?.pose) {
+    const cx = view.x + nav.pose.x * view.s
+    const cy = view.y - nav.pose.y * view.s
+    const a = -(nav.pose.yaw - Math.PI / 2)
+    const dx = px - cx, dy = py - cy
+    x = cx + dx * Math.cos(a) - dy * Math.sin(a)
+    y = cy + dx * Math.sin(a) + dy * Math.cos(a)
+  }
+  return { x: (x - view.x) / view.s, y: (view.y - y) / view.s }
+}
+
+// 맵 경계 안쪽인지. 맵 밖을 찍으면 로봇이 갈 수 없는 좌표가 저장된다.
+export function insideMap(m, x, y) {
+  if (!m) return false
+  return x >= m.ox && y >= m.oy && x <= m.ox + m.w * m.res && y <= m.oy + m.h * m.res
+}
+
 // 맵 + 궤적 + 스캔 + 로봇 — nav.html 그대로
 //
 // headingUp: 로봇 진행 방향이 항상 위를 향하도록 화면을 돌린다(주행 시 방향 감각 유지).
 // 끄면 북향(+y 위) 고정 — ROS map 프레임 그대로다.
-export function drawNav(g, cv, nav, view, headingUp = false) {
+// route: 순찰 경로(S15P11E101-514). [{x, y, name}] 순서대로 선으로 잇고 번호를 붙인다.
+export function drawNav(g, cv, nav, view, headingUp = false, route = null) {
   g.fillStyle = '#15171c'
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
@@ -123,6 +146,27 @@ export function drawNav(g, cv, nav, view, headingUp = false) {
       const a = p.yaw + s.angle_min + i * s.angle_inc
       g.fillRect(sx(p.x + r * Math.cos(a)) - 1, sy(p.y + r * Math.sin(a)) - 1, 2, 2)
     }
+  }
+
+  // 순찰 경로 — 지나갈 순서를 선으로 잇고 각 지점에 번호를 붙인다.
+  // 로봇 마커보다 먼저 그려 로봇이 지점 위에 있어도 가려지지 않게 한다.
+  if (route && route.length) {
+    if (route.length > 1) {
+      g.strokeStyle = 'rgba(61,220,151,0.55)'; g.lineWidth = 2; g.setLineDash([6, 4])
+      g.beginPath(); g.moveTo(sx(route[0].x), sy(route[0].y))
+      for (const w of route) g.lineTo(sx(w.x), sy(w.y))
+      g.stroke(); g.setLineDash([])
+    }
+    route.forEach((w, i) => {
+      const X = sx(w.x), Y = sy(w.y)
+      g.fillStyle = '#3ddc97'
+      g.beginPath(); g.arc(X, Y, 9, 0, Math.PI * 2); g.fill()
+      g.fillStyle = '#0b0d11'
+      g.font = 'bold 11px system-ui, sans-serif'
+      g.textAlign = 'center'; g.textBaseline = 'middle'
+      g.fillText(String(i + 1), X, Y + 0.5)
+    })
+    g.textAlign = 'start'; g.textBaseline = 'alphabetic'
   }
 
   // 로봇 마커 (점 + 방향 화살표) — pose 는 TF 미확보 시 없을 수 있다
