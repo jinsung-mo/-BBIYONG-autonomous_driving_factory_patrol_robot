@@ -80,6 +80,18 @@ public class EventLogService {
         return eventLogRepository.save(event);
     }
 
+    /**
+     * 이벤트(경보) 이력 삭제. 테스트/더미로 유입된 이벤트 정리용. 미존재 시 404.
+     * 연관 영상(video_clips.event_id)은 유지되며 참조만 남는다.
+     */
+    @Transactional
+    public void delete(Long eventId) {
+        if (!eventLogRepository.existsById(eventId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다.");
+        }
+        eventLogRepository.deleteById(eventId);
+    }
+
     @Transactional(readOnly = true)
     public EventPageResponse getEvents(int page, int size, String type) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"));

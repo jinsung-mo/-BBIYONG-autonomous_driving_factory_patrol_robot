@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -242,5 +243,22 @@ public class EventController {
             @Parameter(description = "조회할 일수", example = "7")
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(eventStatsService.getStatsByType(days));
+    }
+
+    @Operation(
+            summary = "이벤트(경보) 삭제",
+            description = "테스트/더미 이벤트를 삭제합니다. 해당 ID가 없으면 404.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "삭제 성공"),
+            @ApiResponse(responseCode = "404", description = "해당 ID의 이벤트를 찾을 수 없음")
+    })
+    @DeleteMapping("/{eventId}")
+    public ResponseEntity<Void> delete(
+            @Parameter(description = "이벤트 ID", example = "1")
+            @PathVariable Long eventId) {
+        eventLogService.delete(eventId);
+        return ResponseEntity.noContent().build();
     }
 }
