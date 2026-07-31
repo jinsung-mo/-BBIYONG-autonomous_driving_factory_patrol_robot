@@ -567,8 +567,19 @@ class Esp32Base(Node):
         v = max(-self.max_lin, min(self.max_lin, msg.linear.x))
         w = max(-self.max_ang, min(self.max_ang, msg.angular.z))
         half = 0.5 * self.track * w
+
+        req_l = v - half
+        req_r = v + half
+
+        # Saturation Scaling: preserve turning radius if physical limit is exceeded
+        max_req = max(abs(req_l), abs(req_r))
+        if max_req > self.max_lin:
+            scale = self.max_lin / max_req
+            req_l *= scale
+            req_r *= scale
+
         with self.lock:
-            self.tgt_l, self.tgt_r = v - half, v + half
+            self.tgt_l, self.tgt_r = req_l, req_r
             self.last_cmd_t = time.time()
 
     # ── 시리얼 수신 → 오도메트리 적분 ───────────────────────────────
