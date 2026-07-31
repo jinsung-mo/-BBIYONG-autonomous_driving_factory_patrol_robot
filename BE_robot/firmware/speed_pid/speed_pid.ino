@@ -115,7 +115,7 @@ float feedforward(float target) {
   return d + (target > 0 ? tun.ff_dead : -tun.ff_dead);
 }
 
-void controlWheel(Wheel &w, bool left, float dt) {
+void controlWheel(Wheel &w, bool left, float dt, float eff_target) {
   int64_t c = countNorm(left);
   float raw = (float)(c - w.prev_count) * MM_PER_COUNT / 1000.0f / dt;
   w.prev_count = c;
@@ -123,12 +123,12 @@ void controlWheel(Wheel &w, bool left, float dt) {
 
   if (mode != MODE_VELOCITY) return;
 
-  float err = w.target - w.v;
-  float ff = feedforward(w.target);
+  float err = eff_target - w.v;
+  float ff = feedforward(eff_target);
   float p = tun.kp * err;
 
   // 적분 — 목표 0이면 크리프 방지를 위해 비운다
-  if (fabsf(w.target) < 1e-4f) {
+  if (fabsf(eff_target) < 1e-4f) {
     w.integ = 0.0f;
   } else {
     float cand = w.integ + tun.ki * err * dt;
@@ -241,8 +241,25 @@ void loop() {
   if (now - lastCtrlMs >= CTRL_MS) {
     float dt = (now - lastCtrlMs) / 1000.0f;
     lastCtrlMs = now;
-    controlWheel(wl, true,  dt);
-    controlWheel(wr, false, dt);
+
+    float eff_tgt_l = wl.target;
+    float eff_tgt_r = wr.target;
+
+    if (mode == MODE_VELOCITY) {
+      float err_l = wl.target - wl.v;
+      float err_r = wr.target - wr.v;
+
+      // 하향평준화 피드백 제어 (Cross-coupled downward leveling)
+      // 전진/후진 가속 및 제동(감속) 상황을 모두 포함하기 위해, 단순히 에러의 양/음수로 구분한다.
+      if (err_r > err_l && err_r > 0.0f) eff_tgt_l -= (err_r - max(err_l, 0.0f));
+      else if (err_l > err_r && err_l > 0.0f) eff_tgt_r -= (err_l - max(err_r, 0.0f));
+
+      if (err_r < err_l && err_r < 0.0f) eff_tgt_l -= (err_r - min(err_l, 0.0f));
+      else if (err_l < err_r && err_l < 0.0f) eff_tgt_r -= (err_l - min(err_r, 0.0f));
+    }
+
+    controlWheel(wl, true,  dt, eff_tgt_l);
+    controlWheel(wr, false, dt, eff_tgt_r);
 
     // 데드맨 — 명령이 끊기면 정지. 오픈루프는 벤치 작업용이라 5초로 관대하게.
     uint32_t limit = (mode == MODE_VELOCITY) ? deadman_ms : 5000;
