@@ -102,7 +102,9 @@ class Esp32Base(Node):
         #    · 스핀+법선각 212.4        … 제자리회전 스크럽으로 카운트가 부풂(상한)
         #    · **odom vs 라이다 209.1** … 가장 직접적. 이 값으로 회전오차 1.6%→~0
         #    odom_check.py 로 언제든 재검증 가능.
-        self.declare_parameter("track_width_m", 0.2091)
+        # [수정 2026-07-31] 7월 29일 차체 수평 복원으로 바퀴-바닥 기하학 변경 반영 (0.2091 -> 0.2130)
+        # 윤거가 실효적으로 넓어짐을 보정해 파란 점 뒤로 밀림 현상 방지
+        self.declare_parameter("track_width_m", 0.2130)
         # 🔴 0.30 → 1.00 (2026-07-27 사용자 결정). 이 파일의 다른 변경과 달리
         #    **이것은 실제로 거동을 바꾼다** — 게인 전송·주행로그 tee 는
         #    "파라미터를 안 건드리면 지금과 100% 같다"가 안전 근거였지만,
@@ -141,7 +143,8 @@ class Esp32Base(Node):
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("laser_frame", "laser_frame")
         # [실측 2026-07-26] 제자리 회전 중 벽거리 사인파 적합. 2회 평균.
-        self.declare_parameter("laser_x", 0.0597)
+        # [수정 2026-07-31] 7월 29일 차체 수평 복원(재조립)으로 인한 라이다 수평 투영 거리 축소 반영 (0.0597 -> 0.0550)
+        self.declare_parameter("laser_x", 0.0550)
         self.declare_parameter("laser_y", -0.0051)
         # The LiDAR is mounted facing backward. Preserve the measured +4.31 deg
         # mounting correction, then add 180 deg:
