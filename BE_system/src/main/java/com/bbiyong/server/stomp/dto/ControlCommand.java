@@ -15,7 +15,7 @@ public class ControlCommand {
     @JsonProperty("robot_id")
     private String robotId;
 
-    private String command; // DRIVE | SET_MODE | ESTOP | NAVIGATE | SAVE_MAP | START_MAPPING
+    private String command; // DRIVE | SET_MODE | ESTOP | NAVIGATE | SAVE_MAP | START_MAPPING | STOP_MAPPING | CAMERA_TILT
 
     // DRIVE
     private Double linear;
@@ -34,4 +34,7 @@ public class ControlCommand {
 
     // SAVE_MAP
     private String name;
+
+    // CAMERA_TILT (전면 카메라 상하 각도, 절대각 degrees)
+    private Double tilt;
 }
