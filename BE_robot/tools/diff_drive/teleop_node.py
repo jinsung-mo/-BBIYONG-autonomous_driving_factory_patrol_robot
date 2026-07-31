@@ -16,7 +16,7 @@
      감속**한다. 핫스팟 시연에서 패킷이 자주 끊겨 매번 울컥이던 것을 없앤다.
      비활성(armed=false)·순찰 차단은 그대로 즉시 0 이다.
   ③ **속도 상한** — 조종자는 카메라 한 대로만 보므로 사각이 크다. 보수적으로 잡는다
-  ④ **운동학적 제동 가드** — 진행 방향 최근접거리에서 "반응거리 + 제동거리" 를 계산해
+  ④ **운동학 제동 가드** — 진행 방향 최근접거리에서 "반응거리 + 제동거리" 를 계산해
      **STOP_M 에서 정확히 멈출 속도까지만** 허용한다(brake_limit). 종전처럼 문턱
      안에 들어와서야 0 으로 끊지 않으므로 부드럽고, 데드맨 지연이 식에 포함돼
      실제로 충돌을 막는다. 회전은 허용한다(빠져나와야 하므로).
@@ -58,9 +58,10 @@ V_MAX = 1.00             # m/s — 2026-07-27 0.15 → 0.50 → 1.00 상향 (사
                          #   한쪽만 올리면 낮은 쪽이 이겨 아무 변화가 없다(실제로 겪었다).
                          #   참고: 모터 정격 531rpm · 유효지름 62.29mm → 이론 최대 약 1.73 m/s.
                          #   1.00 은 그 58%다. duty_max=80 제약으로 실제 도달치는 더 낮을 수 있다.
-                         #   ⚠️ 0.4s 데드맨 동안 1.0 m/s 면 40cm 를 더 간다 — 라이다 가드
-                         #   STOP_M=0.35 보다 크다. 즉 **가드는 이 속도에서 제동을 보장하지 못한다.**
-                         #   사람이 보고 있다는 전제로 운용한다(사용자 판단 2026-07-27).
+                         #   ✅ 2026-07-30: 종전 주석의 *"0.4s 데드맨 동안 40cm 를 더 가므로
+                         #   가드는 이 속도에서 제동을 보장하지 못한다"* 는 **해소됐다.**
+                         #   brake_limit() 이 반응거리(REACT_S)를 식 안에 품고 있어
+                         #   V_MAX 는 이제 "충분히 트였을 때만 도달하는 값"이다.
 W_MAX = 0.60             # rad/s
 CONE_DEG = 40.0
 
@@ -77,6 +78,9 @@ CONE_DEG = 40.0
 A_ACC = 0.50             # m/s² 가속 상한. 종전 V_MAX/RAMP_S = 1.00/2.0 과 같은 기울기다
                          #   → 톡 누르면 안 가고 꾹 누르면 급발진하던 것을 막는 효과는 유지된다
 A_DEC = 0.50             # m/s² 감속·역방향 상한 (2026-07-30 사용자 요청: 0.3 → 0.5)
+                         #   🔴 brake_limit() 이 가정하는 감속도와 **같은 상수여야 한다.**
+                         #   다르면 곡선이 "0.16 으로 줄여라"라고 해도 리미터가 못 따라가
+                         #   제동 보장이 거짓이 된다.
 A_REL = 1.50             # m/s² 손을 뗐을 때(명령 중립)의 감속. A_DEC 보다 빨라야 한다 —
                          #   안전 계약 ②가 "버튼에서 손을 떼면 선다"이므로 0.5 로 두면
                          #   1.0 m/s 에서 2초·1m 를 더 간다. 그건 데드맨 정신에 어긋난다.
@@ -86,6 +90,9 @@ A_DEADMAN = 0.60         # m/s² **데드맨이 걸렸을 때**의 감속 (2026-
                          #   자주 끊겨 데드맨이 수시로 걸린다. 매번 0 으로 끊으면
                          #   그때마다 울컥인다. 부드럽게 세우고, 명령이 돌아오면
                          #   그 지점에서 다시 이어받는다.
+                         #   🔴 **A_DEADMAN ≥ A_DEC 이어야 한다.** brake_limit() 이
+                         #   A_DEC 로 제동거리를 계산하는데, 통신이 끊긴 상태의 실제
+                         #   감속이 그보다 느리면 충돌 보장이 깨진다. 0.60 ≥ 0.50 ✅
                          #   ⚠️ 비활성(armed=false)·순찰 차단은 여전히 **즉시 0** 이다 —
                          #   그건 통신 문제가 아니라 명시적 정지 의사표시다.
 
@@ -94,25 +101,23 @@ STOP_M = 0.30            # 여기서 **완전 정지**한다 (종전 0.35 = 전�
 REACT_S = 0.45           # 반응 지연 — 데드맨 0.4s + 통신·직렬 여유. 제동거리에 더한다
 ESCAPE_V = 0.08          # m/s STOP_M 안쪽에서 빠져나올 때의 속도 상한
 
-# ── 정차 확인 ───────────────────────────────────────────────────────────
-STOPPED_V = 0.02         # m/s odom 실측이 이보다 느리면 멈춘 것으로 본다
-STOPPED_S = 0.4          # s 그 상태가 이만큼 유지되면 "완전 정차"
-ODOM_STALE_S = 1.0       # s odom 이 이보다 끊기면 명령값 기준으로 폴백한다
-
 # ── 회전 우선 배분 (2026-07-30 신설, 2026-07-30 고정반경 → 동적으로 교체) ──
 #  🔴 첫 버전은 고정 반경 TURN_R_MAX=0.45m 였다(|v| ≤ |w|×0.45).
 #  사용자 지적대로 **틀린 설계였다** — 출력을 올려 실제로 더 타이트하게 돌 수
 #  있을 때도 0.45m 가 상한으로 눌러버리고, 출력이 약해 0.45m 도 못 낼 때는
 #  계속 그 반경을 요구했다. 방향이 반대인 두 경우 모두에서 틀렸다.
-#  → 고정 반경을 버리고 **그 순간 낼 수 있는 최선의 회전**을 한다: 회피가
-#  실측으로 추정해 둔 v_ceil(도달 가능한 속도 천장)을 그대로 써서,
+#  → 고정 반경을 버리고 **그 순간 낼 수 있는 최선의 회전**을 한다: ⑤ 포화
+#  회피가 실측으로 추정해 둔 v_ceil(도달 가능한 속도 천장)을 그대로 써서,
 #  "빠른 쪽 바퀴가 v_ceil 을 넘지 않는 한도"까지만 v 를 허용한다.
 #    half = 0.5 × TRACK_M × w        (좌우 목표 차이의 절반, 아래 tick() 참조)
 #    cap  = max(0, v_ceil − half)    (빠른 쪽 바퀴 목표 = v+half 가 v_ceil 이하)
 #  출력을 올리면 v_ceil 이 올라가 자동으로 더 타이트하게 돌고, 출력이 약하면
 #  자동으로 완만해진다 — 상수를 안 둬도 된다.
-TRACK_M = 0.2091         # m 윤거. 🔴 정본은 esp32_base_node 의 track_width_m 이다.
-                         #   새 차체(윤거 ~310mm)로 옮기면 **여기도 같이 고쳐야 한다.**
+
+# ── 정차 확인 ───────────────────────────────────────────────────────────
+STOPPED_V = 0.02         # m/s odom 실측이 이보다 느리면 멈춘 것으로 본다
+STOPPED_S = 0.4          # s 그 상태가 이만큼 유지되면 "완전 정차"
+ODOM_STALE_S = 1.0       # s odom 이 이보다 끊기면 명령값 기준으로 폴백한다
 
 # ── 포화 회피 (2026-07-30 신설) ─────────────────────────────────────────
 #  🔴 **이게 직진이 휘는 근본 원인이다.**
@@ -163,6 +168,8 @@ YAW_HOLD_V = 0.03        # m/s 이보다 빠를 때만 각도를 지킨다 (정�
 #     빠른 쪽 바퀴 목표 0.438 + 0.037 = 0.475 가 도달치(0.42)를 넘어 **포화**했다.
 #  → 천장에서 **조향에 쓸 몫을 미리 빼둔다.** 속도를 조금 더 포기하고 조향을 산다.
 #  ⚠️ YAW_W_MAX 를 올리는 것은 역효과다 — 예약이 더 필요해져 악화된다.
+TRACK_M = 0.2091         # m 윤거. 🔴 정본은 esp32_base_node 의 track_width_m 이다.
+                         #   새 차체(윤거 ~310mm)로 옮기면 **여기도 같이 고쳐야 한다.**
 STEER_RESERVE = 0.5 * TRACK_M * YAW_W_MAX * 1.35    # ≈ 0.049 m/s (35% 여유)
 
 
@@ -184,12 +191,15 @@ class Teleop(Node):
         self.yaw = None               # odom 실측 방위각 (rad)
         self.yaw_ref = None           # 직진 유지 기준각. None 이면 미체결
         self.yaw_i = 0.0              # 직진 유지 적분항
-        self.still_t0 = None          # 멈춰 있기 시작한 시각
-        self.escape_armed = False     # 정차 후 "제어권 반환" 래치
-        self.block_head = None        # 막힌 방향(0=앞, π=뒤). 중립일 때도 계속 본다
         self.v_ceil = V_MAX           # 추정한 도달 가능 속도 천장
         self.sat_t = 0.0              # 포화 판정 최종 시각
         self.v_meas_ref = 0.0         # 그 시점의 실측 속도 (상승 여부 비교용)
+        self.still_t0 = None          # 멈춰 있기 시작한 시각
+        self.escape_armed = False     # 정차 후 "제어권 반환" 래치
+        self.block_head = None        # 막힌 방향(0=앞, π=뒤). 중립일 때도 계속 본다
+        # 🆕 직진 유지(yaw_hold) 끄고 켜기 — 펌웨어 단독 보정만 검증할 때 쓴다.
+        #    재시작 없이 `ros2 param set /teleop_bridge yaw_hold_enabled false` 로 즉시 반영.
+        self.declare_parameter("yaw_hold_enabled", True)
         self.create_timer(1.0 / RATE_HZ, self.tick)
         self.create_timer(2.0, self.check_patrol)
         self.get_logger().info(
@@ -320,10 +330,10 @@ class Teleop(Node):
             is_stopped = self.stopped(now)
 
             # ① 회전 우선 — 고정 반경이 아니라 **그 순간 낼 수 있는 최선의 회전**.
-            #    v_ceil(도달 가능 속도 천장)을 그대로 써서, 빠른 쪽 바퀴 목표(v+half)가
-            #    v_ceil 을 넘지 않는 한도까지만 v 를 허용한다. 출력을 올리면 v_ceil 이
-            #    올라가 자동으로 타이트해지고, 출력이 약하면 자동으로 완만해진다 —
-            #    고정 상수를 안 둔다.
+            #    v_ceil(⑤ 가 실측으로 추정해 둔 도달 가능 속도 천장)을 그대로 써서,
+            #    빠른 쪽 바퀴 목표(v+half)가 v_ceil 을 넘지 않는 한도까지만 v 를 허용한다.
+            #    출력을 올리면 v_ceil 이 올라가 자동으로 타이트해지고, 출력이 약하면
+            #    자동으로 완만해진다 — 고정 상수를 안 둔다.
             if abs(w) > 1e-3 and not neutral:
                 half = 0.5 * TRACK_M * abs(w)
                 cap = max(0.0, self.v_ceil - half)
@@ -331,8 +341,8 @@ class Teleop(Node):
                     v = math.copysign(cap, v)
                     turn_cut = True
 
-            # 진행 방향 최근접점. 중립일 때도 **직전에 막혔던 쪽**을 계속 본다 —
-            # 안 보면 손을 뗀 순간 blocked 가 풀려 탈출 래치를 걸 수 없다.
+            # ② 진행 방향 최근접점. 중립일 때도 **직전에 막혔던 쪽**을 계속 본다 —
+            #    안 보면 손을 뗀 순간 blocked 가 풀려 탈출 래치를 걸 수 없다.
             head = None
             if not neutral:
                 head = 0.0 if v > 0 else math.pi
@@ -345,11 +355,11 @@ class Teleop(Node):
                 where = "정면" if abs(bear) < 5 else (
                     f"{'좌' if bear > 0 else '우'}{abs(bear):.0f}°")
 
-            # 탈출 래치 — 막혀서 섰다면 조작이 **중립을 한 번 통과한 뒤**에
-            # 저속 탈출을 허용한다. 중립 통과를 요구하는 이유: 없으면
-            # 0.30m 에서 멈춘 채 버튼을 계속 누르고 있을 때 허용이 열려
-            # 8cm/s 로 벽에 계속 파고든다. 손을 뗐다 다시 누르는 것이
-            # "제어권을 넘겨받는" 행위다.
+            # ③ 탈출 래치 — 막혀서 섰다면 조작이 **중립을 한 번 통과한 뒤**에
+            #    저속 탈출을 허용한다. 중립 통과를 요구하는 이유: 없으면
+            #    0.30m 에서 멈춘 채 버튼을 계속 누르고 있을 때 허용이 열려
+            #    8cm/s 로 벽에 계속 파고든다. 손을 뗐다 다시 누르는 것이
+            #    "제어권을 넘겨받는" 행위다.
             blocked = near is not None and near < STOP_M
             self.block_head = head if blocked else None
             if blocked and neutral and is_stopped:
@@ -357,7 +367,7 @@ class Teleop(Node):
             elif not blocked:
                 self.escape_armed = False
 
-            # 운동학 제동 — 충돌하지 않을 속도까지만 허용한다.
+            # ④ 운동학 제동 — 충돌하지 않을 속도까지만 허용한다.
             if near is not None:
                 v_allow = self.brake_limit(near)
                 if blocked and self.escape_armed:
@@ -367,7 +377,8 @@ class Teleop(Node):
                     brake_cut = True
 
             # ⑤ 포화 회피 — 도달 가능한 천장을 추정해 그 아래에 머문다.
-            #    이게 없으면 duty 상한에 양쪽이 동시에 붙어 조향 권한이 사라진다.
+            #    이게 없으면 duty 상한에 양쪽이 동시에 붙어 조향 권한이 사라지고,
+            #    아래 ⑦ 직진 유지 보정이 **전혀 듣지 않는다.**
             #    🔴 가속 중에는 못 따라오는 게 정상이다 — 그때 천장을 내리면 출발도
             #    못 한다. 그래서 "못 따라온다" 만으로 판정하지 않고 **실측이 더는
             #    오르지 않는지**까지 본다. 둘이 동시면 그게 포화다.
@@ -409,11 +420,11 @@ class Teleop(Node):
                           f"(실측 {abs(self.odom_v):.2f} · 출력 상한에 걸려 있다)")
                 reason_soft = True
 
-        # 슬루 리미터 — 목표까지 가속도 상한 안에서만 움직인다. 부호 전환이
-        # 반드시 0 을 통과하므로 후진↔전진 급전환이 직진 감속과 **같은 경로**를
-        # 탄다. 이게 울컥임의 해법이다.
-        # 비상 경로(비활성·순찰·명령없음)는 슬루하지 않고 즉시 0 이다 —
-        # "버튼에서 손을 떼면 선다"는 안전 계약을 지연시켜선 안 된다.
+        # ⑥ 슬루 리미터 — 목표까지 가속도 상한 안에서만 움직인다. 부호 전환이
+        #    반드시 0 을 통과하므로 후진↔전진 급전환이 직진 감속과 **같은 경로**를
+        #    탄다. 이게 울컥임의 해법이다.
+        #    비상 경로(데드맨·비활성·순찰)는 슬루하지 않고 즉시 0 이다 —
+        #    "버튼에서 손을 떼면 선다"는 안전 계약을 지연시켜선 안 된다.
         if hard:
             self.v_out = 0.0
             self.sat_t, self.v_meas_ref = 0.0, 0.0
@@ -441,7 +452,8 @@ class Teleop(Node):
         #    조종자가 회전을 명령하면 기준각을 버린다 — 놓아줘야 돌 수 있다.
         if (not hard and coast_a is None and abs(w) < 1e-3
                 and abs(v) > YAW_HOLD_V
-                and self.yaw is not None and self.odom_fresh(now)):
+                and self.yaw is not None and self.odom_fresh(now)
+                and self.get_parameter("yaw_hold_enabled").value):
             if self.yaw_ref is None:
                 self.yaw_ref, self.yaw_i = self.yaw, 0.0
             d = self.yaw_ref - self.yaw
@@ -484,6 +496,8 @@ class Teleop(Node):
         if reason != self.last_reason:
             self.last_reason = reason
             self.get_logger().info(f"[{reason}] v={v:.3f} w={w:.3f}")
+        # v_max·w_max·stop_m 은 대시보드가 읽어 쓴다(index.html drvVec / renderDrive).
+        # 키 이름을 바꾸면 화면이 폴백값 0.15 로 떨어진다 — 건드리지 말 것.
         st = {"t": now, "v": v, "w": w, "reason": reason,
               "v_max": V_MAX, "w_max": W_MAX, "stop_m": STOP_M,
               "patrol_running": now - self.patrol_seen < 5.0,
