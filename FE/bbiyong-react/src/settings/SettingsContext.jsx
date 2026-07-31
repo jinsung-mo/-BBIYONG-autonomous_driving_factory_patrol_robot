@@ -1,5 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { ROBOT_V_MAX } from '../live/config.js'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { ROBOT_V_MAX, ROBOT_W_MAX, getDataSource } from '../live/config.js'
+import { getDriveSpeed } from '../live/driveSpeed.js'
+import { useAuth } from '../auth/AuthContext.jsx'
 
 // 운영 설정 (S15P11E101-475 설정 탭).
 //
@@ -15,7 +17,8 @@ const KEY = 'bbiyong.settings'
 // 시뮬은 격자를 쓰지만 worldToCell 로 환산하면 되고, 실서버 NAVIGATE 는 미터가 정답이라
 // 저장값을 미터로 두는 편이 나중에 어긋나지 않는다.
 export const DEFAULT_SETTINGS = {
-  vMax: ROBOT_V_MAX,      // 주행 속도 상한 (m/s) — S15P11E101-463
+  vMax: ROBOT_V_MAX,      // 선속도 상한 (m/s) — S15P11E101-463
+  wMax: ROBOT_W_MAX,      // 각속도 상한 (rad/s) — S15P11E101-515
   tempWarn: 52,           // 열화상 주의 (℃)
   tempCritical: 60,       // 열화상 임계 (℃)
   points: [
@@ -50,6 +53,9 @@ export function useSettings() {
 
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(read)
+  const { accessToken } = useAuth()
+  // 서버 상한을 한 번이라도 받았는지. 못 받았으면 화면에서 "로컬 기본값"임을 밝힌다.
+  const [driveSynced, setDriveSynced] = useState(false)
 
   const update = useCallback((patch) => {
     setSettings((prev) => {
@@ -59,11 +65,33 @@ export function SettingsProvider({ children }) {
     })
   }, [])
 
+  // 주행 상한은 서버가 정답이다(S15P11E101-515). 다른 관리자가 바꾼 값을 이 브라우저도 따라야
+  // 하므로, 로그인 직후 한 번 받아 온다 — 설정 탭에 들어가야만 반영되면 그 전까지의 주행이
+  // 예전 상한으로 나간다.
+  const synced = useRef(false)
+  useEffect(() => {
+    if (!accessToken || getDataSource() !== 'live') { synced.current = false; setDriveSynced(false); return undefined }
+    if (synced.current) return undefined
+    let alive = true
+    getDriveSpeed(accessToken)
+      .then((r) => {
+        if (!alive) return
+        const vMax = Number(r?.maxLinear), wMax = Number(r?.maxAngular)
+        if (!(vMax > 0) || !(wMax > 0)) return
+        synced.current = true
+        setDriveSynced(true)
+        update({ vMax, wMax })
+      })
+      // 조회 실패는 조용히 넘긴다 — 저장된 값(또는 기본값)으로 계속 동작한다.
+      .catch(() => {})
+    return () => { alive = false }
+  }, [accessToken, update])
+
   const reset = useCallback(() => {
     try { localStorage.removeItem(KEY) } catch { /* 무시 */ }
     setSettings(DEFAULT_SETTINGS)
   }, [])
 
-  const value = useMemo(() => ({ settings, update, reset }), [settings, update, reset])
+  const value = useMemo(() => ({ settings, update, reset, driveSynced }), [settings, update, reset, driveSynced])
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }

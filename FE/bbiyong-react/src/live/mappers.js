@@ -122,7 +122,8 @@ export function clampDriveSpeed(v, vMax = ROBOT_V_MAX) {
 
 // 선속도 배율을 각속도에 그대로 쓰면 안 된다 — 로봇 상한이 서로 다르다(V / W).
 // 슬라이더가 상한의 몇 %인지를 각속도 상한에 같은 비율로 적용한다.
-export const angularFor = (speed, vMax = ROBOT_V_MAX) => r2((speed / vMax) * ROBOT_W_MAX)
+// 각속도 상한도 서버 설정을 따른다(S15P11E101-515) — env 값은 서버 값이 없을 때의 기본값이다.
+export const angularFor = (speed, vMax = ROBOT_V_MAX, wMax = ROBOT_W_MAX) => r2((speed / vMax) * wMax)
 
 // 기본 주행 속도 — LiveContext 의 초기값
 export const DEFAULT_DRIVE_SPEED = speedParams().def

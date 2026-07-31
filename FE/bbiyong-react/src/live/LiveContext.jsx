@@ -39,6 +39,9 @@ export function LiveProvider({ children }) {
   const { settings } = useSettings()
   const vMaxRef = useRef(settings.vMax)
   vMaxRef.current = settings.vMax
+  // 각속도 상한도 서버 설정을 따른다(S15P11E101-515)
+  const wMaxRef = useRef(settings.wMax)
+  wMaxRef.current = settings.wMax
   const [dataSource, setDataSourceState] = useState(getDataSource)
   const enabled = dataSource === 'live'
 
@@ -257,7 +260,7 @@ export function LiveProvider({ children }) {
       drive: (linear, angular) => send('/app/control/drive', {
         command: 'DRIVE',
         linear: r2(linear * speedRef.current),
-        angular: r2(angular * angularFor(speedRef.current, vMaxRef.current)),
+        angular: r2(angular * angularFor(speedRef.current, vMaxRef.current, wMaxRef.current)),
       }),
       stop: () => send('/app/control/drive', { command: 'DRIVE', linear: 0, angular: 0 }),
       // mode: autonomy | manual | disabled 만 유효
