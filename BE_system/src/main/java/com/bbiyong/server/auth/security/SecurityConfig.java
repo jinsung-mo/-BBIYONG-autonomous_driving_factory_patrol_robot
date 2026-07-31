@@ -2,6 +2,7 @@ package com.bbiyong.server.auth.security;
 
 import com.bbiyong.server.auth.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -37,6 +38,10 @@ public class SecurityConfig {
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
 
+    /** 로봇/게이트웨이 업로드 전용 토큰. 비면 업로드도 JWT 필수(안전 기본값). */
+    @Value("${bbiyong.robot.upload-token:}")
+    private String robotUploadToken;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -61,7 +66,10 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
-                        UsernamePasswordAuthenticationFilter.class);
+                        UsernamePasswordAuthenticationFilter.class)
+                // 업로드 경로 한정 로봇 토큰 인증(JWT 필터보다 먼저 시도)
+                .addFilterBefore(new RobotUploadTokenFilter(robotUploadToken),
+                        JwtAuthenticationFilter.class);
 
         return http.build();
     }
