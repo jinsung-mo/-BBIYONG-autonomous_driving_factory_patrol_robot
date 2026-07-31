@@ -24,7 +24,7 @@ Spring Boot 백엔드는 REST API, STOMP WebSocket, 로봇 WSS 연결을 제공�
 | `GET` | `/api/maps` · `/api/maps/latest` · `/api/maps/{id}` · `/{id}/image` | 맵 목록/최신/상세/이미지 서빙 |
 | `GET/PUT` | `/api/maps/active` · `/api/maps/{id}/active` | 활성 맵 조회 / 지정(단일 활성) |
 | `DELETE` | `/api/events/{eventId}` | 이벤트(경보) 삭제 — 테스트/더미 정리(없으면 404) |
-| `GET/POST/PUT/DELETE` | `/api/waypoints` · `/api/waypoints/apply` | 순찰 지점 CRUD·일괄교체 / 로봇 하달(`SET_PATROL_ROUTE`) |
+| `GET/PUT/POST/DELETE` | `/api/patrol-route` · `/points` · `/points/{id}` · `/apply` | **순찰 경로**(=순서 있는 지점) 조회/교체 + 지점 추가/삭제 / 로봇 하달(`SET_PATROL_ROUTE`). `/api/waypoints`(509)는 동일 데이터 호환 |
 | `GET/PUT` | `/api/settings/drive-speed` | 주행 속도 상한 조회/설정(→`SET_MAX_SPEED` 중계) |
 
 ### 주요 요청 예시

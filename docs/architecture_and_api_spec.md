@@ -267,7 +267,7 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 | MVP | **GET** | `/api/maps/{id}/image` | 맵 이미지 바이트 서빙 | None | (image/*) |
 | MVP | **GET/PUT** | `/api/maps/active` · `/api/maps/{id}/active` | 활성 맵 조회 / 지정(단일 활성) (S15P11E101-482) | None | `{"id":"<uuid>","active":true}` |
 | MVP | **DELETE** | `/api/events/{eventId}` | 이벤트(경보) 삭제 — 테스트/더미 정리. 없으면 404 (S15P11E101-511) | None | 204 |
-| MVP | **GET/POST/PUT/DELETE** | `/api/waypoints` (`/apply`) | 순찰 지점 CRUD·일괄교체 및 로봇 하달(`apply`→`SET_PATROL_ROUTE`). 좌표는 미터/월드 (S15P11E101-509) | `{"x":8.5,"y":3.1,"yaw":0.0,"name":"panel_A"}` | `[{"id":"<uuid>","x":8.5,"y":3.1,"seq":0}]` |
+| MVP | **GET/PUT/POST/DELETE** | `/api/patrol-route` (`/points`, `/points/{id}`, `/apply`) | **순찰 경로(=순서 있는 지점)** 조회/교체 + 지점 추가/삭제 + 로봇 하달(`apply`→`SET_PATROL_ROUTE`). 좌표는 미터/월드. `/api/waypoints`(509)는 동일 데이터 호환 (S15P11E101-509·520) | `{"waypoints":[{"x":8.5,"y":3.1,"yaw":0.0,"name":"panel_A"}]}` | `{"robotId":"orinka_01","count":1,"waypoints":[{"id":"<uuid>","x":8.5,"y":3.1,"seq":0}]}` |
 | MVP | **GET/PUT** | `/api/settings/drive-speed` | 주행 속도 상한 조회/설정(→`SET_MAX_SPEED` 중계) (S15P11E101-512) | `{"maxLinear":0.5,"maxAngular":0.5}` | `{"maxLinear":0.5,"maxAngular":0.5,"delivered":true}` |
 
 > **인증**: 회원가입/로그인은 이메일 기반. **JWT 인증·인가 필터 적용됨(S15P11E101-401)** — `/api/auth/**` 공개, 그 외 `/api/**`는 `Authorization: Bearer <JWT>` 필수(미인증 401). STOMP CONNECT도 JWT 필수(S15P11E101-418).
