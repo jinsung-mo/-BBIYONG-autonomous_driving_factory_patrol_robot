@@ -16,8 +16,12 @@
      감속**한다. 핫스팟 시연에서 패킷이 자주 끊겨 매번 울컥이던 것을 없앤다.
      비활성(armed=false)·순찰 차단은 그대로 즉시 0 이다.
   ③ **속도 상한** — 조종자는 카메라 한 대로만 보므로 사각이 크다. 보수적으로 잡는다
-  ④ **라이다 충돌 가드** — 진행 방향 STOP_M 안에 뭔가 있으면 그 방향 성분을 죽인다.
-     회전은 허용한다(빠져나와야 하므로)
+  ④ **운동학적 제동 가드** — 진행 방향 최근접거리에서 "반응거리 + 제동거리" 를 계산해
+     **STOP_M 에서 정확히 멈출 속도까지만** 허용한다(brake_limit). 종전처럼 문턱
+     안에 들어와서야 0 으로 끊지 않으므로 부드럽고, 데드맨 지연이 식에 포함돼
+     실제로 충돌을 막는다. 회전은 허용한다(빠져나와야 하므로).
+     STOP_M 안쪽에 이미 들어와 있으면, **완전 정차 + 조작 중립 통과** 후에
+     ESCAPE_V 저속 탈출을 허용한다 — 갇히지 않게.
   ⑤ **순찰 동시실행 거부** — patrol.py 도 /cmd_vel 을 낸다. 둘이 같이 쏘면
      서로 다른 명령이 번갈아 나가 예측 불가능해진다. 순찰이 돌면 수동을 막는다
 
@@ -35,6 +39,7 @@ import time
 import numpy as np
 import rclpy
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
@@ -54,7 +59,6 @@ V_MAX = 1.00             # m/s — 2026-07-27 0.15 → 0.50 → 1.00 상향 (사
                          #   STOP_M=0.35 보다 크다. 즉 **가드는 이 속도에서 제동을 보장하지 못한다.**
                          #   사람이 보고 있다는 전제로 운용한다(사용자 판단 2026-07-27).
 W_MAX = 0.60             # rad/s
-STOP_M = 0.35            # 진행 방향 이 안쪽이면 전진 성분 차단
 CONE_DEG = 40.0
 
 # ── 가감속 (2026-07-30 신설) ──────────────────────────────────────────────
@@ -82,6 +86,16 @@ A_DEADMAN = 0.60         # m/s² **데드맨이 걸렸을 때**의 감속 (2026-
                          #   ⚠️ 비활성(armed=false)·순찰 차단은 여전히 **즉시 0** 이다 —
                          #   그건 통신 문제가 아니라 명시적 정지 의사표시다.
 
+# ── 충돌 회피 제동 (2026-07-30 신설) ─────────────────────────────────────
+STOP_M = 0.30            # 여기서 **완전 정지**한다 (종전 0.35 = 전진 성분 즉시 차단)
+REACT_S = 0.45           # 반응 지연 — 데드맨 0.4s + 통신·직렬 여유. 제동거리에 더한다
+ESCAPE_V = 0.08          # m/s STOP_M 안쪽에서 빠져나올 때의 속도 상한
+
+# ── 정차 확인 ───────────────────────────────────────────────────────────
+STOPPED_V = 0.02         # m/s odom 실측이 이보다 느리면 멈춘 것으로 본다
+STOPPED_S = 0.4          # s 그 상태가 이만큼 유지되면 "완전 정차"
+ODOM_STALE_S = 1.0       # s odom 이 이보다 끊기면 명령값 기준으로 폴백한다
+
 
 class Teleop(Node):
     def __init__(self, cmd_file):
@@ -89,12 +103,18 @@ class Teleop(Node):
         self.cmd_file = cmd_file
         self.scan = None
         self.create_subscription(LaserScan, "/scan", self._scan, qos_profile_sensor_data)
+        self.create_subscription(Odometry, "/odom", self._odom, 10)
         self.pub = self.create_publisher(Twist, "/cmd_vel", 10)
         self.pub_status = self.create_publisher(String, "/teleop/status", 10)
         self.last_reason = ""
         self.stop_frames = 0
         self.patrol_seen = 0.0
         self.v_out = 0.0              # 실제로 내보낸 선속도 — 슬루 리미터의 상태
+        self.odom_t = None            # odom 최종 수신 시각
+        self.odom_v = 0.0             # odom 실측 선속도
+        self.still_t0 = None          # 멈춰 있기 시작한 시각
+        self.escape_armed = False     # 정차 후 "제어권 반환" 래치
+        self.block_head = None        # 막힌 방향(0=앞, π=뒤). 중립일 때도 계속 본다
         self.create_timer(1.0 / RATE_HZ, self.tick)
         self.create_timer(2.0, self.check_patrol)
         self.get_logger().info(
@@ -103,6 +123,48 @@ class Teleop(Node):
 
     def _scan(self, m):
         self.scan = m
+
+    def _odom(self, m):
+        self.odom_t = time.time()
+        self.odom_v = float(m.twist.twist.linear.x)
+
+    def odom_fresh(self, now):
+        return self.odom_t is not None and now - self.odom_t < ODOM_STALE_S
+
+    def brake_limit(self, d):
+        """장애물이 d[m] 앞에 있을 때 허용할 최대 속도(m/s).
+
+        "반응거리 + 제동거리 ≤ 여유거리" 를 v 로 푼 것이다.
+
+            v·REACT_S  +  v² / (2·A_DEC)  ≤  d − STOP_M
+
+        REACT_S 를 식 안에 품는 것이 핵심이다. 종전 가드는 "STOP_M 안에
+        들어오면 v=0" 이라 **데드맨 0.4초 동안 40cm 를 더 가는 만큼을
+        계산에 넣지 못했다**(V_MAX 주석이 그 구멍을 인정하고 있었다).
+
+        🔴 여기서 쓰는 A_DEC 은 슬루 리미터의 A_DEC 과 **같은 상수여야 한다.**
+        """
+        avail = d - STOP_M
+        if avail <= 0.0:
+            return 0.0
+        aT = A_DEC * REACT_S
+        return math.sqrt(aT * aT + 2.0 * A_DEC * avail) - aT
+
+    def stopped(self, now):
+        """완전 정차 판정 — odom 실측이 있으면 그것을, 없으면 명령값을 쓴다.
+
+        "정차 후에 제어권을 넘긴다"는 요구는 **실제로 섰는지**를 알아야
+        성립한다. 명령이 0 인 것과 차가 선 것은 다르다(관성·PID 잔류).
+        """
+        moving = abs(self.v_out) > 1e-3
+        if self.odom_fresh(now):
+            moving = moving or abs(self.odom_v) > STOPPED_V
+        if moving:
+            self.still_t0 = None
+            return False
+        if self.still_t0 is None:
+            self.still_t0 = now
+        return (now - self.still_t0) >= STOPPED_S
 
     def check_patrol(self):
         """patrol.py 가 돌면 수동을 막는다 — 같은 토픽을 두 곳에서 쏘면 안 된다."""
@@ -148,6 +210,10 @@ class Teleop(Node):
     def tick(self):
         v = w = 0.0
         reason = ""
+        near = None                   # 진행 방향 최근접 거리 (m)
+        v_allow = None                # 제동 곡선이 허용한 상한 (m/s)
+        escaping = False              # 탈출 모드로 움직이는 중인가
+        brake_cut = False             # 제동 곡선 때문에 v 를 깎았나
         hard = True                   # 즉시 0 (비상). 정상 명령이면 아래에서 해제된다
         coast_a = None                # 목표 0 으로 슬루할 때 쓸 감속도 (데드맨용)
         c = self.read_cmd()
@@ -167,19 +233,55 @@ class Teleop(Node):
             hard = False
             v = max(-V_MAX, min(V_MAX, float(c.get("v", 0.0))))
             w = max(-W_MAX, min(W_MAX, float(c.get("w", 0.0))))
+            neutral = abs(v) < 1e-3
+            is_stopped = self.stopped(now)
 
-            # 라이다 가드: 진행 방향이 막혔으면 그 성분만 죽인다. 회전은 살린다
-            # (막힌 데서 빠져나오려면 돌 수 있어야 한다).
-            if abs(v) > 1e-3:
-                heading = 0.0 if v > 0 else math.pi
-                hit = self.cone_min(heading)
-                if hit is not None and hit[0] < STOP_M:
-                    near, bear = hit
-                    where = "정면" if abs(bear) < 5 else (
-                        f"{'좌' if bear > 0 else '우'}{abs(bear):.0f}°")
-                    reason = (f"라이다 가드 — {'전진' if v > 0 else '후진'} "
-                              f"{where} {near * 100:.0f}cm")
-                    v = 0.0
+            # 진행 방향 최근접점. 중립일 때도 **직전에 막혔던 쪽**을 계속 본다 —
+            # 안 보면 손을 뗀 순간 blocked 가 풀려 탈출 래치를 걸 수 없다.
+            head = None
+            if not neutral:
+                head = 0.0 if v > 0 else math.pi
+            elif self.block_head is not None:
+                head = self.block_head
+            hit = self.cone_min(head) if head is not None else None
+            where = ""
+            if hit is not None:
+                near, bear = hit
+                where = "정면" if abs(bear) < 5 else (
+                    f"{'좌' if bear > 0 else '우'}{abs(bear):.0f}°")
+
+            # 탈출 래치 — 막혀서 섰다면 조작이 **중립을 한 번 통과한 뒤**에
+            # 저속 탈출을 허용한다. 중립 통과를 요구하는 이유: 없으면
+            # 0.30m 에서 멈춘 채 버튼을 계속 누르고 있을 때 허용이 열려
+            # 8cm/s 로 벽에 계속 파고든다. 손을 뗐다 다시 누르는 것이
+            # "제어권을 넘겨받는" 행위다.
+            blocked = near is not None and near < STOP_M
+            self.block_head = head if blocked else None
+            if blocked and neutral and is_stopped:
+                self.escape_armed = True
+            elif not blocked:
+                self.escape_armed = False
+
+            # 운동학 제동 — 충돌하지 않을 속도까지만 허용한다.
+            if near is not None:
+                v_allow = self.brake_limit(near)
+                if blocked and self.escape_armed:
+                    v_allow, escaping = ESCAPE_V, True
+                if abs(v) > v_allow:
+                    v = math.copysign(v_allow, v)
+                    brake_cut = True
+
+            if escaping:
+                reason = (f"탈출 허용 — {where} {near * 100:.0f}cm · "
+                          f"{ESCAPE_V:.2f}m/s 상한")
+            elif blocked:
+                reason = (f"정차 — {where} {near * 100:.0f}cm · 손을 떼면 탈출 허용"
+                          if is_stopped else
+                          f"제동 — {where} {near * 100:.0f}cm")
+            elif brake_cut:
+                reason = (f"제동 곡선 — {where} {near * 100:.0f}cm · "
+                          f"v ≤ {v_allow:.2f}m/s")
+
             if not reason:
                 reason = "주행 중" if (abs(v) > 1e-3 or abs(w) > 1e-3) else "정지"
 
@@ -190,6 +292,9 @@ class Teleop(Node):
         # "버튼에서 손을 떼면 선다"는 안전 계약을 지연시켜선 안 된다.
         if hard:
             self.v_out = 0.0
+            self.still_t0 = None
+            self.escape_armed = False
+            self.block_head = None
         else:
             if coast_a is not None:
                 a = coast_a                     # 데드맨 — 끊지 않고 이 감속도로 세운다
@@ -226,7 +331,14 @@ class Teleop(Node):
             self.get_logger().info(f"[{reason}] v={v:.3f} w={w:.3f}")
         st = {"t": now, "v": v, "w": w, "reason": reason,
               "v_max": V_MAX, "w_max": W_MAX, "stop_m": STOP_M,
-              "patrol_running": now - self.patrol_seen < 5.0}
+              "patrol_running": now - self.patrol_seen < 5.0,
+              # 아래는 2026-07-30 신설 — "왜 느려졌는지"를 화면에 보이게 한다
+              "near": round(near, 3) if near is not None else None,
+              "v_allow": round(v_allow, 3) if v_allow is not None else None,
+              "brake": brake_cut, "escape": escaping,
+              "escape_armed": self.escape_armed, "deadman_coast": coast_a is not None,
+              "a_dec": A_DEC, "react_s": REACT_S,
+              "odom_v": round(self.odom_v, 3) if self.odom_fresh(now) else None}
         self.pub_status.publish(String(data=json.dumps(st)))
         tmp = STATUS_FILE + ".tmp"
         try:
