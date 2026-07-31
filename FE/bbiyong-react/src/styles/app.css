@@ -167,6 +167,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .logfilter button.on{background:#24466e; color:#dce9fb; border-color:#3a5a86;}
 .elog li .tag{margin-left:auto; font-size:9px; font-weight:700; color:var(--dk-sub);
   border:1px solid var(--dk-line); border-radius:4px; padding:1px 4px; align-self:center; white-space:nowrap;}
+/* 설비별 과열 임계 온도 (S15P11E101-525) */
+.eq-list{list-style:none; padding:0; margin:0;}
+.eq-list li{background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:9px;
+  padding:9px 11px; margin-bottom:8px;}
+.eq-head{display:flex; align-items:center; gap:8px; font-size:12.5px;}
+.eq-head .t{color:var(--dk-sub); font-size:10.5px;}
+.eq-head .tag{margin-left:auto; font-size:9.5px; font-weight:700; color:var(--dk-sub);
+  border:1px solid var(--dk-line); border-radius:4px; padding:1px 6px;}
+.eq-head .tag.ok{color:var(--dk-green); border-color:rgba(61,220,151,.5);}
+.eq-head .tag.heat{color:var(--dk-red); border-color:rgba(255,86,72,.5);}
+.eq-meta{font-size:10.5px; color:var(--dk-sub); margin-top:4px;}
+.eq-list .gotor{margin-top:7px;}
+.eq-list .gotor input{width:100%;}
+.eq-list .gotor .dbtn{padding:7px 12px; font-size:11.5px; white-space:nowrap;}
 /* 도면 ↔ 원본 격자 전환 (S15P11E101-524) — 방향 전환 버튼 옆에 나란히 */
 .mapview.mapkind{left:auto; right:10px; bottom:8px;}
 /* 카메라 상하 각도 (S15P11E101-521) — 수동 조작 패널 좌측 열, 주행 속도와 같은 배치 */
