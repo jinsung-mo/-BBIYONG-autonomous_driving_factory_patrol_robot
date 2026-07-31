@@ -114,6 +114,34 @@ ODOM_STALE_S = 1.0       # s odom 이 이보다 끊기면 명령값 기준으로
 TRACK_M = 0.2091         # m 윤거. 🔴 정본은 esp32_base_node 의 track_width_m 이다.
                          #   새 차체(윤거 ~310mm)로 옮기면 **여기도 같이 고쳐야 한다.**
 
+# ── 포화 회피 (2026-07-30 신설) ─────────────────────────────────────────
+#  🔴 **이게 직진이 휘는 근본 원인이다.**
+#  esp32_base_node 가 `duty_max:=30.0` 으로 도는데, duty 100% = 무부하 588rpm
+#  ≈ 1.92 m/s 이므로 v=1.00 에는 약 52% duty 가 필요하다. 즉 대시보드가 보내는
+#  V_MAX 는 **도달 불가능한 목표**다.
+#  양쪽 바퀴 목표(v ∓ half)가 둘 다 도달치를 넘으면 **좌우 PID 가 동시에 duty
+#  상한에 붙어 조향 권한을 완전히 잃는다.** 그 상태에서는 w 를 아무리 줘도
+#  좌우 차이가 안 생기고, §L 의 "우측 모터가 부하에서 약하다"가 그대로 드러나
+#  오른쪽으로 휜다. 회전 보정만 넣어도 안 듣는 이유가 이것이다.
+#  → **도달 가능한 속도 천장을 스스로 찾아 그 아래에 머문다.**
+#    ⚠️ 첫 시도(`V_HEADROOM = 실측 + 0.15`)는 틀렸다 — 실측보다 항상 앞선 목표를
+#    주면 추종오차가 영구히 남아 적분이 감기고 **여전히 포화한다.** 천장은
+#    도달치 *아래*여야 좌우 조절 여유가 생긴다.
+#    duty 텔레메트리를 안 쓰고 **추종오차만으로** 판정하므로, 출력 슬라이더를
+#    올리거나 바닥 마찰이 바뀌어도 알아서 따라간다.
+#  ⚠️ 2차 시도도 틀렸다 — "슬루가 목표에 도달했을 때만 판정" 게이트를 뒀는데
+#  제동 곡선이 v_allow 를 미세하게 흔들어 **거의 항상 '가속 중'으로 판정**됐다.
+#  실측: 천장이 1.0 → 0.864 에서 멈췄다(도달치는 약 0.4).
+#  → 가속 판별을 목표 추종이 아니라 **"실측 속도가 더 이상 오르는가"** 로 바꾼다.
+#    안 오르면서 못 따라오면 그게 포화다. 그때는 천천히 내리지 말고
+#    **실측 바로 아래로 즉시** 끌어내린다 — 못 내는 속도를 계속 명령할 이유가 없다.
+SAT_ERR = 0.04           # m/s 실제 보낸 값을 이보다 못 따라오면 못 따라오는 것이다
+SAT_WATCH_S = 0.4        # s 이 주기로 판정한다 (가속 여부를 보려면 시간 간격이 필요하다)
+SAT_RISE = 0.01          # m/s 이 주기에 이보다 덜 올랐으면 "더는 안 오른다"
+SAT_KEEP = 0.95          # 포화면 천장을 실측의 이 비율로 즉시 내린다
+SAT_UP = 0.08            # m/s² 천장 상승률 — 회복은 천천히(출력을 올리면 따라 오른다)
+V_CEIL_MIN = 0.06        # m/s 천장 하한. 아예 못 가게 되는 것을 막는다
+
 
 class Teleop(Node):
     def __init__(self, cmd_file):
@@ -134,6 +162,8 @@ class Teleop(Node):
         self.escape_armed = False     # 정차 후 "제어권 반환" 래치
         self.block_head = None        # 막힌 방향(0=앞, π=뒤). 중립일 때도 계속 본다
         self.v_ceil = V_MAX           # 추정한 도달 가능 속도 천장
+        self.sat_t = 0.0              # 포화 판정 최종 시각
+        self.v_meas_ref = 0.0         # 그 시점의 실측 속도 (상승 여부 비교용)
         self.create_timer(1.0 / RATE_HZ, self.tick)
         self.create_timer(2.0, self.check_patrol)
         self.get_logger().info(
@@ -234,6 +264,7 @@ class Teleop(Node):
         escaping = False              # 탈출 모드로 움직이는 중인가
         turn_cut = False              # 회전 우선 때문에 v 를 깎았나
         brake_cut = False             # 제동 곡선 때문에 v 를 깎았나
+        sat_cut = False               # duty 포화 회피 때문에 v 를 깎았나
         reason_soft = False           # reason 이 정보성인가(안전 사유면 덮어쓰지 않는다)
         hard = True                   # 즉시 0 (비상). 정상 명령이면 아래에서 해제된다
         coast_a = None                # 목표 0 으로 슬루할 때 쓸 감속도 (데드맨용)
@@ -304,6 +335,27 @@ class Teleop(Node):
                     v = math.copysign(v_allow, v)
                     brake_cut = True
 
+            # ⑤ 포화 회피 — 도달 가능한 천장을 추정해 그 아래에 머문다.
+            #    이게 없으면 duty 상한에 양쪽이 동시에 붙어 조향 권한이 사라진다.
+            #    🔴 가속 중에는 못 따라오는 게 정상이다 — 그때 천장을 내리면 출발도
+            #    못 한다. 그래서 "못 따라온다" 만으로 판정하지 않고 **실측이 더는
+            #    오르지 않는지**까지 본다. 둘이 동시면 그게 포화다.
+            if self.odom_fresh(now) and abs(v) > 1e-3:
+                if now - self.sat_t >= SAT_WATCH_S:
+                    meas = abs(self.odom_v)
+                    lagging = abs(self.v_out) - meas > SAT_ERR
+                    rising = meas - self.v_meas_ref > SAT_RISE
+                    if lagging and not rising:
+                        # 더 못 낸다. 천장을 실측 아래로 즉시 끌어내린다.
+                        self.v_ceil = max(V_CEIL_MIN, meas * SAT_KEEP)
+                    elif not lagging:
+                        self.v_ceil = min(V_MAX,
+                                          self.v_ceil + SAT_UP * SAT_WATCH_S)
+                    self.sat_t, self.v_meas_ref = now, meas
+                if abs(v) > self.v_ceil:
+                    v = math.copysign(self.v_ceil, v)
+                    sat_cut = True
+
             if escaping:
                 reason = (f"탈출 허용 — {where} {near * 100:.0f}cm · "
                           f"{ESCAPE_V:.2f}m/s 상한")
@@ -319,6 +371,10 @@ class Teleop(Node):
                 reason = (f"회전 우선 — v ≤ {abs(v):.2f}m/s "
                           f"(반경 {r:.2f}m · 천장 {self.v_ceil:.2f}m/s)")
                 reason_soft = True
+            elif sat_cut:
+                reason = (f"포화 회피 — 천장 {self.v_ceil:.2f}m/s "
+                          f"(실측 {abs(self.odom_v):.2f} · 출력 상한에 걸려 있다)")
+                reason_soft = True
 
             if not reason:
                 reason = "주행 중" if (abs(v) > 1e-3 or abs(w) > 1e-3) else "정지"
@@ -330,6 +386,7 @@ class Teleop(Node):
         # "버튼에서 손을 떼면 선다"는 안전 계약을 지연시켜선 안 된다.
         if hard:
             self.v_out = 0.0
+            self.sat_t, self.v_meas_ref = 0.0, 0.0
             self.still_t0 = None
             self.escape_armed = False
             self.block_head = None
@@ -377,6 +434,7 @@ class Teleop(Node):
               "escape_armed": self.escape_armed, "deadman_coast": coast_a is not None,
               "turn_radius": round(abs(v) / abs(w), 3) if abs(w) > 1e-6 else None,
               "a_dec": A_DEC, "react_s": REACT_S,
+              "sat_cut": sat_cut,
               "v_ceil": round(self.v_ceil, 3),
               "odom_v": round(self.odom_v, 3) if self.odom_fresh(now) else None}
         self.pub_status.publish(String(data=json.dumps(st)))
