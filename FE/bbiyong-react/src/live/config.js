@@ -49,12 +49,19 @@ export const cellToWorld = (c, r) => ({
 // 기본은 mock(로컬 시뮬레이션) — 설정 없이 받은 사람의 데모 동작이 바뀌지 않게 한다.
 // 런타임 토글(Nav 버튼)이 localStorage에 남아 env보다 우선한다.
 const SOURCE_KEY = 'bbiyong.dataSource'
-const DEFAULT_SOURCE = env.VITE_DATA_SOURCE === 'live' ? 'live' : 'mock'
+// S15P11E101-510 이 지정한 이름. 기존 키를 갈아엎지 않고 별칭으로 함께 읽고 쓴다 —
+// 이미 배포된 브라우저의 localStorage 와 팀이 쓰는 토글이 둘 다 살아 있어야 한다.
+const REAL_KEY = 'bbiyong.realBackend'
+
+const truthy = (v) => v === true || v === 'true' || v === '1'
+const DEFAULT_SOURCE = (env.VITE_DATA_SOURCE === 'live' || truthy(env.VITE_REAL_BACKEND)) ? 'live' : 'mock'
 
 export function getDataSource() {
   try {
     const saved = localStorage.getItem(SOURCE_KEY)
     if (saved === 'live' || saved === 'mock') return saved
+    const real = localStorage.getItem(REAL_KEY)
+    if (real !== null) return truthy(real) ? 'live' : 'mock'
   } catch {
     // localStorage 차단 환경 — env 기본값으로 진행
   }
@@ -62,5 +69,8 @@ export function getDataSource() {
 }
 
 export function saveDataSource(value) {
-  try { localStorage.setItem(SOURCE_KEY, value) } catch { /* 저장 실패는 무시 */ }
+  try {
+    localStorage.setItem(SOURCE_KEY, value)
+    localStorage.setItem(REAL_KEY, String(value === 'live'))
+  } catch { /* 저장 실패는 무시 */ }
 }

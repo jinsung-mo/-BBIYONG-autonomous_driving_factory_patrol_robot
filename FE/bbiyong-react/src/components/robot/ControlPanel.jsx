@@ -21,7 +21,7 @@ import CapBadge from './CapBadge.jsx'
 // 두 동작을 한 키에 토글로 얹는 것이 프로토콜과 그대로 맞는다.
 export default function ControlPanel() {
   const { status, activeKeys, actions } = useSim()
-  const { enabled, connected, control, telemetry, speed, setSpeed } = useLive()
+  const { enabled, connected, control, telemetry, speed, setSpeed, robotOnline } = useLive()
   const { settings } = useSettings()
   const { isAdmin } = useAuth()
   // 순찰 지점은 설정 탭에서 등록/편집한다(S15P11E101-475). 관제에서는 실행만 한다.
@@ -39,6 +39,11 @@ export default function ControlPanel() {
   const [seg, setSeg] = useState('patrol')
 
   const liveReady = enabled && connected
+
+  // 연결 배지 3단계. '서버에 붙었다'와 '로봇이 켜져 있다'를 한 문구로 뭉뚱그리면,
+  // 로봇이 꺼진 밤에도 LIVE 로 보여 조작자가 명령이 먹힌다고 오해한다.
+  const linkText = !connected ? 'DISCONNECTED' : (robotOnline === false ? '로봇 오프라인' : 'LIVE')
+  const linkColor = !connected ? '#f5a623' : (robotOnline === false ? '#f5a623' : '#3ddc97')
 
   // 로봇 주행 노드가 죽어 있으면 조작을 막는다 — 받을 쪽이 없는데 DRIVE 를 쏘면
   // 화면만 반응하고 로봇은 그대로라 조작자가 오해한다(S15P11E101-462).
@@ -174,8 +179,10 @@ export default function ControlPanel() {
     <div className="panel" id="pControl">
       <h3>
         순찰 로봇 수동 조작 패널 <span className="k">MANUAL CONTROL</span>
-        {enabled && <span className="k" style={{ marginLeft: 8, color: connected ? '#3ddc97' : '#f5a623' }}>
-          {connected ? 'LIVE' : 'DISCONNECTED'}
+        {/* 서버 연결과 로봇 가동은 다른 이야기다 — 로봇이 꺼져 있어도 STOMP 는 붙어 있다.
+            서버가 판정한 online(S15P11E101-510)이 false 면 그 사실을 따로 말한다. */}
+        {enabled && <span className="k" style={{ marginLeft: 8, color: linkColor }}>
+          {linkText}
         </span>}
         <CapBadge capKey={CAP_KEYS.drive} />
       </h3>
