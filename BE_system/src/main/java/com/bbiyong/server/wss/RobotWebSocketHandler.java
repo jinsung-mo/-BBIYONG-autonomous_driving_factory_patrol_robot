@@ -1,6 +1,7 @@
 package com.bbiyong.server.wss;
 
 import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
@@ -107,15 +108,23 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         log.info("WSS connection closed for session [{}] with status: {}", session.getId(), status);
-        sessionManager.unregisterBySessionId(session.getId());
+        String robotId = sessionManager.unregisterBySessionId(session.getId());
+        publishDisconnect(robotId);
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
         log.error("Transport error in WSS session [{}]: {}", session.getId(), exception.getMessage());
-        sessionManager.unregisterBySessionId(session.getId());
+        String robotId = sessionManager.unregisterBySessionId(session.getId());
         if (session.isOpen()) {
             session.close(CloseStatus.SERVER_ERROR);
+        }
+        publishDisconnect(robotId);
+    }
+
+    private void publishDisconnect(String robotId) {
+        if (robotId != null && !robotId.isBlank()) {
+            eventPublisher.publishEvent(new RobotDisconnectedEvent(this, robotId));
         }
     }
 }
