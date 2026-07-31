@@ -285,6 +285,39 @@ const py = map.heightPx - (worldY - map.originY) / map.resolution
 
 ---
 
+## 9. 순찰 지점 · 주행 속도 설정 · 이벤트 삭제 (REST)
+
+### 9.1 순찰 지점 (지도 클릭 → `/api/waypoints`, S15P11E101-509)
+2D 지도에서 클릭한 지점을 순찰 경로로 저장한다. **클릭 픽셀은 §8.4 역변환으로 미터/월드 좌표로 바꿔** 전송한다(BE는 이미 변환된 월드 좌표를 받는다).
+```js
+// 픽셀 → 월드(m)  (§8.4의 역변환)
+const worldX = map.originX + px * map.resolution
+const worldY = map.originY + (map.heightPx - py) * map.resolution
+
+await authedPost('/api/waypoints', { x: worldX, y: worldY, yaw: 0, name: '지점1' }, token) // 1개 추가
+await authedGet('/api/waypoints', token)                       // 순서대로 조회
+await authedPut('/api/waypoints', [ /* WaypointRequest[] */ ], token) // 경로 일괄 저장(교체)
+await authedDelete('/api/waypoints/{id}', token)               // 1개 삭제
+await authedPost('/api/waypoints/apply', {}, token)            // 로봇에 경로 하달(SET_PATROL_ROUTE)
+```
+- 응답 항목: `{id, robotId, name, x, y, yaw, seq, createdAt}` (seq=순찰 순서)
+- `apply` 응답: `{status, delivered, count}` — `delivered:false`면 로봇 미연결(저장은 유지, 재연결 후 재적용)
+
+### 9.2 주행 속도 상한 (설정 화면 → `/api/settings/drive-speed`, S15P11E101-512)
+```js
+await authedGet('/api/settings/drive-speed', token)   // { maxLinear, maxAngular } (미설정 시 0.5/0.5)
+await authedPut('/api/settings/drive-speed', { maxLinear: 0.4, maxAngular: 0.6 }, token) // 저장 + 로봇 반영
+```
+- FE는 DRIVE 발행 시 이 상한 안에서 `linear/angular`를 정하면 된다(로봇도 SET_MAX_SPEED로 상한을 알게 됨).
+
+### 9.3 이벤트 삭제 (`DELETE /api/events/{eventId}`, S15P11E101-511)
+테스트/더미 이벤트 정리용. `204`(성공)·`404`(없음).
+```js
+await authedDelete('/api/events/{eventId}', token)
+```
+
+---
+
 ## 참조
 - [architecture_and_api_spec.md §2.3 — 웹소켓 토픽 구조](./architecture_and_api_spec.md#23-실시간-웹소켓websocket-토픽-구조-spring-boot-leftrightarrow-web-client)
 - [backend_api_specification.md §1 REST · §2 STOMP](./backend_api_specification.md)

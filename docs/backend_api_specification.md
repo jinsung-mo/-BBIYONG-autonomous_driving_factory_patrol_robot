@@ -23,6 +23,9 @@ Spring Boot 백엔드는 REST API, STOMP WebSocket, 로봇 WSS 연결을 제공�
 | `POST` | `/api/maps/upload` | 2D SLAM 맵 이미지 업로드(로봇/게이트웨이) |
 | `GET` | `/api/maps` · `/api/maps/latest` · `/api/maps/{id}` · `/{id}/image` | 맵 목록/최신/상세/이미지 서빙 |
 | `GET/PUT` | `/api/maps/active` · `/api/maps/{id}/active` | 활성 맵 조회 / 지정(단일 활성) |
+| `DELETE` | `/api/events/{eventId}` | 이벤트(경보) 삭제 — 테스트/더미 정리(없으면 404) |
+| `GET/POST/PUT/DELETE` | `/api/waypoints` · `/api/waypoints/apply` | 순찰 지점 CRUD·일괄교체 / 로봇 하달(`SET_PATROL_ROUTE`) |
+| `GET/PUT` | `/api/settings/drive-speed` | 주행 속도 상한 조회/설정(→`SET_MAX_SPEED` 중계) |
 
 ### 주요 요청 예시
 
@@ -132,3 +135,5 @@ GET /api/events?page=0&size=10&type=FIRE
 | `START_MAPPING` / `STOP_MAPPING` | `{ "command": "START_MAPPING" }` | 자율탐색 맵 모델링 시작/중단 |
 | `SAVE_MAP` | `{ "command": "SAVE_MAP", "name": "factory_01" }` | 현재 SLAM 맵 저장 |
 | `SET_THRESHOLD` | `{ "command": "SET_THRESHOLD", "equipmentId": "panel_A", "threshold": 55.0 }` | 설비 과열 임계값 반영 |
+| `SET_PATROL_ROUTE` | `{ "command": "SET_PATROL_ROUTE", "waypoints": [{"seq":0,"x":8.5,"y":3.1,"yaw":0.0}] }` | 순찰 경로(waypoint 배열) 하달 |
+| `SET_MAX_SPEED` | `{ "command": "SET_MAX_SPEED", "maxLinear": 0.5, "maxAngular": 0.5 }` | 주행 속도 상한 반영 |
