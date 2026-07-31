@@ -142,6 +142,29 @@ SAT_KEEP = 0.95          # 포화면 천장을 실측의 이 비율로 즉시 �
 SAT_UP = 0.08            # m/s² 천장 상승률 — 회복은 천천히(출력을 올리면 따라 오른다)
 V_CEIL_MIN = 0.06        # m/s 천장 하한. 아예 못 가게 되는 것을 막는다
 
+# ── 직진 유지 폐루프 (2026-07-30 신설) ──────────────────────────────────
+#  회전 명령이 없을 때(w_cmd≈0) odom yaw 를 기준각으로 잡고 그 각을 지킨다.
+#  엔코더 odom 이라 **바퀴 회전수 차이는 그대로 보인다** — 실제로 휘는 만큼
+#  yaw 가 움직이므로 폐루프가 성립한다(슬립까지 잡지는 못한다).
+#  부호: w +가 좌회전이다. 오른쪽으로 휘면 yaw 가 줄고 err=ref−yaw 가 +가 되어
+#  좌회전 보정이 나간다.
+YAW_KP = 1.5             # rad/s per rad
+YAW_KI = 0.5             # rad/s per rad·s — 좌우 출력차는 상수 편향이라 적분이 필요하다
+YAW_I_MAX = 0.20         # 적분 누적 상한 (rad·s)
+YAW_W_MAX = 0.35         # rad/s 보정 상한. 조종자가 의도한 직진을 크게 뒤틀지 않게
+YAW_HOLD_V = 0.03        # m/s 이보다 빠를 때만 각도를 지킨다 (정지 중엔 안 건다)
+
+# ── 조향 여유 예약 (2026-07-30 실측으로 도출) ────────────────────────────
+#  🔴 ⑤ 의 천장이 ⑦ 의 발목을 잡고 있었다. 실측(3.0초·1.30m):
+#     SLAM −11.50° vs odom −11.1° → **엔코더는 휨을 정확히 본다**(블라인드 아님).
+#     그런데 보정 w 가 상한 0.35 에 붙어 고정된 채 편차가 계속 커졌다.
+#     필요량은 0.064 rad/s(외란 −8.8 deg/m × 0.42 m/s)뿐인데 명령의 18% 미만만
+#     실현됐다 — 천장이 도달치 바로 아래(0.44)에 앉아서, w 를 주면
+#     빠른 쪽 바퀴 목표 0.438 + 0.037 = 0.475 가 도달치(0.42)를 넘어 **포화**했다.
+#  → 천장에서 **조향에 쓸 몫을 미리 빼둔다.** 속도를 조금 더 포기하고 조향을 산다.
+#  ⚠️ YAW_W_MAX 를 올리는 것은 역효과다 — 예약이 더 필요해져 악화된다.
+STEER_RESERVE = 0.5 * TRACK_M * YAW_W_MAX * 1.35    # ≈ 0.049 m/s (35% 여유)
+
 
 class Teleop(Node):
     def __init__(self, cmd_file):
@@ -158,6 +181,9 @@ class Teleop(Node):
         self.v_out = 0.0              # 실제로 내보낸 선속도 — 슬루 리미터의 상태
         self.odom_t = None            # odom 최종 수신 시각
         self.odom_v = 0.0             # odom 실측 선속도
+        self.yaw = None               # odom 실측 방위각 (rad)
+        self.yaw_ref = None           # 직진 유지 기준각. None 이면 미체결
+        self.yaw_i = 0.0              # 직진 유지 적분항
         self.still_t0 = None          # 멈춰 있기 시작한 시각
         self.escape_armed = False     # 정차 후 "제어권 반환" 래치
         self.block_head = None        # 막힌 방향(0=앞, π=뒤). 중립일 때도 계속 본다
@@ -176,6 +202,9 @@ class Teleop(Node):
     def _odom(self, m):
         self.odom_t = time.time()
         self.odom_v = float(m.twist.twist.linear.x)
+        q = m.pose.pose.orientation
+        self.yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                              1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
     def odom_fresh(self, now):
         return self.odom_t is not None and now - self.odom_t < ODOM_STALE_S
@@ -265,6 +294,8 @@ class Teleop(Node):
         turn_cut = False              # 회전 우선 때문에 v 를 깎았나
         brake_cut = False             # 제동 곡선 때문에 v 를 깎았나
         sat_cut = False               # duty 포화 회피 때문에 v 를 깎았나
+        yaw_hold = False              # 직진 유지 폐루프가 개입했나
+        yaw_err_deg = None            # 그 편차 (deg) — 화면에서 휘는 걸 보게 한다
         reason_soft = False           # reason 이 정보성인가(안전 사유면 덮어쓰지 않는다)
         hard = True                   # 즉시 0 (비상). 정상 명령이면 아래에서 해제된다
         coast_a = None                # 목표 0 으로 슬루할 때 쓸 감속도 (데드맨용)
@@ -346,8 +377,10 @@ class Teleop(Node):
                     lagging = abs(self.v_out) - meas > SAT_ERR
                     rising = meas - self.v_meas_ref > SAT_RISE
                     if lagging and not rising:
-                        # 더 못 낸다. 천장을 실측 아래로 즉시 끌어내린다.
-                        self.v_ceil = max(V_CEIL_MIN, meas * SAT_KEEP)
+                        # 더 못 낸다. 천장을 실측 아래로 즉시 끌어내리고,
+                        # 조향에 쓸 몫(STEER_RESERVE)까지 빼둔다.
+                        self.v_ceil = max(V_CEIL_MIN,
+                                          meas * SAT_KEEP - STEER_RESERVE)
                     elif not lagging:
                         self.v_ceil = min(V_MAX,
                                           self.v_ceil + SAT_UP * SAT_WATCH_S)
@@ -376,9 +409,6 @@ class Teleop(Node):
                           f"(실측 {abs(self.odom_v):.2f} · 출력 상한에 걸려 있다)")
                 reason_soft = True
 
-            if not reason:
-                reason = "주행 중" if (abs(v) > 1e-3 or abs(w) > 1e-3) else "정지"
-
         # 슬루 리미터 — 목표까지 가속도 상한 안에서만 움직인다. 부호 전환이
         # 반드시 0 을 통과하므로 후진↔전진 급전환이 직진 감속과 **같은 경로**를
         # 탄다. 이게 울컥임의 해법이다.
@@ -403,6 +433,36 @@ class Teleop(Node):
             self.v_out = (min(v, self.v_out + step) if v > self.v_out
                           else max(v, self.v_out - step))
         v = self.v_out
+
+        # ⑦ 직진 유지 — 회전 명령이 없으면 odom yaw 를 붙잡는다.
+        #    좌우 출력차는 시간에 따라 변하는 양이라(§L: 23.8% → 39.1%) 고정
+        #    보정계수로는 못 잡는다. 그래서 폐루프여야 하고, 상수 편향을 없애려면
+        #    적분항이 필요하다.
+        #    조종자가 회전을 명령하면 기준각을 버린다 — 놓아줘야 돌 수 있다.
+        if (not hard and coast_a is None and abs(w) < 1e-3
+                and abs(v) > YAW_HOLD_V
+                and self.yaw is not None and self.odom_fresh(now)):
+            if self.yaw_ref is None:
+                self.yaw_ref, self.yaw_i = self.yaw, 0.0
+            d = self.yaw_ref - self.yaw
+            err = math.atan2(math.sin(d), math.cos(d))        # ±π 로 감는다
+            self.yaw_i = max(-YAW_I_MAX,
+                             min(YAW_I_MAX, self.yaw_i + err / RATE_HZ))
+            w = max(-YAW_W_MAX,
+                    min(YAW_W_MAX, YAW_KP * err + YAW_KI * self.yaw_i))
+            yaw_hold = True
+            yaw_err_deg = round(math.degrees(err), 2)
+            # 포화 회피·회전 우선은 **상시 참**이라 그냥 두면 직진 유지 메시지를
+            # 영구히 가린다(실제로 그랬다). 정보성 사유는 덮어쓰고 천장은 뒤에 붙인다.
+            if not reason or reason_soft:
+                reason = (f"직진 유지 — 편차 {math.degrees(err):+.1f}° "
+                          f"보정 {w:+.2f}rad/s"
+                          + (f" · 천장 {self.v_ceil:.2f}m/s" if sat_cut else ""))
+        else:
+            self.yaw_ref, self.yaw_i = None, 0.0
+
+        if not reason:
+            reason = "주행 중" if (abs(v) > 1e-3 or abs(w) > 1e-3) else "정지"
 
         # 🔴 **명령하지 않을 때는 발행하지 않는다.**
         #    같은 토픽에 퍼블리셔가 둘이면 마지막 메시지가 이긴다. 여기서
@@ -434,7 +494,7 @@ class Teleop(Node):
               "escape_armed": self.escape_armed, "deadman_coast": coast_a is not None,
               "turn_radius": round(abs(v) / abs(w), 3) if abs(w) > 1e-6 else None,
               "a_dec": A_DEC, "react_s": REACT_S,
-              "sat_cut": sat_cut,
+              "sat_cut": sat_cut, "yaw_hold": yaw_hold, "yaw_err_deg": yaw_err_deg,
               "v_ceil": round(self.v_ceil, 3),
               "odom_v": round(self.odom_v, 3) if self.odom_fresh(now) else None}
         self.pub_status.publish(String(data=json.dumps(st)))
