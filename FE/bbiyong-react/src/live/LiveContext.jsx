@@ -55,6 +55,11 @@ export function LiveProvider({ children }) {
   // null = 아직 모름(조회 전·실패). 모름을 offline 으로 위장하지 않는다.
   const [robotOnline, setRobotOnline] = useState(null)
 
+  // 사용자가 고른 제어 모드(S15P11E101-448 · 513). 조작 패널의 지역 상태였는데,
+  // 키보드 주행을 발행하는 LiveSimBridge 도 이 값을 봐야 해서 연동 레이어로 올린다 —
+  // 순찰 모드에서는 WASD 가 DRIVE 를 보내면 안 된다.
+  const [driveMode, setDriveMode] = useState('patrol')
+
   // 영상 프레임은 초당 수십 장이 들어올 수 있어 React state로 올리지 않는다.
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
   const videoRef = useRef({ FRONT: null, THERMAL: null })
@@ -277,9 +282,11 @@ export function LiveProvider({ children }) {
     onVideoFrame, onNavUpdate, videoSeen, control, robotId: ROBOT_ID,
     speed, setSpeed,
     mappingComplete, clearMappingComplete, robotOnline,
+    driveMode, setDriveMode,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
-      videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline])
+      videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline,
+      driveMode, setDriveMode])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }

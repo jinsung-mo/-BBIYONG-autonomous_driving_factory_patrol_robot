@@ -21,7 +21,10 @@ import CapBadge from './CapBadge.jsx'
 // 두 동작을 한 키에 토글로 얹는 것이 프로토콜과 그대로 맞는다.
 export default function ControlPanel() {
   const { status, activeKeys, actions } = useSim()
-  const { enabled, connected, control, telemetry, speed, setSpeed, robotOnline } = useLive()
+  const {
+    enabled, connected, control, telemetry, speed, setSpeed, robotOnline,
+    driveMode: seg, setDriveMode: setSeg,
+  } = useLive()
   const { settings } = useSettings()
   const { isAdmin } = useAuth()
   // 순찰 지점은 설정 탭에서 등록/편집한다(S15P11E101-475). 관제에서는 실행만 한다.
@@ -36,7 +39,7 @@ export default function ControlPanel() {
   // 움직임 기준(움직이면 MANUAL_CONTROL, 멈추면 AUTO_PATROL)이라 WASD 를 떼는 순간
   // 토글이 '순찰'로 튀어 돌아갔다. 로봇의 현재 상태는 상태 패널 pill 이 따로 보여주므로,
   // 토글과 status 는 별개 축으로 둔다.
-  const [seg, setSeg] = useState('patrol')
+  // 값 자체는 LiveContext 가 들고 있다 — 키보드 주행을 발행하는 LiveSimBridge 도 봐야 한다(S15P11E101-513).
 
   const liveReady = enabled && connected
 
@@ -59,10 +62,10 @@ export default function ControlPanel() {
     ? (!!telemetry?.estop && telemetry.estop !== 'RELEASED')
     : status.estop !== 'RELEASED'
 
-  // 주행을 시작하는 것도 사용자가 수동 조작을 고른 행위다 — 토글을 수동으로 맞춘다.
-  // 표시만 바꾸고 SET_MODE 는 보내지 않는다(모드 전환은 모드 버튼의 몫).
-  // 키를 떼거나 텔레메트리가 바뀌는 것으로는 되돌아가지 않는다(S15P11E101-448).
-  const markManual = () => setSeg('manual')
+  // 주행 입력은 모드를 바꾸지 않는다(S15P11E101-513). 예전에는 WASD 를 누르면 토글이
+  // 수동으로 넘어갔는데, 순찰 중 화면을 잠깐 건드린 것만으로 순찰이 멈추는 셈이었다.
+  // 모드 전환은 스페이스바와 모드 버튼만 한다.
+  const manual = seg === 'manual'
 
   // 버튼은 키보드 키 이름으로 표기 (조작은 WASD/방향키 동일)
   const glyph = { w: 'W', a: 'A', s: 'S', d: 'D' }
@@ -70,10 +73,7 @@ export default function ControlPanel() {
   const key = (k) => {
     // live: 누르는 동안 주행, 떼면 정지 / mock: 기존처럼 클릭당 한 칸 이동
     const live = {
-      onPointerDown: () => {
-        markManual()
-        control.drive(DRIVE_VECTORS[k].linear, DRIVE_VECTORS[k].angular)
-      },
+      onPointerDown: () => control.drive(DRIVE_VECTORS[k].linear, DRIVE_VECTORS[k].angular),
       onPointerUp: () => control.stop(),
       onPointerLeave: () => control.stop(),
     }
@@ -81,8 +81,10 @@ export default function ControlPanel() {
       <button
         className={activeKeys[k] ? 'active' : ''}
         aria-label={`${dirLabel[k]} (${glyph[k]})`}
-        disabled={ctlOff}
-        {...(enabled ? live : { onClick: () => { markManual(); actions.dpadMove(k) } })}
+        // 순찰 중에는 주행 명령이 무효다 — 눌러도 아무 일이 없는 버튼으로 두지 않고 잠근다
+        disabled={ctlOff || !manual}
+        title={!manual ? '수동 모드에서 조작할 수 있습니다 (Space)' : undefined}
+        {...(enabled ? live : { onClick: () => actions.dpadMove(k) })}
       >
         {glyph[k]}
       </button>
@@ -127,7 +129,7 @@ export default function ControlPanel() {
   // 리스너는 enabled/connected 가 바뀔 때만 다시 걸고, 그때그때의 상태·핸들러는 ref로 읽는다
   // (핸들러가 매 렌더 새로 만들어지므로 의존성에 넣으면 리스너를 계속 재등록하게 된다).
   const latest = useRef(null)
-  latest.current = { estopEngaged, seg, onEmergencyStop, onReturnPatrol, onSetSeg, markManual }
+  latest.current = { estopEngaged, seg, onEmergencyStop, onReturnPatrol, onSetSeg }
 
   useEffect(() => {
     if (ctlOff) return undefined // 버튼 disabled 와 같은 게이트
@@ -142,10 +144,9 @@ export default function ControlPanel() {
     const onDown = (e) => {
       if (e.key === 'Shift') { if (!e.repeat && !isTyping(e.target)) shiftAlone = true; return }
       shiftAlone = false
-      if (DRIVE_KEYS.test(e.key.toLowerCase())) {
-        if (!isTyping(e.target)) latest.current.markManual()
-        return
-      }
+      // 주행 키는 모드를 건드리지 않는다(S15P11E101-513). 실제 주행 발행은
+      // live 는 LiveSimBridge, mock 은 useSimulation 의 키 리스너가 맡는다.
+      if (DRIVE_KEYS.test(e.key.toLowerCase())) return
       if (e.code !== 'Space') return
       if (isTyping(e.target)) return
       // 포커스된 버튼의 기본 활성화(=중복 실행)와 페이지 스크롤을 막는다
