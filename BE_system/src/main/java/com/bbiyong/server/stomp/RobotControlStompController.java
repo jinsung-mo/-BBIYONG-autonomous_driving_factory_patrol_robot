@@ -2,8 +2,8 @@ package com.bbiyong.server.stomp;
 
 import com.bbiyong.server.stomp.dto.ControlCommand;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
 
@@ -19,18 +19,31 @@ import java.util.Set;
  *   <li>/app/control/drive → DRIVE(linear, angular) — manual 모드에서 유효</li>
  *   <li>/app/control/mode → SET_MODE(autonomy|manual|disabled) 또는 ESTOP(active=true)</li>
  *   <li>/app/control/operation → START_MAPPING / STOP_MAPPING / NAVIGATE(x, y, yaw) / SAVE_MAP(name)</li>
+ *   <li>/app/control/camera → CAMERA_TILT(tilt) — 전면 카메라 상하 절대각(degrees), 가동범위로 클램프</li>
  * </ul>
  * 순찰 복귀는 별도 명령이 아니라 SET_MODE mode=autonomy 로 처리한다(로봇 프로토콜에 RESUME 없음).
  */
 @Slf4j
 @Controller
-@RequiredArgsConstructor
 public class RobotControlStompController {
 
     private static final String DEFAULT_ROBOT_ID = "orinka_01";
     private static final Set<String> VALID_MODES = Set.of("autonomy", "manual", "disabled");
 
     private final RobotWebSocketSessionManager sessionManager;
+
+    /** 전면 카메라 tilt 가동 범위(절대각, degrees). FE 는 동일 범위로 버튼 잠금/현재각을 표시한다. */
+    private final double tiltMin;
+    private final double tiltMax;
+
+    public RobotControlStompController(
+            RobotWebSocketSessionManager sessionManager,
+            @Value("${bbiyong.camera.tilt-min:-30.0}") double tiltMin,
+            @Value("${bbiyong.camera.tilt-max:45.0}") double tiltMax) {
+        this.sessionManager = sessionManager;
+        this.tiltMin = tiltMin;
+        this.tiltMax = tiltMax;
+    }
 
     @MessageMapping("/control/drive")
     public void drive(ControlCommand cmd) {
@@ -113,6 +126,20 @@ public class RobotControlStompController {
             return;
         }
         drop(cmd, "알 수 없는 operation command: " + command);
+    }
+
+    @MessageMapping("/control/camera")
+    public void camera(ControlCommand cmd) {
+        // 전면 카메라 상하 각도(절대각, degrees). 로봇 프로토콜: CAMERA_TILT{tilt}.
+        if (cmd.getTilt() == null) {
+            drop(cmd, "CAMERA_TILT 는 tilt(절대각 degrees) 가 필요합니다.");
+            return;
+        }
+        double clamped = Math.max(tiltMin, Math.min(tiltMax, cmd.getTilt()));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("command", "CAMERA_TILT");
+        payload.put("tilt", clamped);
+        relay(cmd, payload);
     }
 
     private void relay(ControlCommand cmd, Map<String, Object> payload) {

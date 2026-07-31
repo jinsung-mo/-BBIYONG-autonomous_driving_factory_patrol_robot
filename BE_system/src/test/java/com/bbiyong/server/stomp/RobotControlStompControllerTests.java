@@ -21,7 +21,8 @@ import static org.mockito.Mockito.when;
 class RobotControlStompControllerTests {
 
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
-    private final RobotControlStompController controller = new RobotControlStompController(sessionManager);
+    private final RobotControlStompController controller =
+            new RobotControlStompController(sessionManager, -30.0, 45.0);
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> capturePayload(String expectedRobotId) {
@@ -160,6 +161,44 @@ class RobotControlStompControllerTests {
 
         Map<String, Object> p = capturePayload("orinka_01");
         assertThat(p).containsEntry("command", "STOP_MAPPING");
+    }
+
+    @Test
+    void cameraRelaysTiltWithinRange() {
+        when(sessionManager.sendCommand(any(), any())).thenReturn(true);
+        ControlCommand cmd = new ControlCommand();
+        cmd.setRobotId("orinka_01");
+        cmd.setCommand("CAMERA_TILT");
+        cmd.setTilt(20.0);
+
+        controller.camera(cmd);
+
+        Map<String, Object> p = capturePayload("orinka_01");
+        assertThat(p).containsEntry("command", "CAMERA_TILT").containsEntry("tilt", 20.0);
+    }
+
+    @Test
+    void cameraClampsTiltToRange() {
+        when(sessionManager.sendCommand(any(), any())).thenReturn(true);
+        ControlCommand cmd = new ControlCommand();
+        cmd.setRobotId("orinka_01");
+        cmd.setCommand("CAMERA_TILT");
+        cmd.setTilt(120.0); // 최대 45 초과 → 클램프
+
+        controller.camera(cmd);
+
+        Map<String, Object> p = capturePayload("orinka_01");
+        assertThat(p).containsEntry("tilt", 45.0);
+    }
+
+    @Test
+    void cameraDroppedWhenTiltMissing() {
+        ControlCommand cmd = new ControlCommand();
+        cmd.setCommand("CAMERA_TILT"); // tilt 누락
+
+        controller.camera(cmd);
+
+        verify(sessionManager, never()).sendCommand(any(), any());
     }
 
     @Test
