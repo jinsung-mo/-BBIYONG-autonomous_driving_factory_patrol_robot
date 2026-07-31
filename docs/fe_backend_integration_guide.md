@@ -15,6 +15,9 @@
 | BE 경보 (`/topic/alerts`, `AlertMessage`) | ✅ 배포 (유닛테스트 통과) | |
 | **BE STOMP 인증 (CONNECT JWT 검증)** | 🔜 **병합·배포 후 적용** | 무인증 → **JWT 필수**로 전환 (S15P11E101-418). FE는 지금부터 토큰을 실어 구현할 것 |
 | **BE 2D 맵 API (`/api/maps`)** | 🔜 **병합·배포 후 적용** | SLAM 맵 이미지 저장·서빙 (S15P11E101-426). 실시간 `/topic/map`은 Deferred → 우선 REST 제공. FE 렌더는 §8 |
+| **BE 온디맨드 매핑 (START/STOP_MAPPING·완료·활성맵)** | 🔜 **병합 대기** | 맵 모델링 시작/중단 중계 + `/topic/mapping` 완료 relay + 활성 맵 API (S15P11E101-495·482). §3.4·§4·§8.6 |
+| **BE 설비 임계값 로봇 반영** | 🔜 **병합 대기** | `PUT /api/equipments/{id}` 수정 시 로봇으로 `SET_THRESHOLD` 중계(실제 판정 반영). (S15P11E101-499) |
+| **BE 로봇 연결상태 정확화** | 🔜 **병합 대기** | `GET /api/robots`의 `online`/`status(OFFLINE)` 정확화 + 끊김 시 `/topic/robots` offline 브로드캐스트 (S15P11E101-500). FE는 `online`/offline 메시지로 live 판정할 것 |
 | **FE 연동** | ❌ **미연동** | 현재 관제 화면(예: `EventAlert.jsx`)은 로컬 시뮬레이션(`useSim`)으로만 동작 |
 
 > 즉 **백엔드는 준비 완료**, FE에서 (인증 포함) 구독/발행만 붙이면 됩니다.
@@ -124,7 +127,19 @@ client.subscribe('/topic/video/orinka_01', (m) => onVideo(JSON.parse(m.body)))
   "data":"<base64 JPEG>", "maxTemp":36.1, "seq":1024, "timestamp":"..." }
 ```
 - `channel`: `FRONT`(RGB·YOLO 오버레이) | `THERMAL`(열화상, `maxTemp` 포함)
-- `/topic/map` *(미확정/후속)*: 로봇 맵 스트리밍 능력 확인 시 점유 격자 중계.
+
+### 3.4 `/topic/mapping` — 온디맨드 매핑 완료 알림 (S15P11E101-482)
+맵 모델링(자율탐색)을 §4 `START_MAPPING`으로 시작한 뒤, 로봇이 매핑을 끝내면 서버가 `EVENT_MAPPING_COMPLETE` 원문을 이 토픽으로 relay 한다. FE는 "완료" 알림 표시 후 §8.6 활성 맵 지정/`GET /api/maps/latest`로 새 도면을 불러온다.
+```js
+client.subscribe('/topic/mapping', (m) => onMappingComplete(JSON.parse(m.body)))
+// 예: { "type":"EVENT_MAPPING_COMPLETE", "robot_id":"orinka_01", "name":"factory_01" }
+```
+
+### 3.5 `/topic/nav/{robotId}` — 실시간 맵/자세 (있을 때)
+로봇이 `MAP`(2D 점유격자 RLE)·`NAV_LIVE`(pose·scan)를 보내면 서버가 원문 그대로 중계한다. 지원 여부는 로봇 구현에 따른다.
+```js
+client.subscribe('/topic/nav/orinka_01', (m) => onNav(JSON.parse(m.body)))
+```
 
 ---
 
@@ -138,7 +153,9 @@ client.subscribe('/topic/video/orinka_01', (m) => onVideo(JSON.parse(m.body)))
 | `/app/control/mode` | 순찰/수동 모드 | `{"robot_id":"orinka_01","command":"SET_MODE","mode":"autonomy"}` |
 | `/app/control/mode` | 긴급 정지 | `{"robot_id":"orinka_01","command":"ESTOP","active":true}` |
 | `/app/control/operation` | 지점 이동 | `{"robot_id":"orinka_01","command":"NAVIGATE","x":15.0,"y":8.2,"yaw":0.0}` |
-| `/app/control/operation` *(후속)* | 맵 저장 | `{"robot_id":"orinka_01","command":"SAVE_MAP","name":"factory_01"}` |
+| `/app/control/operation` | 맵 모델링 시작 | `{"robot_id":"orinka_01","command":"START_MAPPING"}` |
+| `/app/control/operation` | 맵 모델링 중단 | `{"robot_id":"orinka_01","command":"STOP_MAPPING"}` |
+| `/app/control/operation` | 맵 저장 | `{"robot_id":"orinka_01","command":"SAVE_MAP","name":"factory_01"}` |
 
 ```js
 const publish = (dest, body) =>
@@ -207,7 +224,9 @@ publish('/app/control/operation', { command: 'NAVIGATE', x: 15.0, y: 8.2, yaw: 0
 | :-- | :-- |
 | `GET /api/maps/latest?robotId=orinka_01` | **대시보드가 현재 도면을 그릴 때** 쓰는 최신 맵(메타 + imageUrl) |
 | `GET /api/maps/{id}/image` | 맵 이미지 바이트 서빙 (PNG 등) |
-| `GET /api/maps` | 맵 목록(최신순 Summary) |
+| `GET /api/maps` | 맵 목록(최신순 Summary, 각 항목 `active` 포함) |
+| `GET /api/maps/active` | **현재 활성 맵**(운영 도면). 없으면 404 |
+| `PUT /api/maps/{id}/active` | 저장된 맵을 **활성 맵으로 지정**(온디맨드 매핑 완료 후 "이 맵 사용", 단일 활성) |
 | `POST /api/maps/upload` *(FE 아님)* | 로봇/게이트웨이가 `SAVE_MAP` 산출물(이미지+메타) 등록 |
 
 ### 8.2 `GET /api/maps/latest` 응답
@@ -253,8 +272,16 @@ const py = map.heightPx - (worldY - map.originY) / map.resolution
 - 이 변환으로 로봇 마커·경보 위치(`AlertMessage.x/y`)·NAVIGATE 목표를 실제 도면 위 정확한 지점에 표시할 수 있다.
 - 그동안 좌표 매핑을 임시 1:1로 두었다면, 위 `resolution`/`origin` 값으로 대체하면 맵·지점이동이 함께 정확해진다.
 
-### 8.5 상태
-- `-426` **병합·배포 후** 사용 가능. 그 전엔 404. 업로더(로봇/게이트웨이)가 `SAVE_MAP` 후 `POST /api/maps/upload`를 호출해야 맵이 채워진다.
+### 8.6 온디맨드 매핑 → 활성 맵 흐름 (S15P11E101-482)
+1. FE가 §4 `START_MAPPING` 발행 → 로봇이 자율탐색 매핑 시작.
+2. 로봇 매핑 완료 → 서버가 §3.4 `/topic/mapping`으로 완료 알림 relay.
+3. FE는 `GET /api/maps`(또는 `latest`)로 새 맵을 확인하고, **`PUT /api/maps/{id}/active`로 활성 맵 지정**("이 맵 사용").
+4. 이후 대시보드는 `GET /api/maps/active`로 운영 도면을 로드(§8.3 blob-fetch 동일).
+
+> 활성 맵은 **단일**이다. 새로 지정하면 기존 활성은 자동 해제된다. `Summary`/`Detail`의 `active`(boolean)로 현재 활성 여부를 알 수 있다.
+
+### 8.7 상태
+- `-426`(저장·서빙)·`-482`(활성 맵) **병합·배포 후** 사용 가능. 그 전엔 404. 업로더(로봇/게이트웨이)가 `SAVE_MAP` 후 `POST /api/maps/upload`를 호출해야 맵이 채워진다.
 
 ---
 
