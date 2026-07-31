@@ -167,6 +167,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .logfilter button.on{background:#24466e; color:#dce9fb; border-color:#3a5a86;}
 .elog li .tag{margin-left:auto; font-size:9px; font-weight:700; color:var(--dk-sub);
   border:1px solid var(--dk-line); border-radius:4px; padding:1px 4px; align-self:center; white-space:nowrap;}
+/* 도면 ↔ 원본 격자 전환 (S15P11E101-524) — 방향 전환 버튼 옆에 나란히 */
+.mapview.mapkind{left:auto; right:10px; bottom:8px;}
 /* 카메라 상하 각도 (S15P11E101-521) — 수동 조작 패널 좌측 열, 주행 속도와 같은 배치 */
 .camtilt{margin-top:10px;}
 .camtilt-val{display:inline-flex; align-items:baseline; gap:5px;}

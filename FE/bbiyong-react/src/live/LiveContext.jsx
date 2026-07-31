@@ -13,6 +13,7 @@ import { useSettings } from '../settings/SettingsContext.jsx'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.js'
 import { isMappingComplete } from './mapping.js'
 import { TILT_COMMAND } from './cameraTilt.js'
+import { isFloorplanReady, loadActivePlan, releasePlan } from './floorplan.js'
 import { authedGet } from './authApi.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { REASON } from '../auth/sessionPolicy.js'
@@ -54,6 +55,10 @@ export function LiveProvider({ children }) {
   // 맵 모델링 완료 이벤트(S15P11E101-483). 마지막 1건만 들고 있으면 충분하다 —
   // 운영 탭이 '이 맵 사용?' 안내를 띄우고 사용자가 확인하면 지운다.
   const [mappingComplete, setMappingComplete] = useState(null)
+  // 정제 도면(S15P11E101-524). planReady 는 알림, plan 은 실제로 받아 온 도면이다.
+  const [planReady, setPlanReady] = useState(null)
+  const [plan, setPlan] = useState(null)
+  const [planError, setPlanError] = useState(null)
   // 로봇 가동 여부(S15P11E101-510). STOMP 연결은 '관제↔서버'만 말해준다 —
   // 로봇이 꺼져 있어도 connected 는 true 라서, 서버가 판정한 online 을 따로 받아야 한다.
   // null = 아직 모름(조회 전·실패). 모름을 offline 으로 위장하지 않는다.
@@ -130,10 +135,14 @@ export function LiveProvider({ children }) {
       setAlerts((prev) => [...prev, { ...msg, _id: ++alertUid }])
     })
 
-    // 매핑 완료 전용 토픽(S15P11E101-482 · 510). 서버가 로봇 원문을 그대로 relay 하므로
-    // 도착 자체가 완료 신호다 — 타입 문자열에 의존하지 않는다.
+    // 매핑 토픽(S15P11E101-482 · 510 · 524). 두 종류가 온다 —
+    //   EVENT_MAPPING_COMPLETE : 로봇 원문 relay (매핑이 끝났다)
+    //   FLOORPLAN_READY        : 서버가 정제 도면을 만들어 활성화했다
+    // 도착 자체를 완료로 보면 도면 알림에도 '이 맵을 사용할까요?' 가 다시 뜬다.
     const offMapping = subscribe('/topic/mapping', (msg) => {
-      setMappingComplete({ ...(typeof msg === 'object' && msg ? msg : {}), _at: Date.now() })
+      const m = (typeof msg === 'object' && msg) ? msg : {}
+      if (isFloorplanReady(m)) { setPlanReady({ ...m, _at: Date.now() }); return }
+      setMappingComplete({ ...m, _at: Date.now() })
     })
 
     const offVideo = subscribe(`/topic/video/${ROBOT_ID}`, (frame) => {
@@ -210,6 +219,32 @@ export function LiveProvider({ children }) {
     const id = setInterval(poll, ROBOT_POLL_MS)
     return () => { alive = false; clearInterval(id) }
   }, [canConnect, accessToken])
+
+  // 활성 도면을 받아 온다(S15P11E101-524). 로그인 직후 한 번, 그리고 FLOORPLAN_READY 마다.
+  // 이미지는 blob 으로 받아 objectURL 로 들고 있으므로 교체할 때 이전 것을 반드시 풀어야 한다.
+  useEffect(() => {
+    if (!canConnect) {
+      setPlan((prev) => { releasePlan(prev); return null })
+      navRef.current.plan = null
+      setPlanError(null)
+      return undefined
+    }
+    let alive = true
+    loadActivePlan(accessToken)
+      .then((next) => {
+        if (!alive) { releasePlan(next); return }
+        setPlan((prev) => { if (prev !== next) releasePlan(prev); return next })
+        navRef.current.plan = next
+        setPlanError(null)
+        emitNav()
+      })
+      // 활성 맵이 아직 없으면 404 다 — 오류로 떠들지 않고 조용히 비워 둔다.
+      .catch((e) => { if (alive) setPlanError(e.message) })
+    return () => { alive = false }
+  }, [canConnect, accessToken, planReady, emitNav])
+
+  // 언마운트 시 마지막 objectURL 을 푼다
+  useEffect(() => () => releasePlan(navRef.current.plan), [])
 
   // STOMP 가 인증을 거부하면 토큰이 죽은 것이다. 지금까지는 문구만 띄우고 화면에 남았다 —
   // 아무 데이터도 오지 않는 관제 화면을 계속 보여주는 것보다 로그인으로 보내는 편이 정직하다(S15P11E101-508).
@@ -290,10 +325,11 @@ export function LiveProvider({ children }) {
     speed, setSpeed,
     mappingComplete, clearMappingComplete, robotOnline,
     driveMode, setDriveMode,
+    plan, planError,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
       videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline,
-      driveMode, setDriveMode])
+      driveMode, setDriveMode, plan, planError])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }
