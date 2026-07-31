@@ -12,6 +12,8 @@ import OpsPage from './components/ops/OpsPage.jsx'
 import ConfigPage from './components/config/ConfigPage.jsx'
 import EventAlert from './components/EventAlert.jsx'
 import { SettingsProvider } from './settings/SettingsContext.jsx'
+import SessionWatcher from './auth/SessionWatcher.jsx'
+import EventLogActivity from './auth/EventLogActivity.jsx'
 
 // 로그인 상태에서만 마운트 → 시뮬레이션 루프도, STOMP 연결도 로그인 후에만 시작
 //
@@ -31,6 +33,8 @@ function Dashboard() {
         <LiveProvider>
           {/* live 모드일 때 실서버 위치·영상 프레임을 캔버스 렌더러로 밀어 넣는다 */}
           <LiveSimBridge />
+          {/* 이벤트 로그가 기록되는 동안 세션을 유지한다(S15P11E101-508) */}
+          <EventLogActivity />
           <Nav section={active} onSection={setSection} />
           {/* 화재/과열 발생 팝업 알림 — 어느 탭에 있든 항상 최상단에 떠 있음 */}
           <EventAlert />
@@ -45,11 +49,12 @@ function Dashboard() {
 
 // 로그아웃 상태: Welcome(랜딩) → 로그인. 로그인 성공 시 대시보드(순찰 로봇 관제)로 진입.
 function Gate() {
-  const { user } = useAuth()
+  const { user, logoutReason } = useAuth()
   const [entered, setEntered] = useState(false) // Welcome을 지나 로그인 화면으로 들어왔는지
 
-  if (user) return <Dashboard />
-  if (!entered) return <WelcomeScreen onEnter={() => setEntered(true)} />
+  // 자동 로그아웃되면 랜딩이 아니라 로그인 화면으로 보낸다 — 사유를 바로 읽을 수 있어야 한다
+  if (user) return <><SessionWatcher /><Dashboard /></>
+  if (!entered && !logoutReason) return <WelcomeScreen onEnter={() => setEntered(true)} />
   return <AuthScreen onBack={() => setEntered(false)} />
 }
 
