@@ -7,6 +7,7 @@ import StatusPanel from './StatusPanel.jsx'
 import ControlPanel from './ControlPanel.jsx'
 import MapPanel from './MapPanel.jsx'
 import CapBadge from './CapBadge.jsx'
+import CameraTilt from './CameraTilt.jsx'
 
 // 순찰 로봇 관제 (다크 테마) — 단일 화면
 export default function RobotPage() {
@@ -42,6 +43,8 @@ export default function RobotPage() {
             <span className="rec">● REC 00:00</span>
             {camDown && <span className="nodata">전면 카메라 영상 없음</span>}
           </div>
+          {/* 카메라 상하 각도 (S15P11E101-521) */}
+          <CameraTilt />
         </div>
 
         <ControlPanel />

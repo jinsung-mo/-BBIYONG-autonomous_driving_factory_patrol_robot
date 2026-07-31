@@ -12,6 +12,7 @@ import { DEFAULT_DRIVE_SPEED, angularFor, clampDriveSpeed } from './mappers.js'
 import { useSettings } from '../settings/SettingsContext.jsx'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.js'
 import { isMappingComplete } from './mapping.js'
+import { TILT_COMMAND } from './cameraTilt.js'
 import { authedGet } from './authApi.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { REASON } from '../auth/sessionPolicy.js'
@@ -268,6 +269,9 @@ export function LiveProvider({ children }) {
       // fail-safe — active:true 만 허용(해제 명령 없음)
       estop: () => send('/app/control/mode', { command: 'ESTOP', active: true }),
       navigate: (x, y, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
+      // 전면 카메라 상하 각도(S15P11E101-521). 절대각(도)으로 보낸다.
+      // 명령 이름은 cameraTilt.js 에 잠정 정의돼 있다 — 로봇 계약이 확정되면 그 파일만 고친다.
+      setCameraTilt: (deg) => send('/app/control/operation', { command: TILT_COMMAND, tilt: deg }),
       // 자율 주행하며 2D 맵 생성 시작(S15P11E101-483).
       // BE 는 /app/control/operation 에서 이 명령을 로봇으로 릴레이한다.
       startMapping: () => send('/app/control/operation', { command: 'START_MAPPING' }),
