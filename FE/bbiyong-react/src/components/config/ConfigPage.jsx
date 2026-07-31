@@ -5,6 +5,7 @@ import { speedParams } from '../../live/mappers.js'
 import { useLive } from '../../live/LiveContext.jsx'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { putDriveSpeed, speedProblems } from '../../live/driveSpeed.js'
+import EquipmentPanel from './EquipmentPanel.jsx'
 
 // 설정 (S15P11E101-475) — 가끔 바꾸는 값. 관리자만 들어온다.
 // 주행 속도 상한은 서버에 저장되고 로봇에 하달된다(S15P11E101-515).
@@ -115,7 +116,7 @@ export default function ConfigPage() {
 
         <div className="panel">
           <h3>열화상 임계 온도 <span className="k">THERMAL</span></h3>
-          <p className="cfg-help">열화상 화면의 경고·임계 표시 기준입니다.</p>
+          <p className="cfg-help">열화상 <b>화면의 색 표시</b> 기준입니다. 로봇의 과열 판정 기준은 <b>설비별 과열 임계 온도</b> 설정에서 분전반마다 따로 정합니다.</p>
           <div className="form-row">
             <label htmlFor="cfg-warn">주의 (℃)</label>
             <input id="cfg-warn" type="number" step="1" value={settings.tempWarn}
@@ -130,6 +131,8 @@ export default function ConfigPage() {
             <div className="form-msg err">주의 온도는 임계 온도보다 낮아야 합니다.</div>
           )}
         </div>
+
+        <EquipmentPanel />
 
         <div className="panel cfg-points">
           <h3>순찰 지점 <span className="k">WAYPOINTS</span></h3>
