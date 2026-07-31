@@ -72,7 +72,7 @@ Mode mode = MODE_IDLE;
 
 unsigned long lastCmdMs = 0, lastCtrlMs = 0, lastTeleMs = 0;
 uint32_t deadman_ms = 1000;      // 속도모드 기본 1초 (ROS가 20Hz로 보낸다)
-uint32_t tele_ms = 100;          // 텔레메트리 10Hz
+uint32_t tele_ms = 50;           // 텔레메트리 20Hz (2026-07-30: teleop 소비주기(20Hz)에 맞춤 — 종전 10Hz)
 bool tele_csv = true;            // true=기계 파싱용 CSV, false=사람용
 
 // ============================================================================
