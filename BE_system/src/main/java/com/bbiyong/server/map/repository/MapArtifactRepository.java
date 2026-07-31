@@ -15,4 +15,8 @@ public interface MapArtifactRepository extends JpaRepository<MapArtifact, String
     Optional<MapArtifact> findFirstByRobotIdOrderByCreatedAtDesc(String robotId);
 
     Optional<MapArtifact> findFirstByOrderByCreatedAtDesc();
+
+    Optional<MapArtifact> findFirstByActiveTrueOrderByCreatedAtDesc();
+
+    List<MapArtifact> findByActiveTrue();
 }

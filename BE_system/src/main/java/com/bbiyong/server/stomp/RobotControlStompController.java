@@ -18,7 +18,7 @@ import java.util.Set;
  * <ul>
  *   <li>/app/control/drive → DRIVE(linear, angular) — manual 모드에서 유효</li>
  *   <li>/app/control/mode → SET_MODE(autonomy|manual|disabled) 또는 ESTOP(active=true)</li>
- *   <li>/app/control/operation → START_MAPPING / NAVIGATE(x, y, yaw) / SAVE_MAP(name) — 후속</li>
+ *   <li>/app/control/operation → START_MAPPING / STOP_MAPPING / NAVIGATE(x, y, yaw) / SAVE_MAP(name)</li>
  * </ul>
  * 순찰 복귀는 별도 명령이 아니라 SET_MODE mode=autonomy 로 처리한다(로봇 프로토콜에 RESUME 없음).
  */
@@ -76,6 +76,13 @@ public class RobotControlStompController {
             // 로봇에게 "자율주행하며 2D 맵 생성 시작"을 요청. 실제 SLAM/자율주행은 로봇 측에서 수행.
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("command", "START_MAPPING");
+            relay(cmd, payload);
+            return;
+        }
+        if ("STOP_MAPPING".equalsIgnoreCase(command)) {
+            // 진행 중인 자율탐색 매핑 중단 요청.
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("command", "STOP_MAPPING");
             relay(cmd, payload);
             return;
         }

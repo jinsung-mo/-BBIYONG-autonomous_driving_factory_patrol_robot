@@ -49,6 +49,9 @@ public class MapArtifact {
 
     private Long fileSizeBytes;
 
+    // 활성 맵 지정(단일 활성). null/false=비활성. 마이그레이션 안전 위해 nullable wrapper 사용. (S15P11E101-482)
+    private Boolean active;
+
     @Column(nullable = false)
     private Instant createdAt;
 }

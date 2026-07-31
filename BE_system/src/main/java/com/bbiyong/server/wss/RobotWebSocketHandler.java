@@ -3,6 +3,7 @@ package com.bbiyong.server.wss;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
+import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
@@ -85,6 +86,15 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                 case "INSPECTION":
                     // 분전반 정상 점검 리포트 (경보 아님) - 설비 최근점검 상태 갱신용
                     eventPublisher.publishEvent(new RobotInspectionEvent(this, packet));
+                    break;
+                case "EVENT_MAPPING_COMPLETE":
+                    // 온디맨드 매핑 완료 - 수신 원문을 /topic/mapping 으로 관제에 relay
+                    log.info("Mapping complete event received via WSS from [{}]", robotId);
+                    if (robotId != null && !robotId.trim().isEmpty()) {
+                        eventPublisher.publishEvent(new RobotMappingCompleteEvent(this, robotId, payload));
+                    } else {
+                        log.warn("Dropping EVENT_MAPPING_COMPLETE with missing robot_id");
+                    }
                     break;
                 case "MAP":
                 case "NAV_LIVE":

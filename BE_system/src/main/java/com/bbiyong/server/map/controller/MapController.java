@@ -49,6 +49,18 @@ public class MapController {
         return ResponseEntity.ok(mapService.getLatest(robotId));
     }
 
+    /** 현재 활성 맵 조회. ('/{id}' 보다 먼저 선언해 리터럴 경로 우선 매칭.) */
+    @GetMapping("/active")
+    public ResponseEntity<MapResponses.Detail> active() {
+        return ResponseEntity.ok(mapService.getActive());
+    }
+
+    /** 저장된 맵을 활성 맵으로 지정(온디맨드 매핑 완료 후 '이 맵 사용'). */
+    @PutMapping("/{id}/active")
+    public ResponseEntity<MapResponses.Detail> setActive(@PathVariable String id) {
+        return ResponseEntity.ok(mapService.setActive(id));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<MapResponses.Detail> detail(@PathVariable String id) {
         return ResponseEntity.ok(mapService.getDetail(id));

@@ -68,6 +68,28 @@ public class MapService {
         return MapResponses.Detail.of(artifact);
     }
 
+    /** 저장된 맵 중 하나를 활성 맵으로 지정한다(단일 활성 — 기존 활성은 해제). */
+    @Transactional
+    public MapResponses.Detail setActive(String id) {
+        MapArtifact target = findMap(id);
+        for (MapArtifact prev : mapRepository.findByActiveTrue()) {
+            if (!prev.getId().equals(target.getId())) {
+                prev.setActive(false);
+                mapRepository.save(prev);
+            }
+        }
+        target.setActive(true);
+        return MapResponses.Detail.of(mapRepository.save(target));
+    }
+
+    /** 현재 활성 맵. 없으면 404. */
+    @Transactional(readOnly = true)
+    public MapResponses.Detail getActive() {
+        MapArtifact artifact = mapRepository.findFirstByActiveTrueOrderByCreatedAtDesc()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "활성 맵이 없습니다."));
+        return MapResponses.Detail.of(artifact);
+    }
+
     /** 맵 이미지 파일 로드. */
     @Transactional(readOnly = true)
     public StoredFile loadImage(String id) {
