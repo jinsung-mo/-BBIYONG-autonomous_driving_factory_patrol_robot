@@ -38,6 +38,19 @@ class WaypointServiceTests {
     }
 
     @Test
+    void getRouteReturnsOrderedRoute() {
+        when(repository.findByRobotIdOrderBySeqAscCreatedAtAsc("orinka_01"))
+                .thenReturn(List.of(wp("a", 1.0, 1.0, 0), wp("b", 2.0, 2.0, 1)));
+
+        WaypointResponses.Route route = service.getRoute(null);
+
+        assertThat(route.robotId()).isEqualTo("orinka_01");
+        assertThat(route.count()).isEqualTo(2);
+        assertThat(route.waypoints()).hasSize(2);
+        assertThat(route.waypoints().get(0).seq()).isEqualTo(0);
+    }
+
+    @Test
     void addAssignsNextSeqWhenOmitted() {
         when(repository.findByRobotIdOrderBySeqAscCreatedAtAsc("orinka_01"))
                 .thenReturn(List.of(wp("a", 1.0, 1.0, 0), wp("b", 2.0, 2.0, 1)));

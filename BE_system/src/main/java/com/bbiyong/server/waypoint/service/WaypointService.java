@@ -55,6 +55,15 @@ public class WaypointService {
                 repository.findByRobotIdOrderBySeqAscCreatedAtAsc(resolveRobotId(robotId)));
     }
 
+    /** 순찰 경로 전체(로봇별, 순서대로). 지점들의 집합을 하나의 경로로 반환한다. */
+    @Transactional(readOnly = true)
+    public WaypointResponses.Route getRoute(String robotId) {
+        String rid = resolveRobotId(robotId);
+        List<WaypointResponses.Item> items = WaypointResponses.items(
+                repository.findByRobotIdOrderBySeqAscCreatedAtAsc(rid));
+        return new WaypointResponses.Route(rid, items.size(), items);
+    }
+
     /** 순찰 경로 일괄 교체(기존 전부 삭제 후 순서대로 저장). */
     @Transactional
     public List<WaypointResponses.Item> replace(String robotId, List<WaypointRequest> reqs) {
