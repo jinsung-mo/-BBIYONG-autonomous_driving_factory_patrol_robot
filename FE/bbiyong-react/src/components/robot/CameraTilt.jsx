@@ -24,14 +24,16 @@ export default function CameraTilt() {
   const tilt = reported ?? requested
 
   const camDown = enabled && isDown(capOf(telemetry, CAP_KEYS.camera))
-  const off = !enabled || !connected || camDown || !isAdmin
+  // 시뮬 모드에서도 조작할 수 있어야 한다 — 긴급정지·순찰복귀·속도·지점이동이 모두 시뮬에서
+  // 동작하는데 카메라 각도만 죽어 있으면 고장으로 읽힌다. 값만 바뀌고 발행은 하지 않는다.
+  const off = enabled ? (!connected || camDown || !isAdmin) : !isAdmin
 
   const nudge = useCallback((dir) => {
     const next = clampTilt(tilt + dir * TILT_STEP)
     if (next === tilt) return          // 한계 — 같은 값을 다시 보내지 않는다
     setRequested(next)
-    control.setCameraTilt(next)
-  }, [tilt, control])
+    if (enabled) control.setCameraTilt(next)   // 시뮬에서는 보낼 로봇이 없다
+  }, [tilt, control, enabled])
 
   // 핸들러가 매 렌더 새로 만들어지므로 ref 로 읽는다(리스너 재등록 방지)
   const latest = useRef(null)
@@ -62,10 +64,13 @@ export default function CameraTilt() {
         <span>카메라 각도 <em className="camtilt-range mono">{formatTilt(TILT_MIN)} ~ {formatTilt(TILT_MAX)}</em></span>
         <span className="camtilt-val">
           <b className="mono">{formatTilt(tilt)}</b>
-          <i title={reported == null
-            ? '로봇이 아직 각도를 보고하지 않아 마지막으로 보낸 값입니다. 실제 자세와 다를 수 있습니다.'
-            : '로봇이 보고한 현재 각도입니다.'}
-          >{reported == null ? '요청' : '현재'}</i>
+          {/* 보고값 / 요청값 / 시뮬값을 구분한다 — 실제 자세로 오해하면 안 된다 */}
+          <i title={!enabled
+            ? '시뮬레이션 값입니다. 로봇으로 전송되지 않습니다.'
+            : (reported == null
+              ? '로봇이 아직 각도를 보고하지 않아 마지막으로 보낸 값입니다. 실제 자세와 다를 수 있습니다.'
+              : '로봇이 보고한 현재 각도입니다.')}
+          >{!enabled ? '시뮬' : (reported == null ? '요청' : '현재')}</i>
         </span>
       </div>
       <div className="spdr">
