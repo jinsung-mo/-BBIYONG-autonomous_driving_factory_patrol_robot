@@ -63,6 +63,7 @@ export function eventToLog(e) {
     : (e?.temperature != null ? `${num(e.temperature)}℃` : '')
   return {
     id: `ev-${e?.eventId}`,
+    eventId: e?.eventId,   // 서버 삭제(DELETE /api/events/{id}) 대상 — S15P11E101-516
     time: formatTime(e?.timestamp),
     date: formatDate(e?.timestamp),
     kind,
