@@ -73,7 +73,7 @@ pipeline {
                         TEST_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3307/bbiyong_test \
                         TEST_DATASOURCE_USERNAME=test \
                         TEST_DATASOURCE_PASSWORD=test \
-                        sh ./gradlew test --no-daemon
+                        ./gradlew test --no-daemon
                     '''
                 }
             }
