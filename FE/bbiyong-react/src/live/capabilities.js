@@ -1,3 +1,4 @@
+// @ts-check
 // 로봇 서브시스템 생존 상태 — TELEMETRY.capabilities (S15P11E101-458)
 //
 // 로봇 브리지(cloud_bridge.py)가 /tmp 파일 mtime 으로 판정해 보고한다.

@@ -1,3 +1,4 @@
+// @ts-check
 // 순찰 지점(waypoint) API — S15P11E101-514.
 // BE 계약: WaypointController (S15P11E101-509).
 //
@@ -13,12 +14,24 @@
 import { authedGet, authedSend } from './authApi.js'
 import { ROBOT_ID } from './config.js'
 
+/** @param {string} [robotId] */
 const q = (robotId = ROBOT_ID) => (robotId ? `?robotId=${encodeURIComponent(robotId)}` : '')
 
+/**
+ * @param {string | null | undefined} accessToken
+ * @param {string} [robotId]
+ * @returns {Promise<import('./contracts').Waypoint[]>}
+ */
 export function listWaypoints(accessToken, robotId) {
   return authedGet(`/api/waypoints${q(robotId)}`, accessToken).then((r) => (Array.isArray(r) ? r : (r?.content || [])))
 }
 
+/**
+ * @param {import('./contracts').WaypointRequest} req
+ * @param {string | null | undefined} accessToken
+ * @param {string} [robotId]
+ * @returns {Promise<import('./contracts').Waypoint>}
+ */
 export function addWaypoint({ x, y, yaw, name, seq }, accessToken, robotId) {
   return authedSend(`/api/waypoints${q(robotId)}`, accessToken, {
     method: 'POST',
@@ -27,6 +40,12 @@ export function addWaypoint({ x, y, yaw, name, seq }, accessToken, robotId) {
 }
 
 // 목록 전체를 순서대로 교체한다. 순서 변경·이름 수정을 한 번에 반영하는 용도다.
+/**
+ * @param {Array<import('./contracts').WaypointRequest & { id?: string }>} items
+ * @param {string | null | undefined} accessToken
+ * @param {string} [robotId]
+ * @returns {Promise<import('./contracts').Waypoint[]>}
+ */
 export function replaceWaypoints(items, accessToken, robotId) {
   const body = items.map((w, i) => ({
     x: w.x, y: w.y,
@@ -38,6 +57,11 @@ export function replaceWaypoints(items, accessToken, robotId) {
     .then((r) => (Array.isArray(r) ? r : []))
 }
 
+/**
+ * @param {string} id
+ * @param {string | null | undefined} accessToken
+ * @returns {Promise<unknown>}
+ */
 export function deleteWaypoint(id, accessToken) {
   // 204 No Content — 본문이 없다. authedSend 는 JSON 파싱 실패를 null 로 흡수한다.
   return authedSend(`/api/waypoints/${encodeURIComponent(id)}`, accessToken, { method: 'DELETE' })
@@ -46,9 +70,16 @@ export function deleteWaypoint(id, accessToken) {
 // 저장된 경로를 로봇에 하달(SET_PATROL_ROUTE).
 // 로봇이 꺼져 있어도 200 이 오고 delivered=false 로 알려준다 — 저장은 이미 끝났으므로
 // 재연결 후 다시 누르면 된다. 그 구분을 화면에도 그대로 전한다.
+/**
+ * @param {string | null | undefined} accessToken
+ * @param {string} [robotId]
+ * @returns {Promise<import('./contracts').WaypointApplyResult>}
+ */
 export function applyWaypoints(accessToken, robotId) {
   return authedSend(`/api/waypoints/apply${q(robotId)}`, accessToken, { method: 'POST' })
 }
 
+/** @param {import('./contracts').Waypoint | null | undefined} w */
 export const wpId = (w) => w?.id ?? null
+/** @param {import('./contracts').Waypoint | null | undefined} w @param {number} i */
 export const wpLabel = (w, i) => w?.name || `지점 ${i + 1}`

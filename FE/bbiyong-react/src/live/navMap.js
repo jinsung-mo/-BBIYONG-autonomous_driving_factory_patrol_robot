@@ -1,3 +1,4 @@
+// @ts-check
 // 실시간 2D SLAM 맵 렌더러 — docs/439_live_nav_map_fe_porting.md 기준.
 //
 // 로봇팀 대시보드(BE_robot/orin_dashboard/static/nav.html)의 렌더 로직을 그대로 옮겼다.

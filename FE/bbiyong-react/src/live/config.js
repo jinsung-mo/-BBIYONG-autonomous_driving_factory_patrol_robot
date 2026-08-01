@@ -1,3 +1,4 @@
+// @ts-check
 // 실서버 연동 설정 — docs/fe_backend_integration_guide.md §1 접속 정보 기준.
 //
 // 값은 Vite 환경변수로 덮어쓸 수 있고, 없으면 배포 서버 기본값을 쓴다.

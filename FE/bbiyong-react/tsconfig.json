@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
@@ -9,12 +8,18 @@
     /* 번들러(Vite/esbuild) 기준 모듈 해석 */
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "isolatedModules": true,
     "moduleDetection": "force",
-    "noEmit": true,
     "jsx": "react-jsx",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+
+    /* 산출물을 내지 않는다 — 빌드는 Vite 가 하고 tsc 는 검사만 한다 (S15P11E101-569) */
+    "noEmit": true,
+
+    /* .js/.jsx 를 그대로 두고 타입만 입힌다. checkJs 는 전역으로 켜지 않는다 —
+       파일 맨 위의 // @ts-check 로 켠 파일만 검사한다. 이번 범위는 src/live 뿐이다. */
+    "allowJs": true,
+    "checkJs": false,
 
     /* 1단계: 실용적(느슨한) 타입 — 이후 strict 로 단계적 강화 */
     "strict": false,
@@ -23,5 +28,5 @@
     "noUnusedParameters": false,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.js"]
 }

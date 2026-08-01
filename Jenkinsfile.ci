@@ -69,6 +69,10 @@ pipeline {
             steps {
                 dir('FE/bbiyong-react') {
                     sh 'npm ci'
+                    // 서버·로봇 연동 계약 타입 검사 (S15P11E101-569).
+                    // 빌드(esbuild)는 타입을 보지 않으므로 별도 단계가 필요하다 —
+                    // 이 단계가 없으면 타입은 곧 낡아 무의미해진다.
+                    sh 'npm run typecheck'
                     sh 'npm run build'
                 }
             }

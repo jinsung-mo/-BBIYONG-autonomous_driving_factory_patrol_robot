@@ -1,3 +1,4 @@
+// @ts-check
 // 실서버(STOMP) 연동 컨텍스트 — docs/fe_backend_integration_guide.md §3·§4 구현.
 //
 // 로컬 시뮬레이션(SimContext)은 그대로 두고 그 위에 얹는다. 컴포넌트는 live 모드일 때만
@@ -81,7 +82,8 @@ export function LiveProvider({ children }) {
 
   // 실시간 SLAM 맵(가이드 §5). NAV_LIVE 가 3Hz 로 오고 scan 배열이 커서 영상 프레임과 같은
   // 방식으로 다룬다 — React state 로 올리지 않고 ref 에 최신값만 두고 리스너가 직접 받아간다.
-  const navRef = useRef({ map: null, mapCanvas: null, pose: null, scan: null, trail: [] })
+  /** @type {import('react').MutableRefObject<import('./contracts').NavState>} */
+  const navRef = useRef({ map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null })
   const navListeners = useRef(new Set())
   // 구독자를 서로 격리한다. 한 리스너가 던지면 forEach 가 거기서 끊겨 뒤쪽 구독자는
   // 갱신을 못 받는다 — 관제 캔버스가 실패했다고 운영 탭 진행 표시까지 멈추면 안 된다.
@@ -125,9 +127,11 @@ export function LiveProvider({ children }) {
       setConnected(c); setLastError(e); setAuthError(!!a)
     })
 
-    const offRobots = subscribe('/topic/robots', (msg) => { telemetryRef.current = msg })
+    const offRobots = subscribe('/topic/robots',
+      /** @param {import('./contracts').RobotTelemetry} msg */ (msg) => { telemetryRef.current = msg })
 
-    const offAlerts = subscribe('/topic/alerts', (msg) => {
+    const offAlerts = subscribe('/topic/alerts',
+      /** @param {import('./contracts').AlertMessage | import('./contracts').MappingMessage} msg */ (msg) => {
       // 맵 모델링 완료는 위험 경보가 아니다 — 화재/과열 토스트로 흘리면
       // alertToToast 가 타입 문자열을 그대로 띄운다. 운영 탭 전용 상태로 뺀다.
       if (isMappingComplete(msg)) { setMappingComplete({ ...msg, _at: Date.now() }); return }
@@ -139,7 +143,8 @@ export function LiveProvider({ children }) {
     //   EVENT_MAPPING_COMPLETE : 로봇 원문 relay (매핑이 끝났다)
     //   FLOORPLAN_READY        : 서버가 정제 도면을 만들어 활성화했다
     // 도착 자체를 완료로 보면 도면 알림에도 '이 맵을 사용할까요?' 가 다시 뜬다.
-    const offMapping = subscribe('/topic/mapping', (msg) => {
+    const offMapping = subscribe('/topic/mapping',
+      /** @param {import('./contracts').MappingMessage} msg */ (msg) => {
       const m = (typeof msg === 'object' && msg) ? msg : {}
       if (isFloorplanReady(m)) { setPlanReady({ ...m, _at: Date.now() }); return }
       setMappingComplete({ ...m, _at: Date.now() })
@@ -154,7 +159,8 @@ export function LiveProvider({ children }) {
     })
 
     // 실시간 SLAM 맵 — 한 토픽에 MAP/NAV_LIVE 두 종류가 오고 type 으로 갈린다(가이드 §1).
-    const offNav = subscribe(`/topic/nav/${ROBOT_ID}`, (msg) => {
+    const offNav = subscribe(`/topic/nav/${ROBOT_ID}`,
+      /** @param {import('./contracts').MapSnapshot | import('./contracts').NavLive | import('./contracts').MappingMessage} msg */ (msg) => {
       const nav = navRef.current
       if (msg?.type === 'MAP') {
         // 서버는 snapshot 만 보낸다(patch 없음). sequence 가 바뀔 때만 다시 굽는다.
@@ -287,7 +293,13 @@ export function LiveProvider({ children }) {
   }, [settings.vMax, setSpeed])
 
   const control = useMemo(() => {
-    const send = (dest, body) => publish(dest, { robot_id: ROBOT_ID, ...body })
+    /**
+     * 제어 명령 발행. body 는 판별 유니온이라 command 에 맞지 않는 필드를 실으면
+     * 빌드에서 걸린다 — SET_MODE 에 linear 를 넣는 류의 실수를 여기서 막는다.
+     * @param {'/app/control/drive' | '/app/control/mode' | '/app/control/operation'} dest
+     * @param {import('./contracts').ControlCommandBody} body
+     */
+    const send = (dest, body) => publish(dest, /** @type {any} */ ({ robot_id: ROBOT_ID, ...body }))
     // 방향 단위벡터 × 축별 속도. 선속도는 슬라이더 값 그대로, 각속도는 같은 비율을
     // 각속도 상한에 적용한다 — 로봇 상한이 서로 달라(V/W) 한 배율을 공유하면 안 된다.
     // 부동소수 잔값이 payload 에 남지 않게 소수 2자리로 정리한다.
