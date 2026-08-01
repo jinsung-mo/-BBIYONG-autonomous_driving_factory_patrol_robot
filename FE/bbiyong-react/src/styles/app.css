@@ -489,3 +489,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .logfilter-rb input{width:auto;}
 .logfilter2 input[type=date]{flex:1; min-width:0; padding:3px 6px; font-size:11px;
   border-radius:7px; border:1px solid var(--dk-line); background:var(--dk-panel2); color:var(--dk-ink);}
+
+/* 이벤트 해결 처리 (S15P11E101-593)
+   삭제는 되돌릴 수 없고 해결 처리는 되돌릴 수 있다 — 나란히 있으므로 색과 테두리로 갈라 둔다.
+   해결은 초록 계열(안전한 동작), 삭제는 기존의 흐린 회색/빨강을 그대로 쓴다. */
+.elog li .logfix{margin-left:auto; font-size:10px; font-weight:700; padding:2px 6px; border-radius:5px;
+  border:1px solid rgba(61,220,151,.45); background:transparent; color:var(--dk-green); align-self:center;
+  white-space:nowrap; opacity:.55; transition:opacity .12s;}
+.elog li:hover .logfix, .elog li .logfix:focus-visible{opacity:1;}
+/* 해결 버튼이 먼저 오므로 뒤따르는 삭제 버튼은 우측으로 밀지 않는다 */
+.elog li .logfix + .logdel{margin-left:6px;}
+.elog li .tag + .logfix{margin-left:6px;}
+.elog li .tag.done{color:var(--dk-green); border-color:rgba(61,220,151,.45);}
