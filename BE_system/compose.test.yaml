@@ -1,23 +1,16 @@
 services:
   mysql-test:
     image: mysql:8.0
-    container_name: bbiyong-mysql-test
     environment:
-      MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: bbiyong_test
       MYSQL_USER: test
       MYSQL_PASSWORD: test
+      MYSQL_ROOT_PASSWORD: test-root-password
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "test", "-ptest"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-ptest-root-password"]
       interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --sql_mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
-    tmpfs:
-      - /var/lib/mysql
+      timeout: 5s
+      retries: 12
+      start_period: 15s
