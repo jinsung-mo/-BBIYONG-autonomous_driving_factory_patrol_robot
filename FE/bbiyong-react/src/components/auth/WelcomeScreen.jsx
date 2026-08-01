@@ -1,3 +1,4 @@
+// @ts-check
 // 진입(랜딩) 화면 — 로그인 전에 표시. "접속" → 로그인 화면으로 진입.
 // 산업용 관제 콘솔 톤의 절제된 다크 레이아웃 (테마와 무관하게 항상 다크).
 
@@ -8,6 +9,7 @@ const MODULES = [
   '웹 기반 관제',
 ]
 
+/** @param {{ onEnter: () => void }} props */
 export default function WelcomeScreen({ onEnter }) {
   return (
     <div

@@ -1,3 +1,4 @@
+// @ts-check
 import { useSim } from '../../SimContext.js'
 import { useLive } from '../../live/LiveContext.jsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.js'

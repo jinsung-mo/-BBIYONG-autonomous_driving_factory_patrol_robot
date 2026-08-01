@@ -1,3 +1,4 @@
+// @ts-check
 import { useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.jsx'
 import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgroundOf } from '../../live/navMap.js'
@@ -7,6 +8,12 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgr
 //
 // route/onPick 을 주면 순찰 경로를 겹쳐 그리고 클릭으로 지점을 찍을 수 있다(S15P11E101-514).
 // 관제 화면은 이 두 값을 주지 않으므로 기존과 똑같이 동작한다.
+/**
+ * @param {{
+ *   route?: import('../../live/contracts').Waypoint[] | null,
+ *   onPick?: ((p: { x: number, y: number } | null) => void) | null,
+ * }} props
+ */
 export default function LiveNavMap({ route = null, onPick = null }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef(null)

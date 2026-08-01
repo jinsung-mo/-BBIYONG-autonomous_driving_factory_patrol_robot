@@ -1,3 +1,4 @@
+// @ts-check
 import { useSim } from '../SimContext.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { roleText } from '../auth/roles.js'
@@ -10,13 +11,23 @@ import UserMenu from './auth/UserMenu.jsx'
 // 섹션 탭(S15P11E101-475): 관제는 상시, 운영·설정은 관리자에게만 보인다.
 // 뷰어에게 탭 자체를 감추는 이유는 눌러도 못 들어가는 문을 만들지 않기 위해서다.
 // (반대로 관제 화면의 조작 버튼은 감추지 않고 회색으로 남긴다 — 기능이 없는 게 아니라 권한이 없는 것)
+/**
+ * @param {{ section: 'live' | 'ops' | 'config',
+ *           onSection: (s: 'live' | 'ops' | 'config') => void }} props
+ */
 export default function Nav({ section, onSection }) {
   const { clock, theme, toggleTheme } = useSim()
   const { user, isAdmin } = useAuth()
 
+  // key 를 리터럴로 고정한다 — 그냥 두면 string 으로 넓어져 onSection 이 받지 못한다.
+  /** @type {Array<{ key: 'live' | 'ops' | 'config', label: string }>} */
   const tabs = [
     { key: 'live', label: '관제' },
-    ...(isAdmin ? [{ key: 'ops', label: '운영' }, { key: 'config', label: '설정' }] : []),
+    ...(isAdmin
+      ? /** @type {Array<{ key: 'live' | 'ops' | 'config', label: string }>} */ ([
+        { key: 'ops', label: '운영' }, { key: 'config', label: '설정' },
+      ])
+      : []),
   ]
 
   return (

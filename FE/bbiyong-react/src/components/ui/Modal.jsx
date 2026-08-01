@@ -1,6 +1,11 @@
+// @ts-check
 import { useEffect } from 'react'
 
 // 공용 모달 (오버레이 + 카드). ESC/오버레이 클릭으로 닫힘.
+/**
+ * @param {{ title: string, onClose: () => void,
+ *           children?: import('react').ReactNode, width?: number }} props
+ */
 export default function Modal({ title, onClose, children, width = 400 }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }

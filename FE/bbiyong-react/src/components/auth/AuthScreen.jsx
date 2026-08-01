@@ -1,3 +1,4 @@
+// @ts-check
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { getDataSource, saveDataSource } from '../../live/config.js'
@@ -11,6 +12,7 @@ import { REASON_TEXT } from '../../auth/sessionPolicy.js'
 // → 모드 선택을 로그인 화면에 함께 둔다.
 const EMPTY = { email: '', password: '', password2: '', name: '', phone: '', birth: '', gender: '' }
 
+/** @param {{ onBack?: (() => void) | null }} props */
 export default function AuthScreen({ onBack }) {
   const { login, signup, logoutReason } = useAuth()
   const [mode, setMode] = useState('login') // 'login' | 'signup'

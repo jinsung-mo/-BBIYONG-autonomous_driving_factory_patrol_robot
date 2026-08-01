@@ -1,3 +1,4 @@
+// @ts-check
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { roleText } from '../../auth/roles.js'
