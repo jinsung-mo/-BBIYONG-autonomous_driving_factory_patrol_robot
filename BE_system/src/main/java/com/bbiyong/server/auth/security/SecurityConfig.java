@@ -58,6 +58,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         // 헬스/모니터링
                         .requestMatchers("/actuator/**").permitAll()
+                        // Swagger UI 및 OpenAPI 문서 (개발/테스트 용도)
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         // 실시간 소켓 핸드셰이크 (로봇 WSS · 관제 STOMP/SockJS)
                         .requestMatchers("/ws/robot/**", "/ws-관제/**", "/ws/control/**").permitAll()
                         // 그 외 REST 는 인증 필요
