@@ -2,6 +2,7 @@ import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { telemetryToStatus } from '../../live/mappers.ts'
 import LogList from '../LogList.tsx'
+import FleetList from '../dashboard/FleetList.tsx'
 
 // 순찰 로봇 상태 + 환경 + 이벤트 로그
 // live 모드에서는 /topic/robots 텔레메트리를 그대로 표시한다.
@@ -57,6 +58,8 @@ export default function StatusPanel() {
           <div><b className="mono">{status.envH}</b><span>습도</span></div>
         </div>
       )}
+      {/* 편성이 2대 이상이면 나머지 로봇도 여기서 본다(S15P11E101-591) */}
+      <FleetList />
       <h3 style={{ marginTop: 12 }}>이벤트 로그</h3>
       <LogList variant="elog" />
     </div>

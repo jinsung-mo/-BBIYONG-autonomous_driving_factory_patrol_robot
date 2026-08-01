@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
+import { useFleet } from '../../live/FleetContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { errMessage } from '../../live/errors.ts'
 import {
@@ -15,7 +16,9 @@ type Schedule = import('../../live/contracts.d.ts').PatrolSchedule
 // 지금은 사람이 퇴근 전에 관제에 들어와 순찰을 시작한다. 스케줄을 걸어 두면
 // 그 시각에 서버가 대신 띄운다 — 20시~08시 무인 운영과 맞물리는 기능이다.
 export default function SchedulePanel() {
-  const { enabled, robotId } = useLive()
+  const { enabled } = useLive()
+  // 새 스케줄은 관제 화면에서 고른 로봇으로 만든다(S15P11E101-591)
+  const { selected: robotId, robotName, multi } = useFleet()
   const { accessToken, isAdmin } = useAuth()
 
   const [rows, setRows] = useState<Schedule[]>([])
@@ -116,7 +119,7 @@ export default function SchedulePanel() {
                 </div>
                 {/* 해석되면 사람 말로, 아니면 표현식을 그대로 — 틀린 설명을 보여 주지 않는다 */}
                 <div className="sch-when">{cronText(s.cronExpression) || <span className="mono">{s.cronExpression}</span>}</div>
-                <div className="sch-meta mono">{s.robotId} · 최근 실행 {lastRunText(s.lastExecuted)}</div>
+                <div className="sch-meta">{robotName(s.robotId)} · <span className="mono">최근 실행 {lastRunText(s.lastExecuted)}</span></div>
                 {isAdmin && (
                   <div className="gotor">
                     <button type="button" className="dbtn" disabled={busy === s.scheduleId}
@@ -135,6 +138,7 @@ export default function SchedulePanel() {
 
           {isAdmin && (
             <div className="sch-new">
+              {multi && <div className="cfg-note">새 스케줄은 <b>{robotName(robotId)}</b> 앞으로 만듭니다.</div>}
               <div className="form-row">
                 <label htmlFor="sch-name">새 스케줄 이름</label>
                 <input id="sch-name" value={name} maxLength={40}

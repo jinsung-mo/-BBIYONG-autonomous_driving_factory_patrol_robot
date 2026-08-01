@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
+import { useFleet } from '../../live/FleetContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { errMessage } from '../../live/errors.ts'
 import { fetchEventStats, isTimeSeries, STATS_GROUP_LABEL } from '../../live/events.ts'
@@ -29,6 +30,8 @@ const WARN = '#ffc14d'
 // 서버가 timestamp 를 null 로 주는 것이 그 구분과 정확히 일치한다.
 export default function EventStatsPanel() {
   const { enabled } = useLive()
+  // 축 라벨을 사람이 읽는 이름으로 바꾸기 위한 이름표(S15P11E101-591)
+  const { robotName, equipmentName } = useFleet()
   const { accessToken } = useAuth()
 
   const [group, setGroup] = useState<Group>('day')
@@ -61,8 +64,14 @@ export default function EventStatsPanel() {
   }
 
   const points = stats?.dataPoints ?? []
-  // 유형별 label 은 FIRE/OVERHEAT/SYSTEM 원문이라 한글로 바꿔 준다
-  const labelOf = (l: string) => (group === 'type' ? (TYPE_LABEL[l] || l) : l)
+  // 서버는 label 로 원본 ID(FIRE · orinka_01 · panel_A)를 준다. 사람이 읽는 이름으로 바꾸되,
+  // 이름을 못 찾으면 ID 를 그대로 둔다 — 빈 라벨을 만들면 어느 항목인지조차 알 수 없다.
+  const labelOf = (l: string) => {
+    if (group === 'type') return TYPE_LABEL[l] || l
+    if (group === 'robot') return robotName(l)
+    if (group === 'equipment') return equipmentName(l)
+    return l
+  }
   const total = points.reduce((s, p) => s + (p.totalCount || 0), 0)
   const critical = points.reduce((s, p) => s + (p.criticalCount || 0), 0)
   const unresolved = points.reduce((s, p) => s + (p.unresolvedCount || 0), 0)
