@@ -1,3 +1,4 @@
+// @ts-check
 import { useCallback, useEffect, useState } from 'react'
 import { useSim } from '../SimContext.js'
 import { useLive } from '../live/LiveContext.jsx'
@@ -20,6 +21,7 @@ const FILTERS = [
 ]
 const PAGE_SIZE = 20
 
+/** @param {{ variant?: string }} props 리스트에 붙일 CSS 클래스 */
 export default function LogList({ variant = 'elog' }) {
   const { status } = useSim()
   const { enabled, connected, alerts, dismissAlert } = useLive()

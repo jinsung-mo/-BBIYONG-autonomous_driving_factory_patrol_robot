@@ -1,3 +1,4 @@
+// @ts-check
 import { useState } from 'react'
 import useSimulation from './hooks/useSimulation.js'
 import { SimContext } from './SimContext.js'

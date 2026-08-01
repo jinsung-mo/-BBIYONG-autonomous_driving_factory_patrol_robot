@@ -1,3 +1,4 @@
+// @ts-check
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSim } from '../SimContext.js'
 import { useLive } from '../live/LiveContext.jsx'
@@ -19,7 +20,10 @@ let uid = 0
 // 오디오 파일 없이 오실레이터로 경보음 생성 (화재: 높은 삐-삐-삐 / 과열: 낮은 삐-삐)
 function playAlarmBeep(kind) {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    // webkitAudioContext 는 구형 Safari 폴백이라 표준 타입에 없다. 런타임 동작은 그대로 두고
+    // 타입만 넓힌다(S15P11E101-570).
+    const w = /** @type {any} */ (window)
+    const AudioCtx = w.AudioContext || w.webkitAudioContext
     const ctx = new AudioCtx()
     const now = ctx.currentTime
     const freqs = kind === 'fire' ? [880, 660, 880] : [520, 440]

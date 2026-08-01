@@ -1,3 +1,4 @@
+// @ts-check
 import { useEffect, useState } from 'react'
 import { useSettings, DEFAULT_SETTINGS } from '../../settings/SettingsContext.jsx'
 import { ROBOT_V_MAX, ROBOT_W_MAX } from '../../live/config.js'

@@ -1,3 +1,4 @@
+// @ts-check
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
   addUser, clearSession, findUser, getSession, setSession, updateUser,
@@ -15,8 +16,14 @@ import {
 // live 모드: 실서버 REST(§2)로 로그인하고 accessToken을 보관한다.
 //            이 토큰은 STOMP CONNECT 헤더에도 실린다 — 없으면 실시간 연결이 거부된다(§1).
 
+/** @type {import('react').Context<import('../live/contracts').AuthContextValue | null>} */
 const AuthContext = createContext(null)
 
+/**
+ * Provider 밖에서 부르면 던지므로 호출부는 null 을 다룰 필요가 없다 —
+ * 반환 타입을 non-null 로 좁혀 매번 옵셔널 체이닝을 쓰지 않게 한다(S15P11E101-570).
+ * @returns {import('../live/contracts').AuthContextValue}
+ */
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within <AuthProvider>')
@@ -24,10 +31,15 @@ export function useAuth() {
 }
 
 // 비밀번호를 제외한 공개 유저 정보
+/**
+ * @param {import('../live/contracts').StoredUser | null | undefined} u
+ * @returns {import('../live/contracts').PublicUser | null}
+ */
 const publicUser = (u) => (u ? { email: u.email, name: u.name, role: u.role } : null)
 
 // 서버는 role만 내려준다 — 이름은 가입 시 입력값, 없으면 이메일 로컬파트로 채운다.
 // 서버가 준 role 원문을 그대로 보관한다 — 표시 문구로 바꿔 저장하면 권한 판정을 잃는다.
+/** @param {string | null | undefined} role */
 const rawRole = (role) => role || ROLE_VIEWER
 
 // 복원 전에 만료를 먼저 판정한다(S15P11E101-508). 지난 세션은 되살리지 않는다 —
@@ -55,6 +67,7 @@ function restoreUser() {
 
 // 로그인 응답의 expiresIn(초) → 절대 만료 시각. 값이 없으면 절대 만료를 걸지 않는다
 // (유휴 만료는 그대로 동작한다).
+/** @param {{ expiresIn?: number } | null | undefined} res */
 const expiryFrom = (res) => (Number(res?.expiresIn) > 0 ? Date.now() + Number(res.expiresIn) * 1000 : null)
 
 export function AuthProvider({ children }) {
@@ -109,6 +122,7 @@ export function AuthProvider({ children }) {
   }
 
   // reason 이 MANUAL 이면 안내를 띄우지 않는다 — 스스로 누른 로그아웃이다.
+  /** @type {(reason?: import('../live/contracts').LogoutReason) => void} */
   const logout = useCallback((reason = REASON.MANUAL) => {
     clearSession(); clearToken()
     setWarning(false)

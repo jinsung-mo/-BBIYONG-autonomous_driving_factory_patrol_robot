@@ -1,3 +1,4 @@
+// @ts-check
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.jsx'
 import { useAuth } from '../../auth/AuthContext.jsx'

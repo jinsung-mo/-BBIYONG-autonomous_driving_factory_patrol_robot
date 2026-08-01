@@ -1,3 +1,4 @@
+// @ts-check
 // Simulation — 원본 index.html의 vanilla JS(IIFE)를 프레임워크 독립적인
 // 컨트롤러로 이식. Canvas 실시간 렌더링(rAF)과 상태 머신을 담당하고,
 // UI에 필요한 값은 subscribe(snapshot) 로 React에 밀어준다.
@@ -237,6 +238,16 @@ export default class Simulation {
     })
 
     // 내부 오브젝트 depth-sort (먼 것 → 가까운 것)
+    //
+    // kind 마다 필요한 필드가 다른 이질 배열이다. 그냥 두면 처음 push 한 모양으로만
+    // 추론돼 geo 접근이 막힌다 — 이 함수 안에서만 쓰는 형태라 여기 typedef 로 둔다.
+    /**
+     * @typedef {{ pn: any, c: number, r: number, hw: number, hd: number,
+     *             face: number[], inC: number, inR: number }} PanelGeo
+     * @typedef {{ zc: number, kind: 'obs' | 'panel' | 'robot' | 'fire',
+     *             c?: number, r?: number, geo?: PanelGeo }} DrawItem
+     * @type {DrawItem[]}
+     */
     const items = []
     for (let r = 0; r < RS; r++) for (let c = 0; c < CSn; c++) if (MAP[r][c] === 1) items.push({ zc: raw(c, 0, r).zc, kind: 'obs', c, r })
     panelGeos.forEach((geo) => items.push({ zc: raw(geo.c, 0, geo.r).zc, kind: 'panel', geo }))

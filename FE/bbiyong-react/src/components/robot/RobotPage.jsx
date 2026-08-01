@@ -1,3 +1,4 @@
+// @ts-check
 import { useEffect } from 'react'
 import { useSim } from '../../SimContext.js'
 import { useSettings } from '../../settings/SettingsContext.jsx'
