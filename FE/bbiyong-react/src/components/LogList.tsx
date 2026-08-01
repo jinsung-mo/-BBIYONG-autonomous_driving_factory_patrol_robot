@@ -4,8 +4,7 @@ import { useSim } from '../SimContext.ts'
 import { useLive } from '../live/LiveContext.tsx'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { alertToLog, eventToLog, TYPE_LABEL } from '../live/mappers.ts'
-import { authedGet } from '../live/authApi.ts'
-import { deleteEvent } from '../live/events.ts'
+import { deleteEvent, fetchEvents, LEVEL_LABEL, EVENT_STATUS_LABEL } from '../live/events.ts'
 import Modal from './ui/Modal.tsx'
 
 // 이벤트 로그 (순찰 로봇 관제의 .elog).
@@ -21,6 +20,24 @@ const FILTERS = [
 ]
 const PAGE_SIZE = 20
 
+// 기간은 서버가 YYYY-MM-DD 로 받는다(startDate). '전체'는 아예 보내지 않는다.
+const RANGES = [
+  { key: 'ALL', label: '전체 기간', days: 0 },
+  { key: 'TODAY', label: '오늘', days: 1 },
+  { key: 'D7', label: '최근 7일', days: 7 },
+  { key: 'D30', label: '최근 30일', days: 30 },
+]
+
+// days=1 이면 오늘 0시부터다. 로컬 시각 기준으로 만든다 —
+// toISOString() 은 UTC 라 한국 시간 오전 9시 이전에는 어제 날짜가 나온다.
+function startDateOf(days: number) {
+  if (!days) return null
+  const d = new Date()
+  d.setDate(d.getDate() - (days - 1))
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 /** @param {{ variant?: string }} props 리스트에 붙일 CSS 클래스 */
 export default function LogList({ variant = 'elog' }) {
   const { status } = useSim()
@@ -28,6 +45,10 @@ export default function LogList({ variant = 'elog' }) {
   const { accessToken, isAdmin } = useAuth()
 
   const [filter, setFilter] = useState('ALL')
+  // 심각도·해결 상태·기간 — 서버가 쿼리로 받아 거른다(관제센터 확장)
+  const [level, setLevel] = useState('')
+  const [statusF, setStatusF] = useState('')
+  const [range, setRange] = useState('ALL')
   const [history, setHistory] = useState<any[]>([])
   const [page, setPage] = useState(0)
   const [more, setMore] = useState(false)
@@ -43,9 +64,14 @@ export default function LogList({ variant = 'elog' }) {
     setLoading(true)
     setError(null)
     try {
-      const q = new URLSearchParams({ page: String(nextPage), size: String(PAGE_SIZE) })
-      if (filter !== 'ALL') q.set('type', filter)
-      const res = await authedGet(`/api/events?${q}`, accessToken)
+      const res = await fetchEvents({
+        page: nextPage,
+        size: PAGE_SIZE,
+        type: filter === 'ALL' ? null : (filter as import('../live/contracts.d.ts').EventType),
+        level: (level || null) as import('../live/contracts.d.ts').EventLevel | null,
+        status: (statusF || null) as import('../live/contracts.d.ts').EventStatus | null,
+        startDate: startDateOf(RANGES.find((r) => r.key === range)?.days ?? 0),
+      }, accessToken)
       const rows = (res?.content || []).map(eventToLog)
       setHistory((prev) => (reset ? rows : [...prev, ...rows]))
       setPage(nextPage)
@@ -55,13 +81,13 @@ export default function LogList({ variant = 'elog' }) {
     } finally {
       setLoading(false)
     }
-  }, [enabled, accessToken, filter])
+  }, [enabled, accessToken, filter, level, statusF, range])
 
   // 필터가 바뀌면 처음부터 다시 받는다
   useEffect(() => {
     if (!enabled) { setHistory([]); setMore(false); setError(null); return }
     load(0, true)
-  }, [enabled, filter, load])
+  }, [enabled, filter, level, statusF, range, load])
 
   if (!enabled) {
     // 시뮬 모드 — 기존 시뮬 로그를 그대로 보여준다(필터·이력 없음)
@@ -77,8 +103,12 @@ export default function LogList({ variant = 'elog' }) {
     )
   }
 
+  // 실시간 수신분은 서버 쿼리를 거치지 않으므로 같은 조건을 화면에서 적용한다.
+  // 기간 필터는 걸지 않는다 — 방금 들어온 경보는 어느 기간을 골랐든 지금 일어난 일이다.
   const liveRows = alerts.map(alertToLog).reverse()
     .filter((l: any) => filter === 'ALL' || l.type === filter)
+    .filter((l: any) => !level || l.level === level)
+    .filter((l: any) => !statusF || l.status === statusF)
   const rows = [...liveRows, ...history]
 
   // 서버에서 지운다. 실시간 수신분은 eventId 가 없어(AlertMessage 에 필드가 없다)
@@ -110,6 +140,22 @@ export default function LogList({ variant = 'elog' }) {
           </button>
         ))}
       </div>
+      {/* 심각도·상태·기간은 서버가 걸러 준다 — 화면에서 자르면 '더 보기'가 어긋난다 */}
+      <div className="logfilter2">
+        <select aria-label="심각도" value={level} onChange={(e) => setLevel(e.target.value)}>
+          <option value="">심각도 전체</option>
+          <option value="CRITICAL">{LEVEL_LABEL.CRITICAL}</option>
+          <option value="WARNING">{LEVEL_LABEL.WARNING}</option>
+        </select>
+        <select aria-label="해결 상태" value={statusF} onChange={(e) => setStatusF(e.target.value)}>
+          <option value="">상태 전체</option>
+          <option value="UNRESOLVED">{EVENT_STATUS_LABEL.UNRESOLVED}</option>
+          <option value="RESOLVED">{EVENT_STATUS_LABEL.RESOLVED}</option>
+        </select>
+        <select aria-label="조회 기간" value={range} onChange={(e) => setRange(e.target.value)}>
+          {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+        </select>
+      </div>
       <ul className={variant}>
         {rows.length === 0 && (
           <li className="ok">
@@ -120,7 +166,10 @@ export default function LogList({ variant = 'elog' }) {
           <li key={log.id} className={log.kind}>
             <span className="t mono">{log.date ? `${log.date} ` : ''}{log.time}</span>
             <b>{log.msg}</b>
-            {log.live && <span className="tag">실시간</span>}
+            {log.live && <span className="tag live">실시간</span>}
+            {/* 긴급과 미해결만 표시한다 — 경고·해결까지 다 붙이면 줄이 태그로 덮인다 */}
+            {log.level === 'CRITICAL' && <span className="tag crit">{LEVEL_LABEL.CRITICAL}</span>}
+            {log.status === 'UNRESOLVED' && !log.live && <span className="tag open">{EVENT_STATUS_LABEL.UNRESOLVED}</span>}
             {/* 이력 행은 서버에서 삭제, 실시간 행은 화면에서만 닫는다(서버 id 가 없다) */}
             {isAdmin && log.eventId != null && (
               <button type="button" className="logdel" title="이 이벤트를 서버에서 삭제"

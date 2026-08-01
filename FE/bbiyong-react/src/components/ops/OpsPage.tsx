@@ -5,6 +5,9 @@ import { useAuth } from '../../auth/AuthContext.tsx'
 import { ROBOT_ID } from '../../live/config.ts'
 import Modal from '../ui/Modal.tsx'
 import RoutePanel from './RoutePanel.tsx'
+import SchedulePanel from './SchedulePanel.tsx'
+import EventStatsPanel from './EventStatsPanel.tsx'
+import HealthPanel from './HealthPanel.tsx'
 import {
   MAPPING_STATUS, activateMap, activatePath, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
   waitForSavedMap, NotImplementedError,
@@ -219,6 +222,14 @@ export default function OpsPage() {
 
       {/* 맵을 만든 뒤 그 위에 순찰 경로를 그리는 흐름이라 같은 탭에 둔다(S15P11E101-514) */}
       <RoutePanel />
+
+      {/* 경로 다음은 '언제 돌지'(스케줄), 그 다음이 '어떻게 돌았나'(건강 이력·통계)다.
+          차트는 폭이 좁으면 읽기 어려워 2열까지만 벌린다. */}
+      <div className="ops-grid">
+        <SchedulePanel />
+        <HealthPanel />
+        <EventStatsPanel />
+      </div>
 
       {confirming && (
         <Modal title="맵 모델링을 시작할까요?" onClose={() => setConfirming(false)} width={420}>

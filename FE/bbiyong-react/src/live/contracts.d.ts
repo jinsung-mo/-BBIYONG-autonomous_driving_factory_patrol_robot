@@ -592,3 +592,136 @@ export interface LiveContextValue {
   plan: PlanLayer | null
   planError: string | null
 }
+
+// ---------------------------------------------------------------- 관제센터 신규 API
+//
+// BE 가이드: docs/FE_CONTROL_CENTER_API_GUIDE.md
+// 컨트롤러: DashboardController · EventController(stats) · NotificationController ·
+//           PatrolScheduleController · RobotController(health-history)
+//
+// 응답 필드는 BE DTO 를 그대로 옮겼다. 가이드 문서에 없지만 DTO 에 있는 것
+// (EventLogResponse.hasVideo, NotificationSettingResponse.id/userId/…)도 포함한다 —
+// 서버가 보내는 것을 타입에서 지워 두면 나중에 쓸 때 캐스트가 필요해진다.
+
+/** GET /api/dashboard/stats — 관제 요약 4종을 한 번에 받는다. */
+export interface DashboardStats {
+  summary: RobotSummary
+  today: TodayStats
+  recentEvents: EventLog[]
+  robotStatus: RobotResponse[]
+}
+
+export interface RobotSummary {
+  totalRobots: number
+  activeRobots: number
+  chargingRobots: number
+  /** 소수점이 붙어 온다 (예: 78.5) */
+  avgBattery: number
+  onlineRobots: number
+}
+
+/** 오늘(서버 기준 자정부터) 집계. 서버가 long 으로 주므로 큰 수가 올 수 있다. */
+export interface TodayStats {
+  eventCount: number
+  criticalEvents: number
+  warningEvents: number
+  resolvedEvents: number
+  unresolvedEvents: number
+}
+
+/** GET /api/events 쿼리 — 모두 선택이고, 빈 값은 아예 보내지 않는다. */
+export interface EventFilters {
+  type?: EventType | null
+  level?: EventLevel | null
+  status?: EventStatus | null
+  robotId?: string | null
+  equipmentId?: string | null
+  /** YYYY-MM-DD */
+  startDate?: string | null
+  endDate?: string | null
+}
+
+/** 통계 묶음 기준. by-robot·by-equipment·by-type 은 시계열이 아니라 timestamp 가 null 이다. */
+export type EventStatsGroup = 'hour' | 'day' | 'robot' | 'equipment' | 'type'
+
+export interface EventStatsPoint {
+  /** 시간별 '10:00' · 일별 'MM/DD' · 그 외에는 로봇/설비/타입 ID */
+  label: string
+  timestamp?: string | null
+  totalCount: number
+  criticalCount: number
+  warningCount: number
+  unresolvedCount: number
+  resolvedCount: number
+}
+
+export interface EventStats {
+  groupBy: EventStatsGroup
+  startTime?: string
+  endTime?: string
+  dataPoints: EventStatsPoint[]
+}
+
+/** GET/PUT /api/notifications/settings — 사용자별 Mattermost 알림 설정. */
+export interface NotificationSetting {
+  id?: number
+  userId?: string
+  mattermostEnabled: boolean
+  mattermostWebhookUrl?: string | null
+  mattermostChannel?: string | null
+  /** CRITICAL = 긴급만 · WARNING = 경고 이상 전부 */
+  minSeverity: EventLevel
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** PUT 본문. 서버가 채우는 id·userId·시각은 보내지 않는다. */
+export interface NotificationSettingRequest {
+  mattermostEnabled: boolean
+  mattermostWebhookUrl?: string
+  mattermostChannel?: string
+  minSeverity: EventLevel
+}
+
+/** GET /api/patrol-schedules — Spring cron(6필드) 으로 도는 자동 순찰 예약. */
+export interface PatrolSchedule {
+  scheduleId: number
+  name: string
+  robotId: string
+  /** 초 분 시 일 월 요일 — Spring 6필드다(표준 5필드가 아니다) */
+  cronExpression: string
+  enabled: boolean
+  lastExecuted?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface PatrolScheduleRequest {
+  name: string
+  robotId: string
+  cronExpression: string
+  enabled: boolean
+}
+
+/** GET /api/robots/{id}/health-history — 차트용 시계열. */
+export interface RobotHealthHistory {
+  robotId: string
+  startTime?: string
+  endTime?: string
+  /** 시간 오름차순 정렬돼 온다 */
+  dataPoints: HealthDataPoint[]
+}
+
+export interface HealthDataPoint {
+  timestamp: string
+  battery?: number
+  speed?: number
+  commLatencyMs?: number
+  inferenceFps?: number
+  status?: string
+  estop?: string
+  online?: boolean
+}
+
+/** health-history 의 period 파라미터. 서버가 받는 값만 넣는다. */
+export type HealthPeriod = '1h' | '6h' | '24h' | '7d' | '30d'

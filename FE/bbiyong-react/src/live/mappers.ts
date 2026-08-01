@@ -68,6 +68,9 @@ export function eventToLog(e: any) {
     date: formatDate(e?.timestamp),
     kind,
     type: e?.type || 'SYSTEM',
+    // 심각도·해결 상태는 필터와 행 표시에 함께 쓴다(관제센터 확장)
+    level: e?.level || null,
+    status: e?.status || null,
     msg: [TYPE_LABEL[e?.type] || e?.type || '이벤트', e?.robotId, detail].filter(Boolean).join(' · '),
   }
 }
@@ -82,6 +85,9 @@ export function alertToLog(a: any) {
     date: formatDate(a?.timestamp),
     kind: a?.type === 'FIRE' ? 'fire' : 'heat',
     type: a?.type || 'SYSTEM',
+    level: a?.level || null,
+    // 방금 들어온 경보는 아직 아무도 처리하지 않았다 — 해결 상태 필터에서 미해결로 잡힌다
+    status: 'UNRESOLVED',
     live: true,   // 실시간 수신분 — 히스토리와 구분해 표시한다
     msg: a?.message || alertToToast(a).sub,
   }
