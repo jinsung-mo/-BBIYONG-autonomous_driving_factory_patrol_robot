@@ -28,7 +28,7 @@ export default function LogList({ variant = 'elog' }) {
   const { accessToken, isAdmin } = useAuth()
 
   const [filter, setFilter] = useState('ALL')
-  const [history, setHistory] = useState([])
+  const [history, setHistory] = useState<any[]>([])
   const [page, setPage] = useState(0)
   const [more, setMore] = useState(false)
   const [loading, setLoading] = useState(false)

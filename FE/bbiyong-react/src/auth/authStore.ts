@@ -13,7 +13,7 @@ const TOKEN_KEY = 'bbiyong.token'
 const SEED = [{ email: 'safety@bbiyong.io', password: 'bbiyong', name: 'E101 관리자', role: ROLE_ADMIN }]
 
 function readUsers() {
-  try { return JSON.parse(localStorage.getItem(USERS_KEY)) } catch { return null }
+  try { return JSON.parse(localStorage.getItem(USERS_KEY) || 'null') } catch { return null }
 }
 function writeUsers(users: any) { localStorage.setItem(USERS_KEY, JSON.stringify(users)) }
 
@@ -61,7 +61,7 @@ export function updateUser(email: string, patch: Partial<import('../live/contrac
 
 /** @returns {import('../live/contracts').StoredSession | null} */
 export function getSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY)) } catch { return null }
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null') } catch { return null }
 }
 /** @param {string} email */
 export function setSession(email: string) { localStorage.setItem(SESSION_KEY, JSON.stringify({ email })) }
@@ -75,7 +75,7 @@ export function clearSession() {
 // expiresAt 은 로그인 응답의 expiresIn 으로 계산한 절대 만료 시각이다(S15P11E101-508).
 /** @returns {import('../live/contracts').StoredAuth | null} */
 export function getAuth() {
-  try { return JSON.parse(localStorage.getItem(TOKEN_KEY)) } catch { return null }
+  try { return JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null') } catch { return null }
 }
 /** @param {import('../live/contracts').StoredAuth} auth */
 export function setAuth({ accessToken, user, expiresAt = null }: import('../live/contracts').StoredAuth) {

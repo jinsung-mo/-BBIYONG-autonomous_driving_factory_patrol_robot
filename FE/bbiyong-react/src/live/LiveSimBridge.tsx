@@ -72,7 +72,10 @@ export default function LiveSimBridge(): null {
     }
 
     // 여러 키를 동시에 눌러도 방향은 하나 — 가장 최근에 누른 키를 따른다(Set은 삽입 순서 유지).
-    const currentVector = () => DRIVE_VECTORS[[...held.current].pop()] || null
+    const currentVector = () => {
+      const last = [...held.current].pop()
+      return (last && DRIVE_VECTORS[last]) || null
+    }
     const sendCurrent = () => {
       const v = currentVector()
       if (v) control.drive(v.linear, v.angular)

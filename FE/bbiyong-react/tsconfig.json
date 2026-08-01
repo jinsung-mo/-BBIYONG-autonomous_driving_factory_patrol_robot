@@ -19,14 +19,8 @@
        .ts/.tsx 를 그대로 적으려면 이 옵션이 필요하다(noEmit 전제). */
     "allowImportingTsExtensions": true,
 
-    /* 4단계 — strict 를 하나씩 켠다. 남은 것은 noImplicitAny · strictNullChecks 다. */
-    "strict": false,
-    "noImplicitThis": true,
-    "strictBindCallApply": true,
-    "alwaysStrict": true,
-    "strictFunctionTypes": true,
-    "useUnknownInCatchVariables": true,
-    "noImplicitAny": true,
+    /* 4단계 완료 — strict 전 항목을 켠다(S15P11E101-576). 개별 예외 없음. */
+    "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "forceConsistentCasingInFileNames": true

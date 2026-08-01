@@ -18,7 +18,7 @@ export default function OpsPage() {
 
   const [nav, setNav] = useState<import('../../live/contracts.d.ts').DecodedMap | null>(null)
   const [name, setName] = useState('')
-  const [maps, setMaps] = useState([])
+  const [maps, setMaps] = useState<import('../../live/contracts.d.ts').MapSummary[]>([])
   const [mapsErr, setMapsErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 

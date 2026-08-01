@@ -8,8 +8,10 @@ const initials = (name: any) => (name || '?').replace(/\s/g, '').slice(0, 2)
 
 // 마이페이지 모달 — 프로필 조회/수정
 function MyPageModal({ onClose }: any) {
-  const { user, updateProfile } = useAuth()
-  const [name, setName] = useState(user.name)
+  // Gate 가 로그인 상태에서만 이 트리를 렌더한다 — user 는 여기서 항상 있다
+  const user = useAuth().user!
+  const { updateProfile } = useAuth()
+  const [name, setName] = useState(user.name || '')
 
   const [msg, setMsg] = useState('')
   const save = (e: any) => {
@@ -72,7 +74,9 @@ function PasswordModal({ onClose }: any) {
 }
 
 export default function UserMenu() {
-  const { user, logout } = useAuth()
+  // Gate 가 로그인 상태에서만 이 트리를 렌더한다 — user 는 여기서 항상 있다
+  const user = useAuth().user!
+  const { logout } = useAuth()
   const [open, setOpen] = useState(false)
   const [modal, setModal] = useState<'mypage' | 'password' | null>(null) // 'mypage' | 'password' | null
   const ref = useRef<HTMLDivElement | null>(null)

@@ -60,7 +60,7 @@ export function LiveProvider({ children }: any) {
   const [lastError, setLastError] = useState<string | null>(null)
   const [authError, setAuthError] = useState(false)
   const [telemetry, setTelemetry] = useState<import('./contracts.d.ts').RobotTelemetry | null>(null)
-  const [alerts, setAlerts] = useState([])
+  const [alerts, setAlerts] = useState<import('./contracts.d.ts').AlertMessage[]>([])
   // 맵 모델링 완료 이벤트(S15P11E101-483). 마지막 1건만 들고 있으면 충분하다 —
   // 운영 탭이 '이 맵 사용?' 안내를 띄우고 사용자가 확인하면 지운다.
   const [mappingComplete, setMappingComplete] = useState<any>(null)
@@ -91,7 +91,7 @@ export function LiveProvider({ children }: any) {
   // 실시간 SLAM 맵(가이드 §5). NAV_LIVE 가 3Hz 로 오고 scan 배열이 커서 영상 프레임과 같은
   // 방식으로 다룬다 — React state 로 올리지 않고 ref 에 최신값만 두고 리스너가 직접 받아간다.
   /** @type {import('react').MutableRefObject<import('./contracts').NavState>} */
-  const navRef = useRef({ map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null })
+  const navRef = useRef<import('./contracts.d.ts').NavState>({ map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null })
   const navListeners = useRef(new Set<(nav: import('./contracts').NavState) => void>())
   // 구독자를 서로 격리한다. 한 리스너가 던지면 forEach 가 거기서 끊겨 뒤쪽 구독자는
   // 갱신을 못 받는다 — 관제 캔버스가 실패했다고 운영 탭 진행 표시까지 멈추면 안 된다.
@@ -240,7 +240,7 @@ export function LiveProvider({ children }: any) {
   // 이미지는 blob 으로 받아 objectURL 로 들고 있으므로 교체할 때 이전 것을 반드시 풀어야 한다.
   useEffect(() => {
     if (!canConnect) {
-      setPlan((prev: any): null => { releasePlan(prev); return null })
+      setPlan((prev) => { releasePlan(prev); return null })
       navRef.current.plan = null
       setPlanError(null)
       return undefined
@@ -249,7 +249,7 @@ export function LiveProvider({ children }: any) {
     loadActivePlan(accessToken)
       .then((next) => {
         if (!alive) { releasePlan(next); return }
-        setPlan((prev: any) => { if (prev !== next) releasePlan(prev); return next })
+        setPlan((prev) => { if (prev !== next) releasePlan(prev); return next })
         navRef.current.plan = next
         setPlanError(null)
         emitNav()

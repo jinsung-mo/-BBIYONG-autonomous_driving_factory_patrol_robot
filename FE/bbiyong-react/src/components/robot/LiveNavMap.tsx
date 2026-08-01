@@ -61,7 +61,7 @@ export default function LiveNavMap({ route = null, onPick = null }: {
     const off = onNavUpdate(render)
     // 패널 크기가 바뀌면 다시 맞춰 그린다 (그리드 레이아웃이라 창 크기에 따라 변한다)
     const ro = new ResizeObserver(() => render(lastRef.current))
-    ro.observe(cv.parentElement)
+    if (cv.parentElement) ro.observe(cv.parentElement)
 
     return () => { off(); ro.disconnect() }
   }, [onNavUpdate])

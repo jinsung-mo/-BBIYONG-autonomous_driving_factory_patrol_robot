@@ -15,7 +15,7 @@ export default function EquipmentPanel() {
   const { enabled } = useLive()
   const { accessToken } = useAuth()
 
-  const [rows, setRows] = useState([])
+  const [rows, setRows] = useState<import('../../live/contracts.d.ts').Equipment[]>([])
   const [drafts, setDrafts] = useState<Record<string, string>>({})   // id → 입력 중인 문자열
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState<string | null>(null) // 저장 중인 id
@@ -41,7 +41,7 @@ export default function EquipmentPanel() {
 
   useEffect(() => { load() }, [load])
 
-  const shown = (e: any) => drafts[eqId(e)] ?? String(e?.threshold ?? '')
+  const shown = (e: any) => drafts[eqId(e) || ''] ?? String(e?.threshold ?? '')
   const setDraft = (id: any, v: any) => setDrafts((prev) => ({ ...prev, [id]: v }))
 
   const onSave = async (e: any, i: any) => {
@@ -67,7 +67,7 @@ export default function EquipmentPanel() {
   }
 
   const dirty = (e: any) => {
-    const d = drafts[eqId(e)]
+    const d = drafts[eqId(e) || '']
     return d !== undefined && Number(d) !== Number(e?.threshold)
   }
 

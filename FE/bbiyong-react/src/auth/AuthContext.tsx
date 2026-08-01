@@ -16,14 +16,13 @@ import {
 //            이 토큰은 STOMP CONNECT 헤더에도 실린다 — 없으면 실시간 연결이 거부된다(§1).
 
 /** @type {import('react').Context<import('../live/contracts').AuthContextValue | null>} */
-const AuthContext = createContext(null)
+const AuthContext = createContext<import('../live/contracts.d.ts').AuthContextValue | null>(null)
 
 /**
  * Provider 밖에서 부르면 던지므로 호출부는 null 을 다룰 필요가 없다 —
  * 반환 타입을 non-null 로 좁혀 매번 옵셔널 체이닝을 쓰지 않게 한다(S15P11E101-570).
- * @returns {import('../live/contracts').AuthContextValue}
  */
-export function useAuth() {
+export function useAuth(): import('../live/contracts.d.ts').AuthContextValue {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within <AuthProvider>')
   return ctx

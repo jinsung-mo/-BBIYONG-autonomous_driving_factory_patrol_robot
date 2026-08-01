@@ -53,7 +53,6 @@ export default class Simulation {
   rcamHud: string
   logs: any[]
   logId: number
-  zc: number
   canvases: Record<string, HTMLCanvasElement | null>
   listeners: Set<(snap: any) => void>
   externalPose: any
@@ -255,12 +254,11 @@ export default class Simulation {
     g.fillStyle = cone; g.beginPath(); g.moveTo(chead.x, chead.y); g.lineTo(cbL.x, cbL.y); g.lineTo(cbR.x, cbR.y); g.closePath(); g.fill()
 
     // 원거리 벽 2개 (근접 벽은 생략해 내부 시야 확보)
-    // zc(깊이)는 아래에서 채워 정렬에 쓴다 — 선언 시점에는 없다
-    const walls: Array<{ c: number, r: number, hw: number, hd: number, zc?: number }> = [
+    const walls = [
       { c: cxw, r: -0.6, hw: CSn / 2 + 0.1, hd: 0.12 }, { c: cxw, r: RS - 0.4, hw: CSn / 2 + 0.1, hd: 0.12 },
       { c: -0.6, r: czw, hw: 0.12, hd: RS / 2 + 0.1 }, { c: CSn - 0.4, r: czw, hw: 0.12, hd: RS / 2 + 0.1 },
-    ]
-    walls.forEach((w) => { w.zc = raw(w.c, 0, w.r).zc }); walls.sort((a, b) => b.zc - a.zc)
+    ].map((w) => ({ ...w, zc: raw(w.c, 0, w.r).zc }))   // zc(깊이)는 정렬용
+    walls.sort((a, b) => b.zc - a.zc)
     for (let i = 0; i < 2; i++) { const w = walls[i]; box(w.c, w.r, w.hw, w.hd, 1.7, '#333b46', '#464f5c') }
 
     // 순찰 경로(파랑 점선) + 긴급 경로(초록)
@@ -290,10 +288,11 @@ export default class Simulation {
       face: number[], inC: number, inR: number,
     }
     /** kind 마다 필요한 필드가 다른 이질 배열이다 */
-    type DrawItem = {
-      zc: number, kind: 'obs' | 'panel' | 'robot' | 'fire',
-      c?: number, r?: number, geo?: PanelGeo,
-    }
+    type DrawItem =
+      | { zc: number, kind: 'obs', c: number, r: number }
+      | { zc: number, kind: 'panel', geo: PanelGeo }
+      | { zc: number, kind: 'robot' }
+      | { zc: number, kind: 'fire' }
     const items: DrawItem[] = []
     for (let r = 0; r < RS; r++) for (let c = 0; c < CSn; c++) if (MAP[r][c] === 1) items.push({ zc: raw(c, 0, r).zc, kind: 'obs', c, r })
     panelGeos.forEach((geo) => items.push({ zc: raw(geo.c, 0, geo.r).zc, kind: 'panel', geo }))
@@ -739,9 +738,9 @@ export default class Simulation {
     }
 
     // 겨냥 분전반 + 표면온도 easing
-    let near
-    if (this.heatOn) near = PANELS.find((p) => p.n === 'B')
-    else { near = PANELS[0]; let nd = 1e9; for (const p of PANELS) { const d = Math.hypot(p.c - bx, p.r - br); if (d < nd) { nd = d; near = p } } }
+    let near = PANELS[0]
+    if (this.heatOn) near = PANELS.find((p) => p.n === 'B') || near
+    else { let nd = 1e9; for (const p of PANELS) { const d = Math.hypot(p.c - bx, p.r - br); if (d < nd) { nd = d; near = p } } }
     const dist = Math.hypot(near.c - bx, near.r - br)
     const prox = Math.max(0, 1 - dist / 6)
     const panelBase = near.n === 'A' ? 39 : near.n === 'B' ? 43 : 41

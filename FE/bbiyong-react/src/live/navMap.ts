@@ -27,7 +27,7 @@ export function decodeMapSnapshot(msg: any) {
 export function bakeMap(m: any) {
   const c = document.createElement('canvas')
   c.width = m.w; c.height = m.h
-  const g = c.getContext('2d')
+  const g = c.getContext('2d')!
   const img = g.createImageData(m.w, m.h)
   const d = img.data, s = m.data
   for (let i = 0; i < m.w * m.h; i++) {

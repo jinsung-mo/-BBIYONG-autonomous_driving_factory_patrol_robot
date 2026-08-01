@@ -42,14 +42,14 @@ function subscribeNow(id: any, entry: any) {
 
 function ensureClient() {
   if (client) return client
-  client = new Client({
+  const c = new Client({
     brokerURL: WS_URL,
     reconnectDelay: 2000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
     // CONNECT 프레임 인증 (가이드 §1) — 매 (재)연결 시 최신 토큰을 싣는다.
     beforeConnect: () => {
-      client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+      c.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {}
     },
     onConnect: () => {
       active.clear()
@@ -73,7 +73,8 @@ function ensureClient() {
       emitState()
     },
   })
-  return client
+  client = c
+  return c
 }
 
 // accessToken 은 STOMP CONNECT 헤더에 실린다(가이드 §1).

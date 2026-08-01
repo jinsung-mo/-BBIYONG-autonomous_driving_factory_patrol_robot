@@ -98,7 +98,7 @@ function LiveAlerts() {
 // ---- mock: 시뮬레이션 전이로 생성 (기존 동작 유지) ----
 function SimAlerts() {
   const { status, actions } = useSim()
-  const [alerts, setAlerts] = useState([])
+  const [alerts, setAlerts] = useState<any[]>([])
   const prevFire = useRef(status.fireOn)
   const prevHeat = useRef(status.heatOn)
 
