@@ -462,3 +462,91 @@ export interface MapView {
   s: number
   init: boolean
 }
+
+// ---------------------------------------------------------------- 인증·설정 (S15P11E101-570)
+//
+// 서버 계약이 아니라 FE 가 브라우저에 들고 있는 상태다. 여러 파일이 함께 쓰므로 여기에 둔다.
+
+/** 자동 로그아웃 사유. 사용자가 직접 누른 로그아웃(MANUAL)은 안내를 띄우지 않는다. */
+export type LogoutReason = 'idle' | 'expired' | 'manual'
+
+/** mock 저장소의 회원 한 건. 실서버 모드에서는 쓰지 않는다. */
+export interface StoredUser {
+  email: string
+  password: string
+  name?: string
+  phone?: string
+  birth?: string
+  gender?: string
+  role: string
+}
+
+/** 화면에 노출하는 공개 정보 — 비밀번호는 담지 않는다. */
+export interface PublicUser {
+  email: string
+  name?: string
+  /** 서버가 준 원문을 그대로 보관한다. 표시 문구로 바꿔 저장하면 권한 판정을 잃는다. */
+  role: string
+}
+
+/** localStorage `bbiyong.session` — mock 모드 세션. */
+export interface StoredSession {
+  email: string
+}
+
+/** localStorage `bbiyong.token` — 실서버 세션. */
+export interface StoredAuth {
+  accessToken: string
+  user: PublicUser
+  /** 로그인 응답 expiresIn 으로 계산한 절대 만료 시각. 없으면 절대 만료를 걸지 않는다. */
+  expiresAt?: number | null
+}
+
+/** 순찰 지점(설정 탭). 좌표는 미터·map 프레임이다. */
+export interface PatrolPoint {
+  id: string
+  label: string
+  x: number
+  y: number
+}
+
+/** 운영 설정. 주행 상한은 서버가 정답이고 나머지는 이 브라우저에만 저장된다. */
+export interface Settings {
+  /** 선속도 상한 (m/s) */
+  vMax: number
+  /** 각속도 상한 (rad/s) */
+  wMax: number
+  /** 열화상 화면 표시 기준 — 로봇의 과열 판정 기준(Equipment.threshold)과는 다른 값이다 */
+  tempWarn: number
+  tempCritical: number
+  points: PatrolPoint[]
+}
+
+export interface SettingsContextValue {
+  settings: Settings
+  update: (patch: Partial<Settings>) => void
+  reset: () => void
+  /** 서버 주행 상한을 한 번이라도 받았는지 */
+  driveSynced: boolean
+}
+
+export interface AuthContextValue {
+  user: PublicUser | null
+  accessToken: string | null
+  login: (email: string, password: string) => Promise<void>
+  signup: (form: {
+    email: string, password: string, name?: string,
+    phone?: string, birth?: string, gender?: string,
+  }) => Promise<void>
+  logout: (reason?: LogoutReason) => void
+  changePassword: (current: string, next: string) => void
+  updateProfile: (patch: Partial<StoredUser>) => void
+  isAdmin: boolean
+  /** 사용자 조작·이벤트 기록을 활동으로 남긴다 */
+  touch: () => void
+  /** 만료 임박 경고 표시 여부 */
+  warning: boolean
+  extendSession: () => void
+  logoutReason: LogoutReason | null
+  clearLogoutReason: () => void
+}

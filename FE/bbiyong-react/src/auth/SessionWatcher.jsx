@@ -1,3 +1,4 @@
+// @ts-check
 import { useEffect, useState } from 'react'
 import { useAuth } from './AuthContext.jsx'
 import Modal from '../components/ui/Modal.jsx'

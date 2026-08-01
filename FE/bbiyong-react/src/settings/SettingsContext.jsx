@@ -1,3 +1,4 @@
+// @ts-check
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ROBOT_V_MAX, ROBOT_W_MAX, getDataSource } from '../live/config.js'
 import { getDriveSpeed } from '../live/driveSpeed.js'
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS = {
   ],
 }
 
+/** @returns {import('../live/contracts').Settings} */
 function read() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY))
@@ -43,8 +45,13 @@ function read() {
   }
 }
 
+/** @type {import('react').Context<import('../live/contracts').SettingsContextValue | null>} */
 const SettingsContext = createContext(null)
 
+/**
+ * Provider 밖에서 부르면 던지므로 반환 타입을 non-null 로 좁힌다(S15P11E101-570).
+ * @returns {import('../live/contracts').SettingsContextValue}
+ */
 export function useSettings() {
   const ctx = useContext(SettingsContext)
   if (!ctx) throw new Error('useSettings must be used within <SettingsProvider>')
@@ -57,6 +64,7 @@ export function SettingsProvider({ children }) {
   // 서버 상한을 한 번이라도 받았는지. 못 받았으면 화면에서 "로컬 기본값"임을 밝힌다.
   const [driveSynced, setDriveSynced] = useState(false)
 
+  /** @type {(patch: Partial<import('../live/contracts').Settings>) => void} */
   const update = useCallback((patch) => {
     setSettings((prev) => {
       const next = { ...prev, ...patch }

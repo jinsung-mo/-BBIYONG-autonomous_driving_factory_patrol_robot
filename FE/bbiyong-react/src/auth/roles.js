@@ -1,3 +1,4 @@
+// @ts-check
 // 권한 (S15P11E101-475)
 //
 // 백엔드가 로그인 응답으로 role 을 내려준다(ROLE_ADMIN 등). 관제는 두 등급만 구분한다.
@@ -14,6 +15,8 @@ export const ROLE_VIEWER = 'ROLE_VIEWER'
 // 그 시절 계정은 전부 전권이었으므로 관리자로 본다(로컬 저장소 하위호환).
 const LEGACY_ADMIN = '관제 권한'
 
+/** @param {string | null | undefined} role */
 export const isAdminRole = (role) => role === ROLE_ADMIN || role === LEGACY_ADMIN
 
+/** @param {string | null | undefined} role */
 export const roleText = (role) => (isAdminRole(role) ? '관리자' : '뷰어')
