@@ -2,8 +2,10 @@ package com.bbiyong.server.event.service;
 
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.event.dto.AlertMessage;
+import com.bbiyong.server.event.dto.EventFilterRequest;
 import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.repository.EventLogRepository;
+import com.bbiyong.server.event.repository.EventLogSpecification;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Set;
 
 @Slf4j
@@ -56,6 +59,50 @@ public class EventLogService {
         Page<EventLog> result = (type == null || type.isBlank())
                 ? eventLogRepository.findAll(pageable)
                 : eventLogRepository.findByType(type.trim().toUpperCase(), pageable);
+        return EventPageResponse.from(result);
+    }
+
+    /**
+     * 고급 필터링을 지원하는 이벤트 조회
+     */
+    @Transactional(readOnly = true)
+    public EventPageResponse getEventsWithFilters(
+            int page, int size,
+            String type, String level, String status,
+            String robotId, String equipmentId,
+            String startDate, String endDate) {
+
+        // 필터 객체 생성
+        EventFilterRequest filter = new EventFilterRequest();
+        filter.setType(type);
+        filter.setLevel(level);
+        filter.setStatus(status);
+        filter.setRobotId(robotId);
+        filter.setEquipmentId(equipmentId);
+
+        // 날짜 파싱
+        if (startDate != null && !startDate.isBlank()) {
+            try {
+                filter.setStartDate(LocalDate.parse(startDate));
+            } catch (Exception e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 시작 날짜 형식입니다. YYYY-MM-DD 형식을 사용하세요.");
+            }
+        }
+        if (endDate != null && !endDate.isBlank()) {
+            try {
+                filter.setEndDate(LocalDate.parse(endDate));
+            } catch (Exception e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 종료 날짜 형식입니다. YYYY-MM-DD 형식을 사용하세요.");
+            }
+        }
+
+        // Specification 기반 동적 쿼리 실행
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"));
+        Page<EventLog> result = eventLogRepository.findAll(
+                EventLogSpecification.withFilters(filter),
+                pageable
+        );
+
         return EventPageResponse.from(result);
     }
 

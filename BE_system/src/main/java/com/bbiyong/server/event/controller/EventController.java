@@ -34,19 +34,25 @@ public class EventController {
     }
 
     @Operation(
-            summary = "이벤트 이력 조회",
+            summary = "이벤트 이력 조회 (고급 필터링)",
             description = """
-                    화재 및 장비 과열 감지, 로봇 이상 이벤트 이력을 페이징 조회합니다.
+                    화재 및 장비 과열 감지, 로봇 이상 이벤트 이력을 다양한 조건으로 필터링하여 조회합니다.
 
-                    **쿼리 파라미터**:
+                    **필터 파라미터**:
                     - page: 페이지 번호 (0부터 시작, 기본값 0)
                     - size: 페이지 크기 (기본값 10)
-                    - type: 이벤트 타입 필터 (FIRE, OVERHEAT, SYSTEM 중 택일, 생략 시 전체)
+                    - type: 이벤트 타입 (FIRE, OVERHEAT, SYSTEM)
+                    - level: 심각도 (CRITICAL, WARNING)
+                    - status: 해결 상태 (UNRESOLVED, RESOLVED)
+                    - robotId: 특정 로봇 ID
+                    - equipmentId: 특정 설비 ID (OVERHEAT 전용)
+                    - startDate: 시작 날짜 (YYYY-MM-DD)
+                    - endDate: 종료 날짜 (YYYY-MM-DD)
 
-                    **이벤트 타입**:
-                    - FIRE: 화재 감지 이벤트 (로봇 교차검증 확정)
-                    - OVERHEAT: 설비 과열 이벤트
-                    - SYSTEM: 시스템 이상 이벤트
+                    **사용 예시**:
+                    - 미해결 화재 이벤트: `?type=FIRE&status=UNRESOLVED`
+                    - 최근 1주일 E101 로봇 이벤트: `?robotId=E101&startDate=2026-07-25`
+                    - 분전반 C 과열 이력: `?equipmentId=분전반_C&type=OVERHEAT`
 
                     **실시간 경보**: WebSocket STOMP `/topic/alerts` 구독으로 신규 경보 실시간 수신 가능
                     """,
@@ -67,7 +73,7 @@ public class EventController {
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "잘못된 요청 파라미터 (예: 음수 페이지 번호)"
+                    description = "잘못된 요청 파라미터"
             )
     })
     @GetMapping
@@ -76,9 +82,22 @@ public class EventController {
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기", example = "10")
             @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "이벤트 타입 필터 (FIRE, OVERHEAT, SYSTEM)", example = "FIRE")
-            @RequestParam(required = false) String type) {
-        return ResponseEntity.ok(eventLogService.getEvents(page, size, type));
+            @Parameter(description = "이벤트 타입 (FIRE, OVERHEAT, SYSTEM)", example = "FIRE")
+            @RequestParam(required = false) String type,
+            @Parameter(description = "심각도 (CRITICAL, WARNING)", example = "CRITICAL")
+            @RequestParam(required = false) String level,
+            @Parameter(description = "해결 상태 (UNRESOLVED, RESOLVED)", example = "UNRESOLVED")
+            @RequestParam(required = false) String status,
+            @Parameter(description = "로봇 ID", example = "E101")
+            @RequestParam(required = false) String robotId,
+            @Parameter(description = "설비 ID", example = "분전반_C")
+            @RequestParam(required = false) String equipmentId,
+            @Parameter(description = "시작 날짜 (YYYY-MM-DD)", example = "2026-08-01")
+            @RequestParam(required = false) String startDate,
+            @Parameter(description = "종료 날짜 (YYYY-MM-DD)", example = "2026-08-07")
+            @RequestParam(required = false) String endDate) {
+        return ResponseEntity.ok(eventLogService.getEventsWithFilters(
+                page, size, type, level, status, robotId, equipmentId, startDate, endDate));
     }
 
     @Operation(
