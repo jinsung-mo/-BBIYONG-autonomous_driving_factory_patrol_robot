@@ -4,6 +4,7 @@ import { SimContext } from './SimContext.ts'
 import { AuthProvider, useAuth } from './auth/AuthContext.tsx'
 import { LiveProvider } from './live/LiveContext.tsx'
 import LiveSimBridge from './live/LiveSimBridge.tsx'
+import { FleetProvider } from './live/FleetContext.tsx'
 import WelcomeScreen from './components/auth/WelcomeScreen.tsx'
 import AuthScreen from './components/auth/AuthScreen.tsx'
 import Nav from './components/Nav.tsx'
@@ -31,16 +32,19 @@ function Dashboard() {
     <SimContext.Provider value={sim}>
       <SettingsProvider>
         <LiveProvider>
-          {/* live 모드일 때 실서버 위치·영상 프레임을 캔버스 렌더러로 밀어 넣는다 */}
-          <LiveSimBridge />
-          {/* 이벤트 로그가 기록되는 동안 세션을 유지한다(S15P11E101-508) */}
-          <EventLogActivity />
-          <Nav section={active} onSection={setSection} />
-          {/* 화재/과열 발생 팝업 알림 — 어느 탭에 있든 항상 최상단에 떠 있음 */}
-          <EventAlert />
-          <div hidden={active !== 'live'}><RobotPage /></div>
-          {isAdmin && active === 'ops' && <OpsPage />}
-          {isAdmin && active === 'config' && <ConfigPage />}
+          {/* 편성 전체 상태(대시보드 집계)를 한 번 받아 나눠 쓴다(S15P11E101-591) */}
+          <FleetProvider>
+            {/* live 모드일 때 실서버 위치·영상 프레임을 캔버스 렌더러로 밀어 넣는다 */}
+            <LiveSimBridge />
+            {/* 이벤트 로그가 기록되는 동안 세션을 유지한다(S15P11E101-508) */}
+            <EventLogActivity />
+            <Nav section={active} onSection={setSection} />
+            {/* 화재/과열 발생 팝업 알림 — 어느 탭에 있든 항상 최상단에 떠 있음 */}
+            <EventAlert />
+            <div hidden={active !== 'live'}><RobotPage /></div>
+            {isAdmin && active === 'ops' && <OpsPage />}
+            {isAdmin && active === 'config' && <ConfigPage />}
+          </FleetProvider>
         </LiveProvider>
       </SettingsProvider>
     </SimContext.Provider>

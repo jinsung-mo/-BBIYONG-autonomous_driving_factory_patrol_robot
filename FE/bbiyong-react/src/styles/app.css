@@ -461,3 +461,31 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .ops-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(430px,1fr)); gap:12px;
   align-items:start; margin-top:12px;}
 .ops-grid .panel{display:block;}
+
+/* 편성 로봇 현황 (S15P11E101-591) — 관제 좌측 상태 패널 안 */
+.fleet{margin-top:12px;}
+.fleet-h{display:flex; align-items:center; gap:6px; font-size:12px; letter-spacing:1px;
+  color:var(--dk-sub); margin-bottom:8px; text-transform:uppercase;}
+.fleet-h .k{color:var(--dk-ink); font-size:13px; letter-spacing:0;}
+.fleet-list{list-style:none; padding:0; margin:0;}
+.fleet-list li{margin-bottom:6px;}
+.fleet-list li.off{opacity:.65;}
+.fleet-btn{display:flex; flex-direction:column; gap:3px; width:100%; text-align:left;
+  background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:9px; padding:7px 9px;
+  color:var(--dk-ink); cursor:pointer;}
+.fleet-list li.sel .fleet-btn{border-color:#3a5a86; background:#1b2735;}
+.fleet-nm{display:flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700;}
+.fleet-nm .tag{font-size:9px; font-weight:700; font-style:normal; border-radius:4px; padding:1px 4px;
+  border:1px solid var(--dk-line); color:var(--dk-sub);}
+.fleet-nm .tag.ctl{color:var(--dk-green); border-color:rgba(61,220,151,.5);}
+.fleet-nm .tag.sel{color:#9cc4f5; border-color:#3a5a86;}
+.fleet-st{font-size:11px; color:var(--dk-sub);}
+.fleet-kv{font-size:10.5px; color:var(--dk-sub);}
+.fleet-warn{font-size:10.5px; color:var(--dk-amber);}
+.fleet-note{font-size:11px; color:var(--dk-amber); line-height:1.6; margin-top:6px;}
+/* 이벤트 로그의 '이 로봇 것만' 토글 */
+.logfilter-rb{display:flex; align-items:center; gap:6px; margin-top:6px;
+  font-size:11px; color:var(--dk-sub);}
+.logfilter-rb input{width:auto;}
+.logfilter2 input[type=date]{flex:1; min-width:0; padding:3px 6px; font-size:11px;
+  border-radius:7px; border:1px solid var(--dk-line); background:var(--dk-panel2); color:var(--dk-ink);}

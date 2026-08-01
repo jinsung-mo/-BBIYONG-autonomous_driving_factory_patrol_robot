@@ -71,6 +71,8 @@ export function eventToLog(e: any) {
     // 심각도·해결 상태는 필터와 행 표시에 함께 쓴다(관제센터 확장)
     level: e?.level || null,
     status: e?.status || null,
+    robotId: e?.robotId || null,
+    equipmentId: e?.equipmentId || null,
     msg: [TYPE_LABEL[e?.type] || e?.type || '이벤트', e?.robotId, detail].filter(Boolean).join(' · '),
   }
 }
@@ -88,6 +90,9 @@ export function alertToLog(a: any) {
     level: a?.level || null,
     // 방금 들어온 경보는 아직 아무도 처리하지 않았다 — 해결 상태 필터에서 미해결로 잡힌다
     status: 'UNRESOLVED',
+    // 실시간 행은 서버 쿼리를 거치지 않으므로 로봇·설비 필터를 화면에서 적용한다
+    robotId: a?.robotId || null,
+    equipmentId: a?.equipmentId || null,
     live: true,   // 실시간 수신분 — 히스토리와 구분해 표시한다
     msg: a?.message || alertToToast(a).sub,
   }

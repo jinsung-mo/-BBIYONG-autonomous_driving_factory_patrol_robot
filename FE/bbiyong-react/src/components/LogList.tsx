@@ -2,6 +2,7 @@ import { errMessage } from '../live/errors.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { useSim } from '../SimContext.ts'
 import { useLive } from '../live/LiveContext.tsx'
+import { useFleet } from '../live/FleetContext.tsx'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { alertToLog, eventToLog, TYPE_LABEL } from '../live/mappers.ts'
 import { deleteEvent, fetchEvents, LEVEL_LABEL, EVENT_STATUS_LABEL } from '../live/events.ts'
@@ -30,6 +31,13 @@ const RANGES = [
 
 // days=1 이면 오늘 0시부터다. 로컬 시각 기준으로 만든다 —
 // toISOString() 은 UTC 라 한국 시간 오전 9시 이전에는 어제 날짜가 나온다.
+// 종료일에 미래 날짜를 고르게 두지 않는다 — 이벤트는 과거에만 있다
+const TODAY = (() => {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+})()
+
 function startDateOf(days: number) {
   if (!days) return null
   const d = new Date()
@@ -42,6 +50,8 @@ function startDateOf(days: number) {
 export default function LogList({ variant = 'elog' }) {
   const { status } = useSim()
   const { enabled, connected, alerts, dismissAlert } = useLive()
+  // 조회 대상 로봇·설비 목록은 편성 컨텍스트가 갖고 있다(S15P11E101-591)
+  const { selected, robots, multi, equipments, equipmentName } = useFleet()
   const { accessToken, isAdmin } = useAuth()
 
   const [filter, setFilter] = useState('ALL')
@@ -49,6 +59,11 @@ export default function LogList({ variant = 'elog' }) {
   const [level, setLevel] = useState('')
   const [statusF, setStatusF] = useState('')
   const [range, setRange] = useState('ALL')
+  // 설비·종료일은 서버가 받는 파라미터인데 여태 화면에 없었다(S15P11E101-591)
+  const [equipment, setEquipment] = useState('')
+  const [endDate, setEndDate] = useState('')
+  // 편성이 여럿일 때만 로봇으로 좁힐 의미가 있다. 기본은 '고른 로봇'이다.
+  const [byRobot, setByRobot] = useState(true)
   const [history, setHistory] = useState<any[]>([])
   const [page, setPage] = useState(0)
   const [more, setMore] = useState(false)
@@ -71,6 +86,9 @@ export default function LogList({ variant = 'elog' }) {
         level: (level || null) as import('../live/contracts.d.ts').EventLevel | null,
         status: (statusF || null) as import('../live/contracts.d.ts').EventStatus | null,
         startDate: startDateOf(RANGES.find((r) => r.key === range)?.days ?? 0),
+        endDate: endDate || null,
+        robotId: multi && byRobot ? selected : null,
+        equipmentId: equipment || null,
       }, accessToken)
       const rows = (res?.content || []).map(eventToLog)
       setHistory((prev) => (reset ? rows : [...prev, ...rows]))
@@ -81,13 +99,13 @@ export default function LogList({ variant = 'elog' }) {
     } finally {
       setLoading(false)
     }
-  }, [enabled, accessToken, filter, level, statusF, range])
+  }, [enabled, accessToken, filter, level, statusF, range, endDate, equipment, multi, byRobot, selected])
 
   // 필터가 바뀌면 처음부터 다시 받는다
   useEffect(() => {
     if (!enabled) { setHistory([]); setMore(false); setError(null); return }
     load(0, true)
-  }, [enabled, filter, level, statusF, range, load])
+  }, [enabled, filter, level, statusF, range, endDate, equipment, byRobot, selected, load])
 
   if (!enabled) {
     // 시뮬 모드 — 기존 시뮬 로그를 그대로 보여준다(필터·이력 없음)
@@ -109,6 +127,8 @@ export default function LogList({ variant = 'elog' }) {
     .filter((l: any) => filter === 'ALL' || l.type === filter)
     .filter((l: any) => !level || l.level === level)
     .filter((l: any) => !statusF || l.status === statusF)
+    .filter((l: any) => !(multi && byRobot) || l.robotId === selected)
+    .filter((l: any) => !equipment || l.equipmentId === equipment)
   const rows = [...liveRows, ...history]
 
   // 서버에서 지운다. 실시간 수신분은 eventId 가 없어(AlertMessage 에 필드가 없다)
@@ -156,6 +176,24 @@ export default function LogList({ variant = 'elog' }) {
           {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
         </select>
       </div>
+      <div className="logfilter2">
+        {/* 이름으로 고르되 서버에는 equipmentId 를 보낸다 */}
+        <select aria-label="설비" value={equipment} onChange={(e) => setEquipment(e.target.value)}>
+          <option value="">설비 전체</option>
+          {equipments.map((eq) => {
+            const eid = eq.equipmentId
+            return <option key={eid} value={eid}>{equipmentName(eid)}</option>
+          })}
+        </select>
+        <input type="date" aria-label="종료일" value={endDate} max={TODAY}
+          onChange={(e) => setEndDate(e.target.value)} />
+      </div>
+      {multi && (
+        <label className="logfilter-rb">
+          <input type="checkbox" checked={byRobot} onChange={(e) => setByRobot(e.target.checked)} />
+          {robots.find((r) => r.robotId === selected)?.name || selected} 것만 보기
+        </label>
+      )}
       <ul className={variant}>
         {rows.length === 0 && (
           <li className="ok">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
+import { useFleet } from '../../live/FleetContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { errMessage } from '../../live/errors.ts'
 import { axisTime, fetchHealthHistory, liveValue, offlineRatio, PERIODS } from '../../live/health.ts'
@@ -20,7 +21,9 @@ const FPS = '#6db3ff'
 // 텔레메트리는 지금 값만 준다. 무인 시간대(20시~08시)에 무슨 일이 있었는지는
 // 아침에 이 그래프로만 확인할 수 있다.
 export default function HealthPanel() {
-  const { enabled, robotId } = useLive()
+  const { enabled } = useLive()
+  // 조회 대상은 관제 화면에서 고른 로봇이다(S15P11E101-591)
+  const { selected: robotId, robotName, multi } = useFleet()
   const { accessToken } = useAuth()
 
   const [period, setPeriod] = useState<Period>('24h')
@@ -66,6 +69,8 @@ export default function HealthPanel() {
 
       {enabled && (
         <>
+          {/* 어느 로봇의 이력인지 분명히 한다 — 편성이 여럿이면 헷갈린다 */}
+          {multi && <div className="cfg-note">조회 대상 <b>{robotName(robotId)}</b> — 관제 탭의 편성 로봇에서 바꿉니다.</div>}
           <div className="logfilter" role="group" aria-label="조회 기간">
             {PERIODS.map((p) => (
               <button key={p.value} type="button" className={period === p.value ? 'on' : ''}
@@ -91,7 +96,7 @@ export default function HealthPanel() {
 
           {!err && points.length > 0 && (
             <div className="cfg-note">
-              <div>{robotId} · 기록 <b>{points.length}점</b></div>
+              <div>{robotName(robotId)} · 기록 <b>{points.length}점</b></div>
               <div>
                 마지막 값 배터리 <b>{last?.battery != null ? `${Math.round(last.battery)}%` : '—'}</b>
                 {' · '}지연 <b>{last?.commLatencyMs != null ? `${last.commLatencyMs}ms` : '—'}</b>
