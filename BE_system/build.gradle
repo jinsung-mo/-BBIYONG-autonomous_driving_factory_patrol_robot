@@ -44,7 +44,7 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
 	// API 문서 자동화 (SpringDoc OpenAPI 3.0)
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
 
 	// 구조화된 로깅 (Logback JSON Encoder)
 	implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
