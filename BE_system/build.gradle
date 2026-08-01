@@ -65,8 +65,14 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 
-	// Jenkins CI 환경 변수를 시스템 프로퍼티로 전달
-	systemProperty 'spring.datasource.url', System.getenv('TEST_DATASOURCE_URL') ?: 'jdbc:mysql://127.0.0.1:3307/bbiyong_test'
-	systemProperty 'spring.datasource.username', System.getenv('TEST_DATASOURCE_USERNAME') ?: 'test'
-	systemProperty 'spring.datasource.password', System.getenv('TEST_DATASOURCE_PASSWORD') ?: 'test'
+	// Jenkins CI 환경 변수를 테스트 프로세스로 전달
+	if (System.getenv('TEST_DATASOURCE_URL')) {
+		environment 'TEST_DATASOURCE_URL', System.getenv('TEST_DATASOURCE_URL')
+	}
+	if (System.getenv('TEST_DATASOURCE_USERNAME')) {
+		environment 'TEST_DATASOURCE_USERNAME', System.getenv('TEST_DATASOURCE_USERNAME')
+	}
+	if (System.getenv('TEST_DATASOURCE_PASSWORD')) {
+		environment 'TEST_DATASOURCE_PASSWORD', System.getenv('TEST_DATASOURCE_PASSWORD')
+	}
 }
