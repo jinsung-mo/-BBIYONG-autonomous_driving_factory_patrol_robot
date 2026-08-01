@@ -13,20 +13,18 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
-    /* 산출물을 내지 않는다 — 빌드는 Vite 가 하고 tsc 는 검사만 한다 (S15P11E101-569) */
+    /* 산출물을 내지 않는다 — 빌드는 Vite 가 하고 tsc 는 검사만 한다 */
     "noEmit": true,
+    /* 이 코드베이스는 로컬 import 에 확장자를 명시하는 규칙을 쓴다.
+       .ts/.tsx 를 그대로 적으려면 이 옵션이 필요하다(noEmit 전제). */
+    "allowImportingTsExtensions": true,
 
-    /* .js/.jsx 를 그대로 두고 타입만 입힌다. checkJs 는 전역으로 켜지 않는다 —
-       파일 맨 위의 // @ts-check 로 켠 파일만 검사한다. 이번 범위는 src/live 뿐이다. */
-    "allowJs": true,
-    "checkJs": false,
-
-    /* 1단계: 실용적(느슨한) 타입 — 이후 strict 로 단계적 강화 */
+    /* 1단계: 실용적(느슨한) 타입 — 이후 strict 로 단계적 강화 (4단계) */
     "strict": false,
     "noImplicitAny": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "vite.config.js"]
+  "include": ["src"]
 }
