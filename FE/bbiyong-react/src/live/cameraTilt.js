@@ -1,3 +1,4 @@
+// @ts-check
 // 전면 카메라 상하 각도 — S15P11E101-521.
 //
 // 로봇 명령 계약이 아직 없다. 저장소 어디에도 tilt/servo/gimbal 개념이 없고
@@ -11,7 +12,8 @@
 // 절대각으로 보낸다(증분이 아니라). 증분은 유실·중복 시 실제 각도가 화면과 어긋나는데,
 // 절대각은 같은 명령을 몇 번 보내도 같은 자세로 수렴한다.
 
-const env = import.meta.env || {}
+// `|| {}` 는 방어용이라 그대로 둔다. 타입만 넓혀 준다(런타임 변화 없음).
+const env = /** @type {Record<string, string | undefined>} */ (import.meta.env || {})
 const num = (v, fallback) => {
   const n = Number(v)
   return Number.isFinite(n) ? n : fallback

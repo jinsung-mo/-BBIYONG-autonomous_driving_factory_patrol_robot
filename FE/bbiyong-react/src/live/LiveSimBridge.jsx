@@ -1,3 +1,4 @@
+// @ts-check
 // LiveContext(STOMP) → Simulation(캔버스) 연결 다리.
 //
 // 렌더링은 아무것도 하지 않는다. live 모드일 때 실서버에서 받은

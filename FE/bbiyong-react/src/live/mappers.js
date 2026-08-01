@@ -1,3 +1,4 @@
+// @ts-check
 // 서버 payload → 기존 화면이 쓰던 표시 형태로 변환.
 // 컴포넌트가 서버 스키마를 직접 알지 않도록 이 파일에 매핑을 모은다.
 // 계약 원본: docs/fe_backend_integration_guide.md §3.1 (텔레메트리) · §3.2 (경보)
