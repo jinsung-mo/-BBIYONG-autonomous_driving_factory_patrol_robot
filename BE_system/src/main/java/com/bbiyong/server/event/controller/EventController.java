@@ -1,9 +1,12 @@
 package com.bbiyong.server.event.controller;
 
 import com.bbiyong.server.event.domain.EventLog;
+import com.bbiyong.server.event.dto.EventLogDetailResponse;
 import com.bbiyong.server.event.dto.EventPageResponse;
+import com.bbiyong.server.event.dto.EventStatsResponse;
 import com.bbiyong.server.event.dto.EventStatusUpdateRequest;
 import com.bbiyong.server.event.service.EventLogService;
+import com.bbiyong.server.event.service.EventStatsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -28,9 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class EventController {
 
     private final EventLogService eventLogService;
+    private final EventStatsService eventStatsService;
 
-    public EventController(EventLogService eventLogService) {
+    public EventController(EventLogService eventLogService, EventStatsService eventStatsService) {
         this.eventLogService = eventLogService;
+        this.eventStatsService = eventStatsService;
     }
 
     @Operation(
@@ -101,6 +106,43 @@ public class EventController {
     }
 
     @Operation(
+            summary = "이벤트 로그 상세 조회",
+            description = """
+                    특정 이벤트의 상세 정보를 조회합니다. 연관된 영상 정보도 함께 반환합니다.
+
+                    **응답 정보**:
+                    - 이벤트 기본 정보 (타입, 심각도, 메시지 등)
+                    - 연관 영상 목록 (videos 배열)
+                    - 각 영상의 시작 시간, 길이, 스트리밍 URL 정보
+
+                    **영상 재생 방법**:
+                    - 영상 스트리밍: GET /api/videos/{videoId}/stream
+                    - 썸네일: GET /api/videos/{videoId}/thumbnail
+                    """,
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "이벤트 상세 조회 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = EventLogDetailResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "해당 ID의 이벤트를 찾을 수 없음"
+            )
+    })
+    @GetMapping("/{eventId}")
+    public ResponseEntity<EventLogDetailResponse> getEventDetail(
+            @Parameter(description = "이벤트 ID", example = "1")
+            @PathVariable Long eventId) {
+        return ResponseEntity.ok(eventLogService.getEventDetail(eventId));
+    }
+
+    @Operation(
             summary = "경보 상태 업데이트",
             description = """
                     경보(이벤트) 상태를 전이합니다. 관제사가 확인 후 처리완료(RESOLVED) 등으로 표시할 수 있습니다.
@@ -140,5 +182,65 @@ public class EventController {
             @PathVariable Long eventId,
             @Valid @RequestBody EventStatusUpdateRequest request) {
         return ResponseEntity.ok(eventLogService.updateStatus(eventId, request.status()));
+    }
+
+    @Operation(
+            summary = "시간별 이벤트 통계",
+            description = "지정된 시간 동안의 시간별 이벤트 발생 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/hourly")
+    public ResponseEntity<EventStatsResponse> getHourlyStats(
+            @Parameter(description = "조회할 시간 범위 (시간)", example = "24")
+            @RequestParam(defaultValue = "24") int hours) {
+        return ResponseEntity.ok(eventStatsService.getHourlyStats(hours));
+    }
+
+    @Operation(
+            summary = "일별 이벤트 통계",
+            description = "지정된 기간 동안의 일별 이벤트 발생 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/daily")
+    public ResponseEntity<EventStatsResponse> getDailyStats(
+            @Parameter(description = "조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(eventStatsService.getDailyStats(days));
+    }
+
+    @Operation(
+            summary = "로봇별 이벤트 통계",
+            description = "지정된 기간 동안 로봇별 이벤트 발생 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/by-robot")
+    public ResponseEntity<EventStatsResponse> getStatsByRobot(
+            @Parameter(description = "조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(eventStatsService.getStatsByRobot(days));
+    }
+
+    @Operation(
+            summary = "설비별 이벤트 통계",
+            description = "지정된 기간 동안 설비별 과열 이벤트 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/by-equipment")
+    public ResponseEntity<EventStatsResponse> getStatsByEquipment(
+            @Parameter(description = "조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(eventStatsService.getStatsByEquipment(days));
+    }
+
+    @Operation(
+            summary = "이벤트 타입별 통계",
+            description = "지정된 기간 동안 이벤트 타입별 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/by-type")
+    public ResponseEntity<EventStatsResponse> getStatsByType(
+            @Parameter(description = "조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(eventStatsService.getStatsByType(days));
     }
 }
