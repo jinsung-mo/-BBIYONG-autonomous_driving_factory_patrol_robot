@@ -2,9 +2,12 @@ frontier_explorer:
   ros__parameters:
     map_topic: /map
     navigate_to_pose_action: /navigate_to_pose
+    compute_path_to_pose_action: /compute_path_to_pose
+    planner_id: GridBased
     global_frame: map
     robot_frame: base_link
     planning_period_sec: 1.0
+    plan_timeout_sec: 8.0
     goal_timeout_sec: 90.0
     goal_response_timeout_sec: 5.0
     cancel_grace_sec: 3.0
@@ -15,7 +18,10 @@ frontier_explorer:
     free_threshold: 20
     min_cluster_size: 5
     occupied_threshold: 65
-    min_obstacle_clearance_m: 0.25
+    # nav2_diff.yaml uses robot_radius=0.30 m.  Keep the complete goal
+    # footprint in known free space, with a little localization margin.
+    min_obstacle_clearance_m: 0.35
+    goal_standoff_m: 0.45
     min_frontier_distance: 0.5
     information_gain_weight: 2.0
     distance_weight: 1.0

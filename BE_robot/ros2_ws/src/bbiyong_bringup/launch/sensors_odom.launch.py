@@ -60,7 +60,7 @@ def _configured_nodes(context):
                 name="rf2o_laser_odometry",
                 output="screen",
                 parameters=[{
-                    "laser_scan_topic": "/scan",
+                    "laser_scan_topic": "/scan_filtered",
                     "odom_topic": "/odom",
                     "publish_tf": True,
                     "base_frame_id": "base_link",
@@ -78,8 +78,11 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("vehicle_config", default_value=f"{share}/config/vehicle.example.yaml"),
         DeclareLaunchArgument("ydlidar_params", default_value=f"{share}/config/ydlidar.yaml"),
+        DeclareLaunchArgument("scan_filter_params", default_value=f"{share}/config/scan_filter.yaml"),
         DeclareLaunchArgument("odom_source", default_value="rf2o"),
         DeclareLaunchArgument("start_lidar", default_value="true"),
+        DeclareLaunchArgument("start_scan_filter", default_value="true"),
+        DeclareLaunchArgument("publish_scan_compat", default_value="true"),
         DeclareLaunchArgument("publish_laser_tf", default_value="true"),
         DeclareLaunchArgument("allow_unmeasured_lidar", default_value="false"),
         LifecycleNode(
@@ -90,7 +93,28 @@ def generate_launch_description():
             output="screen",
             emulate_tty=True,
             parameters=[LaunchConfiguration("ydlidar_params")],
+            remappings=[("scan", "/scan_raw")],
             condition=IfCondition(LaunchConfiguration("start_lidar")),
+        ),
+        Node(
+            package="laser_filters",
+            executable="scan_to_scan_filter_chain",
+            name="scan_to_scan_filter_chain",
+            output="screen",
+            parameters=[LaunchConfiguration("scan_filter_params")],
+            remappings=[
+                ("scan", "/scan_raw"),
+                ("scan_filtered", "/scan_filtered"),
+            ],
+            condition=IfCondition(LaunchConfiguration("start_scan_filter")),
+        ),
+        Node(
+            package="topic_tools",
+            executable="relay",
+            name="scan_compat_relay",
+            output="screen",
+            arguments=["/scan_filtered", "/scan"],
+            condition=IfCondition(LaunchConfiguration("publish_scan_compat")),
         ),
         OpaqueFunction(function=_configured_nodes),
     ])

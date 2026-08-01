@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from math import ceil, cos, hypot, sin
+from math import atan2, ceil, cos, hypot, sin
 from typing import Iterable, Sequence
 
 
@@ -69,6 +69,7 @@ class FrontierCluster:
 
     cells: tuple[Cell, ...]
     goal_cell: Cell
+    unknown_normal: Point = (0.0, 0.0)
 
     @property
     def size(self) -> int:
@@ -142,10 +143,12 @@ def detect_frontier_clusters(
     min_cluster_size: int = 5,
     occupied_threshold: int = 65,
     min_obstacle_clearance_m: float = 0.0,
+    goal_standoff_m: float = 0.0,
 ) -> list[FrontierCluster]:
-    """Find connected reachable free cells adjacent to unknown space."""
+    """Find frontiers and put each goal safely back inside known free space."""
     reachable = reachable_free_cells(grid, robot_cell, free_threshold)
     clearance_cells = max(0, ceil(min_obstacle_clearance_m / grid.resolution))
+    standoff_cells = max(0.0, goal_standoff_m / grid.resolution)
 
     def has_clearance(cell: Cell) -> bool:
         if clearance_cells == 0:
@@ -154,6 +157,19 @@ def detect_frontier_clusters(
             for x in range(cell[0] - clearance_cells, cell[0] + clearance_cells + 1):
                 neighbor = (x, y)
                 if grid.contains(neighbor) and grid.value(neighbor) >= occupied_threshold:
+                    return False
+        return True
+
+    def has_known_free_clearance(cell: Cell) -> bool:
+        """Require the complete robot-clearance box to be known free space."""
+        for y in range(cell[1] - clearance_cells, cell[1] + clearance_cells + 1):
+            for x in range(cell[0] - clearance_cells, cell[0] + clearance_cells + 1):
+                neighbor = (x, y)
+                if (
+                    not grid.contains(neighbor)
+                    or neighbor not in reachable
+                    or grid.value(neighbor) > free_threshold
+                ):
                     return False
         return True
 
@@ -186,12 +202,64 @@ def detect_frontier_clusters(
 
         center_x = sum(cell[0] for cell in cluster) / len(cluster)
         center_y = sum(cell[1] for cell in cluster) / len(cluster)
+        unknown_neighbors = {
+            neighbor
+            for cell in cluster
+            for neighbor in _neighbors4(cell)
+            if grid.contains(neighbor) and grid.value(neighbor) < 0
+        }
+        if not unknown_neighbors:
+            continue
+        unknown_x = sum(cell[0] for cell in unknown_neighbors) / len(unknown_neighbors)
+        unknown_y = sum(cell[1] for cell in unknown_neighbors) / len(unknown_neighbors)
+        normal_x = unknown_x - center_x
+        normal_y = unknown_y - center_y
+        normal_length = hypot(normal_x, normal_y)
+        if normal_length <= 1e-9:
+            continue
+        normal = (normal_x / normal_length, normal_y / normal_length)
+
+        # A frontier cell touches unknown space.  It is a useful observation
+        # boundary but a poor navigation goal because the robot footprint or
+        # Nav2 inflation may overlap the unknown region.  Move the goal in the
+        # opposite direction, back into mapped free space.
+        target_x = center_x - normal[0] * standoff_cells
+        target_y = center_y - normal[1] * standoff_cells
+        maximum_goal_offset = standoff_cells + clearance_cells + 2.0
+        search_radius = ceil(maximum_goal_offset)
+        safe_candidates = [
+            cell
+            for y in range(
+                max(0, int(target_y) - search_radius),
+                min(grid.height, int(target_y) + search_radius + 1),
+            )
+            for x in range(
+                max(0, int(target_x) - search_radius),
+                min(grid.width, int(target_x) + search_radius + 1),
+            )
+            if (cell := (x, y)) in reachable and has_known_free_clearance(cell)
+        ]
+        if not safe_candidates:
+            continue
         goal_cell = min(
-            cluster,
-            key=lambda cell: (cell[0] - center_x) ** 2 + (cell[1] - center_y) ** 2,
+            safe_candidates,
+            key=lambda cell: (
+                (cell[0] - target_x) ** 2 + (cell[1] - target_y) ** 2,
+                (cell[0] - robot_cell[0]) ** 2 + (cell[1] - robot_cell[1]) ** 2,
+            ),
         )
-        clusters.append(FrontierCluster(tuple(sorted(cluster)), goal_cell))
+        if hypot(goal_cell[0] - target_x, goal_cell[1] - target_y) > maximum_goal_offset:
+            continue
+        clusters.append(
+            FrontierCluster(tuple(sorted(cluster)), goal_cell, normal)
+        )
     return clusters
+
+
+def frontier_heading(grid: GridSpec, cluster: FrontierCluster) -> float:
+    """Return a map-frame yaw that faces from known space toward unknown space."""
+    normal_x, normal_y = cluster.unknown_normal
+    return grid.origin_yaw + atan2(normal_y, normal_x)
 
 
 def frontier_score(

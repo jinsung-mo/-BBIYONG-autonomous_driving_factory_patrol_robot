@@ -10,7 +10,7 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
     ],
-    install_requires=["setuptools", "websocket-client"],
+    install_requires=["setuptools"],
     zip_safe=True,
     maintainer="E101",
     maintainer_email="e101@example.com",
@@ -20,7 +20,7 @@ setup(
         "console_scripts": [
             "cmd_mux = bbiyong_base.cmd_mux_node:main",
             "ackermann_adapter = bbiyong_base.ackermann_adapter_node:main",
-            "remote_control_bridge = bbiyong_base.remote_control_bridge_node:main",
+            "differential_adapter = bbiyong_base.differential_adapter_node:main",
         ]
     },
 )
