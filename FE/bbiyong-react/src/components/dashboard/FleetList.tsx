@@ -50,7 +50,7 @@ export default function FleetList() {
                 <span className="fleet-nm">
                   {r.name || r.robotId}
                   {/* 제어가 나가는 로봇을 표시한다 — 고른 로봇과 다를 수 있다 */}
-                  {isCtl && <i className="tag ctl">제어</i>}
+                  {isCtl && <i className="tag ctrl">제어</i>}
                   {isSel && <i className="tag sel">조회</i>}
                 </span>
                 <span className="fleet-st">
