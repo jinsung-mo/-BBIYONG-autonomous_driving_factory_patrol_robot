@@ -1,3 +1,4 @@
+import { errMessage } from '../../live/errors.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { getDataSource, saveDataSource } from '../../live/config.ts'
@@ -59,7 +60,7 @@ export default function AuthScreen({ onBack }) {
         })
       }
       reset() // 성공하면 입력을 남기지 않는다
-    } catch (e2) { setErr(e2.message) } finally { setBusy(false) }
+    } catch (e2) { setErr(errMessage(e2)) } finally { setBusy(false) }
   }
 
   return (

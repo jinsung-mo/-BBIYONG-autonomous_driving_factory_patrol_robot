@@ -1,3 +1,4 @@
+import { errMessage } from './errors.ts'
 // 실서버(STOMP) 연동 컨텍스트 — docs/fe_backend_integration_guide.md §3·§4 구현.
 //
 // 로컬 시뮬레이션(SimContext)은 그대로 두고 그 위에 얹는다. 컴포넌트는 live 모드일 때만
@@ -169,7 +170,7 @@ export function LiveProvider({ children }) {
           nav.mapCanvas = bakeMap(nav.map)
         } catch (e) {
           // 크기가 안 맞는 맵은 버리고 직전 맵을 유지한다 — 깨진 화면보다 낫다
-          console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', e.message)
+          console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', errMessage(e))
           return
         }
       } else if (isMappingComplete(msg)) {
@@ -244,7 +245,7 @@ export function LiveProvider({ children }) {
         emitNav()
       })
       // 활성 맵이 아직 없으면 404 다 — 오류로 떠들지 않고 조용히 비워 둔다.
-      .catch((e) => { if (alive) setPlanError(e.message) })
+      .catch((e) => { if (alive) setPlanError(errMessage(e)) })
     return () => { alive = false }
   }, [canConnect, accessToken, planReady, emitNav])
 

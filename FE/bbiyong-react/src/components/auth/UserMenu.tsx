@@ -1,3 +1,4 @@
+import { errMessage } from '../../live/errors.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { roleText } from '../../auth/roles.ts'
@@ -45,7 +46,7 @@ function PasswordModal({ onClose }) {
       if (next !== next2) throw new Error('새 비밀번호가 일치하지 않습니다.')
       changePassword(cur, next)
       setOk(true)
-    } catch (e2) { setErr(e2.message) }
+    } catch (e2) { setErr(errMessage(e2)) }
   }
   return (
     <Modal title="비밀번호 수정" onClose={onClose}>

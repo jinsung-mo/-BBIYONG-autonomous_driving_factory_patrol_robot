@@ -62,7 +62,10 @@ function useAlarmSound(items) {
     })
   }, [items])
   // 언마운트 시 남은 타이머 정리
-  useEffect(() => () => { Object.values(timers.current).forEach(clearInterval) }, [])
+  // Object.values 가 unknown[] 을 주므로 타이머 핸들 타입을 명시한다
+  useEffect(() => () => {
+    Object.values(timers.current as Record<string, number>).forEach(clearInterval)
+  }, [])
 }
 
 function ToastList({ items, onDismiss }) {

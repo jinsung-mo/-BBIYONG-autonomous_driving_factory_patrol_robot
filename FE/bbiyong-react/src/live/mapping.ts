@@ -1,3 +1,4 @@
+import { errMessage, errStatus } from './errors.ts'
 // 2D 맵 모델링(SLAM) 흐름 — S15P11E101-483.
 //
 // 계약 근거와 미확정 지점을 한곳에 모아 둔다. 로봇/BE 가 확정되면 이 파일만 고치면 된다.
@@ -109,8 +110,8 @@ export async function activateMap(id, accessToken) {
     return await authedSend(activatePath(id), accessToken, { method: ACTIVATE_METHOD })
   } catch (e) {
     // 404/405 는 "서버에 그 API 가 없다" 는 뜻 — 사용자에게 실패가 아니라 미구현으로 알린다.
-    const he = /** @type {import('./contracts').HttpError} */ (e)
-    if (he.status === 404 || he.status === 405) throw new NotImplementedError(he.message)
+    const st = errStatus(e)
+    if (st === 404 || st === 405) throw new NotImplementedError(errMessage(e))
     throw e
   }
 }

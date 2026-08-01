@@ -1,3 +1,4 @@
+import { errMessage, errStatus } from '../../live/errors.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
@@ -34,7 +35,7 @@ export default function EquipmentPanel() {
       setDrafts({})            // 서버 값이 정답 — 입력 초안은 버린다
       if (!keepMsg) setMsg(null)
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `설비 목록을 불러오지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `설비 목록을 불러오지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setLoading(false) }
   }, [enabled, accessToken])
 
@@ -59,9 +60,9 @@ export default function EquipmentPanel() {
       setMsg({ kind: 'ok', text: `${eqName(e, i)} 임계 온도를 ${Number(raw)}℃ 로 저장했습니다 — 로봇에도 반영됩니다.` })
     } catch (err) {
       if (!alive.current) return
-      setMsg(err.status === 404
+      setMsg(errStatus(err) === 404
         ? { kind: 'err', text: `${eqName(e, i)}(${id}) 를 서버에서 찾을 수 없습니다. 목록을 새로고침하세요.` }
-        : { kind: 'err', text: `저장하지 못했습니다 — ${err.message}` })
+        : { kind: 'err', text: `저장하지 못했습니다 — ${errMessage(err)}` })
     } finally { if (alive.current) setSaving(null) }
   }
 

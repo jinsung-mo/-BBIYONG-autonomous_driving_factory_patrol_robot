@@ -1,3 +1,4 @@
+import { errMessage } from '../live/errors.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { useSim } from '../SimContext.ts'
 import { useLive } from '../live/LiveContext.tsx'
@@ -50,7 +51,7 @@ export default function LogList({ variant = 'elog' }) {
       setPage(nextPage)
       setMore(nextPage + 1 < (res?.totalPages ?? 0))
     } catch (e) {
-      setError(e.message)
+      setError(errMessage(e))
     } finally {
       setLoading(false)
     }
@@ -90,7 +91,7 @@ export default function LogList({ variant = 'elog' }) {
       setHistory((prev) => prev.filter((l) => l.eventId !== pending.eventId))
       setPending(null)
     } catch (e) {
-      setDelErr(e.message)
+      setDelErr(errMessage(e))
     } finally { setRemoving(false) }
   }
 

@@ -1,3 +1,4 @@
+import { errMessage } from '../../live/errors.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
@@ -38,7 +39,7 @@ export default function OpsPage() {
     setLoading(true); setMapsErr(null)
     try {
       setMaps(await fetchMaps(accessToken))
-    } catch (e) { setMapsErr(e.message) } finally { setLoading(false) }
+    } catch (e) { setMapsErr(errMessage(e)) } finally { setLoading(false) }
   }, [enabled, accessToken])
 
   useEffect(() => { loadMaps() }, [loadMaps])
@@ -100,7 +101,7 @@ export default function OpsPage() {
             + 'BE 에 추가되면 이 화면 수정 없이 바로 동작합니다. 그때까지는 최신 맵이 활성입니다.',
         })
       } else {
-        setMsg({ kind: 'err', text: `활성 맵 지정에 실패했습니다 — ${e.message}` })
+        setMsg({ kind: 'err', text: `활성 맵 지정에 실패했습니다 — ${errMessage(e)}` })
       }
     }
     setSaving(false)

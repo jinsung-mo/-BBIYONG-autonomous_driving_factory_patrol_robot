@@ -1,3 +1,4 @@
+import { errMessage } from '../../live/errors.ts'
 import { useEffect, useState } from 'react'
 import { useSettings, DEFAULT_SETTINGS } from '../../settings/SettingsContext.tsx'
 import { ROBOT_V_MAX, ROBOT_W_MAX } from '../../live/config.ts'
@@ -56,7 +57,7 @@ export default function ConfigPage() {
         ? { kind: 'ok', text: `상한을 저장하고 로봇에 하달했습니다 — 선속 ${r.maxLinear} m/s · 각속 ${r.maxAngular} rad/s` }
         : { kind: 'warn', text: '서버에는 저장됐지만 로봇에 전달되지 않았습니다 — 로봇이 연결되면 다시 저장하세요.' })
     } catch (e) {
-      setSpeedMsg({ kind: 'err', text: `저장하지 못했습니다 — ${e.message}` })
+      setSpeedMsg({ kind: 'err', text: `저장하지 못했습니다 — ${errMessage(e)}` })
     } finally { setSavingSpeed(false) }
   }
 

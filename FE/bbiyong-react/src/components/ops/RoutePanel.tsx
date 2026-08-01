@@ -1,3 +1,4 @@
+import { errMessage } from '../../live/errors.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
@@ -30,7 +31,7 @@ export default function RoutePanel() {
       if (!alive.current) return
       setRoute(rows); setSaved(rows); setMsg(null)
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `순찰 경로를 불러오지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `순찰 경로를 불러오지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }, [enabled, accessToken])
 
@@ -48,7 +49,7 @@ export default function RoutePanel() {
       setRoute(next); setSaved(next)
       setMsg({ kind: 'ok', text: `지점 ${next.length} 추가 — x ${p.x} · y ${p.y} m` })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `지점을 추가하지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `지점을 추가하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
@@ -62,7 +63,7 @@ export default function RoutePanel() {
       setRoute(next); setSaved(next)
       setMsg({ kind: 'ok', text: `${wpLabel(w, i)} 삭제` })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `삭제하지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `삭제하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
@@ -88,7 +89,7 @@ export default function RoutePanel() {
       setRoute(rows); setSaved(rows)
       setMsg({ kind: 'ok', text: `순찰 경로 ${rows.length}개 지점을 저장했습니다.` })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `저장하지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `저장하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
@@ -103,7 +104,7 @@ export default function RoutePanel() {
         ? { kind: 'ok', text: `순찰 경로 ${r.count ?? route.length}개 지점을 로봇에 하달했습니다.` }
         : { kind: 'warn', text: '경로는 서버에 저장돼 있지만 로봇에 전달되지 않았습니다 — 로봇이 연결되면 다시 하달하세요.' })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `하달하지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `하달하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
