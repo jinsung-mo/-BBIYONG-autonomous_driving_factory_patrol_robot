@@ -3,6 +3,7 @@ package com.bbiyong.server.event.service;
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.event.dto.EventFilterRequest;
+import com.bbiyong.server.event.dto.EventLogDetailResponse;
 import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.repository.EventLogSpecification;
@@ -10,6 +11,8 @@ import com.bbiyong.server.notification.domain.NotificationSetting;
 import com.bbiyong.server.notification.repository.NotificationSettingRepository;
 import com.bbiyong.server.notification.service.MattermostNotifier;
 import com.bbiyong.server.notification.service.NotificationService;
+import com.bbiyong.server.video.dto.VideoResponses;
+import com.bbiyong.server.video.repository.VideoClipRepository;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -38,16 +41,19 @@ public class EventLogService {
     private final NotificationSettingRepository notificationSettingRepository;
     private final NotificationService notificationService;
     private final MattermostNotifier mattermostNotifier;
+    private final VideoClipRepository videoClipRepository;
 
     public EventLogService(
             EventLogRepository eventLogRepository,
             NotificationSettingRepository notificationSettingRepository,
             NotificationService notificationService,
-            MattermostNotifier mattermostNotifier) {
+            MattermostNotifier mattermostNotifier,
+            VideoClipRepository videoClipRepository) {
         this.eventLogRepository = eventLogRepository;
         this.notificationSettingRepository = notificationSettingRepository;
         this.notificationService = notificationService;
         this.mattermostNotifier = mattermostNotifier;
+        this.videoClipRepository = videoClipRepository;
     }
 
     /**
@@ -119,6 +125,32 @@ public class EventLogService {
         );
 
         return EventPageResponse.from(result);
+    }
+
+    /**
+     * 이벤트 로그 상세 조회 (연관 영상 정보 포함)
+     */
+    @Transactional(readOnly = true)
+    public EventLogDetailResponse getEventDetail(Long eventId) {
+        EventLog event = eventLogRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."));
+
+        // 연관 영상 조회
+        List<VideoResponses.Summary> videos = videoClipRepository
+                .findByEventIdOrderByStartedAtDesc(eventId)
+                .stream()
+                .map(VideoResponses.Summary::of)
+                .toList();
+
+        return EventLogDetailResponse.from(event, videos);
+    }
+
+    /**
+     * 이벤트에 영상이 존재하는지 확인
+     */
+    @Transactional(readOnly = true)
+    public boolean hasVideo(Long eventId) {
+        return videoClipRepository.existsByEventId(eventId);
     }
 
     @EventListener

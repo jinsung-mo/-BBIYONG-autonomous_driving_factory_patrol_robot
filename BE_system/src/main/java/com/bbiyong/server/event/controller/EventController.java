@@ -1,6 +1,7 @@
 package com.bbiyong.server.event.controller;
 
 import com.bbiyong.server.event.domain.EventLog;
+import com.bbiyong.server.event.dto.EventLogDetailResponse;
 import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.dto.EventStatsResponse;
 import com.bbiyong.server.event.dto.EventStatusUpdateRequest;
@@ -102,6 +103,43 @@ public class EventController {
             @RequestParam(required = false) String endDate) {
         return ResponseEntity.ok(eventLogService.getEventsWithFilters(
                 page, size, type, level, status, robotId, equipmentId, startDate, endDate));
+    }
+
+    @Operation(
+            summary = "이벤트 로그 상세 조회",
+            description = """
+                    특정 이벤트의 상세 정보를 조회합니다. 연관된 영상 정보도 함께 반환합니다.
+
+                    **응답 정보**:
+                    - 이벤트 기본 정보 (타입, 심각도, 메시지 등)
+                    - 연관 영상 목록 (videos 배열)
+                    - 각 영상의 시작 시간, 길이, 스트리밍 URL 정보
+
+                    **영상 재생 방법**:
+                    - 영상 스트리밍: GET /api/videos/{videoId}/stream
+                    - 썸네일: GET /api/videos/{videoId}/thumbnail
+                    """,
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "이벤트 상세 조회 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = EventLogDetailResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "해당 ID의 이벤트를 찾을 수 없음"
+            )
+    })
+    @GetMapping("/{eventId}")
+    public ResponseEntity<EventLogDetailResponse> getEventDetail(
+            @Parameter(description = "이벤트 ID", example = "1")
+            @PathVariable Long eventId) {
+        return ResponseEntity.ok(eventLogService.getEventDetail(eventId));
     }
 
     @Operation(

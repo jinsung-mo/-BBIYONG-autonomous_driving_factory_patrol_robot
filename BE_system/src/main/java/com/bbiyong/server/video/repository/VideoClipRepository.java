@@ -28,4 +28,9 @@ public interface VideoClipRepository extends JpaRepository<VideoClip, String> {
                            Pageable pageable);
 
     List<VideoClip> findByEventIdOrderByStartedAtDesc(Long eventId);
+
+    /**
+     * 특정 이벤트에 연관된 영상이 존재하는지 확인
+     */
+    boolean existsByEventId(Long eventId);
 }
