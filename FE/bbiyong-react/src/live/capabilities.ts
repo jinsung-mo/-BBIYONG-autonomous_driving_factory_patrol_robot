@@ -23,7 +23,7 @@ export const CAP_KEYS = {
   drive: 'drive',         // 주행(수동 조작)
 }
 
-const LABEL = {
+const LABEL: Record<string, string> = {
   [CAP_ONLINE]: '정상',
   [CAP_STALE]: '지연',
   [CAP_OFFLINE]: '중단',

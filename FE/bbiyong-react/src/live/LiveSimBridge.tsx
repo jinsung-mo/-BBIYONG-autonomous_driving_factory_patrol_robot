@@ -18,12 +18,13 @@ import { DRIVE_VECTORS } from './mappers.ts'
 // deadman 이 그대로 동작해 로봇이 선다 — 로봇이나 브리지가 ts 를 자체 갱신하면 안 된다.
 const DRIVE_REPEAT_MS = 100
 
-export default function LiveSimBridge() {
+export default function LiveSimBridge(): null {
   const { actions } = useSim()
   const { enabled, connected, telemetry, onVideoFrame, control, driveMode } = useLive()
 
   // 채널별로 Image 하나를 재사용한다 (프레임마다 새로 만들면 GC 부담이 크다)
-  const imgs = useRef({ FRONT: null, THERMAL: null })
+  // `${ch}_maxTemp` 키도 함께 담으므로 인덱스 시그니처가 필요하다
+  const imgs = useRef<Record<string, any>>({ FRONT: null, THERMAL: null })
 
   // ---- 위치 ----
   useEffect(() => {
@@ -63,7 +64,7 @@ export default function LiveSimBridge() {
   useEffect(() => {
     if (!enabled || !connected) return undefined
 
-    const arrowMap = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
+    const arrowMap: Record<string, string> = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
     const resolve = (e: any) => {
       let k = e.key.toLowerCase()
       if (arrowMap[k]) k = arrowMap[k]

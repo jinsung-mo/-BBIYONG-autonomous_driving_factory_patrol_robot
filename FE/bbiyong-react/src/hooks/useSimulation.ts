@@ -10,7 +10,7 @@ export default function useSimulation() {
 
   const [status, setStatus] = useState(() => sim.snapshot())
   const [clock, setClock] = useState('--:--:--')
-  const [activeKeys, setActiveKeys] = useState({ w: false, a: false, s: false, d: false })
+  const [activeKeys, setActiveKeys] = useState<Record<string, boolean>>({ w: false, a: false, s: false, d: false })
   const [theme, setTheme] = useState('dark') // 'dark' | 'light'
 
   // 구독 + 루프 시작/정리
@@ -31,7 +31,7 @@ export default function useSimulation() {
 
   // 키보드 WASD + 방향키 — 로봇 이동
   useEffect(() => {
-    const arrowMap = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
+    const arrowMap: Record<string, string> = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
     const resolve = (e: any) => {
       let key = e.key.toLowerCase()
       if (arrowMap[key]) { key = arrowMap[key]; e.preventDefault() } // 방향키 → WASD, 페이지 스크롤 방지

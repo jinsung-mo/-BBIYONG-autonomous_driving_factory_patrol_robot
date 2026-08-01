@@ -34,7 +34,7 @@ export const REASON = {
   MANUAL: 'manual',    // 사용자가 직접 로그아웃
 } as const
 
-export const REASON_TEXT = {
+export const REASON_TEXT: Record<string, string> = {
   [REASON.IDLE]: '장시간 활동이 없어 자동으로 로그아웃되었습니다. 다시 로그인해 주세요.',
   [REASON.EXPIRED]: '세션이 만료되어 로그아웃되었습니다. 다시 로그인해 주세요.',
 }

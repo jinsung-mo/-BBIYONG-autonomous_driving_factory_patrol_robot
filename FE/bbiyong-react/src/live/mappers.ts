@@ -6,7 +6,7 @@ import { ROBOT_V_MAX, ROBOT_W_MAX } from './config.ts'
 
 // /topic/robots 의 status → 상태 pill 문구/색
 // (modeClass: '' 정상 · 'emg' 긴급 · 'man' 수동 — 기존 CSS 클래스를 그대로 쓴다)
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<string, { text: string, cls: string }> = {
   AUTO_PATROL: { text: '순찰 중', cls: '' },
   APPROACH: { text: '접근 중', cls: 'emg' },
   VERIFY: { text: '근접 확인', cls: 'emg' },
@@ -72,7 +72,7 @@ export function eventToLog(e: any) {
   }
 }
 
-export const TYPE_LABEL = { FIRE: '화재', OVERHEAT: '과열', SYSTEM: '시스템' }
+export const TYPE_LABEL: Record<string, string> = { FIRE: '화재', OVERHEAT: '과열', SYSTEM: '시스템' }
 
 // AlertMessage → 이벤트 로그 한 줄 (LogList 공용 형태)
 export function alertToLog(a: any) {
@@ -89,7 +89,7 @@ export function alertToLog(a: any) {
 
 // WASD → 방향 단위벡터 (가이드 §4 매핑표).
 // 실제 발행값은 여기에 아래 주행 속도를 곱한 것이다 — 로봇이 자체 max로 클램핑한다.
-export const DRIVE_VECTORS = {
+export const DRIVE_VECTORS: Record<string, { linear: number, angular: number }> = {
   w: { linear: 1, angular: 0 },   // 전진
   s: { linear: -1, angular: 0 },  // 후진
   a: { linear: 0, angular: 1 },   // 좌회전

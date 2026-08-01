@@ -16,7 +16,7 @@ export default function EquipmentPanel() {
   const { accessToken } = useAuth()
 
   const [rows, setRows] = useState([])
-  const [drafts, setDrafts] = useState({})   // id → 입력 중인 문자열
+  const [drafts, setDrafts] = useState<Record<string, string>>({})   // id → 입력 중인 문자열
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(null) // 저장 중인 id
   const [msg, setMsg] = useState(null)       // { kind, text }

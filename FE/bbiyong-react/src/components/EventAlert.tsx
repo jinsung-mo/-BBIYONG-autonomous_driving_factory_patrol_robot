@@ -48,7 +48,7 @@ function playAlarmBeep(kind: any) {
 
 // 떠 있는 토스트 목록에 맞춰 반복 경보음 타이머를 붙였다 뗀다.
 function useAlarmSound(items: any) {
-  const timers = useRef({})
+  const timers = useRef<Record<string, any>>({})
   useEffect(() => {
     const alive = new Set(items.map((i: any) => String(i.id)))
     items.forEach((i: any) => {

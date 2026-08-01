@@ -26,7 +26,7 @@
     "alwaysStrict": true,
     "strictFunctionTypes": true,
     "useUnknownInCatchVariables": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "forceConsistentCasingInFileNames": true

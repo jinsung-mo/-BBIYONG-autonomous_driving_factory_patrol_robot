@@ -110,7 +110,10 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
   // 휴대전화번호·생년월일·성별은 S15P11E101-493 에서 추가됐다.
   // 서버 /api/auth/signup 스키마에는 아직 없어 지금은 전송돼도 무시된다(BE 반영 후 저장).
   // 시뮬 모드는 localStorage 라 곧바로 저장된다.
-  const signup = async ({ email, password, name, phone, birth, gender }) => {
+  const signup = async ({ email, password, name, phone, birth, gender }: {
+    email: string, password: string, name?: string,
+    phone?: string, birth?: string, gender?: string,
+  }) => {
     // 화면은 하이픈으로 보여주고 저장·전송은 숫자만 한다 — 이 경계에서 한 번만 정규화한다
     const tel = phoneDigits(phone)
     writeActivity()

@@ -7,7 +7,7 @@ import { REST_BASE } from './config.ts'
 // 인증이 깨졌을 때(401/403) 알릴 곳. AuthProvider 가 등록해 세션을 정리한다(S15P11E101-508).
 // 조회 함수마다 로그아웃을 부르면 순환 참조가 생겨서 이 한 지점으로 모은다.
 /** @type {(() => void) | null} */
-let onUnauthorized = null
+let onUnauthorized: (() => void) | null = null
 /** @param {(() => void) | null} fn */
 export function setUnauthorizedHandler(fn: any) { onUnauthorized = fn }
 
@@ -33,7 +33,7 @@ async function post(path: string, body: Record<string, unknown>) {
     throw new Error('실서버에 연결할 수 없습니다. 네트워크를 확인하세요.')
   }
 
-  const data = await res.json().catch(() => null)
+  const data = await res.json().catch((): any => null)
   if (!res.ok) {
     // 공통 에러 응답 포맷의 message를 우선 노출 (§1.0)
     throw new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
@@ -80,7 +80,7 @@ export async function authedGet(path: string, accessToken: string | null | undef
   const res = await fetch(`${REST_BASE}${path}`, {
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   })
-  const data = await res.json().catch(() => null)
+  const data = await res.json().catch((): any => null)
   if (!res.ok) {
     checkAuthFailure(res.status)
     throw new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
@@ -115,7 +115,7 @@ export async function authedSend(
   } catch {
     throw new Error('실서버에 연결할 수 없습니다. 네트워크를 확인하세요.')
   }
-  const data = await res.json().catch(() => null)
+  const data = await res.json().catch((): any => null)
   if (!res.ok) {
     checkAuthFailure(res.status)
     const err: import('./contracts').HttpError =

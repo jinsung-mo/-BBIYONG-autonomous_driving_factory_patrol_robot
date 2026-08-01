@@ -69,8 +69,8 @@ export default function ControlPanel() {
   const manual = seg === 'manual'
 
   // 버튼은 키보드 키 이름으로 표기 (조작은 WASD/방향키 동일)
-  const glyph = { w: 'W', a: 'A', s: 'S', d: 'D' }
-  const dirLabel = { w: '전진', a: '좌회전', s: '후진', d: '우회전' }
+  const glyph: Record<string, string> = { w: 'W', a: 'A', s: 'S', d: 'D' }
+  const dirLabel: Record<string, string> = { w: '전진', a: '좌회전', s: '후진', d: '우회전' }
   const key = (k: any) => {
     // live: 누르는 동안 주행, 떼면 정지 / mock: 기존처럼 클릭당 한 칸 이동
     const live = {

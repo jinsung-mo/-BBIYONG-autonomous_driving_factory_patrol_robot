@@ -72,11 +72,11 @@ export function LiveProvider({ children }: any) {
 
   // 영상 프레임은 초당 수십 장이 들어올 수 있어 React state로 올리지 않는다.
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
-  const videoRef = useRef({ FRONT: null, THERMAL: null })
+  const videoRef = useRef<Record<string, any>>({ FRONT: null, THERMAL: null })
   const videoListeners = useRef(new Set<(ch: 'FRONT' | 'THERMAL', frame: any) => void>())
   // 채널별로 프레임을 한 번이라도 받았는지. capabilities 가 online 이어도 프레임이 안 오면
   // 캔버스에는 시뮬 화면이 그대로 남아 실데이터처럼 보인다(S15P11E101-462).
-  const [videoSeen, setVideoSeen] = useState({ FRONT: false, THERMAL: false })
+  const [videoSeen, setVideoSeen] = useState<Record<string, boolean>>({ FRONT: false, THERMAL: false })
 
   const telemetryRef = useRef(null)
 
@@ -123,7 +123,9 @@ export function LiveProvider({ children }: any) {
       return undefined
     }
 
-    const offState = onState(({ connected: c, lastError: e, authError: a }) => {
+    const offState = onState(({ connected: c, lastError: e, authError: a }: {
+      connected: boolean, lastError: string | null, authError: boolean,
+    }) => {
       setConnected(c); setLastError(e); setAuthError(!!a)
     })
 
@@ -230,7 +232,7 @@ export function LiveProvider({ children }: any) {
   // 이미지는 blob 으로 받아 objectURL 로 들고 있으므로 교체할 때 이전 것을 반드시 풀어야 한다.
   useEffect(() => {
     if (!canConnect) {
-      setPlan((prev: any) => { releasePlan(prev); return null })
+      setPlan((prev: any): null => { releasePlan(prev); return null })
       navRef.current.plan = null
       setPlanError(null)
       return undefined

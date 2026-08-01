@@ -7,15 +7,18 @@
 import { Client } from '@stomp/stompjs'
 import { WS_URL } from './config.ts'
 
-let client = null
+// 모듈 수준 상태. null 로 시작하므로 타입을 명시하지 않으면 암시적 any 가 된다.
+/** @stomp/stompjs 의 Client — 앱 전체가 커넥션 하나를 공유한다 */
+let client: import('@stomp/stompjs').Client | null = null
 let connected = false
-let lastError = null
+let lastError: string | null = null
 let authError = false
 let nextId = 0
-let token = null
+let token: string | null = null
 
-const registry = new Map()      // id -> { destination, handler }
-const active = new Map()        // id -> StompSubscription
+type Entry = { destination: string, handler: (msg: any) => void }
+const registry = new Map<number, Entry>()      // id -> { destination, handler }
+const active = new Map<number, import('@stomp/stompjs').StompSubscription>()
 const stateListeners = new Set<(snap: {
   connected: boolean, lastError: string | null, authError: boolean, hasToken: boolean,
 }) => void>()

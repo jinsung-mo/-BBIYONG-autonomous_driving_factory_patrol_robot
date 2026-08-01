@@ -284,14 +284,17 @@ export default class Simulation {
     //
     // kind 마다 필요한 필드가 다른 이질 배열이다. 그냥 두면 처음 push 한 모양으로만
     // 추론돼 geo 접근이 막힌다 — 이 함수 안에서만 쓰는 형태라 여기 typedef 로 둔다.
-    /**
-     * @typedef {{ pn: any, c: number, r: number, hw: number, hd: number,
-     *             face: number[], inC: number, inR: number }} PanelGeo
-     * @typedef {{ zc: number, kind: 'obs' | 'panel' | 'robot' | 'fire',
-     *             c?: number, r?: number, geo?: PanelGeo }} DrawItem
-     * @type {DrawItem[]}
-     */
-    const items = []
+    /** 벽면 부착 분전반 지오메트리 */
+    type PanelGeo = {
+      pn: any, c: number, r: number, hw: number, hd: number,
+      face: number[], inC: number, inR: number,
+    }
+    /** kind 마다 필요한 필드가 다른 이질 배열이다 */
+    type DrawItem = {
+      zc: number, kind: 'obs' | 'panel' | 'robot' | 'fire',
+      c?: number, r?: number, geo?: PanelGeo,
+    }
+    const items: DrawItem[] = []
     for (let r = 0; r < RS; r++) for (let c = 0; c < CSn; c++) if (MAP[r][c] === 1) items.push({ zc: raw(c, 0, r).zc, kind: 'obs', c, r })
     panelGeos.forEach((geo) => items.push({ zc: raw(geo.c, 0, geo.r).zc, kind: 'panel', geo }))
     items.push({ zc: raw(this.bot.pos.c, 0, this.bot.pos.r).zc, kind: 'robot' })
@@ -877,7 +880,7 @@ export default class Simulation {
   // 멈추는 셈이라 위험하다. 모드 전환은 스페이스바(또는 모드 버튼)의 몫이다.
   dpadMove(dir: any) {
     if (this.bot.mode !== 'manual') return
-    const map = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] }
+    const map: Record<string, number[]> = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] }
     const [dc, dr] = map[dir] || [0, 0]
     const nc = Math.round(this.bot.pos.c) + dc, nr = Math.round(this.bot.pos.r) + dr
     if (nc >= 0 && nr >= 0 && nc < CSn && nr < RS && MAP[nr][nc] === 0) this.bot.pos = { c: nc, r: nr }

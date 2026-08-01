@@ -45,7 +45,7 @@ export function thresholdProblem(v: unknown) {
   return null
 }
 
-export const STATUS_LABEL = { NORMAL: '정상', OVER: '과열', UNKNOWN: '미점검' }
+export const STATUS_LABEL: Record<string, string> = { NORMAL: '정상', OVER: '과열', UNKNOWN: '미점검' }
 // 과열은 붉게, 미점검은 흐리게 — 이벤트 로그의 kind 클래스를 그대로 쓴다
 /** @param {import('./contracts').EquipmentStatus | string | undefined} s */
 export const statusClass = (s: string | undefined) => (s === 'OVER' ? 'heat' : (s === 'NORMAL' ? 'ok' : ''))
