@@ -72,7 +72,7 @@ export function LiveProvider({ children }) {
   // 영상 프레임은 초당 수십 장이 들어올 수 있어 React state로 올리지 않는다.
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
   const videoRef = useRef({ FRONT: null, THERMAL: null })
-  const videoListeners = useRef(new Set())
+  const videoListeners = useRef(new Set<(ch: 'FRONT' | 'THERMAL', frame: any) => void>())
   // 채널별로 프레임을 한 번이라도 받았는지. capabilities 가 online 이어도 프레임이 안 오면
   // 캔버스에는 시뮬 화면이 그대로 남아 실데이터처럼 보인다(S15P11E101-462).
   const [videoSeen, setVideoSeen] = useState({ FRONT: false, THERMAL: false })
@@ -83,7 +83,7 @@ export function LiveProvider({ children }) {
   // 방식으로 다룬다 — React state 로 올리지 않고 ref 에 최신값만 두고 리스너가 직접 받아간다.
   /** @type {import('react').MutableRefObject<import('./contracts').NavState>} */
   const navRef = useRef({ map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null })
-  const navListeners = useRef(new Set())
+  const navListeners = useRef(new Set<(nav: import('./contracts').NavState) => void>())
   // 구독자를 서로 격리한다. 한 리스너가 던지면 forEach 가 거기서 끊겨 뒤쪽 구독자는
   // 갱신을 못 받는다 — 관제 캔버스가 실패했다고 운영 탭 진행 표시까지 멈추면 안 된다.
   const emitNav = useCallback(() => {
@@ -116,7 +116,7 @@ export function LiveProvider({ children }) {
       setMappingComplete(null)
       videoRef.current = { FRONT: null, THERMAL: null }
       setVideoSeen({ FRONT: false, THERMAL: false })
-      navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [] }
+      navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null }
       emitNav()
       disconnect()
       return undefined

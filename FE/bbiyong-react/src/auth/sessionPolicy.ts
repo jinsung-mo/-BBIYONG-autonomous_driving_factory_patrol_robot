@@ -26,13 +26,13 @@ export const ACTIVITY_KEY = 'bbiyong.activity'
 
 /**
  * 자동 로그아웃 사유. as const 로 리터럴을 고정해 오타·미정의 값을 빌드에서 막는다.
- * @type {{ IDLE: 'idle', EXPIRED: 'expired', MANUAL: 'manual' }}
+ * (JSDoc 으로 적혀 있던 것을 TS 문법으로 옮긴다 — .ts 에서는 JSDoc 이 무시된다)
  */
 export const REASON = {
   IDLE: 'idle',        // 장시간 활동 없음
   EXPIRED: 'expired',  // 토큰 수명 만료
   MANUAL: 'manual',    // 사용자가 직접 로그아웃
-}
+} as const
 
 export const REASON_TEXT = {
   [REASON.IDLE]: '장시간 활동이 없어 자동으로 로그아웃되었습니다. 다시 로그인해 주세요.',

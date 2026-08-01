@@ -41,9 +41,20 @@ const publicUser = (u) => (u ? { email: u.email, name: u.name, role: u.role } : 
 /** @param {string | null | undefined} role */
 const rawRole = (role) => role || ROLE_VIEWER
 
+/**
+ * 세션 상태. restoreUser() 가 만드는 형태와 이후 setState 가 넣는 형태가 갈라져 있었다 —
+ * reason 을 빠뜨린 호출이 다섯 군데였다(@types/react 를 넣으니 드러났다).
+ */
+type SessionState = {
+  user: import('../live/contracts').PublicUser | null
+  accessToken: string | null
+  expiresAt: number | null
+  reason: import('../live/contracts').LogoutReason | null
+}
+
 // 복원 전에 만료를 먼저 판정한다(S15P11E101-508). 지난 세션은 되살리지 않는다 —
 // 브라우저를 닫았다 다시 열어도, 유휴 시간이 지났으면 로그인 화면으로 보낸다.
-function restoreUser() {
+function restoreUser(): SessionState {
   const saved = getAuth()
   const s = getSession()
   const hasSession = !!(saved?.accessToken && saved.user) || !!s
@@ -70,7 +81,7 @@ function restoreUser() {
 const expiryFrom = (res) => (Number(res?.expiresIn) > 0 ? Date.now() + Number(res.expiresIn) * 1000 : null)
 
 export function AuthProvider({ children }) {
-  const [state, setState] = useState(restoreUser)
+  const [state, setState] = useState<SessionState>(restoreUser)
   const { user, accessToken, expiresAt } = state
   // restoreUser() 는 만료를 발견하면 세션을 지운다 — 두 번 부르면 두 번째는 사유를 잃는다.
   // 최초 판정 결과를 그대로 쓴다.
@@ -84,7 +95,7 @@ export function AuthProvider({ children }) {
       if (!u || u.password !== password) throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
       setSession(u.email)
       setLogoutReason(null); setWarning(false)
-      setState({ user: publicUser(u), accessToken: null, expiresAt: null })
+      setState({ user: publicUser(u), accessToken: null, expiresAt: null, reason: null })
       return
     }
     const res = await loginRequest(email.trim().toLowerCase(), password)
@@ -93,7 +104,7 @@ export function AuthProvider({ children }) {
     const exp = expiryFrom(res)
     setAuth({ accessToken: res.accessToken, user: nu, expiresAt: exp })
     setLogoutReason(null); setWarning(false)
-    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp })
+    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp, reason: null })
   }
 
   // 휴대전화번호·생년월일·성별은 S15P11E101-493 에서 추가됐다.
@@ -107,7 +118,7 @@ export function AuthProvider({ children }) {
       const u = addUser({ email, password, name, phone: tel, birth, gender })
       setSession(u.email)
       setLogoutReason(null); setWarning(false)
-      setState({ user: publicUser(u), accessToken: null, expiresAt: null })
+      setState({ user: publicUser(u), accessToken: null, expiresAt: null, reason: null })
       return
     }
     await signupRequest({ email: email.trim().toLowerCase(), password, name, phone: tel, birth, gender })
@@ -117,16 +128,15 @@ export function AuthProvider({ children }) {
     const exp = expiryFrom(res)
     setAuth({ accessToken: res.accessToken, user: nu, expiresAt: exp })
     setLogoutReason(null); setWarning(false)
-    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp })
+    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp, reason: null })
   }
 
   // reason 이 MANUAL 이면 안내를 띄우지 않는다 — 스스로 누른 로그아웃이다.
-  /** @type {(reason?: import('../live/contracts').LogoutReason) => void} */
-  const logout = useCallback((reason = REASON.MANUAL) => {
+  const logout = useCallback((reason: import('../live/contracts').LogoutReason = REASON.MANUAL) => {
     clearSession(); clearToken()
     setWarning(false)
     setLogoutReason(reason === REASON.MANUAL ? null : reason)
-    setState({ user: null, accessToken: null, expiresAt: null })
+    setState({ user: null, accessToken: null, expiresAt: null, reason: null })
   }, [])
 
   // 활동 기록. 사용자 조작과 이벤트 로그 신규 기록이 모두 여기로 들어온다.
