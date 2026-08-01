@@ -4,15 +4,15 @@ import { useAuth } from '../../auth/AuthContext.tsx'
 import { roleText } from '../../auth/roles.ts'
 import Modal from '../ui/Modal.tsx'
 
-const initials = (name) => (name || '?').replace(/\s/g, '').slice(0, 2)
+const initials = (name: any) => (name || '?').replace(/\s/g, '').slice(0, 2)
 
 // 마이페이지 모달 — 프로필 조회/수정
-function MyPageModal({ onClose }) {
+function MyPageModal({ onClose }: any) {
   const { user, updateProfile } = useAuth()
   const [name, setName] = useState(user.name)
 
   const [msg, setMsg] = useState('')
-  const save = (e) => {
+  const save = (e: any) => {
     e.preventDefault()
     // 권한은 본인이 바꿀 수 없다 — 편집 가능하면 권한 게이트가 무의미해진다(S15P11E101-475)
     updateProfile({ name: name.trim() || user.name })
@@ -35,11 +35,11 @@ function MyPageModal({ onClose }) {
 }
 
 // 비밀번호 수정 모달
-function PasswordModal({ onClose }) {
+function PasswordModal({ onClose }: any) {
   const { changePassword } = useAuth()
   const [cur, setCur] = useState(''); const [next, setNext] = useState(''); const [next2, setNext2] = useState('')
   const [err, setErr] = useState(''); const [ok, setOk] = useState(false)
-  const save = (e) => {
+  const save = (e: any) => {
     e.preventDefault(); setErr('')
     try {
       if (next.length < 4) throw new Error('새 비밀번호는 4자 이상이어야 합니다.')
@@ -78,7 +78,7 @@ export default function UserMenu() {
   const ref = useRef(null)
 
   useEffect(() => {
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDoc = (e: any) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])

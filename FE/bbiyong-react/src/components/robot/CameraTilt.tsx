@@ -28,7 +28,7 @@ export default function CameraTilt() {
   // 동작하는데 카메라 각도만 죽어 있으면 고장으로 읽힌다. 값만 바뀌고 발행은 하지 않는다.
   const off = enabled ? (!connected || camDown || !isAdmin) : !isAdmin
 
-  const nudge = useCallback((dir) => {
+  const nudge = useCallback((dir: any) => {
     const next = clampTilt(tilt + dir * TILT_STEP)
     if (next === tilt) return          // 한계 — 같은 값을 다시 보내지 않는다
     setRequested(next)
@@ -41,8 +41,8 @@ export default function CameraTilt() {
 
   useEffect(() => {
     if (off) return undefined
-    const isTyping = (el) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
-    const onKey = (e) => {
+    const isTyping = (el: any) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
+    const onKey = (e: any) => {
       // WASD·방향키·Space·Shift 는 주행과 모드에 이미 쓰인다 — 겹치지 않는 키를 쓴다
       const up = e.key === '.' || e.key === '>' || e.key === 'PageUp'
       const down = e.key === ',' || e.key === '<' || e.key === 'PageDown'

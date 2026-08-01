@@ -13,7 +13,10 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgr
  *   onPick?: ((p: { x: number, y: number } | null) => void) | null,
  * }} props
  */
-export default function LiveNavMap({ route = null, onPick = null }) {
+export default function LiveNavMap({ route = null, onPick = null }: {
+    route?: import('../../live/contracts').Waypoint[] | null,
+    onPick?: ((p: { x: number, y: number } | null) => void) | null,
+  }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef(null)
   const viewRef = useRef(makeView())
@@ -44,7 +47,7 @@ export default function LiveNavMap({ route = null, onPick = null }) {
     const cv = cvRef.current
     if (!cv) return undefined
 
-    const render = (nav) => {
+    const render = (nav: any) => {
       lastRef.current = nav
       const fitted = fitCanvas(cv)
       if (!fitted) return // 패널이 아직 0 크기 — 다음 갱신에 다시 시도한다
@@ -76,7 +79,7 @@ export default function LiveNavMap({ route = null, onPick = null }) {
   }, [showPlan, plan])
 
   // 지도 클릭 → map 프레임 미터. 맵 밖은 로봇이 갈 수 없는 좌표라 받지 않는다.
-  const onClick = (e) => {
+  const onClick = (e: any) => {
     const pick = pickRef.current
     const nav = lastRef.current
     const cv = cvRef.current

@@ -36,7 +36,7 @@ const ROBOT_POLL_MS = 15000
 
 let alertUid = 0
 
-export function LiveProvider({ children }) {
+export function LiveProvider({ children }: any) {
   const { accessToken, logout } = useAuth()
   // 주행 상한은 설정 탭에서 바뀔 수 있다 — ref 로 들고 control 의 정체성은 고정한다
   const { settings } = useSettings()
@@ -93,7 +93,7 @@ export function LiveProvider({ children }) {
     })
   }, [])
 
-  const setDataSource = useCallback((value) => {
+  const setDataSource = useCallback((value: any) => {
     saveDataSource(value)
     setDataSourceState(value)
   }, [])
@@ -128,10 +128,10 @@ export function LiveProvider({ children }) {
     })
 
     const offRobots = subscribe('/topic/robots',
-      /** @param {import('./contracts').RobotTelemetry} msg */ (msg) => { telemetryRef.current = msg })
+      /** @param {import('./contracts').RobotTelemetry} msg */ (msg: any) => { telemetryRef.current = msg })
 
     const offAlerts = subscribe('/topic/alerts',
-      /** @param {import('./contracts').AlertMessage | import('./contracts').MappingMessage} msg */ (msg) => {
+      /** @param {import('./contracts').AlertMessage | import('./contracts').MappingMessage} msg */ (msg: any) => {
       // 맵 모델링 완료는 위험 경보가 아니다 — 화재/과열 토스트로 흘리면
       // alertToToast 가 타입 문자열을 그대로 띄운다. 운영 탭 전용 상태로 뺀다.
       if (isMappingComplete(msg)) { setMappingComplete({ ...msg, _at: Date.now() }); return }
@@ -144,13 +144,13 @@ export function LiveProvider({ children }) {
     //   FLOORPLAN_READY        : 서버가 정제 도면을 만들어 활성화했다
     // 도착 자체를 완료로 보면 도면 알림에도 '이 맵을 사용할까요?' 가 다시 뜬다.
     const offMapping = subscribe('/topic/mapping',
-      /** @param {import('./contracts').MappingMessage} msg */ (msg) => {
+      /** @param {import('./contracts').MappingMessage} msg */ (msg: any) => {
       const m = (typeof msg === 'object' && msg) ? msg : {}
       if (isFloorplanReady(m)) { setPlanReady({ ...m, _at: Date.now() }); return }
       setMappingComplete({ ...m, _at: Date.now() })
     })
 
-    const offVideo = subscribe(`/topic/video/${ROBOT_ID}`, (frame) => {
+    const offVideo = subscribe(`/topic/video/${ROBOT_ID}`, (frame: any) => {
       const ch = frame?.channel
       if (ch !== 'FRONT' && ch !== 'THERMAL') return
       videoRef.current[ch] = frame
@@ -160,7 +160,7 @@ export function LiveProvider({ children }) {
 
     // 실시간 SLAM 맵 — 한 토픽에 MAP/NAV_LIVE 두 종류가 오고 type 으로 갈린다(가이드 §1).
     const offNav = subscribe(`/topic/nav/${ROBOT_ID}`,
-      /** @param {import('./contracts').MapSnapshot | import('./contracts').NavLive | import('./contracts').MappingMessage} msg */ (msg) => {
+      /** @param {import('./contracts').MapSnapshot | import('./contracts').NavLive | import('./contracts').MappingMessage} msg */ (msg: any) => {
       const nav = navRef.current
       if (msg?.type === 'MAP') {
         // 서버는 snapshot 만 보낸다(patch 없음). sequence 가 바뀔 때만 다시 굽는다.
@@ -214,7 +214,7 @@ export function LiveProvider({ children }) {
         const rows = await authedGet('/api/robots', accessToken)
         if (!alive) return
         const list = Array.isArray(rows) ? rows : (rows?.content || [])
-        const me = list.find((r) => r?.robotId === ROBOT_ID)
+        const me = list.find((r: any) => r?.robotId === ROBOT_ID)
         // 필드가 없으면 status 로 보조 판정한다 — online 을 안 주는 서버 버전이 있다.
         setRobotOnline(me ? (me.online ?? (me.status !== 'OFFLINE')) : false)
       } catch {
@@ -230,7 +230,7 @@ export function LiveProvider({ children }) {
   // 이미지는 blob 으로 받아 objectURL 로 들고 있으므로 교체할 때 이전 것을 반드시 풀어야 한다.
   useEffect(() => {
     if (!canConnect) {
-      setPlan((prev) => { releasePlan(prev); return null })
+      setPlan((prev: any) => { releasePlan(prev); return null })
       navRef.current.plan = null
       setPlanError(null)
       return undefined
@@ -239,7 +239,7 @@ export function LiveProvider({ children }) {
     loadActivePlan(accessToken)
       .then((next) => {
         if (!alive) { releasePlan(next); return }
-        setPlan((prev) => { if (prev !== next) releasePlan(prev); return next })
+        setPlan((prev: any) => { if (prev !== next) releasePlan(prev); return next })
         navRef.current.plan = next
         setPlanError(null)
         emitNav()
@@ -258,11 +258,11 @@ export function LiveProvider({ children }) {
     if (authError && accessToken) logout(REASON.EXPIRED)
   }, [authError, accessToken, logout])
 
-  const dismissAlert = useCallback((id) => {
+  const dismissAlert = useCallback((id: any) => {
     setAlerts((prev) => prev.filter((a) => a._id !== id))
   }, [])
 
-  const onVideoFrame = useCallback((fn) => {
+  const onVideoFrame = useCallback((fn: any) => {
     videoListeners.current.add(fn)
     // 이미 받아둔 프레임이 있으면 즉시 1회 전달 (구독 시점 공백 방지)
     const cur = videoRef.current
@@ -272,7 +272,7 @@ export function LiveProvider({ children }) {
   }, [])
 
   // 맵 캔버스가 구독한다. 구독 시점에 이미 받아둔 맵이 있으면 즉시 1회 전달해 공백을 막는다.
-  const onNavUpdate = useCallback((fn) => {
+  const onNavUpdate = useCallback((fn: any) => {
     navListeners.current.add(fn)
     fn(navRef.current)
     return () => navListeners.current.delete(fn)
@@ -283,7 +283,7 @@ export function LiveProvider({ children }) {
   // control 이 새로 만들어져 LiveSimBridge 의 키보드 effect 가 재등록되고 주행이 끊긴다.
   const speedRef = useRef(DEFAULT_DRIVE_SPEED)
   const [speed, setSpeedState] = useState(DEFAULT_DRIVE_SPEED)
-  const setSpeed = useCallback((v) => { speedRef.current = v; setSpeedState(v) }, [])
+  const setSpeed = useCallback((v: any) => { speedRef.current = v; setSpeedState(v) }, [])
 
   // 설정에서 상한을 낮추면 지금 속도가 범위를 벗어난다 — 새 범위 안으로 끌어온다.
   // 그대로 두면 슬라이더는 상한을 넘은 값을 표시하고 발행도 그 값으로 나간다.
@@ -299,31 +299,31 @@ export function LiveProvider({ children }) {
      * @param {'/app/control/drive' | '/app/control/mode' | '/app/control/operation'} dest
      * @param {import('./contracts').ControlCommandBody} body
      */
-    const send = (dest, body) => publish(dest, /** @type {any} */ ({ robot_id: ROBOT_ID, ...body }))
+    const send = (dest: any, body: any) => publish(dest, /** @type {any} */ ({ robot_id: ROBOT_ID, ...body }))
     // 방향 단위벡터 × 축별 속도. 선속도는 슬라이더 값 그대로, 각속도는 같은 비율을
     // 각속도 상한에 적용한다 — 로봇 상한이 서로 달라(V/W) 한 배율을 공유하면 안 된다.
     // 부동소수 잔값이 payload 에 남지 않게 소수 2자리로 정리한다.
-    const r2 = (v) => Number(v.toFixed(2))
+    const r2 = (v: any) => Number(v.toFixed(2))
     return {
-      drive: (linear, angular) => send('/app/control/drive', {
+      drive: (linear: any, angular: any) => send('/app/control/drive', {
         command: 'DRIVE',
         linear: r2(linear * speedRef.current),
         angular: r2(angular * angularFor(speedRef.current, vMaxRef.current, wMaxRef.current)),
       }),
       stop: () => send('/app/control/drive', { command: 'DRIVE', linear: 0, angular: 0 }),
       // mode: autonomy | manual | disabled 만 유효
-      setMode: (mode) => send('/app/control/mode', { command: 'SET_MODE', mode }),
+      setMode: (mode: any) => send('/app/control/mode', { command: 'SET_MODE', mode }),
       // fail-safe — active:true 만 허용(해제 명령 없음)
       estop: () => send('/app/control/mode', { command: 'ESTOP', active: true }),
-      navigate: (x, y, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
+      navigate: (x: any, y: any, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
       // 전면 카메라 상하 각도(S15P11E101-521). 절대각(도)으로 보낸다.
       // 명령 이름은 cameraTilt.js 에 잠정 정의돼 있다 — 로봇 계약이 확정되면 그 파일만 고친다.
-      setCameraTilt: (deg) => send('/app/control/operation', { command: TILT_COMMAND, tilt: deg }),
+      setCameraTilt: (deg: any) => send('/app/control/operation', { command: TILT_COMMAND, tilt: deg }),
       // 자율 주행하며 2D 맵 생성 시작(S15P11E101-483).
       // BE 는 /app/control/operation 에서 이 명령을 로봇으로 릴레이한다.
       startMapping: () => send('/app/control/operation', { command: 'START_MAPPING' }),
       // 지금 만들어진 맵을 이름 붙여 저장한다(가이드 §5 SAVE_MAP) — 운영 탭에서 쓴다
-      saveMap: (name) => send('/app/control/operation', { command: 'SAVE_MAP', name }),
+      saveMap: (name: any) => send('/app/control/operation', { command: 'SAVE_MAP', name }),
     }
   }, [])
 

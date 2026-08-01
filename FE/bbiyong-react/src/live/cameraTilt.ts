@@ -13,7 +13,7 @@
 
 // `|| {}` 는 방어용이라 그대로 둔다. 타입만 넓혀 준다(런타임 변화 없음).
 const env: Record<string, string | undefined> = import.meta.env || {}
-const num = (v, fallback) => {
+const num = (v: any, fallback: any) => {
   const n = Number(v)
   return Number.isFinite(n) ? n : fallback
 }
@@ -25,16 +25,16 @@ export const TILT_MIN = num(env.VITE_CAMERA_TILT_MIN, -30)
 export const TILT_MAX = num(env.VITE_CAMERA_TILT_MAX, 30)
 export const TILT_STEP = Math.max(1, num(env.VITE_CAMERA_TILT_STEP, 5))
 
-export const clampTilt = (deg) => Math.min(TILT_MAX, Math.max(TILT_MIN, Math.round(deg)))
+export const clampTilt = (deg: any) => Math.min(TILT_MAX, Math.max(TILT_MIN, Math.round(deg)))
 
-export const atMax = (deg) => deg >= TILT_MAX
-export const atMin = (deg) => deg <= TILT_MIN
+export const atMax = (deg: any) => deg >= TILT_MAX
+export const atMin = (deg: any) => deg <= TILT_MIN
 
 // 로봇이 보고하는 현재 각도. 필드 이름도 아직 계약에 없어 후보를 넓게 받는다 —
 // 못 받으면 null 이고, 화면은 '요청값'임을 밝힌다(보고값으로 위장하지 않는다).
-export function reportedTilt(telemetry) {
+export function reportedTilt(telemetry: any) {
   const v = telemetry?.cameraTilt ?? telemetry?.camera_tilt ?? telemetry?.tilt
   return Number.isFinite(Number(v)) ? Number(v) : null
 }
 
-export const formatTilt = (deg) => `${deg > 0 ? '+' : ''}${deg}°`
+export const formatTilt = (deg: any) => `${deg > 0 ? '+' : ''}${deg}°`

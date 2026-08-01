@@ -5,9 +5,10 @@ import { useEffect } from 'react'
  * @param {{ title: string, onClose: () => void,
  *           children?: import('react').ReactNode, width?: number }} props
  */
-export default function Modal({ title, onClose, children, width = 400 }) {
+export default function Modal({ title, onClose, children, width = 400 }: { title: string, onClose: () => void,
+            children?: import('react').ReactNode, width?: number }) {
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: any) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])

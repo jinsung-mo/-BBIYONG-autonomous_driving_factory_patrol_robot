@@ -38,7 +38,7 @@ export default function RoutePanel() {
   useEffect(() => { load() }, [load])
 
   // 지도 클릭 — 서버에 바로 1건 추가한다(POST). 목록만 늘려 두면 새로고침에 사라진다.
-  const onPick = async (p) => {
+  const onPick = async (p: any) => {
     if (!p) { setMsg({ kind: 'warn', text: '맵 바깥은 지정할 수 없습니다. 회색으로 칠해진 영역 안을 클릭하세요.' }); return }
     if (busy) return
     setBusy(true)
@@ -53,7 +53,7 @@ export default function RoutePanel() {
     } finally { if (alive.current) setBusy(false) }
   }
 
-  const onDelete = async (w, i) => {
+  const onDelete = async (w: any, i: any) => {
     if (busy) return
     setBusy(true)
     try {
@@ -68,14 +68,14 @@ export default function RoutePanel() {
   }
 
   // 순서·이름은 화면에서만 바꾸고 '경로 저장'(PUT)으로 한 번에 반영한다.
-  const move = (i, d) => {
+  const move = (i: any, d: any) => {
     const j = i + d
     if (j < 0 || j >= route.length) return
     const next = route.slice()
     ;[next[i], next[j]] = [next[j], next[i]]
     setRoute(next)
   }
-  const rename = (i, name) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, name } : w)))
+  const rename = (i: any, name: any) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, name } : w)))
 
   const dirty = JSON.stringify(route.map((w) => [w.x, w.y, w.name || '']))
     !== JSON.stringify(saved.map((w) => [w.x, w.y, w.name || '']))

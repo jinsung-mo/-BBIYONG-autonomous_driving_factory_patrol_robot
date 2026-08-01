@@ -13,7 +13,7 @@
 
 // `|| {}` 는 방어용이라 그대로 둔다. 타입만 넓혀 준다(런타임 변화 없음 — S15P11E101-570).
 const env: Record<string, string | undefined> = import.meta.env || {}
-const minutes = (v, fallback) => {
+const minutes = (v: any, fallback: any) => {
   const n = Number(v)
   return (Number.isFinite(n) && n > 0 ? n : fallback) * 60 * 1000
 }
@@ -46,7 +46,7 @@ export function readActivity() {
 }
 
 /** @param {number} [at] @returns {number} */
-export function writeActivity(at = Date.now()) {
+export function writeActivity(at: number = Date.now()) {
   localStorage.setItem(ACTIVITY_KEY, String(at))
   return at
 }
@@ -60,7 +60,7 @@ export function clearActivity() { localStorage.removeItem(ACTIVITY_KEY) }
  * @param {number} [last]
  * @returns {number} 남은 ms. 0 이하면 만료
  */
-export function idleRemaining(now = Date.now(), last = readActivity()) {
+export function idleRemaining(now: number = Date.now(), last = readActivity()) {
   if (!last) return IDLE_MS
   return last + IDLE_MS - now
 }
@@ -71,6 +71,6 @@ export function idleRemaining(now = Date.now(), last = readActivity()) {
  * @param {number} [now]
  * @returns {number} 남은 ms. expiresAt 이 없으면 Infinity
  */
-export function absoluteRemaining(expiresAt, now = Date.now()) {
+export function absoluteRemaining(expiresAt: number | null | undefined, now: number = Date.now()) {
   return expiresAt ? expiresAt - now : Infinity
 }

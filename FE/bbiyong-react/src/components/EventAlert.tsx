@@ -17,7 +17,7 @@ const SOUND_REPEAT_MS = 3000 // 알림이 떠 있는 동안 경보음 반복 간
 let uid = 0
 
 // 오디오 파일 없이 오실레이터로 경보음 생성 (화재: 높은 삐-삐-삐 / 과열: 낮은 삐-삐)
-function playAlarmBeep(kind) {
+function playAlarmBeep(kind: any) {
   try {
     // webkitAudioContext 는 구형 Safari 폴백이라 표준 타입에 없다. 런타임 동작은 그대로 두고
     // 타입만 넓힌다(S15P11E101-570).
@@ -47,11 +47,11 @@ function playAlarmBeep(kind) {
 }
 
 // 떠 있는 토스트 목록에 맞춰 반복 경보음 타이머를 붙였다 뗀다.
-function useAlarmSound(items) {
+function useAlarmSound(items: any) {
   const timers = useRef({})
   useEffect(() => {
-    const alive = new Set(items.map((i) => String(i.id)))
-    items.forEach((i) => {
+    const alive = new Set(items.map((i: any) => String(i.id)))
+    items.forEach((i: any) => {
       if (!timers.current[i.id]) {
         playAlarmBeep(i.kind)
         timers.current[i.id] = setInterval(() => playAlarmBeep(i.kind), SOUND_REPEAT_MS)
@@ -68,12 +68,12 @@ function useAlarmSound(items) {
   }, [])
 }
 
-function ToastList({ items, onDismiss }) {
+function ToastList({ items, onDismiss }: any) {
   useAlarmSound(items)
   if (items.length === 0) return null
   return (
     <div className="alert-toast-wrap" role="alert" aria-live="assertive">
-      {items.map((a) => (
+      {items.map((a: any) => (
         <div key={a.id} className={`alert-toast ${a.kind}`}>
           <div className="alert-toast-text">
             <span className="alert-toast-title">{a.title}</span>
@@ -91,7 +91,7 @@ function ToastList({ items, onDismiss }) {
 function LiveAlerts() {
   const { alerts, dismissAlert } = useLive()
   // 매 렌더마다 새 배열이 되면 경보음 타이머 동기화 effect가 불필요하게 재실행된다
-  const items = useMemo(() => alerts.map((a) => ({ id: a._id, ...alertToToast(a) })), [alerts])
+  const items = useMemo(() => alerts.map((a: any) => ({ id: a._id, ...alertToToast(a) })), [alerts])
   return <ToastList items={items} onDismiss={dismissAlert} />
 }
 
@@ -109,7 +109,7 @@ function SimAlerts() {
     setAlerts((prev) => [...prev, { id, kind, title, time, sub }])
   }
 
-  const dismissKind = (kind) => setAlerts((prev) => prev.filter((a) => a.kind !== kind))
+  const dismissKind = (kind: any) => setAlerts((prev) => prev.filter((a) => a.kind !== kind))
 
   // 꺼짐→켜짐으로 바뀌는 "발생 순간"에만 알림 생성, 켜짐→꺼짐 순간 자동 종료
   // 화재는 실제로 오린카가 긴급 출동하므로(Simulation.setFire → botGoto), 출동 로봇을 함께 표시
@@ -126,7 +126,7 @@ function SimAlerts() {
   }, [status.heatOn])
 
   // ✕로 닫으면 알림만 없애는 게 아니라, 해당 경보 원인(화재/과열)도 함께 해제한다.
-  const dismiss = (id) => {
+  const dismiss = (id: any) => {
     const target = alerts.find((a) => a.id === id)
     setAlerts((prev) => prev.filter((a) => a.id !== id))
     if (target?.kind === 'fire' && status.fireOn) actions.toggleFire()

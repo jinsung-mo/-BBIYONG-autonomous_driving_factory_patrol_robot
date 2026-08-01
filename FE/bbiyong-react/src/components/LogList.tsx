@@ -38,7 +38,7 @@ export default function LogList({ variant = 'elog' }) {
   const [removing, setRemoving] = useState(false)
   const [delErr, setDelErr] = useState(null)
 
-  const load = useCallback(async (nextPage, reset) => {
+  const load = useCallback(async (nextPage: any, reset: any) => {
     if (!enabled || !accessToken) return
     setLoading(true)
     setError(null)
@@ -67,7 +67,7 @@ export default function LogList({ variant = 'elog' }) {
     // 시뮬 모드 — 기존 시뮬 로그를 그대로 보여준다(필터·이력 없음)
     return (
       <ul className={variant}>
-        {status.logs.map((log) => (
+        {status.logs.map((log: any) => (
           <li key={log.id} className={log.kind}>
             <span className="t mono">{log.time}</span>
             <b>{log.msg}</b>
@@ -78,7 +78,7 @@ export default function LogList({ variant = 'elog' }) {
   }
 
   const liveRows = alerts.map(alertToLog).reverse()
-    .filter((l) => filter === 'ALL' || l.type === filter)
+    .filter((l: any) => filter === 'ALL' || l.type === filter)
   const rows = [...liveRows, ...history]
 
   // 서버에서 지운다. 실시간 수신분은 eventId 가 없어(AlertMessage 에 필드가 없다)

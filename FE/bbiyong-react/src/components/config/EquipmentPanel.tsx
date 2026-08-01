@@ -41,10 +41,10 @@ export default function EquipmentPanel() {
 
   useEffect(() => { load() }, [load])
 
-  const shown = (e) => drafts[eqId(e)] ?? String(e?.threshold ?? '')
-  const setDraft = (id, v) => setDrafts((prev) => ({ ...prev, [id]: v }))
+  const shown = (e: any) => drafts[eqId(e)] ?? String(e?.threshold ?? '')
+  const setDraft = (id: any, v: any) => setDrafts((prev) => ({ ...prev, [id]: v }))
 
-  const onSave = async (e, i) => {
+  const onSave = async (e: any, i: any) => {
     const id = eqId(e)
     if (!id || saving) return
     const raw = shown(e)
@@ -66,7 +66,7 @@ export default function EquipmentPanel() {
     } finally { if (alive.current) setSaving(null) }
   }
 
-  const dirty = (e) => {
+  const dirty = (e: any) => {
     const d = drafts[eqId(e)]
     return d !== undefined && Number(d) !== Number(e?.threshold)
   }

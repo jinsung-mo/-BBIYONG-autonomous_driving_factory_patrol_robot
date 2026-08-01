@@ -16,12 +16,12 @@ export const RS = MAP.length       // 행 수
 export const CSn = MAP[0].length    // 열 수
 
 // A* 최단 회피 경로 (맨해튼 휴리스틱)
-export function astar(s, g2) {
-  const key = (c, r) => r * CSn + c
+export function astar(s: any, g2: any) {
+  const key = (c: any, r: any) => r * CSn + c
   const open = [{ c: s.c, r: s.r, g: 0, f: 0, p: null }]
   const gsc = {}
   gsc[key(s.c, s.r)] = 0
-  const H = (c, r) => Math.abs(c - g2.c) + Math.abs(r - g2.r)
+  const H = (c: any, r: any) => Math.abs(c - g2.c) + Math.abs(r - g2.r)
   while (open.length) {
     open.sort((a, b) => a.f - b.f)
     const cur = open.shift()

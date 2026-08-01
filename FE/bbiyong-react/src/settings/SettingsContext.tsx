@@ -57,15 +57,15 @@ export function useSettings() {
   return ctx
 }
 
-export function SettingsProvider({ children }) {
+export function SettingsProvider({ children }: any) {
   const [settings, setSettings] = useState(read)
   const { accessToken } = useAuth()
   // 서버 상한을 한 번이라도 받았는지. 못 받았으면 화면에서 "로컬 기본값"임을 밝힌다.
   const [driveSynced, setDriveSynced] = useState(false)
 
   /** @type {(patch: Partial<import('../live/contracts').Settings>) => void} */
-  const update = useCallback((patch) => {
-    setSettings((prev) => {
+  const update = useCallback((patch: any) => {
+    setSettings((prev: any) => {
       const next = { ...prev, ...patch }
       try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* 저장 실패는 무시 */ }
       return next

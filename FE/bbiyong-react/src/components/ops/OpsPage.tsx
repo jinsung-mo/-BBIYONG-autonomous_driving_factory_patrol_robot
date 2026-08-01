@@ -32,7 +32,7 @@ export default function OpsPage() {
   useEffect(() => () => { alive.current = false }, [])
 
   // 실시간 맵 진행 상황 — /topic/nav 의 MAP 스냅샷을 그대로 본다
-  useEffect(() => onNavUpdate((n) => setNav(n?.map ? { ...n.map } : null)), [onNavUpdate])
+  useEffect(() => onNavUpdate((n: any) => setNav(n?.map ? { ...n.map } : null)), [onNavUpdate])
 
   const loadMaps = useCallback(async () => {
     if (!enabled || !accessToken) return

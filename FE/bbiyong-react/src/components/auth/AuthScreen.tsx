@@ -13,7 +13,7 @@ import { REASON_TEXT } from '../../auth/sessionPolicy.ts'
 const EMPTY = { email: '', password: '', password2: '', name: '', phone: '', birth: '', gender: '' }
 
 /** @param {{ onBack?: (() => void) | null }} props */
-export default function AuthScreen({ onBack }) {
+export default function AuthScreen({ onBack }: { onBack?: (() => void) | null }) {
   const { login, signup, logoutReason } = useAuth()
   const [mode, setMode] = useState('login') // 'login' | 'signup'
   const [form, setForm] = useState(EMPTY)
@@ -24,23 +24,23 @@ export default function AuthScreen({ onBack }) {
 
   const reset = useCallback(() => { setForm(EMPTY); setErr('') }, [])
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const set = (k: any) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }))
   // 휴대전화번호는 입력하는 대로 하이픈을 넣는다(숫자 외 문자는 버린다)
-  const setPhone = (e) => setForm((f) => ({ ...f, phone: formatPhone(e.target.value) }))
+  const setPhone = (e: any) => setForm((f) => ({ ...f, phone: formatPhone(e.target.value) }))
 
-  const switchMode = (m) => { setMode(m); reset() }
-  const switchSource = (v) => { saveDataSource(v); setSource(v); setErr('') }
+  const switchMode = (m: any) => { setMode(m); reset() }
+  const switchSource = (v: any) => { saveDataSource(v); setSource(v); setErr('') }
 
   // 뒤로가기(bfcache)로 이 화면에 돌아오면 이전 입력이 그대로 살아 있다.
   // bfcache 는 JS 힙까지 복원하므로 컴포넌트 상태도 남는다 — 복원 시점에 비운다.
   // 공용 PC 에서 앞사람의 이메일·이름이 보이면 안 된다.
   useEffect(() => {
-    const onShow = (e) => { if (e.persisted) reset() }
+    const onShow = (e: any) => { if (e.persisted) reset() }
     window.addEventListener('pageshow', onShow)
     return () => window.removeEventListener('pageshow', onShow)
   }, [reset])
 
-  const submit = async (e) => {
+  const submit = async (e: any) => {
     e.preventDefault(); setErr(''); setBusy(true)
     try {
       if (mode === 'login') {

@@ -34,12 +34,12 @@ export function useAuth() {
  * @param {import('../live/contracts').StoredUser | null | undefined} u
  * @returns {import('../live/contracts').PublicUser | null}
  */
-const publicUser = (u) => (u ? { email: u.email, name: u.name, role: u.role } : null)
+const publicUser = (u: any) => (u ? { email: u.email, name: u.name, role: u.role } : null)
 
 // 서버는 role만 내려준다 — 이름은 가입 시 입력값, 없으면 이메일 로컬파트로 채운다.
 // 서버가 준 role 원문을 그대로 보관한다 — 표시 문구로 바꿔 저장하면 권한 판정을 잃는다.
 /** @param {string | null | undefined} role */
-const rawRole = (role) => role || ROLE_VIEWER
+const rawRole = (role: any) => role || ROLE_VIEWER
 
 /**
  * 세션 상태. restoreUser() 가 만드는 형태와 이후 setState 가 넣는 형태가 갈라져 있었다 —
@@ -78,9 +78,9 @@ function restoreUser(): SessionState {
 // 로그인 응답의 expiresIn(초) → 절대 만료 시각. 값이 없으면 절대 만료를 걸지 않는다
 // (유휴 만료는 그대로 동작한다).
 /** @param {{ expiresIn?: number } | null | undefined} res */
-const expiryFrom = (res) => (Number(res?.expiresIn) > 0 ? Date.now() + Number(res.expiresIn) * 1000 : null)
+const expiryFrom = (res: any) => (Number(res?.expiresIn) > 0 ? Date.now() + Number(res.expiresIn) * 1000 : null)
 
-export function AuthProvider({ children }) {
+export function AuthProvider({ children }: { children?: import('react').ReactNode }) {
   const [state, setState] = useState<SessionState>(restoreUser)
   const { user, accessToken, expiresAt } = state
   // restoreUser() 는 만료를 발견하면 세션을 지운다 — 두 번 부르면 두 번째는 사유를 잃는다.
@@ -88,7 +88,7 @@ export function AuthProvider({ children }) {
   const [logoutReason, setLogoutReason] = useState(state.reason ?? null)
   const [warning, setWarning] = useState(false)   // 만료 임박 경고 표시 여부
 
-  const login = async (email, password) => {
+  const login = async (email: any, password: any) => {
     writeActivity()
     if (getDataSource() !== 'live') {
       const u = findUser(email)
@@ -189,14 +189,14 @@ export function AuthProvider({ children }) {
   }, [accessToken, logout])
 
   // 아래 두 기능은 실서버 API 계약에 없다 — mock 모드에서만 동작한다.
-  const changePassword = (current, next) => {
+  const changePassword = (current: any, next: any) => {
     if (accessToken) throw new Error('실서버 모드에서는 비밀번호 변경을 지원하지 않습니다.')
     const s = getSession(); const u = findUser(s?.email)
     if (!u || u.password !== current) throw new Error('현재 비밀번호가 올바르지 않습니다.')
     updateUser(u.email, { password: next })
   }
 
-  const updateProfile = (patch) => {
+  const updateProfile = (patch: any) => {
     if (accessToken) throw new Error('실서버 모드에서는 프로필 수정을 지원하지 않습니다.')
     const s = getSession(); const u = updateUser(s.email, patch)
     setState((prev) => ({ ...prev, user: publicUser(u) }))

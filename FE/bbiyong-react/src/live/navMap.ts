@@ -10,10 +10,10 @@
 export const TRAIL_MAX = 5000
 
 // 점유값 → 표시 문자. <0 미탐색 · >50 벽 · 그 외 자유
-function mapSymbol(value) { return value < 0 ? '.' : value > 50 ? '#' : ' ' }
+function mapSymbol(value: any) { return value < 0 ? '.' : value > 50 ? '#' : ' ' }
 
 // flat RLE([값, 개수, 값, 개수, ...]) → row-major(아래→위) 문자열
-export function decodeMapSnapshot(msg) {
+export function decodeMapSnapshot(msg: any) {
   const cells = []
   for (let i = 0; i < msg.cells.length; i += 2) {
     cells.push(mapSymbol(msg.cells[i]).repeat(msg.cells[i + 1]))
@@ -24,7 +24,7 @@ export function decodeMapSnapshot(msg) {
 }
 
 // 셀이 많아 매 프레임 다시 그리면 느리다 — sequence 가 바뀔 때만 1픽셀=1셀로 굽고 draw 에서 확대한다
-export function bakeMap(m) {
+export function bakeMap(m: any) {
   const c = document.createElement('canvas')
   c.width = m.w; c.height = m.h
   const g = c.getContext('2d')
@@ -50,7 +50,7 @@ export function bakeMap(m) {
 export function makeView() { return { x: 0, y: 0, s: 60, init: false } }
 
 // 맵을 캔버스에 맞춘다 (첫 MAP 수신 시 · 캔버스 크기가 바뀌었을 때)
-export function fitView(view, cv, m) {
+export function fitView(view: any, cv: any, m: any) {
   if (!cv.width || !cv.height) return false
   const w = m.w * m.res, h = m.h * m.res
   view.s = Math.min(cv.width / w, cv.height / h) * 0.88
@@ -61,7 +61,7 @@ export function fitView(view, cv, m) {
 }
 
 // 캔버스를 부모 크기에 맞추고 2D 컨텍스트를 반환 (Simulation 의 fit 과 같은 역할)
-export function fitCanvas(cv) {
+export function fitCanvas(cv: any) {
   const r = cv.parentElement?.getBoundingClientRect()
   if (!r) return null
   const w = Math.round(r.width), h = Math.round(r.height)
@@ -75,8 +75,8 @@ export function fitCanvas(cv) {
 // 정제 도면이 있으면 그것을, 없으면 원본 점유격자를 쓴다. 둘 다 원점(m)과 m/px 로
 // 배치가 정해지므로 그리기·화면 맞춤이 같은 식을 쓸 수 있다.
 // 이미지 행 0 이 위(+y 끝)라 좌상단은 (ox, oy + h*res) 다 — 두 경우 모두 동일하다.
-export function backgroundOf(nav, showPlan = true) {
-  const ok = (o) => !!o?.img && [o.w, o.h, o.res, o.ox, o.oy].every(Number.isFinite)
+export function backgroundOf(nav: any, showPlan = true) {
+  const ok = (o: any) => !!o?.img && [o.w, o.h, o.res, o.ox, o.oy].every(Number.isFinite)
   const plan = showPlan ? nav?.plan : null
   if (ok(plan)) return { ...plan, isPlan: true }
   const raw = nav?.mapCanvas ? { ...nav.map, img: nav.mapCanvas } : null
@@ -86,7 +86,7 @@ export function backgroundOf(nav, showPlan = true) {
 // 화면 픽셀 → map 프레임 미터 (S15P11E101-514).
 // drawNav 의 sx/sy 를 그대로 뒤집는다. heading-up 일 때는 캔버스가 로봇 화면 위치를 축으로
 // (yaw - 90°) 만큼 돌아가 있으므로, 클릭 지점을 같은 축에서 반대로 돌린 뒤 환산한다.
-export function canvasToWorld(view, nav, headingUp, px, py) {
+export function canvasToWorld(view: any, nav: any, headingUp: any, px: any, py: any) {
   let x = px, y = py
   if (headingUp && nav?.pose) {
     const cx = view.x + nav.pose.x * view.s
@@ -100,7 +100,7 @@ export function canvasToWorld(view, nav, headingUp, px, py) {
 }
 
 // 맵 경계 안쪽인지. 맵 밖을 찍으면 로봇이 갈 수 없는 좌표가 저장된다.
-export function insideMap(m, x, y) {
+export function insideMap(m: any, x: any, y: any) {
   if (!m) return false
   return x >= m.ox && y >= m.oy && x <= m.ox + m.w * m.res && y <= m.oy + m.h * m.res
 }
@@ -111,13 +111,13 @@ export function insideMap(m, x, y) {
 // 끄면 북향(+y 위) 고정 — ROS map 프레임 그대로다.
 // route: 순찰 경로(S15P11E101-514). [{x, y, name}] 순서대로 선으로 잇고 번호를 붙인다.
 // showPlan: 정제 도면(S15P11E101-524)을 원본 점유격자 대신 배경으로 쓴다.
-export function drawNav(g, cv, nav, view, headingUp = false, route = null, showPlan = true) {
+export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true) {
   g.fillStyle = '#15171c'
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
 
-  const sx = (mx) => view.x + mx * view.s
-  const sy = (my) => view.y - my * view.s   // 화면 y 는 아래로 증가 → 부호 반전
+  const sx = (mx: any) => view.x + mx * view.s
+  const sy = (my: any) => view.y - my * view.s   // 화면 y 는 아래로 증가 → 부호 반전
 
   // heading-up: 로봇 화면 위치를 축으로 (yaw - 90°) 만큼 돌리면 진행 방향이 위가 된다.
   // 회전은 캔버스 변환으로만 걸고 좌표 계산(sx/sy)은 건드리지 않는다.
@@ -171,7 +171,7 @@ export function drawNav(g, cv, nav, view, headingUp = false, route = null, showP
       for (const w of route) g.lineTo(sx(w.x), sy(w.y))
       g.stroke(); g.setLineDash([])
     }
-    route.forEach((w, i) => {
+    route.forEach((w: any, i: any) => {
       const X = sx(w.x), Y = sy(w.y)
       g.fillStyle = '#3ddc97'
       g.beginPath(); g.arc(X, Y, 9, 0, Math.PI * 2); g.fill()
@@ -201,7 +201,7 @@ export function drawNav(g, cv, nav, view, headingUp = false, route = null, showP
 }
 
 // 우상단 나침반. angle 만큼 돌아간 화면에서 북(+y)이 향하는 방향을 가리킨다.
-function drawCompass(g, cv, angle) {
+function drawCompass(g: any, cv: any, angle: any) {
   const cx = cv.width - 26, cy = 26, r = 13
   g.save()
   g.fillStyle = 'rgba(6,9,14,.62)'

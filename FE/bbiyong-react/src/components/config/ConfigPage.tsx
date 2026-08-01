@@ -30,7 +30,7 @@ export default function ConfigPage() {
   // 서버 값을 받아 오면 입력칸도 그 값으로 되돌린다
   useEffect(() => { setVDraft(null); setWDraft(null) }, [driveSynced])
 
-  const onSpeedInput = (which) => (e) => {
+  const onSpeedInput = (which: any) => (e: any) => {
     const raw = e.target.value
     if (which === 'v') setVDraft(raw); else setWDraft(raw)
     const n = Number(raw)
@@ -61,10 +61,10 @@ export default function ConfigPage() {
     } finally { setSavingSpeed(false) }
   }
 
-  const setPoint = (id, patch) => update({
-    points: settings.points.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+  const setPoint = (id: any, patch: any) => update({
+    points: settings.points.map((p: any) => (p.id === id ? { ...p, ...patch } : p)),
   })
-  const removePoint = (id) => update({ points: settings.points.filter((p) => p.id !== id) })
+  const removePoint = (id: any) => update({ points: settings.points.filter((p: any) => p.id !== id) })
   const addPoint = () => {
     const label = draft.trim()
     if (!label) return
@@ -141,7 +141,7 @@ export default function ConfigPage() {
             관제 화면의 <b>지점 이동</b> 목록입니다. 좌표는 로봇 map 프레임 기준 미터입니다.
           </p>
           <ul className="pt-list">
-            {settings.points.map((p) => (
+            {settings.points.map((p: any) => (
               <li key={p.id}>
                 <input aria-label="지점 이름" value={p.label} onChange={(e) => setPoint(p.id, { label: e.target.value })} />
                 <input aria-label="x (m)" type="number" step="0.1" value={p.x}

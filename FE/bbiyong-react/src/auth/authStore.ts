@@ -15,7 +15,7 @@ const SEED = [{ email: 'safety@bbiyong.io', password: 'bbiyong', name: 'E101 관
 function readUsers() {
   try { return JSON.parse(localStorage.getItem(USERS_KEY)) } catch { return null }
 }
-function writeUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)) }
+function writeUsers(users: any) { localStorage.setItem(USERS_KEY, JSON.stringify(users)) }
 
 /** @returns {import('../live/contracts').StoredUser[]} */
 export function getUsers() {
@@ -28,9 +28,9 @@ export function getUsers() {
  * @param {string | null | undefined} email
  * @returns {import('../live/contracts').StoredUser | undefined}
  */
-export function findUser(email) {
+export function findUser(email: string | null | undefined) {
   if (!email) return undefined
-  return getUsers().find((u) => u.email === email.toLowerCase())
+  return getUsers().find((u: any) => u.email === email.toLowerCase())
 }
 
 // 스스로 가입한 계정은 뷰어로 시작한다 — 관리자 승격은 운영 정책의 몫이다(S15P11E101-475).
@@ -38,9 +38,9 @@ export function findUser(email) {
  * @param {Partial<import('../live/contracts').StoredUser> & { email: string, password: string }} form
  * @returns {import('../live/contracts').StoredUser}
  */
-export function addUser({ email, password, name, phone, birth, gender, role = ROLE_VIEWER }) {
+export function addUser({ email, password, name, phone, birth, gender, role = ROLE_VIEWER }: Partial<import('../live/contracts').StoredUser> & { email: string, password: string }) {
   const users = getUsers()
-  if (users.some((u) => u.email === email.toLowerCase())) throw new Error('이미 가입된 이메일입니다.')
+  if (users.some((u: any) => u.email === email.toLowerCase())) throw new Error('이미 가입된 이메일입니다.')
   const nu = { email: email.toLowerCase(), password, name, phone, birth, gender, role }
   users.push(nu); writeUsers(users)
   return nu
@@ -51,9 +51,9 @@ export function addUser({ email, password, name, phone, birth, gender, role = RO
  * @param {Partial<import('../live/contracts').StoredUser>} patch
  * @returns {import('../live/contracts').StoredUser}
  */
-export function updateUser(email, patch) {
+export function updateUser(email: string, patch: Partial<import('../live/contracts').StoredUser>) {
   const users = getUsers()
-  const i = users.findIndex((u) => u.email === email)
+  const i = users.findIndex((u: any) => u.email === email)
   if (i < 0) throw new Error('사용자를 찾을 수 없습니다.')
   users[i] = { ...users[i], ...patch }; writeUsers(users)
   return users[i]
@@ -64,7 +64,7 @@ export function getSession() {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY)) } catch { return null }
 }
 /** @param {string} email */
-export function setSession(email) { localStorage.setItem(SESSION_KEY, JSON.stringify({ email })) }
+export function setSession(email: string) { localStorage.setItem(SESSION_KEY, JSON.stringify({ email })) }
 export function clearSession() {
   localStorage.removeItem(SESSION_KEY); clearToken(); clearActivity()
 }
@@ -78,7 +78,7 @@ export function getAuth() {
   try { return JSON.parse(localStorage.getItem(TOKEN_KEY)) } catch { return null }
 }
 /** @param {import('../live/contracts').StoredAuth} auth */
-export function setAuth({ accessToken, user, expiresAt = null }) {
+export function setAuth({ accessToken, user, expiresAt = null }: import('../live/contracts').StoredAuth) {
   localStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, user, expiresAt }))
 }
 export function clearToken() { localStorage.removeItem(TOKEN_KEY) }

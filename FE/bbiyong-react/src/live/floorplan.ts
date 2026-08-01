@@ -20,9 +20,9 @@ export const KIND_FLOORPLAN = 'FLOORPLAN'
  * @param {unknown} msg
  * @returns {msg is import('./contracts').FloorplanReady}
  */
-export const isFloorplanReady = (msg) => /** @type {any} */ (msg)?.type === 'FLOORPLAN_READY'
+export const isFloorplanReady = (msg: any) => /** @type {any} */ (msg)?.type === 'FLOORPLAN_READY'
 /** @param {import('./contracts').MapDetail | null | undefined} detail */
-export const isFloorplan = (detail) => (detail?.kind || 'RAW').toUpperCase() === KIND_FLOORPLAN
+export const isFloorplan = (detail: any) => (detail?.kind || 'RAW').toUpperCase() === KIND_FLOORPLAN
 
 // 도면 이미지를 blob 으로 받아 디코드까지 끝낸 Image 를 돌려준다.
 // 캔버스는 매 프레임 그리므로, 로드가 끝나지 않은 Image 를 넘기면 첫 프레임이 빈 화면이 된다.
@@ -31,7 +31,7 @@ export const isFloorplan = (detail) => (detail?.kind || 'RAW').toUpperCase() ===
  * @param {string | null | undefined} accessToken
  * @returns {Promise<{ img: HTMLImageElement, url: string }>}
  */
-async function loadImage(imageUrl, accessToken) {
+async function loadImage(imageUrl: any, accessToken: any) {
   const res = await fetch(`${REST_BASE}${imageUrl}`, {
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   })
@@ -57,7 +57,7 @@ async function loadImage(imageUrl, accessToken) {
  * @param {string | null | undefined} accessToken
  * @returns {Promise<import('./contracts').PlanLayer | null>}
  */
-export async function loadActivePlan(accessToken) {
+export async function loadActivePlan(accessToken: string | null | undefined) {
   const detail = await authedGet('/api/maps/active', accessToken)
   if (!detail?.imageUrl) return null
   const { img, url } = await loadImage(detail.imageUrl, accessToken)
@@ -78,12 +78,12 @@ export async function loadActivePlan(accessToken) {
 
 // objectURL 은 명시적으로 풀어야 한다 — 매핑을 반복하면 blob 이 계속 쌓인다.
 /** @param {{ url?: string } | null | undefined} plan */
-export function releasePlan(plan) {
+export function releasePlan(plan: { url?: string } | null | undefined) {
   if (plan?.url) URL.revokeObjectURL(plan.url)
 }
 
 // 기하가 온전해야 지도 위에 겹칠 수 있다. 하나라도 없으면 그리지 않는다.
 /** @param {import('./contracts').PlanLayer | null | undefined} plan */
-export const planDrawable = (plan) => !!plan?.img
+export const planDrawable = (plan: any) => !!plan?.img
   && Number.isFinite(plan.w) && Number.isFinite(plan.h)
   && Number.isFinite(plan.res) && Number.isFinite(plan.ox) && Number.isFinite(plan.oy)

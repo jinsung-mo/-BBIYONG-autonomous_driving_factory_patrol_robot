@@ -38,7 +38,7 @@ export default function LiveSimBridge() {
   useEffect(() => {
     if (!enabled) { actions.clearExternalFrames(); return undefined }
 
-    const off = onVideoFrame((channel, frame) => {
+    const off = onVideoFrame((channel: any, frame: any) => {
       if (!frame?.data) return
       let img = imgs.current[channel]
       if (!img) {
@@ -64,7 +64,7 @@ export default function LiveSimBridge() {
     if (!enabled || !connected) return undefined
 
     const arrowMap = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
-    const resolve = (e) => {
+    const resolve = (e: any) => {
       let k = e.key.toLowerCase()
       if (arrowMap[k]) k = arrowMap[k]
       return 'wasd'.includes(k) ? k : null
@@ -91,7 +91,7 @@ export default function LiveSimBridge() {
       }, DRIVE_REPEAT_MS)
     }
 
-    const onDown = (e) => {
+    const onDown = (e: any) => {
       const k = resolve(e)
       if (!k || held.current.has(k)) return
       // 순찰 모드에서는 주행 명령이 무효다 — 모드 전환은 스페이스바만 한다(S15P11E101-513).
@@ -101,7 +101,7 @@ export default function LiveSimBridge() {
       sendCurrent() // 첫 명령은 타이머를 기다리지 않고 즉시 보낸다
       startRepeat()
     }
-    const onUp = (e) => {
+    const onUp = (e: any) => {
       const k = resolve(e)
       if (!k || !held.current.has(k)) return
       held.current.delete(k)

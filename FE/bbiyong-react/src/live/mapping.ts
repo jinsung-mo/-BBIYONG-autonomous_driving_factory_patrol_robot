@@ -26,28 +26,28 @@ const COMPLETE_TYPES = new Set(['EVENT_MAPPING_COMPLETE', 'MAPPING_COMPLETE'])
  * @param {unknown} msg
  * @returns {msg is import('./contracts').MappingComplete}
  */
-export function isMappingComplete(msg) {
-  const m = /** @type {{ type?: unknown, event?: unknown }} */ (msg || {})
+export function isMappingComplete(msg: unknown): msg is import('./contracts.d.ts').MappingComplete {
+  const m = (msg || {}) as { type?: unknown, event?: unknown }
   const type = m.type || m.event
   return typeof type === 'string' && COMPLETE_TYPES.has(type.toUpperCase())
 }
 
 // 서버 맵 레코드의 식별자·이름 필드가 목록/상세에서 조금씩 달라 흡수한다.
 /** @param {(import('./contracts').MapSummary & { mapId?: string }) | null | undefined} m */
-export const mapIdOf = (m) => m?.id ?? m?.mapId ?? null
+export const mapIdOf = (m: any) => m?.id ?? m?.mapId ?? null
 /** @param {(import('./contracts').MapSummary & { mapName?: string }) | null | undefined} m */
-export const mapNameOf = (m) => m?.name ?? m?.mapName ?? null
+export const mapNameOf = (m: any) => m?.name ?? m?.mapName ?? null
 
 /**
  * @param {unknown} res
  * @returns {import('./contracts').MapSummary[]}
  */
-const listOf = (res) => (Array.isArray(res) ? res : (/** @type {any} */ (res)?.content || []))
+const listOf = (res: any) => (Array.isArray(res) ? res : (/** @type {any} */ (res)?.content || []))
 
 // 활성 맵. 서버가 플래그를 주면 그것이 정답이고, 없으면 최신(GET /api/maps/latest 기준)을 활성으로 본다.
 /** @param {import('./contracts').MapSummary[]} maps */
-export function activeMapIdOf(maps) {
-  const flagged = maps.find((m) => m?.active === true)
+export function activeMapIdOf(maps: any) {
+  const flagged = maps.find((m: any) => m?.active === true)
   return mapIdOf(flagged || maps[0])
 }
 
@@ -55,7 +55,7 @@ export function activeMapIdOf(maps) {
  * @param {string | null | undefined} accessToken
  * @returns {Promise<import('./contracts').MapSummary[]>}
  */
-export function fetchMaps(accessToken) {
+export function fetchMaps(accessToken: string | null | undefined) {
   return authedGet('/api/maps', accessToken).then(listOf)
 }
 
@@ -80,7 +80,7 @@ export async function waitForSavedMap(
     if (signal?.aborted) return null
     let maps
     try { maps = await fetchMaps(accessToken) } catch { continue }
-    const hit = maps.find((m) => mapNameOf(m) === name)
+    const hit = maps.find((m: any) => mapNameOf(m) === name)
     if (hit) return hit
   }
   return null
@@ -90,7 +90,7 @@ export async function waitForSavedMap(
 // 483 당시에는 API 가 없어 PATCH 로 잠정 구현했는데, 실제 계약은 PUT 이라 그대로 두면
 // 405 가 난다(S15P11E101-524 에서 확인).
 /** @param {string} id */
-export const activatePath = (id) => `/api/maps/${id}/active`
+export const activatePath = (id: any) => `/api/maps/${id}/active`
 /**
  * 계약이 정한 메서드를 리터럴로 못 박는다. 483 당시 PATCH 로 잠정 구현했다가 405 가 났다 —
  * 다시 PATCH 로 되돌리면 빌드에서 걸린다(S15P11E101-569).
@@ -105,7 +105,7 @@ export class NotImplementedError extends Error {}
  * @param {string | null | undefined} accessToken
  * @returns {Promise<import('./contracts').MapDetail>}
  */
-export async function activateMap(id, accessToken) {
+export async function activateMap(id: any, accessToken: any) {
   try {
     return await authedSend(activatePath(id), accessToken, { method: ACTIVATE_METHOD })
   } catch (e) {
