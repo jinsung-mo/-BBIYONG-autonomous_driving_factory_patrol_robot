@@ -35,6 +35,28 @@ export function fetchEvents(
   return authedGet(`/api/events?${q}`, accessToken)
 }
 
+// 해결 처리 — PATCH /api/events/{eventId} { status } (S15P11E101-593)
+//
+// 서버는 UNRESOLVED | RESOLVED 만 받고(EventLogService.updateStatus) 그 밖의 값에 400 을 준다.
+// 방향을 가리지 않으므로 되돌리기(RESOLVED → UNRESOLVED)도 같은 호출이다.
+// 응답은 갱신된 EventLog 한 건이라 목록을 다시 받지 않고 그 행만 바꿀 수 있다.
+/**
+ * @param {number | string} eventId
+ * @param {import('./contracts').EventStatus} status
+ * @param {string | null | undefined} accessToken
+ * @returns {Promise<import('./contracts').EventLog>}
+ */
+export function updateEventStatus(
+  eventId: number | string,
+  status: import('./contracts').EventStatus,
+  accessToken: string | null | undefined,
+) {
+  return authedSend(`/api/events/${encodeURIComponent(eventId)}`, accessToken, {
+    method: 'PATCH',
+    body: { status },
+  })
+}
+
 /**
  * @param {number | string} eventId
  * @param {string | null | undefined} accessToken

@@ -1,11 +1,11 @@
-import { errMessage } from '../live/errors.ts'
+import { errMessage, errStatus } from '../live/errors.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { useSim } from '../SimContext.ts'
 import { useLive } from '../live/LiveContext.tsx'
 import { useFleet } from '../live/FleetContext.tsx'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { alertToLog, eventToLog, TYPE_LABEL } from '../live/mappers.ts'
-import { deleteEvent, fetchEvents, LEVEL_LABEL, EVENT_STATUS_LABEL } from '../live/events.ts'
+import { deleteEvent, fetchEvents, updateEventStatus, LEVEL_LABEL, EVENT_STATUS_LABEL } from '../live/events.ts'
 import Modal from './ui/Modal.tsx'
 
 // 이벤트 로그 (순찰 로봇 관제의 .elog).
@@ -51,7 +51,7 @@ export default function LogList({ variant = 'elog' }) {
   const { status } = useSim()
   const { enabled, connected, alerts, dismissAlert } = useLive()
   // 조회 대상 로봇·설비 목록은 편성 컨텍스트가 갖고 있다(S15P11E101-591)
-  const { selected, robots, multi, equipments, equipmentName } = useFleet()
+  const { selected, robots, multi, equipments, equipmentName, reload: reloadFleet } = useFleet()
   const { accessToken, isAdmin } = useAuth()
 
   const [filter, setFilter] = useState('ALL')
@@ -73,6 +73,9 @@ export default function LogList({ variant = 'elog' }) {
   const [pending, setPending] = useState<any>(null)   // 삭제 확인 대기 중인 행
   const [removing, setRemoving] = useState(false)
   const [delErr, setDelErr] = useState<string | null>(null)
+  // 해결 처리 중인 행과 그 결과 안내(S15P11E101-593)
+  const [resolving, setResolving] = useState<number | null>(null)
+  const [resolveErr, setResolveErr] = useState<string | null>(null)
 
   const load = useCallback(async (nextPage: any, reset: any) => {
     if (!enabled || !accessToken) return
@@ -130,6 +133,32 @@ export default function LogList({ variant = 'elog' }) {
     .filter((l: any) => !(multi && byRobot) || l.robotId === selected)
     .filter((l: any) => !equipment || l.equipmentId === equipment)
   const rows = [...liveRows, ...history]
+
+  // 해결 처리 — 되돌릴 수 있으므로(같은 API 로 UNRESOLVED 로 되돌린다) 확인을 받지 않는다.
+  // 삭제와 달리 복구되는 동작이라 확인 모달을 두면 야간 경보를 한 건씩 닫는 일이 번거로워진다.
+  const onResolve = async (log: any, next: 'RESOLVED' | 'UNRESOLVED') => {
+    if (resolving != null) return
+    setResolving(log.eventId); setResolveErr(null)
+    try {
+      const updated = await updateEventStatus(log.eventId, next, accessToken)
+      // 서버가 갱신된 EventLog 를 돌려준다 — 목록을 다시 받지 않고 그 행만 바꾼다.
+      // 전체 재조회는 스크롤 위치와 '더 보기'로 쌓아 둔 페이지를 날린다.
+      //
+      // 조건이 '미해결'인 상태에서 해결하면 이 행은 더 이상 조건에 맞지 않지만 남겨 둔다 —
+      // 즉시 사라지면 방금 무엇을 눌렀는지 확인할 수 없다. 다음 조회 때 자연히 빠진다.
+      setHistory((prev) => prev.map((l) => (
+        l.eventId === log.eventId ? { ...l, ...eventToLog(updated), _touched: true } : l
+      )))
+      // 요약 띠의 미해결 건수도 같이 바뀌어야 한다. 30초 주기를 기다리면 두 수치가 어긋나 보인다.
+      reloadFleet()
+    } catch (e) {
+      // 404 = 다른 사람이 먼저 지웠다 · 400 = 서버가 받지 않는 값이다. 구분해 알린다.
+      const st = errStatus(e)
+      setResolveErr(st === 404
+        ? '이미 삭제된 이벤트입니다. 목록을 새로 고치세요.'
+        : (st === 400 ? `서버가 받지 않는 상태 값입니다 — ${errMessage(e)}` : errMessage(e)))
+    } finally { setResolving(null) }
+  }
 
   // 서버에서 지운다. 실시간 수신분은 eventId 가 없어(AlertMessage 에 필드가 없다)
   // 여기 오지 않는다 — 그쪽은 화면에서 닫기만 한다.
@@ -208,6 +237,18 @@ export default function LogList({ variant = 'elog' }) {
             {/* 긴급과 미해결만 표시한다 — 경고·해결까지 다 붙이면 줄이 태그로 덮인다 */}
             {log.level === 'CRITICAL' && <span className="tag crit">{LEVEL_LABEL.CRITICAL}</span>}
             {log.status === 'UNRESOLVED' && !log.live && <span className="tag open">{EVENT_STATUS_LABEL.UNRESOLVED}</span>}
+            {/* 해결됨도 표시한다 — 미해결만 보던 중에 처리하면 이 태그가 바뀌는 것으로 결과를 안다 */}
+            {log.status === 'RESOLVED' && <span className="tag done">{EVENT_STATUS_LABEL.RESOLVED}</span>}
+            {/* 해결 처리는 되돌릴 수 있고 삭제는 되돌릴 수 없다 — 서로 다른 모양으로 둔다 */}
+            {isAdmin && log.eventId != null && (
+              <button type="button" className="logfix"
+                title={log.status === 'RESOLVED' ? '미해결로 되돌리기' : '이 이벤트를 해결 처리'}
+                aria-label={`${log.status === 'RESOLVED' ? '미해결로 되돌리기' : '해결 처리'} — ${log.msg}`}
+                disabled={resolving === log.eventId}
+                onClick={() => onResolve(log, log.status === 'RESOLVED' ? 'UNRESOLVED' : 'RESOLVED')}>
+                {resolving === log.eventId ? '…' : (log.status === 'RESOLVED' ? '되돌리기' : '해결')}
+              </button>
+            )}
             {/* 이력 행은 서버에서 삭제, 실시간 행은 화면에서만 닫는다(서버 id 가 없다) */}
             {isAdmin && log.eventId != null && (
               <button type="button" className="logdel" title="이 이벤트를 서버에서 삭제"
@@ -223,6 +264,7 @@ export default function LogList({ variant = 'elog' }) {
             )}
           </li>
         ))}
+        {resolveErr && <li className="heat"><b>해결 처리 실패 — {resolveErr}</b></li>}
         {error && <li className="heat"><b>이력 조회 실패 — {error}</b></li>}
         {more && (
           <li className="loadmore">
