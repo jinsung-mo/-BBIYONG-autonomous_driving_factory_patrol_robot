@@ -34,13 +34,13 @@ export const MAP_ORIGIN_Y = Number(env.VITE_MAP_ORIGIN_Y ?? 0)
 export const MAP_METERS_PER_CELL = Number(env.VITE_MAP_METERS_PER_CELL ?? 1)
 
 // 실서버 미터 좌표 → 시뮬 격자 좌표
-export const worldToCell = (x, y) => ({
+export const worldToCell = (x: any, y: any) => ({
   c: (x - MAP_ORIGIN_X) / MAP_METERS_PER_CELL,
   r: (y - MAP_ORIGIN_Y) / MAP_METERS_PER_CELL,
 })
 
 // 시뮬 격자 좌표 → 실서버 미터 좌표 (NAVIGATE 발행용)
-export const cellToWorld = (c, r) => ({
+export const cellToWorld = (c: any, r: any) => ({
   x: c * MAP_METERS_PER_CELL + MAP_ORIGIN_X,
   y: r * MAP_METERS_PER_CELL + MAP_ORIGIN_Y,
 })
@@ -53,10 +53,10 @@ const SOURCE_KEY = 'bbiyong.dataSource'
 // 이미 배포된 브라우저의 localStorage 와 팀이 쓰는 토글이 둘 다 살아 있어야 한다.
 const REAL_KEY = 'bbiyong.realBackend'
 
-const truthy = (v) => v === true || v === 'true' || v === '1'
+const truthy = (v: any) => v === true || v === 'true' || v === '1'
 const DEFAULT_SOURCE = (env.VITE_DATA_SOURCE === 'live' || truthy(env.VITE_REAL_BACKEND)) ? 'live' : 'mock'
 
-export function getDataSource() {
+export function getDataSource(): 'live' | 'mock' {
   try {
     const saved = localStorage.getItem(SOURCE_KEY)
     if (saved === 'live' || saved === 'mock') return saved
@@ -68,7 +68,7 @@ export function getDataSource() {
   return DEFAULT_SOURCE
 }
 
-export function saveDataSource(value) {
+export function saveDataSource(value: 'live' | 'mock') {
   try {
     localStorage.setItem(SOURCE_KEY, value)
     localStorage.setItem(REAL_KEY, String(value === 'live'))

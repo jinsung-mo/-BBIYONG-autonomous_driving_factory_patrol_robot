@@ -1,3 +1,4 @@
+import { errMessage } from '../../live/errors.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
@@ -15,30 +16,30 @@ export default function OpsPage() {
   const { enabled, connected, control, onNavUpdate, telemetry, mappingComplete, clearMappingComplete } = useLive()
   const { accessToken } = useAuth()
 
-  const [nav, setNav] = useState(null)
+  const [nav, setNav] = useState<import('../../live/contracts.d.ts').DecodedMap | null>(null)
   const [name, setName] = useState('')
-  const [maps, setMaps] = useState([])
-  const [mapsErr, setMapsErr] = useState(null)
+  const [maps, setMaps] = useState<import('../../live/contracts.d.ts').MapSummary[]>([])
+  const [mapsErr, setMapsErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const [confirming, setConfirming] = useState(false)
   const [requested, setRequested] = useState(false)   // START_MAPPING 발행 후 로봇 반응 대기
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState(null)                // { kind: ok|warn|err, text }
+  const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)                // { kind: ok|warn|err, text }
 
   // 언마운트 뒤 setState 를 막는다 — 저장 흐름은 최대 12초까지 폴링한다
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])
 
   // 실시간 맵 진행 상황 — /topic/nav 의 MAP 스냅샷을 그대로 본다
-  useEffect(() => onNavUpdate((n) => setNav(n?.map ? { ...n.map } : null)), [onNavUpdate])
+  useEffect(() => onNavUpdate((n: any) => setNav(n?.map ? { ...n.map } : null)), [onNavUpdate])
 
   const loadMaps = useCallback(async () => {
     if (!enabled || !accessToken) return
     setLoading(true); setMapsErr(null)
     try {
       setMaps(await fetchMaps(accessToken))
-    } catch (e) { setMapsErr(e.message) } finally { setLoading(false) }
+    } catch (e) { setMapsErr(errMessage(e)) } finally { setLoading(false) }
   }, [enabled, accessToken])
 
   useEffect(() => { loadMaps() }, [loadMaps])
@@ -100,7 +101,7 @@ export default function OpsPage() {
             + 'BE 에 추가되면 이 화면 수정 없이 바로 동작합니다. 그때까지는 최신 맵이 활성입니다.',
         })
       } else {
-        setMsg({ kind: 'err', text: `활성 맵 지정에 실패했습니다 — ${e.message}` })
+        setMsg({ kind: 'err', text: `활성 맵 지정에 실패했습니다 — ${errMessage(e)}` })
       }
     }
     setSaving(false)

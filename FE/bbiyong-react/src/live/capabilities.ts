@@ -23,7 +23,7 @@ export const CAP_KEYS = {
   drive: 'drive',         // 주행(수동 조작)
 }
 
-const LABEL = {
+const LABEL: Record<string, string> = {
   [CAP_ONLINE]: '정상',
   [CAP_STALE]: '지연',
   [CAP_OFFLINE]: '중단',
@@ -31,7 +31,7 @@ const LABEL = {
 
 // 텔레메트리에서 해당 서브시스템 상태를 뽑는다.
 // enabled(=live 모드)가 아니면 시뮬이므로 판정 대상이 아니다.
-export function capOf(telemetry, key) {
+export function capOf(telemetry: any, key: any) {
   const caps = telemetry?.capabilities
   if (!caps || typeof caps !== 'object') return CAP_UNKNOWN
   const v = caps[key]
@@ -40,7 +40,7 @@ export function capOf(telemetry, key) {
   return CAP_OFFLINE
 }
 
-export const capLabel = (state) => LABEL[state] || ''
+export const capLabel = (state: any) => LABEL[state] || ''
 
 // 데이터가 오지 않는 패널인지 — 흐리게 + '데이터 없음' 안내를 띄울 기준
-export const isDown = (state) => state === CAP_OFFLINE
+export const isDown = (state: any) => state === CAP_OFFLINE

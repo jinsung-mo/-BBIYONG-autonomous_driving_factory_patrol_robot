@@ -10,7 +10,7 @@ import { useSim } from '../SimContext.ts'
 //
 // 반대로 텔레메트리·영상·맵 갱신은 여기서 보지 않는다. 로봇 전원이 켜져 있기만 하면
 // 끊임없이 흐르므로, 활동으로 치면 유휴 판정이 영원히 성립하지 않는다.
-export default function EventLogActivity() {
+export default function EventLogActivity(): null {
   const { touch } = useAuth()
   const { enabled, alerts } = useLive()
   const { status } = useSim()

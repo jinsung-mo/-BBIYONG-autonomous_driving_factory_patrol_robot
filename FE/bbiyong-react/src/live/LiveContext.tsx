@@ -1,3 +1,4 @@
+import { errMessage } from './errors.ts'
 // 실서버(STOMP) 연동 컨텍스트 — docs/fe_backend_integration_guide.md §3·§4 구현.
 //
 // 로컬 시뮬레이션(SimContext)은 그대로 두고 그 위에 얹는다. 컴포넌트는 live 모드일 때만
@@ -18,9 +19,17 @@ import { authedGet } from './authApi.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { REASON } from '../auth/sessionPolicy.ts'
 
-const LiveContext = createContext(null)
+/**
+ * 컨텍스트가 실제로 공급하는 값. Provider 안에서 만드는 value 객체에서 그대로 끌어온다 —
+ * 형태를 손으로 다시 적으면 Provider 가 바뀔 때 어긋난다.
+ */
+const LiveContext = createContext<import('./contracts.d.ts').LiveContextValue | null>(null)
 
-export function useLive() {
+/**
+ * Provider 밖에서 부르면 던지므로 반환 타입을 non-null 로 좁힌다
+ * (useAuth·useSettings·useSim 과 같은 규칙 — S15P11E101-570).
+ */
+export function useLive(): import('./contracts.d.ts').LiveContextValue {
   const ctx = useContext(LiveContext)
   if (!ctx) throw new Error('useLive must be used within <LiveProvider>')
   return ctx
@@ -35,7 +44,7 @@ const ROBOT_POLL_MS = 15000
 
 let alertUid = 0
 
-export function LiveProvider({ children }) {
+export function LiveProvider({ children }: any) {
   const { accessToken, logout } = useAuth()
   // 주행 상한은 설정 탭에서 바뀔 수 있다 — ref 로 들고 control 의 정체성은 고정한다
   const { settings } = useSettings()
@@ -48,42 +57,42 @@ export function LiveProvider({ children }) {
   const enabled = dataSource === 'live'
 
   const [connected, setConnected] = useState(false)
-  const [lastError, setLastError] = useState(null)
+  const [lastError, setLastError] = useState<string | null>(null)
   const [authError, setAuthError] = useState(false)
-  const [telemetry, setTelemetry] = useState(null)
-  const [alerts, setAlerts] = useState([])
+  const [telemetry, setTelemetry] = useState<import('./contracts.d.ts').RobotTelemetry | null>(null)
+  const [alerts, setAlerts] = useState<import('./contracts.d.ts').AlertMessage[]>([])
   // 맵 모델링 완료 이벤트(S15P11E101-483). 마지막 1건만 들고 있으면 충분하다 —
   // 운영 탭이 '이 맵 사용?' 안내를 띄우고 사용자가 확인하면 지운다.
-  const [mappingComplete, setMappingComplete] = useState(null)
+  const [mappingComplete, setMappingComplete] = useState<any>(null)
   // 정제 도면(S15P11E101-524). planReady 는 알림, plan 은 실제로 받아 온 도면이다.
-  const [planReady, setPlanReady] = useState(null)
-  const [plan, setPlan] = useState(null)
-  const [planError, setPlanError] = useState(null)
+  const [planReady, setPlanReady] = useState<any>(null)
+  const [plan, setPlan] = useState<import('./contracts.d.ts').PlanLayer | null>(null)
+  const [planError, setPlanError] = useState<string | null>(null)
   // 로봇 가동 여부(S15P11E101-510). STOMP 연결은 '관제↔서버'만 말해준다 —
   // 로봇이 꺼져 있어도 connected 는 true 라서, 서버가 판정한 online 을 따로 받아야 한다.
   // null = 아직 모름(조회 전·실패). 모름을 offline 으로 위장하지 않는다.
-  const [robotOnline, setRobotOnline] = useState(null)
+  const [robotOnline, setRobotOnline] = useState<boolean | null>(null)
 
   // 사용자가 고른 제어 모드(S15P11E101-448 · 513). 조작 패널의 지역 상태였는데,
   // 키보드 주행을 발행하는 LiveSimBridge 도 이 값을 봐야 해서 연동 레이어로 올린다 —
   // 순찰 모드에서는 WASD 가 DRIVE 를 보내면 안 된다.
-  const [driveMode, setDriveMode] = useState('patrol')
+  const [driveMode, setDriveMode] = useState<'patrol' | 'manual'>('patrol')
 
   // 영상 프레임은 초당 수십 장이 들어올 수 있어 React state로 올리지 않는다.
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
-  const videoRef = useRef({ FRONT: null, THERMAL: null })
-  const videoListeners = useRef(new Set())
+  const videoRef = useRef<Record<string, any>>({ FRONT: null, THERMAL: null })
+  const videoListeners = useRef(new Set<(ch: 'FRONT' | 'THERMAL', frame: any) => void>())
   // 채널별로 프레임을 한 번이라도 받았는지. capabilities 가 online 이어도 프레임이 안 오면
   // 캔버스에는 시뮬 화면이 그대로 남아 실데이터처럼 보인다(S15P11E101-462).
-  const [videoSeen, setVideoSeen] = useState({ FRONT: false, THERMAL: false })
+  const [videoSeen, setVideoSeen] = useState<Record<string, boolean>>({ FRONT: false, THERMAL: false })
 
-  const telemetryRef = useRef(null)
+  const telemetryRef = useRef<import('./contracts.d.ts').RobotTelemetry | null>(null)
 
   // 실시간 SLAM 맵(가이드 §5). NAV_LIVE 가 3Hz 로 오고 scan 배열이 커서 영상 프레임과 같은
   // 방식으로 다룬다 — React state 로 올리지 않고 ref 에 최신값만 두고 리스너가 직접 받아간다.
   /** @type {import('react').MutableRefObject<import('./contracts').NavState>} */
-  const navRef = useRef({ map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null })
-  const navListeners = useRef(new Set())
+  const navRef = useRef<import('./contracts.d.ts').NavState>({ map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null })
+  const navListeners = useRef(new Set<(nav: import('./contracts').NavState) => void>())
   // 구독자를 서로 격리한다. 한 리스너가 던지면 forEach 가 거기서 끊겨 뒤쪽 구독자는
   // 갱신을 못 받는다 — 관제 캔버스가 실패했다고 운영 탭 진행 표시까지 멈추면 안 된다.
   const emitNav = useCallback(() => {
@@ -92,7 +101,7 @@ export function LiveProvider({ children }) {
     })
   }, [])
 
-  const setDataSource = useCallback((value) => {
+  const setDataSource = useCallback((value: 'live' | 'mock') => {
     saveDataSource(value)
     setDataSourceState(value)
   }, [])
@@ -116,21 +125,23 @@ export function LiveProvider({ children }) {
       setMappingComplete(null)
       videoRef.current = { FRONT: null, THERMAL: null }
       setVideoSeen({ FRONT: false, THERMAL: false })
-      navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [] }
+      navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null }
       emitNav()
       disconnect()
       return undefined
     }
 
-    const offState = onState(({ connected: c, lastError: e, authError: a }) => {
+    const offState = onState(({ connected: c, lastError: e, authError: a }: {
+      connected: boolean, lastError: string | null, authError: boolean,
+    }) => {
       setConnected(c); setLastError(e); setAuthError(!!a)
     })
 
     const offRobots = subscribe('/topic/robots',
-      /** @param {import('./contracts').RobotTelemetry} msg */ (msg) => { telemetryRef.current = msg })
+      /** @param {import('./contracts').RobotTelemetry} msg */ (msg: any) => { telemetryRef.current = msg })
 
     const offAlerts = subscribe('/topic/alerts',
-      /** @param {import('./contracts').AlertMessage | import('./contracts').MappingMessage} msg */ (msg) => {
+      /** @param {import('./contracts').AlertMessage | import('./contracts').MappingMessage} msg */ (msg: any) => {
       // 맵 모델링 완료는 위험 경보가 아니다 — 화재/과열 토스트로 흘리면
       // alertToToast 가 타입 문자열을 그대로 띄운다. 운영 탭 전용 상태로 뺀다.
       if (isMappingComplete(msg)) { setMappingComplete({ ...msg, _at: Date.now() }); return }
@@ -143,13 +154,13 @@ export function LiveProvider({ children }) {
     //   FLOORPLAN_READY        : 서버가 정제 도면을 만들어 활성화했다
     // 도착 자체를 완료로 보면 도면 알림에도 '이 맵을 사용할까요?' 가 다시 뜬다.
     const offMapping = subscribe('/topic/mapping',
-      /** @param {import('./contracts').MappingMessage} msg */ (msg) => {
+      /** @param {import('./contracts').MappingMessage} msg */ (msg: any) => {
       const m = (typeof msg === 'object' && msg) ? msg : {}
       if (isFloorplanReady(m)) { setPlanReady({ ...m, _at: Date.now() }); return }
       setMappingComplete({ ...m, _at: Date.now() })
     })
 
-    const offVideo = subscribe(`/topic/video/${ROBOT_ID}`, (frame) => {
+    const offVideo = subscribe(`/topic/video/${ROBOT_ID}`, (frame: any) => {
       const ch = frame?.channel
       if (ch !== 'FRONT' && ch !== 'THERMAL') return
       videoRef.current[ch] = frame
@@ -159,7 +170,7 @@ export function LiveProvider({ children }) {
 
     // 실시간 SLAM 맵 — 한 토픽에 MAP/NAV_LIVE 두 종류가 오고 type 으로 갈린다(가이드 §1).
     const offNav = subscribe(`/topic/nav/${ROBOT_ID}`,
-      /** @param {import('./contracts').MapSnapshot | import('./contracts').NavLive | import('./contracts').MappingMessage} msg */ (msg) => {
+      /** @param {import('./contracts').MapSnapshot | import('./contracts').NavLive | import('./contracts').MappingMessage} msg */ (msg: any) => {
       const nav = navRef.current
       if (msg?.type === 'MAP') {
         // 서버는 snapshot 만 보낸다(patch 없음). sequence 가 바뀔 때만 다시 굽는다.
@@ -169,7 +180,7 @@ export function LiveProvider({ children }) {
           nav.mapCanvas = bakeMap(nav.map)
         } catch (e) {
           // 크기가 안 맞는 맵은 버리고 직전 맵을 유지한다 — 깨진 화면보다 낫다
-          console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', e.message)
+          console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', errMessage(e))
           return
         }
       } else if (isMappingComplete(msg)) {
@@ -213,7 +224,7 @@ export function LiveProvider({ children }) {
         const rows = await authedGet('/api/robots', accessToken)
         if (!alive) return
         const list = Array.isArray(rows) ? rows : (rows?.content || [])
-        const me = list.find((r) => r?.robotId === ROBOT_ID)
+        const me = list.find((r: any) => r?.robotId === ROBOT_ID)
         // 필드가 없으면 status 로 보조 판정한다 — online 을 안 주는 서버 버전이 있다.
         setRobotOnline(me ? (me.online ?? (me.status !== 'OFFLINE')) : false)
       } catch {
@@ -244,7 +255,7 @@ export function LiveProvider({ children }) {
         emitNav()
       })
       // 활성 맵이 아직 없으면 404 다 — 오류로 떠들지 않고 조용히 비워 둔다.
-      .catch((e) => { if (alive) setPlanError(e.message) })
+      .catch((e) => { if (alive) setPlanError(errMessage(e)) })
     return () => { alive = false }
   }, [canConnect, accessToken, planReady, emitNav])
 
@@ -257,11 +268,11 @@ export function LiveProvider({ children }) {
     if (authError && accessToken) logout(REASON.EXPIRED)
   }, [authError, accessToken, logout])
 
-  const dismissAlert = useCallback((id) => {
+  const dismissAlert = useCallback((id: any) => {
     setAlerts((prev) => prev.filter((a) => a._id !== id))
   }, [])
 
-  const onVideoFrame = useCallback((fn) => {
+  const onVideoFrame = useCallback((fn: any) => {
     videoListeners.current.add(fn)
     // 이미 받아둔 프레임이 있으면 즉시 1회 전달 (구독 시점 공백 방지)
     const cur = videoRef.current
@@ -271,7 +282,7 @@ export function LiveProvider({ children }) {
   }, [])
 
   // 맵 캔버스가 구독한다. 구독 시점에 이미 받아둔 맵이 있으면 즉시 1회 전달해 공백을 막는다.
-  const onNavUpdate = useCallback((fn) => {
+  const onNavUpdate = useCallback((fn: any) => {
     navListeners.current.add(fn)
     fn(navRef.current)
     return () => navListeners.current.delete(fn)
@@ -282,7 +293,7 @@ export function LiveProvider({ children }) {
   // control 이 새로 만들어져 LiveSimBridge 의 키보드 effect 가 재등록되고 주행이 끊긴다.
   const speedRef = useRef(DEFAULT_DRIVE_SPEED)
   const [speed, setSpeedState] = useState(DEFAULT_DRIVE_SPEED)
-  const setSpeed = useCallback((v) => { speedRef.current = v; setSpeedState(v) }, [])
+  const setSpeed = useCallback((v: any) => { speedRef.current = v; setSpeedState(v) }, [])
 
   // 설정에서 상한을 낮추면 지금 속도가 범위를 벗어난다 — 새 범위 안으로 끌어온다.
   // 그대로 두면 슬라이더는 상한을 넘은 값을 표시하고 발행도 그 값으로 나간다.
@@ -298,31 +309,31 @@ export function LiveProvider({ children }) {
      * @param {'/app/control/drive' | '/app/control/mode' | '/app/control/operation'} dest
      * @param {import('./contracts').ControlCommandBody} body
      */
-    const send = (dest, body) => publish(dest, /** @type {any} */ ({ robot_id: ROBOT_ID, ...body }))
+    const send = (dest: any, body: any) => publish(dest, /** @type {any} */ ({ robot_id: ROBOT_ID, ...body }))
     // 방향 단위벡터 × 축별 속도. 선속도는 슬라이더 값 그대로, 각속도는 같은 비율을
     // 각속도 상한에 적용한다 — 로봇 상한이 서로 달라(V/W) 한 배율을 공유하면 안 된다.
     // 부동소수 잔값이 payload 에 남지 않게 소수 2자리로 정리한다.
-    const r2 = (v) => Number(v.toFixed(2))
+    const r2 = (v: any) => Number(v.toFixed(2))
     return {
-      drive: (linear, angular) => send('/app/control/drive', {
+      drive: (linear: any, angular: any) => send('/app/control/drive', {
         command: 'DRIVE',
         linear: r2(linear * speedRef.current),
         angular: r2(angular * angularFor(speedRef.current, vMaxRef.current, wMaxRef.current)),
       }),
       stop: () => send('/app/control/drive', { command: 'DRIVE', linear: 0, angular: 0 }),
       // mode: autonomy | manual | disabled 만 유효
-      setMode: (mode) => send('/app/control/mode', { command: 'SET_MODE', mode }),
+      setMode: (mode: any) => send('/app/control/mode', { command: 'SET_MODE', mode }),
       // fail-safe — active:true 만 허용(해제 명령 없음)
       estop: () => send('/app/control/mode', { command: 'ESTOP', active: true }),
-      navigate: (x, y, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
+      navigate: (x: any, y: any, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
       // 전면 카메라 상하 각도(S15P11E101-521). 절대각(도)으로 보낸다.
       // 명령 이름은 cameraTilt.js 에 잠정 정의돼 있다 — 로봇 계약이 확정되면 그 파일만 고친다.
-      setCameraTilt: (deg) => send('/app/control/operation', { command: TILT_COMMAND, tilt: deg }),
+      setCameraTilt: (deg: any) => send('/app/control/operation', { command: TILT_COMMAND, tilt: deg }),
       // 자율 주행하며 2D 맵 생성 시작(S15P11E101-483).
       // BE 는 /app/control/operation 에서 이 명령을 로봇으로 릴레이한다.
       startMapping: () => send('/app/control/operation', { command: 'START_MAPPING' }),
       // 지금 만들어진 맵을 이름 붙여 저장한다(가이드 §5 SAVE_MAP) — 운영 탭에서 쓴다
-      saveMap: (name) => send('/app/control/operation', { command: 'SAVE_MAP', name }),
+      saveMap: (name: any) => send('/app/control/operation', { command: 'SAVE_MAP', name }),
     }
   }, [])
 

@@ -14,18 +14,19 @@ import UserMenu from './auth/UserMenu.tsx'
  * @param {{ section: 'live' | 'ops' | 'config',
  *           onSection: (s: 'live' | 'ops' | 'config') => void }} props
  */
-export default function Nav({ section, onSection }) {
+export default function Nav({ section, onSection }: { section: 'live' | 'ops' | 'config',
+            onSection: (s: 'live' | 'ops' | 'config') => void }) {
   const { clock, theme, toggleTheme } = useSim()
   const { user, isAdmin } = useAuth()
 
   // key 를 리터럴로 고정한다 — 그냥 두면 string 으로 넓어져 onSection 이 받지 못한다.
   /** @type {Array<{ key: 'live' | 'ops' | 'config', label: string }>} */
-  const tabs = [
+  const tabs: Array<{ key: 'live' | 'ops' | 'config', label: string }> = [
     { key: 'live', label: '관제' },
     ...(isAdmin
-      ? /** @type {Array<{ key: 'live' | 'ops' | 'config', label: string }>} */ ([
-        { key: 'ops', label: '운영' }, { key: 'config', label: '설정' },
-      ])
+      ? [
+        { key: 'ops' as const, label: '운영' }, { key: 'config' as const, label: '설정' },
+      ]
       : []),
   ]
 

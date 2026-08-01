@@ -16,14 +16,13 @@ import {
 //            이 토큰은 STOMP CONNECT 헤더에도 실린다 — 없으면 실시간 연결이 거부된다(§1).
 
 /** @type {import('react').Context<import('../live/contracts').AuthContextValue | null>} */
-const AuthContext = createContext(null)
+const AuthContext = createContext<import('../live/contracts.d.ts').AuthContextValue | null>(null)
 
 /**
  * Provider 밖에서 부르면 던지므로 호출부는 null 을 다룰 필요가 없다 —
  * 반환 타입을 non-null 로 좁혀 매번 옵셔널 체이닝을 쓰지 않게 한다(S15P11E101-570).
- * @returns {import('../live/contracts').AuthContextValue}
  */
-export function useAuth() {
+export function useAuth(): import('../live/contracts.d.ts').AuthContextValue {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within <AuthProvider>')
   return ctx
@@ -34,16 +33,27 @@ export function useAuth() {
  * @param {import('../live/contracts').StoredUser | null | undefined} u
  * @returns {import('../live/contracts').PublicUser | null}
  */
-const publicUser = (u) => (u ? { email: u.email, name: u.name, role: u.role } : null)
+const publicUser = (u: any) => (u ? { email: u.email, name: u.name, role: u.role } : null)
 
 // 서버는 role만 내려준다 — 이름은 가입 시 입력값, 없으면 이메일 로컬파트로 채운다.
 // 서버가 준 role 원문을 그대로 보관한다 — 표시 문구로 바꿔 저장하면 권한 판정을 잃는다.
 /** @param {string | null | undefined} role */
-const rawRole = (role) => role || ROLE_VIEWER
+const rawRole = (role: any) => role || ROLE_VIEWER
+
+/**
+ * 세션 상태. restoreUser() 가 만드는 형태와 이후 setState 가 넣는 형태가 갈라져 있었다 —
+ * reason 을 빠뜨린 호출이 다섯 군데였다(@types/react 를 넣으니 드러났다).
+ */
+type SessionState = {
+  user: import('../live/contracts').PublicUser | null
+  accessToken: string | null
+  expiresAt: number | null
+  reason: import('../live/contracts').LogoutReason | null
+}
 
 // 복원 전에 만료를 먼저 판정한다(S15P11E101-508). 지난 세션은 되살리지 않는다 —
 // 브라우저를 닫았다 다시 열어도, 유휴 시간이 지났으면 로그인 화면으로 보낸다.
-function restoreUser() {
+function restoreUser(): SessionState {
   const saved = getAuth()
   const s = getSession()
   const hasSession = !!(saved?.accessToken && saved.user) || !!s
@@ -67,24 +77,24 @@ function restoreUser() {
 // 로그인 응답의 expiresIn(초) → 절대 만료 시각. 값이 없으면 절대 만료를 걸지 않는다
 // (유휴 만료는 그대로 동작한다).
 /** @param {{ expiresIn?: number } | null | undefined} res */
-const expiryFrom = (res) => (Number(res?.expiresIn) > 0 ? Date.now() + Number(res.expiresIn) * 1000 : null)
+const expiryFrom = (res: any) => (Number(res?.expiresIn) > 0 ? Date.now() + Number(res.expiresIn) * 1000 : null)
 
-export function AuthProvider({ children }) {
-  const [state, setState] = useState(restoreUser)
+export function AuthProvider({ children }: { children?: import('react').ReactNode }) {
+  const [state, setState] = useState<SessionState>(restoreUser)
   const { user, accessToken, expiresAt } = state
   // restoreUser() 는 만료를 발견하면 세션을 지운다 — 두 번 부르면 두 번째는 사유를 잃는다.
   // 최초 판정 결과를 그대로 쓴다.
   const [logoutReason, setLogoutReason] = useState(state.reason ?? null)
   const [warning, setWarning] = useState(false)   // 만료 임박 경고 표시 여부
 
-  const login = async (email, password) => {
+  const login = async (email: any, password: any) => {
     writeActivity()
     if (getDataSource() !== 'live') {
       const u = findUser(email)
       if (!u || u.password !== password) throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
       setSession(u.email)
       setLogoutReason(null); setWarning(false)
-      setState({ user: publicUser(u), accessToken: null, expiresAt: null })
+      setState({ user: publicUser(u), accessToken: null, expiresAt: null, reason: null })
       return
     }
     const res = await loginRequest(email.trim().toLowerCase(), password)
@@ -93,13 +103,16 @@ export function AuthProvider({ children }) {
     const exp = expiryFrom(res)
     setAuth({ accessToken: res.accessToken, user: nu, expiresAt: exp })
     setLogoutReason(null); setWarning(false)
-    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp })
+    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp, reason: null })
   }
 
   // 휴대전화번호·생년월일·성별은 S15P11E101-493 에서 추가됐다.
   // 서버 /api/auth/signup 스키마에는 아직 없어 지금은 전송돼도 무시된다(BE 반영 후 저장).
   // 시뮬 모드는 localStorage 라 곧바로 저장된다.
-  const signup = async ({ email, password, name, phone, birth, gender }) => {
+  const signup = async ({ email, password, name, phone, birth, gender }: {
+    email: string, password: string, name?: string,
+    phone?: string, birth?: string, gender?: string,
+  }) => {
     // 화면은 하이픈으로 보여주고 저장·전송은 숫자만 한다 — 이 경계에서 한 번만 정규화한다
     const tel = phoneDigits(phone)
     writeActivity()
@@ -107,7 +120,7 @@ export function AuthProvider({ children }) {
       const u = addUser({ email, password, name, phone: tel, birth, gender })
       setSession(u.email)
       setLogoutReason(null); setWarning(false)
-      setState({ user: publicUser(u), accessToken: null, expiresAt: null })
+      setState({ user: publicUser(u), accessToken: null, expiresAt: null, reason: null })
       return
     }
     await signupRequest({ email: email.trim().toLowerCase(), password, name, phone: tel, birth, gender })
@@ -117,16 +130,15 @@ export function AuthProvider({ children }) {
     const exp = expiryFrom(res)
     setAuth({ accessToken: res.accessToken, user: nu, expiresAt: exp })
     setLogoutReason(null); setWarning(false)
-    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp })
+    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp, reason: null })
   }
 
   // reason 이 MANUAL 이면 안내를 띄우지 않는다 — 스스로 누른 로그아웃이다.
-  /** @type {(reason?: import('../live/contracts').LogoutReason) => void} */
-  const logout = useCallback((reason = REASON.MANUAL) => {
+  const logout = useCallback((reason: import('../live/contracts').LogoutReason = REASON.MANUAL) => {
     clearSession(); clearToken()
     setWarning(false)
     setLogoutReason(reason === REASON.MANUAL ? null : reason)
-    setState({ user: null, accessToken: null, expiresAt: null })
+    setState({ user: null, accessToken: null, expiresAt: null, reason: null })
   }, [])
 
   // 활동 기록. 사용자 조작과 이벤트 로그 신규 기록이 모두 여기로 들어온다.
@@ -179,14 +191,14 @@ export function AuthProvider({ children }) {
   }, [accessToken, logout])
 
   // 아래 두 기능은 실서버 API 계약에 없다 — mock 모드에서만 동작한다.
-  const changePassword = (current, next) => {
+  const changePassword = (current: any, next: any) => {
     if (accessToken) throw new Error('실서버 모드에서는 비밀번호 변경을 지원하지 않습니다.')
     const s = getSession(); const u = findUser(s?.email)
     if (!u || u.password !== current) throw new Error('현재 비밀번호가 올바르지 않습니다.')
     updateUser(u.email, { password: next })
   }
 
-  const updateProfile = (patch) => {
+  const updateProfile = (patch: any) => {
     if (accessToken) throw new Error('실서버 모드에서는 프로필 수정을 지원하지 않습니다.')
     const s = getSession(); const u = updateUser(s.email, patch)
     setState((prev) => ({ ...prev, user: publicUser(u) }))

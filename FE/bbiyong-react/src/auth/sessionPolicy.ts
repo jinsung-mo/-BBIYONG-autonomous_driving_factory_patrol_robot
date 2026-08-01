@@ -13,7 +13,7 @@
 
 // `|| {}` 는 방어용이라 그대로 둔다. 타입만 넓혀 준다(런타임 변화 없음 — S15P11E101-570).
 const env: Record<string, string | undefined> = import.meta.env || {}
-const minutes = (v, fallback) => {
+const minutes = (v: any, fallback: any) => {
   const n = Number(v)
   return (Number.isFinite(n) && n > 0 ? n : fallback) * 60 * 1000
 }
@@ -26,15 +26,15 @@ export const ACTIVITY_KEY = 'bbiyong.activity'
 
 /**
  * 자동 로그아웃 사유. as const 로 리터럴을 고정해 오타·미정의 값을 빌드에서 막는다.
- * @type {{ IDLE: 'idle', EXPIRED: 'expired', MANUAL: 'manual' }}
+ * (JSDoc 으로 적혀 있던 것을 TS 문법으로 옮긴다 — .ts 에서는 JSDoc 이 무시된다)
  */
 export const REASON = {
   IDLE: 'idle',        // 장시간 활동 없음
   EXPIRED: 'expired',  // 토큰 수명 만료
   MANUAL: 'manual',    // 사용자가 직접 로그아웃
-}
+} as const
 
-export const REASON_TEXT = {
+export const REASON_TEXT: Record<string, string> = {
   [REASON.IDLE]: '장시간 활동이 없어 자동으로 로그아웃되었습니다. 다시 로그인해 주세요.',
   [REASON.EXPIRED]: '세션이 만료되어 로그아웃되었습니다. 다시 로그인해 주세요.',
 }
@@ -46,7 +46,7 @@ export function readActivity() {
 }
 
 /** @param {number} [at] @returns {number} */
-export function writeActivity(at = Date.now()) {
+export function writeActivity(at: number = Date.now()) {
   localStorage.setItem(ACTIVITY_KEY, String(at))
   return at
 }
@@ -60,7 +60,7 @@ export function clearActivity() { localStorage.removeItem(ACTIVITY_KEY) }
  * @param {number} [last]
  * @returns {number} 남은 ms. 0 이하면 만료
  */
-export function idleRemaining(now = Date.now(), last = readActivity()) {
+export function idleRemaining(now: number = Date.now(), last = readActivity()) {
   if (!last) return IDLE_MS
   return last + IDLE_MS - now
 }
@@ -71,6 +71,6 @@ export function idleRemaining(now = Date.now(), last = readActivity()) {
  * @param {number} [now]
  * @returns {number} 남은 ms. expiresAt 이 없으면 Infinity
  */
-export function absoluteRemaining(expiresAt, now = Date.now()) {
+export function absoluteRemaining(expiresAt: number | null | undefined, now: number = Date.now()) {
   return expiresAt ? expiresAt - now : Infinity
 }

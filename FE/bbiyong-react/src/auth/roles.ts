@@ -15,7 +15,7 @@ export const ROLE_VIEWER = 'ROLE_VIEWER'
 const LEGACY_ADMIN = '관제 권한'
 
 /** @param {string | null | undefined} role */
-export const isAdminRole = (role) => role === ROLE_ADMIN || role === LEGACY_ADMIN
+export const isAdminRole = (role: any) => role === ROLE_ADMIN || role === LEGACY_ADMIN
 
 /** @param {string | null | undefined} role */
-export const roleText = (role) => (isAdminRole(role) ? '관리자' : '뷰어')
+export const roleText = (role: any) => (isAdminRole(role) ? '관리자' : '뷰어')

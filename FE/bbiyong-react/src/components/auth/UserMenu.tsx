@@ -1,17 +1,20 @@
+import { errMessage } from '../../live/errors.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { roleText } from '../../auth/roles.ts'
 import Modal from '../ui/Modal.tsx'
 
-const initials = (name) => (name || '?').replace(/\s/g, '').slice(0, 2)
+const initials = (name: any) => (name || '?').replace(/\s/g, '').slice(0, 2)
 
 // 마이페이지 모달 — 프로필 조회/수정
-function MyPageModal({ onClose }) {
-  const { user, updateProfile } = useAuth()
-  const [name, setName] = useState(user.name)
+function MyPageModal({ onClose }: any) {
+  // Gate 가 로그인 상태에서만 이 트리를 렌더한다 — user 는 여기서 항상 있다
+  const user = useAuth().user!
+  const { updateProfile } = useAuth()
+  const [name, setName] = useState(user.name || '')
 
   const [msg, setMsg] = useState('')
-  const save = (e) => {
+  const save = (e: any) => {
     e.preventDefault()
     // 권한은 본인이 바꿀 수 없다 — 편집 가능하면 권한 게이트가 무의미해진다(S15P11E101-475)
     updateProfile({ name: name.trim() || user.name })
@@ -34,18 +37,18 @@ function MyPageModal({ onClose }) {
 }
 
 // 비밀번호 수정 모달
-function PasswordModal({ onClose }) {
+function PasswordModal({ onClose }: any) {
   const { changePassword } = useAuth()
   const [cur, setCur] = useState(''); const [next, setNext] = useState(''); const [next2, setNext2] = useState('')
   const [err, setErr] = useState(''); const [ok, setOk] = useState(false)
-  const save = (e) => {
+  const save = (e: any) => {
     e.preventDefault(); setErr('')
     try {
       if (next.length < 4) throw new Error('새 비밀번호는 4자 이상이어야 합니다.')
       if (next !== next2) throw new Error('새 비밀번호가 일치하지 않습니다.')
       changePassword(cur, next)
       setOk(true)
-    } catch (e2) { setErr(e2.message) }
+    } catch (e2) { setErr(errMessage(e2)) }
   }
   return (
     <Modal title="비밀번호 수정" onClose={onClose}>
@@ -71,13 +74,15 @@ function PasswordModal({ onClose }) {
 }
 
 export default function UserMenu() {
-  const { user, logout } = useAuth()
+  // Gate 가 로그인 상태에서만 이 트리를 렌더한다 — user 는 여기서 항상 있다
+  const user = useAuth().user!
+  const { logout } = useAuth()
   const [open, setOpen] = useState(false)
-  const [modal, setModal] = useState(null) // 'mypage' | 'password' | null
-  const ref = useRef(null)
+  const [modal, setModal] = useState<'mypage' | 'password' | null>(null) // 'mypage' | 'password' | null
+  const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDoc = (e: any) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])

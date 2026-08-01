@@ -5,7 +5,7 @@
 import { MAP, RS, CSn, astar, loop, PANELS, FIREC, speed } from './mapData.ts'
 
 // 캔버스를 부모 크기에 맞추고 2D 컨텍스트를 반환
-function fit(cv) {
+function fit(cv: any) {
   // 화면에서 떨어져 나간 캔버스는 그리지 않는다(부모가 없으면 크기를 잴 수 없다)
   if (!cv.parentElement) return null
   const r = cv.parentElement.getBoundingClientRect()
@@ -53,7 +53,6 @@ export default class Simulation {
   rcamHud: string
   logs: any[]
   logId: number
-  zc: number
   canvases: Record<string, HTMLCanvasElement | null>
   listeners: Set<(snap: any) => void>
   externalPose: any
@@ -124,9 +123,9 @@ export default class Simulation {
   }
 
   // ---------- 라이프사이클 ----------
-  registerCanvas(name, el) { this.canvases[name] = el }
+  registerCanvas(name: any, el: any) { this.canvases[name] = el }
 
-  subscribe(fn) {
+  subscribe(fn: any) {
     this.listeners.add(fn)
     fn(this.snapshot())
     return () => this.listeners.delete(fn)
@@ -175,19 +174,19 @@ export default class Simulation {
     this.listeners.forEach((fn) => fn(snap))
   }
 
-  pushLog(kind, msg) {
+  pushLog(kind: any, msg: any) {
     this.logs = [{ id: ++this.logId, kind, time: nowStr(), msg }, ...this.logs].slice(0, 100)
     this.emit()
   }
 
   // 결정적 유사난수 (텍스처·노이즈용, Math.random 미사용)
-  _hash(a, b) { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+  _hash(a: any, b: any) { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
 
   // ---------- 공장 CCTV 카메라 (관제 전체 뷰 · 3/4 부감) ----------
   // 참고: BBIYONG_simulation_v3 의 camL(높이 34·반경 50·피치 ~34° 부감 회전)을
   // 3D 투영으로 재현 — 공장 전체를 비스듬히 내려다보며 압출 박스(분전반·로봇·설비)와
   // 원거리 벽·순찰 경로·화재를 깊이 정렬로 그린다. PTZ(off)로 회전/틸트/줌.
-  drawFactoryCam(cv, off) {
+  drawFactoryCam(cv: any, off: any) {
     const g = fit(cv); if (!g) return
     const Wc = cv.width, Hc = cv.height, t = this.t
     const zoom = off ? Math.min(2.4, Math.max(1, off.z)) : 1
@@ -196,7 +195,7 @@ export default class Simulation {
     const CAMD = 13
     const cyA = Math.cos(yaw), syA = Math.sin(yaw), cpA = Math.cos(pitch), spA = Math.sin(pitch)
     const cxw = (CSn - 1) / 2, czw = (RS - 1) / 2
-    const raw = (c, wy, r) => {
+    const raw = (c: any, wy: any, r: any) => {
       const x = c - cxw, z = r - czw
       const rx = x * cyA - z * syA, rz = x * syA + z * cyA
       // 카메라 하향 피치: 먼 쪽(rz 큼)이 화면 위로, 박스는 위로 압출 (부호 정정)
@@ -211,11 +210,11 @@ export default class Simulation {
     }
     const scale = Math.min(Wc * 0.92 / (maxX - minX), Hc * 0.92 / (maxY - minY)) * zoom
     const cxn = (minX + maxX) / 2, cyn = (minY + maxY) / 2, ox = Wc / 2, oy = Hc / 2
-    const P = (c, wy, r) => { const q = raw(c, wy, r); return { x: ox + (q.X - cxn) * scale, y: oy - (q.Y - cyn) * scale, s: scale / q.zc, zc: q.zc } }
-    const lerp2 = (a, b, f) => ({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f })
+    const P = (c: any, wy: any, r: any) => { const q = raw(c, wy, r); return { x: ox + (q.X - cxn) * scale, y: oy - (q.Y - cyn) * scale, s: scale / q.zc, zc: q.zc } }
+    const lerp2 = (a: any, b: any, f: any) => ({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f })
 
     // 압출 박스(측면 근접순 → 윗면)
-    const box = (c, r, hw, hd, H, side, top) => {
+    const box = (c: any, r: any, hw: any, hd: any, H: any, side: any, top: any) => {
       const base = [[c - hw, r - hd], [c + hw, r - hd], [c + hw, r + hd], [c - hw, r + hd]]
       const bp = base.map(([x, z]) => P(x, 0, z)), tp = base.map(([x, z]) => P(x, H, z))
       const faces = []
@@ -226,7 +225,7 @@ export default class Simulation {
       g.fillStyle = top; g.beginPath(); tp.forEach((p, k) => k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); g.fill(); g.stroke()
       return { bp, tp, front: faces[faces.length - 1].q, cen: P(c, H, r) }
     }
-    const shadow = (c, r, rw) => { const p = P(c, 0, r); g.fillStyle = 'rgba(0,0,0,.30)'; g.beginPath(); g.ellipse(p.x, p.y, rw * p.s, rw * p.s * 0.5, 0, 0, 7); g.fill() }
+    const shadow = (c: any, r: any, rw: any) => { const p = P(c, 0, r); g.fillStyle = 'rgba(0,0,0,.30)'; g.beginPath(); g.ellipse(p.x, p.y, rw * p.s, rw * p.s * 0.5, 0, 0, 7); g.fill() }
 
     // 배경
     const sky = g.createLinearGradient(0, 0, 0, Hc)
@@ -255,12 +254,11 @@ export default class Simulation {
     g.fillStyle = cone; g.beginPath(); g.moveTo(chead.x, chead.y); g.lineTo(cbL.x, cbL.y); g.lineTo(cbR.x, cbR.y); g.closePath(); g.fill()
 
     // 원거리 벽 2개 (근접 벽은 생략해 내부 시야 확보)
-    // zc(깊이)는 아래에서 채워 정렬에 쓴다 — 선언 시점에는 없다
-    const walls: Array<{ c: number, r: number, hw: number, hd: number, zc?: number }> = [
+    const walls = [
       { c: cxw, r: -0.6, hw: CSn / 2 + 0.1, hd: 0.12 }, { c: cxw, r: RS - 0.4, hw: CSn / 2 + 0.1, hd: 0.12 },
       { c: -0.6, r: czw, hw: 0.12, hd: RS / 2 + 0.1 }, { c: CSn - 0.4, r: czw, hw: 0.12, hd: RS / 2 + 0.1 },
-    ]
-    walls.forEach((w) => { w.zc = raw(w.c, 0, w.r).zc }); walls.sort((a, b) => b.zc - a.zc)
+    ].map((w) => ({ ...w, zc: raw(w.c, 0, w.r).zc }))   // zc(깊이)는 정렬용
+    walls.sort((a, b) => b.zc - a.zc)
     for (let i = 0; i < 2; i++) { const w = walls[i]; box(w.c, w.r, w.hw, w.hd, 1.7, '#333b46', '#464f5c') }
 
     // 순찰 경로(파랑 점선) + 긴급 경로(초록)
@@ -269,7 +267,7 @@ export default class Simulation {
     const q0 = P(loop[0].c, 0.04, loop[0].r); g.lineTo(q0.x, q0.y); g.stroke(); g.setLineDash([])
     if ((this.bot.mode === 'dispatch' || this.bot.mode === 'goto') && this.bot.route.length > 1) {
       g.strokeStyle = '#22b98a'; g.lineWidth = 2.4; g.beginPath()
-      this.bot.route.forEach((p, i) => { const q = P(p.c, 0.05, p.r); i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y) }); g.stroke()
+      this.bot.route.forEach((p: any, i: any) => { const q = P(p.c, 0.05, p.r); i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y) }); g.stroke()
     }
 
     // 분전반: 벽면 부착 지오메트리 (내측 면 인덱스 face·안쪽 방향 inC/inR)
@@ -284,14 +282,18 @@ export default class Simulation {
     //
     // kind 마다 필요한 필드가 다른 이질 배열이다. 그냥 두면 처음 push 한 모양으로만
     // 추론돼 geo 접근이 막힌다 — 이 함수 안에서만 쓰는 형태라 여기 typedef 로 둔다.
-    /**
-     * @typedef {{ pn: any, c: number, r: number, hw: number, hd: number,
-     *             face: number[], inC: number, inR: number }} PanelGeo
-     * @typedef {{ zc: number, kind: 'obs' | 'panel' | 'robot' | 'fire',
-     *             c?: number, r?: number, geo?: PanelGeo }} DrawItem
-     * @type {DrawItem[]}
-     */
-    const items = []
+    /** 벽면 부착 분전반 지오메트리 */
+    type PanelGeo = {
+      pn: any, c: number, r: number, hw: number, hd: number,
+      face: number[], inC: number, inR: number,
+    }
+    /** kind 마다 필요한 필드가 다른 이질 배열이다 */
+    type DrawItem =
+      | { zc: number, kind: 'obs', c: number, r: number }
+      | { zc: number, kind: 'panel', geo: PanelGeo }
+      | { zc: number, kind: 'robot' }
+      | { zc: number, kind: 'fire' }
+    const items: DrawItem[] = []
     for (let r = 0; r < RS; r++) for (let c = 0; c < CSn; c++) if (MAP[r][c] === 1) items.push({ zc: raw(c, 0, r).zc, kind: 'obs', c, r })
     panelGeos.forEach((geo) => items.push({ zc: raw(geo.c, 0, geo.r).zc, kind: 'panel', geo }))
     items.push({ zc: raw(this.bot.pos.c, 0, this.bot.pos.r).zc, kind: 'robot' })
@@ -330,8 +332,8 @@ export default class Simulation {
         // 진행 방향(hd)으로 회전 — 전방(f) / 측방(s) 로컬축을 그리드로 변환
         const bc = this.bot.pos.c, br = this.bot.pos.r, hd = this.bot.hd
         const ch = Math.cos(hd), sh = Math.sin(hd)
-        const pt = (f, s) => ({ c: bc + f * ch - s * sh, r: br + f * sh + s * ch })
-        const rbox = (f0, f1, s0, s1, y0, H, side, top) => {
+        const pt = (f: any, s: any) => ({ c: bc + f * ch - s * sh, r: br + f * sh + s * ch })
+        const rbox = (f0: any, f1: any, s0: any, s1: any, y0: any, H: any, side: any, top: any) => {
           const base = [pt(f1, s0), pt(f1, s1), pt(f0, s1), pt(f0, s0)]
           const bp = base.map((p) => P(p.c, y0, p.r)), tp = base.map((p) => P(p.c, y0 + H, p.r))
           const faces = []
@@ -439,13 +441,13 @@ export default class Simulation {
 
   // ---------- 실서버 외부 입력 ----------
   // live 모드에서 텔레메트리 위치를 격자 좌표로 변환해 넣는다. null이면 시뮬 상태머신으로 복귀.
-  setExternalPose(pose) {
+  setExternalPose(pose: any) {
     this.externalPose = pose
     if (!pose) this.botResume()
   }
 
   // live 모드 카메라 프레임. img는 디코딩이 끝난 HTMLImageElement.
-  setExternalFrame(channel, img, maxTemp) {
+  setExternalFrame(channel: any, img: any, maxTemp: any) {
     if (channel !== 'FRONT' && channel !== 'THERMAL') return
     this.externalFrames[channel] = img ? { img, maxTemp } : null
   }
@@ -453,7 +455,7 @@ export default class Simulation {
   clearExternalFrames() { this.externalFrames = { FRONT: null, THERMAL: null } }
 
   // 캔버스를 꽉 채우되 종횡비를 유지해 그린다 (letterbox).
-  _drawFrame(g, img, Wc, Hc) {
+  _drawFrame(g: any, img: any, Wc: any, Hc: any) {
     g.fillStyle = '#000'; g.fillRect(0, 0, Wc, Hc)
     const s = Math.min(Wc / img.width, Hc / img.height)
     const w = img.width * s, h = img.height * s
@@ -485,7 +487,7 @@ export default class Simulation {
     }
   }
 
-  botGoto(cell, mode) {
+  botGoto(cell: any, mode: any) {
     const bot = this.bot
     const cur = { c: Math.round(bot.pos.c), r: Math.round(bot.pos.r) }
     bot.route = astar(cur, cell)
@@ -506,7 +508,7 @@ export default class Simulation {
     this.setMode('순찰 중', '')
   }
 
-  setMode(txt, cls) {
+  setMode(txt: any, cls: any) {
     this.modeText = txt; this.modeClass = cls
     const m = this.bot.mode
     // 수동 주행만 2자리 — 0.25 를 0.3 으로 반올림하면 실제 발행값과 어긋나 보인다
@@ -523,7 +525,7 @@ export default class Simulation {
     const t = this.t
     g.fillStyle = '#0a0c10'; g.fillRect(0, 0, Wc, Hc)
     const m = 14, cw = (Wc - m * 2) / CSn, ch = (Hc - m * 2) / RS
-    const X = (c) => m + c * cw + cw / 2, Y = (r) => m + r * ch + ch / 2
+    const X = (c: any) => m + c * cw + cw / 2, Y = (r: any) => m + r * ch + ch / 2
     // SLAM 점묘 장애물
     g.fillStyle = '#59637a'
     for (let r = 0; r < RS; r++) for (let c = 0; c < CSn; c++) if (MAP[r][c] === 1) {
@@ -543,7 +545,7 @@ export default class Simulation {
     // 긴급 경로
     if ((this.bot.mode === 'dispatch' || this.bot.mode === 'goto') && this.bot.route.length > 1) {
       g.strokeStyle = '#22b98a'; g.lineWidth = 2; g.beginPath()
-      this.bot.route.forEach((p, i) => { i ? g.lineTo(X(p.c), Y(p.r)) : g.moveTo(X(p.c), Y(p.r)) })
+      this.bot.route.forEach((p: any, i: any) => { i ? g.lineTo(X(p.c), Y(p.r)) : g.moveTo(X(p.c), Y(p.r)) })
       g.stroke()
     }
     // 분전반
@@ -582,7 +584,7 @@ export default class Simulation {
       return
     }
     const vx = Wc / 2, vy = Hc * 0.47, ex = Wc * 0.13 // 소실점 · 통로 폭
-    const edgeX = (spread) => ex + (Wc / 2 - ex) * spread // 깊이별 통로 반폭
+    const edgeX = (spread: any) => ex + (Wc / 2 - ex) * spread // 깊이별 통로 반폭
 
     // 배경(대기 원근)
     const sky = g.createLinearGradient(0, 0, 0, Hc)
@@ -728,7 +730,7 @@ export default class Simulation {
     // 아이언바우 팔레트
     const stops = [[6, 10, 52], [24, 36, 150], [128, 28, 150], [214, 48, 58], [248, 142, 22], [255, 236, 120], [255, 255, 255]]
     const pos = [0, 0.2, 0.4, 0.6, 0.8, 0.92, 1]
-    const heat = (v) => {
+    const heat = (v: any) => {
       v = v < 0 ? 0 : v > 1 ? 1 : v
       let i = 0; while (i < pos.length - 1 && v > pos[i + 1]) i++
       const k = (v - pos[i]) / ((pos[i + 1] - pos[i]) || 1), a = stops[i], b = stops[i + 1]
@@ -736,9 +738,9 @@ export default class Simulation {
     }
 
     // 겨냥 분전반 + 표면온도 easing
-    let near
-    if (this.heatOn) near = PANELS.find((p) => p.n === 'B')
-    else { near = PANELS[0]; let nd = 1e9; for (const p of PANELS) { const d = Math.hypot(p.c - bx, p.r - br); if (d < nd) { nd = d; near = p } } }
+    let near = PANELS[0]
+    if (this.heatOn) near = PANELS.find((p) => p.n === 'B') || near
+    else { let nd = 1e9; for (const p of PANELS) { const d = Math.hypot(p.c - bx, p.r - br); if (d < nd) { nd = d; near = p } } }
     const dist = Math.hypot(near.c - bx, near.r - br)
     const prox = Math.max(0, 1 - dist / 6)
     const panelBase = near.n === 'A' ? 39 : near.n === 'B' ? 43 : 41
@@ -816,7 +818,7 @@ export default class Simulation {
   }
 
   // ---------- 이벤트 데모 ----------
-  setFire(on) {
+  setFire(on: any) {
     this.fireOn = on
     this.det.flameState = on ? '발생' : '미발생'
     this.det.flamePct = on ? '62.5%' : '0%'
@@ -834,7 +836,7 @@ export default class Simulation {
     this.emit()
   }
 
-  setHeat(on) {
+  setHeat(on: any) {
     this.heatOn = on
     if (on) this.pushLog('heat', '분전반 B 표면온도 임계 초과 (71.3°C > 60°C) — 과열 자동 경보')
     else this.pushLog('ok', '분전반 B 온도 정상 복귀 — 경보 해제')
@@ -846,7 +848,7 @@ export default class Simulation {
   toggleSound() { this.soundOn = !this.soundOn; this.emit() }
 
   // ---------- CCTV 조작 ----------
-  ptzMove(dir) {
+  ptzMove(dir: any) {
     if (dir === 'u') this.ptz.y -= 1
     if (dir === 'd') this.ptz.y += 1
     if (dir === 'l') this.ptz.x -= 1
@@ -858,13 +860,13 @@ export default class Simulation {
     this.emit()
   }
 
-  ptzZoom(delta) {
+  ptzZoom(delta: any) {
     this.ptz.z = Math.min(2.4, Math.max(1, this.ptz.z + 0.2 * delta))
     this.emit()
   }
 
   // ---------- 로봇 조작 ----------
-  segSet(man) {
+  segSet(man: any) {
     this.seg = man ? 'manual' : 'patrol'
     if (man) { this.bot.mode = 'manual'; this.setMode('수동 조작', 'man') }
     else this.botResume()
@@ -875,9 +877,9 @@ export default class Simulation {
   // 주행 입력은 모드를 바꾸지 않는다(S15P11E101-513). 예전에는 여기서 segSet(true) 를 불러
   // 순찰 중 WASD 한 번에 수동으로 넘어갔다 — 조작자가 화면을 잠깐 건드린 것만으로 순찰이
   // 멈추는 셈이라 위험하다. 모드 전환은 스페이스바(또는 모드 버튼)의 몫이다.
-  dpadMove(dir) {
+  dpadMove(dir: any) {
     if (this.bot.mode !== 'manual') return
-    const map = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] }
+    const map: Record<string, number[]> = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] }
     const [dc, dr] = map[dir] || [0, 0]
     const nc = Math.round(this.bot.pos.c) + dc, nr = Math.round(this.bot.pos.r) + dr
     if (nc >= 0 && nr >= 0 && nc < CSn && nr < RS && MAP[nr][nc] === 0) this.bot.pos = { c: nc, r: nr }
@@ -887,12 +889,12 @@ export default class Simulation {
   // 여기서 모드를 건드리면 키를 떼는 순간 수동으로 고정된다(S15P11E101-513).
   dpStop() {}
   // 수동 주행 속도 변경 — 현재 표시 중인 속도를 곧바로 갱신한다
-  setTempThresholds(warn, critical) {
+  setTempThresholds(warn: any, critical: any) {
     this.tempWarn = warn
     this.tempCritical = critical
   }
 
-  setManualSpeed(v) {
+  setManualSpeed(v: any) {
     this.manualSpeed = v
     this.setMode(this.modeText, this.modeClass)
   }
@@ -901,7 +903,7 @@ export default class Simulation {
   reset() { this.segSet(true); this.pushLog('ok', '제어 리셋') }
   returnPatrol() { this.botResume(); this.pushLog('ok', '순찰 복귀 명령') }
 
-  goto(value, label) {
+  goto(value: any, label: any) {
     const [c, r] = value.split(',').map(Number)
     this.botGoto({ c, r }, 'goto'); this.setMode('지점 이동', 'man')
     this.pushLog('ok', '지점 이동: ' + label)

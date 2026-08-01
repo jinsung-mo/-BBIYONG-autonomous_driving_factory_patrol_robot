@@ -50,7 +50,7 @@ export function addWaypoint(
  * @returns {Promise<import('./contracts').Waypoint[]>}
  */
 export function replaceWaypoints(
-  items: Array<import('./contracts').WaypointRequest & { id?: string }>,
+  items: Array<(import('./contracts').WaypointRequest | import('./contracts').Waypoint) & { id?: string }>,
   accessToken: string | null | undefined,
   robotId?: string,
 ) {

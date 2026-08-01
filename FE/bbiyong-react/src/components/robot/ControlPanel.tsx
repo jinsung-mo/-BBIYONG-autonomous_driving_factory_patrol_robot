@@ -31,7 +31,7 @@ export default function ControlPanel() {
   // 순찰 지점은 설정 탭에서 등록/편집한다(S15P11E101-475). 관제에서는 실행만 한다.
   const points = settings.points
   const [gotoId, setGotoId] = useState(points[0]?.id)
-  const goal = points.find((p) => p.id === gotoId) || points[0]
+  const goal = points.find((p: any) => p.id === gotoId) || points[0]
   const spd = speedParams(settings.vMax)
 
   // 모드 토글은 '사용자가 고른 제어 모드'다 — 버튼을 누를 때만 바뀐다.
@@ -69,9 +69,9 @@ export default function ControlPanel() {
   const manual = seg === 'manual'
 
   // 버튼은 키보드 키 이름으로 표기 (조작은 WASD/방향키 동일)
-  const glyph = { w: 'W', a: 'A', s: 'S', d: 'D' }
-  const dirLabel = { w: '전진', a: '좌회전', s: '후진', d: '우회전' }
-  const key = (k) => {
+  const glyph: Record<string, string> = { w: 'W', a: 'A', s: 'S', d: 'D' }
+  const dirLabel: Record<string, string> = { w: '전진', a: '좌회전', s: '후진', d: '우회전' }
+  const key = (k: any) => {
     // live: 누르는 동안 주행, 떼면 정지 / mock: 기존처럼 클릭당 한 칸 이동
     const live = {
       onPointerDown: () => control.drive(DRIVE_VECTORS[k].linear, DRIVE_VECTORS[k].angular),
@@ -103,13 +103,13 @@ export default function ControlPanel() {
     if (liveReady) control.setMode('autonomy')
     else actions.returnPatrol()
   }
-  const onSetSeg = (man) => {
+  const onSetSeg = (man: any) => {
     setSeg(man ? 'manual' : 'patrol')
     if (liveReady) control.setMode(man ? 'manual' : 'autonomy')
     else actions.setSeg(man)
   }
   // 속도는 live(발행 배율)와 mock(표시 속도) 양쪽에 함께 반영한다 — 어느 모드에서도 죽은 버튼이 되지 않게
-  const onSetSpeed = (v) => {
+  const onSetSpeed = (v: any) => {
     const next = clampDriveSpeed(v, settings.vMax)
     setSpeed(next)
     actions.setManualSpeed(next)
@@ -129,7 +129,7 @@ export default function ControlPanel() {
   // ---- 단축키 ----
   // 리스너는 enabled/connected 가 바뀔 때만 다시 걸고, 그때그때의 상태·핸들러는 ref로 읽는다
   // (핸들러가 매 렌더 새로 만들어지므로 의존성에 넣으면 리스너를 계속 재등록하게 된다).
-  const latest = useRef(null)
+  const latest = useRef<any>(null)
   latest.current = { estopEngaged, seg, onEmergencyStop, onReturnPatrol, onSetSeg }
 
   useEffect(() => {
@@ -138,11 +138,11 @@ export default function ControlPanel() {
     // Shift 단독 탭만 단축키로 인정한다. keydown 시점에 실행하면 Shift+A 같은
     // 조합키를 누르는 순간에도 긴급 정지가 나가버리므로, 사이에 다른 키가 없었을 때만 keyup에서 실행한다.
     let shiftAlone = false
-    const isTyping = (el) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
+    const isTyping = (el: any) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
     // 주행 키 — 방향키도 WASD 와 같은 조작이다(useSimulation · LiveSimBridge 의 매핑과 동일)
     const DRIVE_KEYS = /^([wasd]|arrow(up|down|left|right))$/
 
-    const onDown = (e) => {
+    const onDown = (e: any) => {
       if (e.key === 'Shift') { if (!e.repeat && !isTyping(e.target)) shiftAlone = true; return }
       shiftAlone = false
       // 주행 키는 모드를 건드리지 않는다(S15P11E101-513). 실제 주행 발행은
@@ -156,7 +156,7 @@ export default function ControlPanel() {
       // 순찰 ↔ 수동 토글 — Shift(긴급 정지 ↔ 순찰 복귀)와 같은 규칙
       latest.current.onSetSeg(latest.current.seg !== 'manual')
     }
-    const onUp = (e) => {
+    const onUp = (e: any) => {
       if (e.key !== 'Shift') return
       if (!shiftAlone) return
       shiftAlone = false
@@ -281,7 +281,7 @@ export default function ControlPanel() {
 
           <div className="gotor">
             <select value={gotoId} onChange={(e) => setGotoId(e.target.value)} disabled={ctlOff}>
-              {points.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              {points.map((p: any) => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
             <button className="dbtn go" onClick={onGoto} disabled={ctlOff}>지점 이동</button>
           </div>

@@ -1,3 +1,4 @@
+import { errMessage } from '../../live/errors.ts'
 import { useEffect, useState } from 'react'
 import { useSettings, DEFAULT_SETTINGS } from '../../settings/SettingsContext.tsx'
 import { ROBOT_V_MAX, ROBOT_W_MAX } from '../../live/config.ts'
@@ -15,21 +16,21 @@ export default function ConfigPage() {
   const { accessToken } = useAuth()
   const [draft, setDraft] = useState('')
   const [savingSpeed, setSavingSpeed] = useState(false)
-  const [speedMsg, setSpeedMsg] = useState(null)
+  const [speedMsg, setSpeedMsg] = useState<{ kind: string, text: string } | null>(null)
 
   const spd = speedParams(settings.vMax)
 
   // 입력 중인 문자열은 따로 들고 있는다(S15P11E101-515).
   // 곧바로 settings 에 밀어 넣으면 0 이나 빈 칸을 거쳐 갈 때 속도 게이지와 주행 발행이
   // 그 값을 그대로 받는다. 그래서 화면에는 사용자가 친 그대로 두고, 양수일 때만 반영한다.
-  const [vDraft, setVDraft] = useState(null)
-  const [wDraft, setWDraft] = useState(null)
+  const [vDraft, setVDraft] = useState<string | null>(null)
+  const [wDraft, setWDraft] = useState<string | null>(null)
   const vShown = vDraft ?? String(settings.vMax)
   const wShown = wDraft ?? String(settings.wMax)
   // 서버 값을 받아 오면 입력칸도 그 값으로 되돌린다
   useEffect(() => { setVDraft(null); setWDraft(null) }, [driveSynced])
 
-  const onSpeedInput = (which) => (e) => {
+  const onSpeedInput = (which: any) => (e: any) => {
     const raw = e.target.value
     if (which === 'v') setVDraft(raw); else setWDraft(raw)
     const n = Number(raw)
@@ -56,14 +57,14 @@ export default function ConfigPage() {
         ? { kind: 'ok', text: `상한을 저장하고 로봇에 하달했습니다 — 선속 ${r.maxLinear} m/s · 각속 ${r.maxAngular} rad/s` }
         : { kind: 'warn', text: '서버에는 저장됐지만 로봇에 전달되지 않았습니다 — 로봇이 연결되면 다시 저장하세요.' })
     } catch (e) {
-      setSpeedMsg({ kind: 'err', text: `저장하지 못했습니다 — ${e.message}` })
+      setSpeedMsg({ kind: 'err', text: `저장하지 못했습니다 — ${errMessage(e)}` })
     } finally { setSavingSpeed(false) }
   }
 
-  const setPoint = (id, patch) => update({
-    points: settings.points.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+  const setPoint = (id: any, patch: any) => update({
+    points: settings.points.map((p: any) => (p.id === id ? { ...p, ...patch } : p)),
   })
-  const removePoint = (id) => update({ points: settings.points.filter((p) => p.id !== id) })
+  const removePoint = (id: any) => update({ points: settings.points.filter((p: any) => p.id !== id) })
   const addPoint = () => {
     const label = draft.trim()
     if (!label) return
@@ -140,7 +141,7 @@ export default function ConfigPage() {
             관제 화면의 <b>지점 이동</b> 목록입니다. 좌표는 로봇 map 프레임 기준 미터입니다.
           </p>
           <ul className="pt-list">
-            {settings.points.map((p) => (
+            {settings.points.map((p: any) => (
               <li key={p.id}>
                 <input aria-label="지점 이름" value={p.label} onChange={(e) => setPoint(p.id, { label: e.target.value })} />
                 <input aria-label="x (m)" type="number" step="0.1" value={p.x}

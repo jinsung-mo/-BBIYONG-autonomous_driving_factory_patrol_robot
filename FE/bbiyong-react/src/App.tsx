@@ -23,7 +23,7 @@ import EventLogActivity from './auth/EventLogActivity.tsx'
 function Dashboard() {
   const sim = useSimulation()
   const { isAdmin } = useAuth()
-  const [section, setSection] = useState('live')
+  const [section, setSection] = useState<'live' | 'ops' | 'config'>('live')
   // 권한이 줄어드는 경우(관리자 → 뷰어 계정으로 재로그인)를 대비해 접근 가능한 섹션으로 되돌린다
   const active = !isAdmin && section !== 'live' ? 'live' : section
 

@@ -7,15 +7,18 @@
 import { Client } from '@stomp/stompjs'
 import { WS_URL } from './config.ts'
 
-let client = null
+// 모듈 수준 상태. null 로 시작하므로 타입을 명시하지 않으면 암시적 any 가 된다.
+/** @stomp/stompjs 의 Client — 앱 전체가 커넥션 하나를 공유한다 */
+let client: import('@stomp/stompjs').Client | null = null
 let connected = false
-let lastError = null
+let lastError: string | null = null
 let authError = false
 let nextId = 0
-let token = null
+let token: string | null = null
 
-const registry = new Map()      // id -> { destination, handler }
-const active = new Map()        // id -> StompSubscription
+type Entry = { destination: string, handler: (msg: any) => void }
+const registry = new Map<number, Entry>()      // id -> { destination, handler }
+const active = new Map<number, import('@stomp/stompjs').StompSubscription>()
 const stateListeners = new Set<(snap: {
   connected: boolean, lastError: string | null, authError: boolean, hasToken: boolean,
 }) => void>()
@@ -26,27 +29,27 @@ function emitState() {
 }
 
 // 서버 payload는 전부 JSON — 파싱 실패 시 원문을 넘겨 핸들러가 판단하게 둔다.
-function parse(message) {
+function parse(message: any) {
   try { return JSON.parse(message.body) } catch { return message.body }
 }
 
-function subscribeNow(id, entry) {
+function subscribeNow(id: any, entry: any) {
   if (!client || !client.connected) return
-  active.set(id, client.subscribe(entry.destination, (m) => {
+  active.set(id, client.subscribe(entry.destination, (m: any) => {
     try { entry.handler(parse(m)) } catch (e) { console.error('[stomp] handler error', entry.destination, e) }
   }))
 }
 
 function ensureClient() {
   if (client) return client
-  client = new Client({
+  const c = new Client({
     brokerURL: WS_URL,
     reconnectDelay: 2000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
     // CONNECT 프레임 인증 (가이드 §1) — 매 (재)연결 시 최신 토큰을 싣는다.
     beforeConnect: () => {
-      client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+      c.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {}
     },
     onConnect: () => {
       active.clear()
@@ -70,13 +73,14 @@ function ensureClient() {
       emitState()
     },
   })
-  return client
+  client = c
+  return c
 }
 
 // accessToken 은 STOMP CONNECT 헤더에 실린다(가이드 §1).
 // 연결 수명주기와 분리해 둔다 — disconnect()가 비동기라, 연결 관리와 토큰 관리를 한데 묶으면
 // deactivate() 완료가 늦게 도착하면서 이미 설정된 새 토큰을 지워버린다.
-export function setToken(accessToken = null) {
+export function setToken(accessToken: any = null) {
   if (token === accessToken) return
   token = accessToken
   // 연결 중이면 끊어서 재연결시킨다 → beforeConnect 에서 새 토큰으로 CONNECT
@@ -97,7 +101,7 @@ export async function disconnect() {
 }
 
 // destination 구독. 반환값을 호출하면 해제된다.
-export function subscribe(destination, handler) {
+export function subscribe(destination: any, handler: any) {
   const id = ++nextId
   const entry = { destination, handler }
   registry.set(id, entry)
@@ -110,7 +114,7 @@ export function subscribe(destination, handler) {
 }
 
 // 연결 전이면 조용히 버린다 — 제어 명령은 뒤늦게 도착하면 오히려 위험하다.
-export function publish(destination, body) {
+export function publish(destination: any, body: any) {
   if (!client || !client.connected) {
     console.warn('[stomp] 미연결 상태 — 발행 취소', destination)
     return false
@@ -119,7 +123,7 @@ export function publish(destination, body) {
   return true
 }
 
-export function onState(fn) {
+export function onState(fn: any) {
   stateListeners.add(fn)
   fn({ connected, lastError, authError, hasToken: !!token })
   return () => stateListeners.delete(fn)

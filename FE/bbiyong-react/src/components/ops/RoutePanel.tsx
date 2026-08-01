@@ -1,3 +1,4 @@
+import { errMessage } from '../../live/errors.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
@@ -14,10 +15,10 @@ export default function RoutePanel() {
   const { enabled, connected } = useLive()
   const { accessToken } = useAuth()
 
-  const [route, setRoute] = useState([])      // 화면에서 편집 중인 목록
-  const [saved, setSaved] = useState([])      // 마지막으로 서버에서 받은 목록
+  const [route, setRoute] = useState<import('../../live/contracts.d.ts').Waypoint[]>([])      // 화면에서 편집 중인 목록
+  const [saved, setSaved] = useState<import('../../live/contracts.d.ts').Waypoint[]>([])      // 마지막으로 서버에서 받은 목록
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState(null)        // { kind: ok|warn|err, text }
+  const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)        // { kind: ok|warn|err, text }
 
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])
@@ -30,14 +31,14 @@ export default function RoutePanel() {
       if (!alive.current) return
       setRoute(rows); setSaved(rows); setMsg(null)
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `순찰 경로를 불러오지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `순찰 경로를 불러오지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }, [enabled, accessToken])
 
   useEffect(() => { load() }, [load])
 
   // 지도 클릭 — 서버에 바로 1건 추가한다(POST). 목록만 늘려 두면 새로고침에 사라진다.
-  const onPick = async (p) => {
+  const onPick = async (p: any) => {
     if (!p) { setMsg({ kind: 'warn', text: '맵 바깥은 지정할 수 없습니다. 회색으로 칠해진 영역 안을 클릭하세요.' }); return }
     if (busy) return
     setBusy(true)
@@ -48,11 +49,11 @@ export default function RoutePanel() {
       setRoute(next); setSaved(next)
       setMsg({ kind: 'ok', text: `지점 ${next.length} 추가 — x ${p.x} · y ${p.y} m` })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `지점을 추가하지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `지점을 추가하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
-  const onDelete = async (w, i) => {
+  const onDelete = async (w: any, i: any) => {
     if (busy) return
     setBusy(true)
     try {
@@ -62,19 +63,19 @@ export default function RoutePanel() {
       setRoute(next); setSaved(next)
       setMsg({ kind: 'ok', text: `${wpLabel(w, i)} 삭제` })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `삭제하지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `삭제하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
   // 순서·이름은 화면에서만 바꾸고 '경로 저장'(PUT)으로 한 번에 반영한다.
-  const move = (i, d) => {
+  const move = (i: any, d: any) => {
     const j = i + d
     if (j < 0 || j >= route.length) return
     const next = route.slice()
     ;[next[i], next[j]] = [next[j], next[i]]
     setRoute(next)
   }
-  const rename = (i, name) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, name } : w)))
+  const rename = (i: any, name: any) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, name } : w)))
 
   const dirty = JSON.stringify(route.map((w) => [w.x, w.y, w.name || '']))
     !== JSON.stringify(saved.map((w) => [w.x, w.y, w.name || '']))
@@ -88,7 +89,7 @@ export default function RoutePanel() {
       setRoute(rows); setSaved(rows)
       setMsg({ kind: 'ok', text: `순찰 경로 ${rows.length}개 지점을 저장했습니다.` })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `저장하지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `저장하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
@@ -103,7 +104,7 @@ export default function RoutePanel() {
         ? { kind: 'ok', text: `순찰 경로 ${r.count ?? route.length}개 지점을 로봇에 하달했습니다.` }
         : { kind: 'warn', text: '경로는 서버에 저장돼 있지만 로봇에 전달되지 않았습니다 — 로봇이 연결되면 다시 하달하세요.' })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `하달하지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `하달하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 

@@ -13,11 +13,14 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgr
  *   onPick?: ((p: { x: number, y: number } | null) => void) | null,
  * }} props
  */
-export default function LiveNavMap({ route = null, onPick = null }) {
+export default function LiveNavMap({ route = null, onPick = null }: {
+    route?: import('../../live/contracts').Waypoint[] | null,
+    onPick?: ((p: { x: number, y: number } | null) => void) | null,
+  }) {
   const { onNavUpdate, connected, plan } = useLive()
-  const cvRef = useRef(null)
+  const cvRef = useRef<HTMLCanvasElement | null>(null)
   const viewRef = useRef(makeView())
-  const lastRef = useRef(null)
+  const lastRef = useRef<import('../../live/contracts.d.ts').NavState | null>(null)
   // 북향 고정(기본) ↔ heading-up. 주행 중에는 진행 방향이 위를 향하는 편이 방향 감각을 유지하기 쉽다.
   const [headingUp, setHeadingUp] = useState(false)
   const headingUpRef = useRef(false)
@@ -44,7 +47,7 @@ export default function LiveNavMap({ route = null, onPick = null }) {
     const cv = cvRef.current
     if (!cv) return undefined
 
-    const render = (nav) => {
+    const render = (nav: any) => {
       lastRef.current = nav
       const fitted = fitCanvas(cv)
       if (!fitted) return // 패널이 아직 0 크기 — 다음 갱신에 다시 시도한다
@@ -58,7 +61,7 @@ export default function LiveNavMap({ route = null, onPick = null }) {
     const off = onNavUpdate(render)
     // 패널 크기가 바뀌면 다시 맞춰 그린다 (그리드 레이아웃이라 창 크기에 따라 변한다)
     const ro = new ResizeObserver(() => render(lastRef.current))
-    ro.observe(cv.parentElement)
+    if (cv.parentElement) ro.observe(cv.parentElement)
 
     return () => { off(); ro.disconnect() }
   }, [onNavUpdate])
@@ -76,7 +79,7 @@ export default function LiveNavMap({ route = null, onPick = null }) {
   }, [showPlan, plan])
 
   // 지도 클릭 → map 프레임 미터. 맵 밖은 로봇이 갈 수 없는 좌표라 받지 않는다.
-  const onClick = (e) => {
+  const onClick = (e: any) => {
     const pick = pickRef.current
     const nav = lastRef.current
     const cv = cvRef.current

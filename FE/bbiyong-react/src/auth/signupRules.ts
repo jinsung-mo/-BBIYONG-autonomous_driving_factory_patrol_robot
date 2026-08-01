@@ -8,7 +8,7 @@ export const GENDERS = [
 ]
 
 // 입력 도중 자동으로 하이픈을 넣는다. 숫자 외 문자는 버린다.
-export function formatPhone(raw) {
+export function formatPhone(raw: any) {
   const d = String(raw || '').replace(/\D/g, '').slice(0, 11)
   if (d.length <= 3) return d
   if (d.length <= 7) return `${d.slice(0, 3)}-${d.slice(3)}`
@@ -20,11 +20,11 @@ const PHONE_RE = /^01[016789]-\d{3,4}-\d{4}$/
 
 // 저장·전송용 값 — 화면에는 하이픈을 두되 서버에는 숫자만 보낸다(BE 협의).
 // 표기 방식이 바뀌어도 저장된 값은 그대로 남도록 경계에서 한 번 정규화한다.
-export const phoneDigits = (v) => String(v || '').replace(/\D/g, '')
+export const phoneDigits = (v: any) => String(v || '').replace(/\D/g, '')
 
 // 비밀번호 — 8자 이상 + 영문·숫자·특수문자 각 1자 이상.
 // 무엇이 빠졌는지 그대로 알려주려고 항목별로 검사한다.
-export function passwordProblems(pw) {
+export function passwordProblems(pw: any) {
   const v = String(pw || '')
   const miss = []
   if (v.length < 8) miss.push('8자 이상')
@@ -37,7 +37,7 @@ export function passwordProblems(pw) {
 const MIN_BIRTH_YEAR = 1900
 
 // 폼 전체 검증. 첫 번째로 걸린 문제 하나만 돌려준다(한 번에 하나씩 고치게).
-export function validateSignup(form) {
+export function validateSignup(form: any) {
   if (!form.name.trim()) return '이름을 입력하세요.'
   if (!form.email.trim()) return '이메일을 입력하세요.'
 
@@ -64,7 +64,7 @@ export function validateSignup(form) {
 // 오늘 날짜 — 생년월일 입력의 max 로 써서 미래 선택 자체를 막는다
 export function todayISO() {
   const d = new Date()
-  const p = (n) => String(n).padStart(2, '0')
+  const p = (n: any) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 

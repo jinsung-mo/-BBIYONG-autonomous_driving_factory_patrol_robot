@@ -31,7 +31,7 @@ export const DEFAULT_SETTINGS = {
 /** @returns {import('../live/contracts').Settings} */
 function read() {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY))
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null')
     if (!saved || typeof saved !== 'object') return DEFAULT_SETTINGS
     // 저장본에 없는 키는 기본값으로 메운다 — 설정 항목이 늘어나도 예전 저장본이 깨지지 않는다
     return {
@@ -45,27 +45,26 @@ function read() {
 }
 
 /** @type {import('react').Context<import('../live/contracts').SettingsContextValue | null>} */
-const SettingsContext = createContext(null)
+const SettingsContext = createContext<import('../live/contracts.d.ts').SettingsContextValue | null>(null)
 
 /**
  * Provider 밖에서 부르면 던지므로 반환 타입을 non-null 로 좁힌다(S15P11E101-570).
- * @returns {import('../live/contracts').SettingsContextValue}
  */
-export function useSettings() {
+export function useSettings(): import('../live/contracts.d.ts').SettingsContextValue {
   const ctx = useContext(SettingsContext)
   if (!ctx) throw new Error('useSettings must be used within <SettingsProvider>')
   return ctx
 }
 
-export function SettingsProvider({ children }) {
+export function SettingsProvider({ children }: any) {
   const [settings, setSettings] = useState(read)
   const { accessToken } = useAuth()
   // 서버 상한을 한 번이라도 받았는지. 못 받았으면 화면에서 "로컬 기본값"임을 밝힌다.
   const [driveSynced, setDriveSynced] = useState(false)
 
   /** @type {(patch: Partial<import('../live/contracts').Settings>) => void} */
-  const update = useCallback((patch) => {
-    setSettings((prev) => {
+  const update = useCallback((patch: any) => {
+    setSettings((prev: any) => {
       const next = { ...prev, ...patch }
       try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* 저장 실패는 무시 */ }
       return next

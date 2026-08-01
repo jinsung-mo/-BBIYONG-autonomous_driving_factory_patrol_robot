@@ -1,3 +1,4 @@
+import { errMessage, errStatus } from '../../live/errors.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
@@ -14,11 +15,11 @@ export default function EquipmentPanel() {
   const { enabled } = useLive()
   const { accessToken } = useAuth()
 
-  const [rows, setRows] = useState([])
-  const [drafts, setDrafts] = useState({})   // id → 입력 중인 문자열
+  const [rows, setRows] = useState<import('../../live/contracts.d.ts').Equipment[]>([])
+  const [drafts, setDrafts] = useState<Record<string, string>>({})   // id → 입력 중인 문자열
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(null) // 저장 중인 id
-  const [msg, setMsg] = useState(null)       // { kind, text }
+  const [saving, setSaving] = useState<string | null>(null) // 저장 중인 id
+  const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)       // { kind, text }
 
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])
@@ -34,16 +35,16 @@ export default function EquipmentPanel() {
       setDrafts({})            // 서버 값이 정답 — 입력 초안은 버린다
       if (!keepMsg) setMsg(null)
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `설비 목록을 불러오지 못했습니다 — ${e.message}` })
+      if (alive.current) setMsg({ kind: 'err', text: `설비 목록을 불러오지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setLoading(false) }
   }, [enabled, accessToken])
 
   useEffect(() => { load() }, [load])
 
-  const shown = (e) => drafts[eqId(e)] ?? String(e?.threshold ?? '')
-  const setDraft = (id, v) => setDrafts((prev) => ({ ...prev, [id]: v }))
+  const shown = (e: any) => drafts[eqId(e) || ''] ?? String(e?.threshold ?? '')
+  const setDraft = (id: any, v: any) => setDrafts((prev) => ({ ...prev, [id]: v }))
 
-  const onSave = async (e, i) => {
+  const onSave = async (e: any, i: any) => {
     const id = eqId(e)
     if (!id || saving) return
     const raw = shown(e)
@@ -59,14 +60,14 @@ export default function EquipmentPanel() {
       setMsg({ kind: 'ok', text: `${eqName(e, i)} 임계 온도를 ${Number(raw)}℃ 로 저장했습니다 — 로봇에도 반영됩니다.` })
     } catch (err) {
       if (!alive.current) return
-      setMsg(err.status === 404
+      setMsg(errStatus(err) === 404
         ? { kind: 'err', text: `${eqName(e, i)}(${id}) 를 서버에서 찾을 수 없습니다. 목록을 새로고침하세요.` }
-        : { kind: 'err', text: `저장하지 못했습니다 — ${err.message}` })
+        : { kind: 'err', text: `저장하지 못했습니다 — ${errMessage(err)}` })
     } finally { if (alive.current) setSaving(null) }
   }
 
-  const dirty = (e) => {
-    const d = drafts[eqId(e)]
+  const dirty = (e: any) => {
+    const d = drafts[eqId(e) || '']
     return d !== undefined && Number(d) !== Number(e?.threshold)
   }
 

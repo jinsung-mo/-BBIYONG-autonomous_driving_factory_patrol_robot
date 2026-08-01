@@ -9,7 +9,7 @@ const MODULES = [
 ]
 
 /** @param {{ onEnter: () => void }} props */
-export default function WelcomeScreen({ onEnter }) {
+export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
   return (
     <div
       className="welcome-wrap"
