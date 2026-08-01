@@ -1,6 +1,8 @@
 package com.bbiyong.server.robot.controller;
 
+import com.bbiyong.server.robot.dto.RobotHealthHistoryResponse;
 import com.bbiyong.server.robot.dto.RobotResponse;
+import com.bbiyong.server.robot.service.RobotHealthHistoryService;
 import com.bbiyong.server.robot.service.RobotService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -10,9 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -22,9 +22,11 @@ import java.util.List;
 public class RobotController {
 
     private final RobotService robotService;
+    private final RobotHealthHistoryService healthHistoryService;
 
-    public RobotController(RobotService robotService) {
+    public RobotController(RobotService robotService, RobotHealthHistoryService healthHistoryService) {
         this.robotService = robotService;
+        this.healthHistoryService = healthHistoryService;
     }
 
     @Operation(
@@ -61,5 +63,26 @@ public class RobotController {
     @GetMapping
     public ResponseEntity<List<RobotResponse>> getRobots() {
         return ResponseEntity.ok(robotService.getAllRobots());
+    }
+
+    @Operation(
+            summary = "로봇 건강 이력 조회",
+            description = """
+                    특정 로봇의 건강 상태 이력(배터리, 통신 지연, FPS 등)을 조회합니다.
+
+                    **기간 형식**:
+                    - 1h, 6h, 24h: 시간 단위
+                    - 7d, 30d: 일 단위
+                    - 기본값: 24h
+
+                    **차트 렌더링용 데이터**: 시간 순으로 정렬된 데이터 포인트 배열
+                    """,
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/{robotId}/health-history")
+    public ResponseEntity<RobotHealthHistoryResponse> getHealthHistory(
+            @PathVariable String robotId,
+            @RequestParam(defaultValue = "24h") String period) {
+        return ResponseEntity.ok(healthHistoryService.getHealthHistory(robotId, period));
     }
 }

@@ -2,8 +2,10 @@ package com.bbiyong.server.event.controller;
 
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.event.dto.EventPageResponse;
+import com.bbiyong.server.event.dto.EventStatsResponse;
 import com.bbiyong.server.event.dto.EventStatusUpdateRequest;
 import com.bbiyong.server.event.service.EventLogService;
+import com.bbiyong.server.event.service.EventStatsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -28,9 +30,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class EventController {
 
     private final EventLogService eventLogService;
+    private final EventStatsService eventStatsService;
 
-    public EventController(EventLogService eventLogService) {
+    public EventController(EventLogService eventLogService, EventStatsService eventStatsService) {
         this.eventLogService = eventLogService;
+        this.eventStatsService = eventStatsService;
     }
 
     @Operation(
@@ -140,5 +144,65 @@ public class EventController {
             @PathVariable Long eventId,
             @Valid @RequestBody EventStatusUpdateRequest request) {
         return ResponseEntity.ok(eventLogService.updateStatus(eventId, request.status()));
+    }
+
+    @Operation(
+            summary = "시간별 이벤트 통계",
+            description = "지정된 시간 동안의 시간별 이벤트 발생 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/hourly")
+    public ResponseEntity<EventStatsResponse> getHourlyStats(
+            @Parameter(description = "조회할 시간 범위 (시간)", example = "24")
+            @RequestParam(defaultValue = "24") int hours) {
+        return ResponseEntity.ok(eventStatsService.getHourlyStats(hours));
+    }
+
+    @Operation(
+            summary = "일별 이벤트 통계",
+            description = "지정된 기간 동안의 일별 이벤트 발생 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/daily")
+    public ResponseEntity<EventStatsResponse> getDailyStats(
+            @Parameter(description = "조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(eventStatsService.getDailyStats(days));
+    }
+
+    @Operation(
+            summary = "로봇별 이벤트 통계",
+            description = "지정된 기간 동안 로봇별 이벤트 발생 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/by-robot")
+    public ResponseEntity<EventStatsResponse> getStatsByRobot(
+            @Parameter(description = "조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(eventStatsService.getStatsByRobot(days));
+    }
+
+    @Operation(
+            summary = "설비별 이벤트 통계",
+            description = "지정된 기간 동안 설비별 과열 이벤트 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/by-equipment")
+    public ResponseEntity<EventStatsResponse> getStatsByEquipment(
+            @Parameter(description = "조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(eventStatsService.getStatsByEquipment(days));
+    }
+
+    @Operation(
+            summary = "이벤트 타입별 통계",
+            description = "지정된 기간 동안 이벤트 타입별 통계를 조회합니다. (차트용)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/stats/by-type")
+    public ResponseEntity<EventStatsResponse> getStatsByType(
+            @Parameter(description = "조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(eventStatsService.getStatsByType(days));
     }
 }

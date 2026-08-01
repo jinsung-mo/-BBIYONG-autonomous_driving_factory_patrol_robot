@@ -6,6 +6,10 @@ import com.bbiyong.server.event.dto.EventFilterRequest;
 import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.repository.EventLogSpecification;
+import com.bbiyong.server.notification.domain.NotificationSetting;
+import com.bbiyong.server.notification.repository.NotificationSettingRepository;
+import com.bbiyong.server.notification.service.MattermostNotifier;
+import com.bbiyong.server.notification.service.NotificationService;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 
 @Slf4j
@@ -30,9 +35,19 @@ public class EventLogService {
     private static final Set<String> ALLOWED_STATUS = Set.of("UNRESOLVED", "RESOLVED");
 
     private final EventLogRepository eventLogRepository;
+    private final NotificationSettingRepository notificationSettingRepository;
+    private final NotificationService notificationService;
+    private final MattermostNotifier mattermostNotifier;
 
-    public EventLogService(EventLogRepository eventLogRepository) {
+    public EventLogService(
+            EventLogRepository eventLogRepository,
+            NotificationSettingRepository notificationSettingRepository,
+            NotificationService notificationService,
+            MattermostNotifier mattermostNotifier) {
         this.eventLogRepository = eventLogRepository;
+        this.notificationSettingRepository = notificationSettingRepository;
+        this.notificationService = notificationService;
+        this.mattermostNotifier = mattermostNotifier;
     }
 
     /**
@@ -141,7 +156,29 @@ public class EventLogService {
         logEntry.setTimestamp(Instant.now());
         logEntry.setStatus("UNRESOLVED");
 
-        eventLogRepository.save(logEntry);
+        EventLog savedEvent = eventLogRepository.save(logEntry);
         log.info("Persisted {} event log for robot: {}", alert.type(), alert.robotId());
+
+        // Mattermost 알림 전송 (모든 사용자에게)
+        sendNotificationsToAllUsers(savedEvent);
+    }
+
+    /**
+     * 모든 사용자의 알림 설정을 확인하여 조건을 만족하는 경우 Mattermost 알림 전송
+     */
+    private void sendNotificationsToAllUsers(EventLog event) {
+        try {
+            List<NotificationSetting> allSettings = notificationSettingRepository.findAll();
+
+            for (NotificationSetting setting : allSettings) {
+                // shouldNotify로 필터링
+                if (notificationService.shouldNotify(setting.getUserId(), event.getLevel())) {
+                    mattermostNotifier.sendEventNotification(setting, event);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Mattermost 알림 전송 중 오류 발생: eventId={}, error={}",
+                    event.getEventId(), e.getMessage(), e);
+        }
     }
 }
