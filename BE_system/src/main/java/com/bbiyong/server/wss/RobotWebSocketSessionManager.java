@@ -6,7 +6,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -33,15 +35,31 @@ public class RobotWebSocketSessionManager {
         }
     }
 
-    public void unregisterBySessionId(String sessionId) {
+    /**
+     * 세션 종료 시 매핑을 제거하고, 해당 세션이 담당하던 robotId 를 반환한다(없으면 null).
+     * 호출측이 오프라인 처리/브로드캐스트를 이어갈 수 있도록 robotId 를 돌려준다.
+     */
+    public String unregisterBySessionId(String sessionId) {
         if (sessionId == null) {
-            return;
+            return null;
         }
         String robotId = sessionIdToRobotId.remove(sessionId);
         if (robotId != null) {
             robotSessions.remove(robotId);
             log.info("Unregistered WSS session [{}] for robot [{}]", sessionId, robotId);
         }
+        return robotId;
+    }
+
+    /** 현재 열린 WSS 세션을 가진 로봇 ID 집합. */
+    public Set<String> getConnectedRobotIds() {
+        Set<String> ids = new HashSet<>();
+        robotSessions.forEach((robotId, session) -> {
+            if (session != null && session.isOpen()) {
+                ids.add(robotId);
+            }
+        });
+        return ids;
     }
 
     public boolean sendCommand(String robotId, Object commandPayload) {

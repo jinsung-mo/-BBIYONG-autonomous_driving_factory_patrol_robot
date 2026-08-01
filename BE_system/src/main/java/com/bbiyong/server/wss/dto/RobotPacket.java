@@ -8,7 +8,7 @@ import lombok.Data;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RobotPacket {
     private String source;
-    private String type; // REGISTER, TELEMETRY, STATE_UPDATE, VIDEO_FRAME, EVENT_FIRE, EVENT_OVERHEAT
+    private String type; // REGISTER, TELEMETRY, STATE_UPDATE, VIDEO_FRAME, EVENT_FIRE, EVENT_OVERHEAT, INSPECTION
 
     @JsonProperty("robot_id")
     private String robotId;
@@ -35,6 +35,10 @@ public class RobotPacket {
 
     @JsonProperty("equipment_id")
     private String equipmentId;
+
+    // 분전반 점검/과열 (EVENT_OVERHEAT / INSPECTION) - S15P11E101-378
+    private Double threshold;        // 로봇이 보유한 판정 임계치(℃)
+    private String thermalImage;     // 과열 시 열화상 스냅샷 base64 (경보와 함께 중계, 미저장)
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)

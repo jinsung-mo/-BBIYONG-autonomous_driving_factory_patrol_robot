@@ -1,7 +1,11 @@
 package com.bbiyong.server.wss;
 
 import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
+import com.bbiyong.server.wss.event.RobotInspectionEvent;
+import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
+import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import com.bbiyong.server.wss.event.RobotVideoEvent;
@@ -76,9 +80,32 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                     eventPublisher.publishEvent(new RobotFireEvent(this, packet));
                     break;
                 case "EVENT_OVERHEAT":
-                    log.info("Overheat event received via WSS from [{}] for equipment [{}]: temp={}",
-                            robotId, packet.getEquipmentId(), packet.getTemperature());
+                    log.info("Overheat event received via WSS from [{}] for equipment [{}]: temp={}, threshold={}",
+                            robotId, packet.getEquipmentId(), packet.getTemperature(), packet.getThreshold());
                     eventPublisher.publishEvent(new RobotOverheatEvent(this, packet));
+                    break;
+                case "INSPECTION":
+                    // 분전반 정상 점검 리포트 (경보 아님) - 설비 최근점검 상태 갱신용
+                    eventPublisher.publishEvent(new RobotInspectionEvent(this, packet));
+                    break;
+                case "EVENT_MAPPING_COMPLETE":
+                    // 온디맨드 매핑 완료 - 수신 원문을 /topic/mapping 으로 관제에 relay
+                    log.info("Mapping complete event received via WSS from [{}]", robotId);
+                    if (robotId != null && !robotId.trim().isEmpty()) {
+                        eventPublisher.publishEvent(new RobotMappingCompleteEvent(this, robotId, payload));
+                    } else {
+                        log.warn("Dropping EVENT_MAPPING_COMPLETE with missing robot_id");
+                    }
+                    break;
+                case "MAP":
+                case "NAV_LIVE":
+                    // 실시간 내비게이션 데이터: MAP(2D 점유격자 RLE) / NAV_LIVE(pose·scan).
+                    // 서버가 해석할 필요 없이 수신 원문을 그대로 /topic/nav/{robotId} 로 중계한다.
+                    if (robotId != null && !robotId.trim().isEmpty()) {
+                        eventPublisher.publishEvent(new RobotNavEvent(this, robotId, payload));
+                    } else {
+                        log.warn("Dropping {} packet with missing robot_id", packet.getType());
+                    }
                     break;
                 default:
                     log.warn("Unknown WSS packet type [{}] in message: {}", packet.getType(), payload);
@@ -91,15 +118,23 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         log.info("WSS connection closed for session [{}] with status: {}", session.getId(), status);
-        sessionManager.unregisterBySessionId(session.getId());
+        String robotId = sessionManager.unregisterBySessionId(session.getId());
+        publishDisconnect(robotId);
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
         log.error("Transport error in WSS session [{}]: {}", session.getId(), exception.getMessage());
-        sessionManager.unregisterBySessionId(session.getId());
+        String robotId = sessionManager.unregisterBySessionId(session.getId());
         if (session.isOpen()) {
             session.close(CloseStatus.SERVER_ERROR);
+        }
+        publishDisconnect(robotId);
+    }
+
+    private void publishDisconnect(String robotId) {
+        if (robotId != null && !robotId.isBlank()) {
+            eventPublisher.publishEvent(new RobotDisconnectedEvent(this, robotId));
         }
     }
 }

@@ -21,4 +21,5 @@ public class RobotResponse {
     private Double inferenceFps;
     private Instant lastConnected;
     private Location location;
+    private Boolean online; // 로봇 WSS 세션이 현재 열려있는지 여부
 }

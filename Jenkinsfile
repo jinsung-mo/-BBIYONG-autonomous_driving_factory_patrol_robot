@@ -1,3 +1,72 @@
+def extractJiraIssueKey() {
+    def sourceBranch = env.gitlabSourceBranch ?: ''
+    def matcher = sourceBranch =~ /([A-Z][A-Z0-9]+-\d+)/
+    return matcher.find() ? matcher.group(1) : null
+}
+
+def completeJiraTaskAfterDeployment() {
+    def jiraIssueKey = extractJiraIssueKey()
+
+    if (!jiraIssueKey) {
+        return '대상 Jira 키 없음 (GitLab MR source branch에 Jira 키 필요)'
+    }
+
+    try {
+        withCredentials([usernamePassword(
+            credentialsId: 'jira-api',
+            usernameVariable: 'JIRA_EMAIL',
+            passwordVariable: 'JIRA_API_TOKEN'
+        )]) {
+            sh(
+                label: "Complete Jira task ${jiraIssueKey}",
+                script: """
+                    curl --silent --show-error --fail --request POST \\
+                      --user \"\$JIRA_EMAIL:\$JIRA_API_TOKEN\" \\
+                      --header 'Content-Type: application/json' \\
+                      --data '{\"transition\":{\"id\":\"31\"}}' \\
+                      \"https://ssafy.atlassian.net/rest/api/3/issue/${jiraIssueKey}/transitions\"
+                """
+            )
+        }
+        return "${jiraIssueKey} 완료 처리 성공"
+    } catch (error) {
+        echo "Jira 완료 처리 실패 (${jiraIssueKey}): ${error.getMessage()}"
+        return "${jiraIssueKey} 완료 처리 실패 (Jenkins 로그 확인)"
+    }
+}
+
+def sendMattermostNotification(boolean success, String jiraStatus = '') {
+    def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: '브랜치 정보 없음'
+    def commitMessage = sh(
+        script: 'git log -1 --pretty=%s 2>/dev/null || true',
+        returnStdout: true
+    ).trim() ?: '커밋 메시지 정보 없음'
+    def statusText = success ? '[CD] System 배포 성공' : '[CD] System 배포 실패'
+    def iconEmoji = success ? ':jenkins1:' : ':angry_jenkins:'
+    def text = "## ${iconEmoji} ${statusText}\n" +
+        "**대상 브랜치:** `${branch}`\n" +
+        "**최신 커밋:** ${commitMessage}" +
+        (jiraStatus ? "\n**Jira:** ${jiraStatus}" : '')
+
+    writeFile(
+        file: 'mattermost-payload.json',
+        text: groovy.json.JsonOutput.toJson([
+            text      : text,
+            username  : 'Jenkins',
+            icon_emoji: iconEmoji
+        ])
+    )
+
+    withCredentials([string(credentialsId: 'mattermost-webhook', variable: 'MM_WEBHOOK')]) {
+        sh '''
+            curl --silent --show-error --fail --request POST \\
+              --header 'Content-Type: application/json' \\
+              --data-binary @mattermost-payload.json \\
+              "$MM_WEBHOOK" || true
+        '''
+    }
+}
+
 pipeline {
     agent any
 
@@ -10,7 +79,20 @@ pipeline {
         stage('Test') {
             steps {
                 dir('BE_system') {
-                    sh './gradlew test --no-daemon'
+                    sh '''
+                        docker compose --project-name bbiyong-system-test -f compose.test.yaml up -d --wait
+                        TEST_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3307/bbiyong_test \\
+                        TEST_DATASOURCE_USERNAME=test \\
+                        TEST_DATASOURCE_PASSWORD=test \\
+                        sh ./gradlew test --no-daemon
+                    '''
+                }
+            }
+            post {
+                always {
+                    dir('BE_system') {
+                        sh 'docker compose --project-name bbiyong-system-test -f compose.test.yaml down -v --remove-orphans || true'
+                    }
                 }
             }
         }
@@ -18,16 +100,6 @@ pipeline {
         stage('Deploy') {
             steps {
                 dir('BE_system') {
-                    // Create .env file for dev environment if on dev branch
-                    script {
-                        if (env.BRANCH_NAME == 'be_system/dev') {
-                            sh '''
-                                echo "ENV=dev" > .env
-                                echo "SERVER_PORT=9081" >> .env
-                                echo "DB_PATH=/opt/bbiyong/data_dev" >> .env
-                            '''
-                        }
-                    }
                     sh 'docker compose up -d --build'
                 }
             }
@@ -49,8 +121,17 @@ pipeline {
     }
 
     post {
+        success {
+            script {
+                def jiraStatus = completeJiraTaskAfterDeployment()
+                sendMattermostNotification(true, jiraStatus)
+            }
+        }
         failure {
             sh 'docker compose -f BE_system/compose.yaml logs --tail=100 || true'
+            script {
+                sendMattermostNotification(false)
+            }
         }
     }
 }
