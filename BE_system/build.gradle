@@ -43,6 +43,9 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
+	// API 문서 자동화 (SpringDoc OpenAPI 3.0)
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
 	// OpenCV(bytedeco) — 2D 도면 정제(S15P11E101-518). 네이티브는 배포(linux)·개발(windows)
 	// 플랫폼만 번들해 용량 최소화. (opencv-platform 전체 대신 classifier 지정)
 	implementation 'org.bytedeco:opencv:4.9.0-1.5.10'
