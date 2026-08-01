@@ -18,8 +18,8 @@ export default function EquipmentPanel() {
   const [rows, setRows] = useState([])
   const [drafts, setDrafts] = useState<Record<string, string>>({})   // id → 입력 중인 문자열
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(null) // 저장 중인 id
-  const [msg, setMsg] = useState(null)       // { kind, text }
+  const [saving, setSaving] = useState<string | null>(null) // 저장 중인 id
+  const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)       // { kind, text }
 
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])

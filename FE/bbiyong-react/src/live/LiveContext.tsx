@@ -19,9 +19,17 @@ import { authedGet } from './authApi.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { REASON } from '../auth/sessionPolicy.ts'
 
-const LiveContext = createContext(null)
+/**
+ * 컨텍스트가 실제로 공급하는 값. Provider 안에서 만드는 value 객체에서 그대로 끌어온다 —
+ * 형태를 손으로 다시 적으면 Provider 가 바뀔 때 어긋난다.
+ */
+const LiveContext = createContext<import('./contracts.d.ts').LiveContextValue | null>(null)
 
-export function useLive() {
+/**
+ * Provider 밖에서 부르면 던지므로 반환 타입을 non-null 로 좁힌다
+ * (useAuth·useSettings·useSim 과 같은 규칙 — S15P11E101-570).
+ */
+export function useLive(): import('./contracts.d.ts').LiveContextValue {
   const ctx = useContext(LiveContext)
   if (!ctx) throw new Error('useLive must be used within <LiveProvider>')
   return ctx
@@ -49,26 +57,26 @@ export function LiveProvider({ children }: any) {
   const enabled = dataSource === 'live'
 
   const [connected, setConnected] = useState(false)
-  const [lastError, setLastError] = useState(null)
+  const [lastError, setLastError] = useState<string | null>(null)
   const [authError, setAuthError] = useState(false)
-  const [telemetry, setTelemetry] = useState(null)
+  const [telemetry, setTelemetry] = useState<import('./contracts.d.ts').RobotTelemetry | null>(null)
   const [alerts, setAlerts] = useState([])
   // 맵 모델링 완료 이벤트(S15P11E101-483). 마지막 1건만 들고 있으면 충분하다 —
   // 운영 탭이 '이 맵 사용?' 안내를 띄우고 사용자가 확인하면 지운다.
-  const [mappingComplete, setMappingComplete] = useState(null)
+  const [mappingComplete, setMappingComplete] = useState<any>(null)
   // 정제 도면(S15P11E101-524). planReady 는 알림, plan 은 실제로 받아 온 도면이다.
-  const [planReady, setPlanReady] = useState(null)
-  const [plan, setPlan] = useState(null)
-  const [planError, setPlanError] = useState(null)
+  const [planReady, setPlanReady] = useState<any>(null)
+  const [plan, setPlan] = useState<import('./contracts.d.ts').PlanLayer | null>(null)
+  const [planError, setPlanError] = useState<string | null>(null)
   // 로봇 가동 여부(S15P11E101-510). STOMP 연결은 '관제↔서버'만 말해준다 —
   // 로봇이 꺼져 있어도 connected 는 true 라서, 서버가 판정한 online 을 따로 받아야 한다.
   // null = 아직 모름(조회 전·실패). 모름을 offline 으로 위장하지 않는다.
-  const [robotOnline, setRobotOnline] = useState(null)
+  const [robotOnline, setRobotOnline] = useState<boolean | null>(null)
 
   // 사용자가 고른 제어 모드(S15P11E101-448 · 513). 조작 패널의 지역 상태였는데,
   // 키보드 주행을 발행하는 LiveSimBridge 도 이 값을 봐야 해서 연동 레이어로 올린다 —
   // 순찰 모드에서는 WASD 가 DRIVE 를 보내면 안 된다.
-  const [driveMode, setDriveMode] = useState('patrol')
+  const [driveMode, setDriveMode] = useState<'patrol' | 'manual'>('patrol')
 
   // 영상 프레임은 초당 수십 장이 들어올 수 있어 React state로 올리지 않는다.
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
@@ -78,7 +86,7 @@ export function LiveProvider({ children }: any) {
   // 캔버스에는 시뮬 화면이 그대로 남아 실데이터처럼 보인다(S15P11E101-462).
   const [videoSeen, setVideoSeen] = useState<Record<string, boolean>>({ FRONT: false, THERMAL: false })
 
-  const telemetryRef = useRef(null)
+  const telemetryRef = useRef<import('./contracts.d.ts').RobotTelemetry | null>(null)
 
   // 실시간 SLAM 맵(가이드 §5). NAV_LIVE 가 3Hz 로 오고 scan 배열이 커서 영상 프레임과 같은
   // 방식으로 다룬다 — React state 로 올리지 않고 ref 에 최신값만 두고 리스너가 직접 받아간다.
@@ -93,7 +101,7 @@ export function LiveProvider({ children }: any) {
     })
   }, [])
 
-  const setDataSource = useCallback((value: any) => {
+  const setDataSource = useCallback((value: 'live' | 'mock') => {
     saveDataSource(value)
     setDataSourceState(value)
   }, [])

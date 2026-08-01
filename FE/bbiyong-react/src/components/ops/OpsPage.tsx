@@ -16,16 +16,16 @@ export default function OpsPage() {
   const { enabled, connected, control, onNavUpdate, telemetry, mappingComplete, clearMappingComplete } = useLive()
   const { accessToken } = useAuth()
 
-  const [nav, setNav] = useState(null)
+  const [nav, setNav] = useState<import('../../live/contracts.d.ts').DecodedMap | null>(null)
   const [name, setName] = useState('')
   const [maps, setMaps] = useState([])
-  const [mapsErr, setMapsErr] = useState(null)
+  const [mapsErr, setMapsErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const [confirming, setConfirming] = useState(false)
   const [requested, setRequested] = useState(false)   // START_MAPPING 발행 후 로봇 반응 대기
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState(null)                // { kind: ok|warn|err, text }
+  const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)                // { kind: ok|warn|err, text }
 
   // 언마운트 뒤 setState 를 막는다 — 저장 흐름은 최대 12초까지 폴링한다
   const alive = useRef(true)

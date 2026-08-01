@@ -129,7 +129,7 @@ export default function ControlPanel() {
   // ---- 단축키 ----
   // 리스너는 enabled/connected 가 바뀔 때만 다시 걸고, 그때그때의 상태·핸들러는 ref로 읽는다
   // (핸들러가 매 렌더 새로 만들어지므로 의존성에 넣으면 리스너를 계속 재등록하게 된다).
-  const latest = useRef(null)
+  const latest = useRef<any>(null)
   latest.current = { estopEngaged, seg, onEmergencyStop, onReturnPatrol, onSetSeg }
 
   useEffect(() => {

@@ -18,9 +18,9 @@ export default function LiveNavMap({ route = null, onPick = null }: {
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
   }) {
   const { onNavUpdate, connected, plan } = useLive()
-  const cvRef = useRef(null)
+  const cvRef = useRef<HTMLCanvasElement | null>(null)
   const viewRef = useRef(makeView())
-  const lastRef = useRef(null)
+  const lastRef = useRef<import('../../live/contracts.d.ts').NavState | null>(null)
   // 북향 고정(기본) ↔ heading-up. 주행 중에는 진행 방향이 위를 향하는 편이 방향 감각을 유지하기 쉽다.
   const [headingUp, setHeadingUp] = useState(false)
   const headingUpRef = useRef(false)

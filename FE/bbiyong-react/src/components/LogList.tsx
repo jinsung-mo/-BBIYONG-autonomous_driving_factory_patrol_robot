@@ -32,11 +32,11 @@ export default function LogList({ variant = 'elog' }) {
   const [page, setPage] = useState(0)
   const [more, setMore] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   // 삭제는 되돌릴 수 없다 — 무엇을 지우는지 보여주고 한 번 확인받는다(S15P11E101-516)
-  const [pending, setPending] = useState(null)   // 삭제 확인 대기 중인 행
+  const [pending, setPending] = useState<any>(null)   // 삭제 확인 대기 중인 행
   const [removing, setRemoving] = useState(false)
-  const [delErr, setDelErr] = useState(null)
+  const [delErr, setDelErr] = useState<string | null>(null)
 
   const load = useCallback(async (nextPage: any, reset: any) => {
     if (!enabled || !accessToken) return

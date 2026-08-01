@@ -36,7 +36,7 @@ export default function CameraTilt() {
   }, [tilt, control, enabled])
 
   // 핸들러가 매 렌더 새로 만들어지므로 ref 로 읽는다(리스너 재등록 방지)
-  const latest = useRef(null)
+  const latest = useRef<any>(null)
   latest.current = { nudge }
 
   useEffect(() => {

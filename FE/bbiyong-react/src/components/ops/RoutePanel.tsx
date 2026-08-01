@@ -18,7 +18,7 @@ export default function RoutePanel() {
   const [route, setRoute] = useState([])      // 화면에서 편집 중인 목록
   const [saved, setSaved] = useState([])      // 마지막으로 서버에서 받은 목록
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState(null)        // { kind: ok|warn|err, text }
+  const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)        // { kind: ok|warn|err, text }
 
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])

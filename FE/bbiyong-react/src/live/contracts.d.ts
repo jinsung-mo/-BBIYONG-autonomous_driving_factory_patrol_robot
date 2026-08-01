@@ -550,3 +550,45 @@ export interface AuthContextValue {
   logoutReason: LogoutReason | null
   clearLogoutReason: () => void
 }
+
+/** LiveProvider 가 공급하는 값 (S15P11E101-576). */
+export interface LiveContextValue {
+  /** live 모드인지 (mock 이면 false) */
+  enabled: boolean
+  connected: boolean
+  lastError: string | null
+  authError: boolean
+  hasToken: boolean
+  dataSource: 'live' | 'mock'
+  setDataSource: (v: 'live' | 'mock') => void
+  toggleDataSource: () => void
+  telemetry: RobotTelemetry | null
+  alerts: AlertMessage[]
+  dismissAlert: (id: number) => void
+  onVideoFrame: (fn: (ch: 'FRONT' | 'THERMAL', frame: any) => void) => () => void
+  onNavUpdate: (fn: (nav: NavState) => void) => () => void
+  videoSeen: Record<string, boolean>
+  control: {
+    drive: (linear: number, angular: number) => void
+    stop: () => void
+    setMode: (mode: DriveMode) => void
+    estop: () => void
+    navigate: (x: number, y: number, yaw?: number) => void
+    setCameraTilt: (deg: number) => void
+    startMapping: () => void
+    saveMap: (name: string) => void
+  }
+  robotId: string
+  /** 주행 슬라이더 값 (m/s) */
+  speed: number
+  setSpeed: (v: number) => void
+  mappingComplete: any
+  clearMappingComplete: () => void
+  /** 서버가 판정한 로봇 가동 여부. null = 아직 모름 */
+  robotOnline: boolean | null
+  /** 사용자가 고른 제어 모드 */
+  driveMode: 'patrol' | 'manual'
+  setDriveMode: (m: 'patrol' | 'manual') => void
+  plan: PlanLayer | null
+  planError: string | null
+}

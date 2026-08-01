@@ -74,8 +74,8 @@ function PasswordModal({ onClose }: any) {
 export default function UserMenu() {
   const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
-  const [modal, setModal] = useState(null) // 'mypage' | 'password' | null
-  const ref = useRef(null)
+  const [modal, setModal] = useState<'mypage' | 'password' | null>(null) // 'mypage' | 'password' | null
+  const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const onDoc = (e: any) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }

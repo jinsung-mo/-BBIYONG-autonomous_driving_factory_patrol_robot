@@ -59,7 +59,7 @@ export default function LiveSimBridge(): null {
   // keydown은 누르고 있는 동안 반복 발생하므로 눌림 집합으로 전이만 잡고,
   // 누르고 있는 동안의 지속 주행은 아래 재전송 타이머가 담당한다(deadman 대응).
   const held = useRef(new Set<string>())
-  const repeat = useRef(null)
+  const repeat = useRef<any>(null)
 
   useEffect(() => {
     if (!enabled || !connected) return undefined

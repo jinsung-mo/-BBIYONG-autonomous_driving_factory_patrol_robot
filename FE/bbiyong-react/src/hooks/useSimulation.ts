@@ -4,7 +4,7 @@ import Simulation from '../sim/Simulation.ts'
 // Simulation 인스턴스를 만들고 rAF 루프 생명주기를 관리하며,
 // 상태 스냅샷·시계·키보드(WASD)·캔버스 ref·액션을 React에 노출한다.
 export default function useSimulation() {
-  const simRef = useRef(null)
+  const simRef = useRef<any>(null)
   if (simRef.current === null) simRef.current = new Simulation()
   const sim = simRef.current
 

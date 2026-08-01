@@ -16,15 +16,15 @@ export default function ConfigPage() {
   const { accessToken } = useAuth()
   const [draft, setDraft] = useState('')
   const [savingSpeed, setSavingSpeed] = useState(false)
-  const [speedMsg, setSpeedMsg] = useState(null)
+  const [speedMsg, setSpeedMsg] = useState<{ kind: string, text: string } | null>(null)
 
   const spd = speedParams(settings.vMax)
 
   // 입력 중인 문자열은 따로 들고 있는다(S15P11E101-515).
   // 곧바로 settings 에 밀어 넣으면 0 이나 빈 칸을 거쳐 갈 때 속도 게이지와 주행 발행이
   // 그 값을 그대로 받는다. 그래서 화면에는 사용자가 친 그대로 두고, 양수일 때만 반영한다.
-  const [vDraft, setVDraft] = useState(null)
-  const [wDraft, setWDraft] = useState(null)
+  const [vDraft, setVDraft] = useState<string | null>(null)
+  const [wDraft, setWDraft] = useState<string | null>(null)
   const vShown = vDraft ?? String(settings.vMax)
   const wShown = wDraft ?? String(settings.wMax)
   // 서버 값을 받아 오면 입력칸도 그 값으로 되돌린다

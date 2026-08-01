@@ -56,7 +56,7 @@ const REAL_KEY = 'bbiyong.realBackend'
 const truthy = (v: any) => v === true || v === 'true' || v === '1'
 const DEFAULT_SOURCE = (env.VITE_DATA_SOURCE === 'live' || truthy(env.VITE_REAL_BACKEND)) ? 'live' : 'mock'
 
-export function getDataSource() {
+export function getDataSource(): 'live' | 'mock' {
   try {
     const saved = localStorage.getItem(SOURCE_KEY)
     if (saved === 'live' || saved === 'mock') return saved
@@ -68,7 +68,7 @@ export function getDataSource() {
   return DEFAULT_SOURCE
 }
 
-export function saveDataSource(value: any) {
+export function saveDataSource(value: 'live' | 'mock') {
   try {
     localStorage.setItem(SOURCE_KEY, value)
     localStorage.setItem(REAL_KEY, String(value === 'live'))
