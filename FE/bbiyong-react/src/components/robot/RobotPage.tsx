@@ -3,6 +3,7 @@ import { useSim } from '../../SimContext.ts'
 import { useSettings } from '../../settings/SettingsContext.tsx'
 import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
+import SummaryBar from '../dashboard/SummaryBar.tsx'
 import StatusPanel from './StatusPanel.tsx'
 import ControlPanel from './ControlPanel.tsx'
 import MapPanel from './MapPanel.tsx'
@@ -28,6 +29,8 @@ export default function RobotPage() {
 
   return (
     <section id="pgB" className="page on">
+      {/* 편성 전체 집계 — 실서버 모드에서만 나온다 */}
+      <SummaryBar />
       <div className="b-grid">
         <StatusPanel />
 
