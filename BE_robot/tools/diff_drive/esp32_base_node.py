@@ -83,12 +83,13 @@ class Esp32Base(Node):
         # [실측 2026-07-26] 제자리 회전 중 벽거리 사인파 적합. 2회 평균.
         self.declare_parameter("laser_x", 0.0597)
         self.declare_parameter("laser_y", -0.0051)
-        # 🔒 +4.31° = +0.0752 rad — 2026-07-26 laser_yaw_calib.py 3회 평균
-        #    (전진 +4.52/+4.69, 후진 +3.71, 산포 ±0.5°).
-        #    평면 2개 + 직진 이동벡터 방식. 전진·후진이 일치하므로 짝짓기
-        #    계통오차가 아니라 실제 마운트 오차다.
-        #    ⚠️ 라이다 마운트를 다시 건드리면 이 값은 무효 — 재측정할 것.
-        self.declare_parameter("laser_yaw", 0.0752)
+        # The LiDAR is mounted facing backward. Preserve the measured +4.31 deg
+        # mounting correction, then add 180 deg:
+        #   normalize(+0.0752 + pi) = -3.06639 rad (-175.69 deg)
+        # This is a physical base_link -> laser_frame rotation. Do not express
+        # it by changing the driver's inverted/reversion scan-order settings.
+        # Re-run laser_yaw_calib.py if the mount is moved again.
+        self.declare_parameter("laser_yaw", -3.06639)
 
         g = lambda k: self.get_parameter(k).value            # noqa: E731
         self.mm_per_count = float(g("mm_per_count"))

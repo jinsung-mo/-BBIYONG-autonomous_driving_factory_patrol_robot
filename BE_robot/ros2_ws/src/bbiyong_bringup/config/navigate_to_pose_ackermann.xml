@@ -1,21 +1,22 @@
-<!-- Nav2 Humble default replanning tree without the in-place Spin recovery. -->
+<!-- Commit to a valid path instead of replacing it at 1 Hz.
+     A path/controller failure returns to the outer recovery node, which clears
+     stale costmaps and computes a new path. A genuinely new NavigateToPose
+     goal can still preempt this tree through GoalUpdated. -->
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
-      <PipelineSequence name="NavigateWithReplanning">
-        <RateController hz="1.0">
-          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
-            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
-            <ClearEntireCostmap name="ClearGlobalCostmap-Context"
-              service_name="global_costmap/clear_entirely_global_costmap"/>
-          </RecoveryNode>
-        </RateController>
+    <RecoveryNode number_of_retries="2" name="NavigateRecovery">
+      <SequenceStar name="NavigateCommittedPath">
+        <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+          <ClearEntireCostmap name="ClearGlobalCostmap-Context"
+            service_name="global_costmap/clear_entirely_global_costmap"/>
+        </RecoveryNode>
         <RecoveryNode number_of_retries="1" name="FollowPath">
           <FollowPath path="{path}" controller_id="FollowPath"/>
           <ClearEntireCostmap name="ClearLocalCostmap-Context"
             service_name="local_costmap/clear_entirely_local_costmap"/>
         </RecoveryNode>
-      </PipelineSequence>
+      </SequenceStar>
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
         <RoundRobin name="RecoveryActions">
@@ -25,8 +26,7 @@
             <ClearEntireCostmap name="ClearGlobalCostmap-Subtree"
               service_name="global_costmap/clear_entirely_global_costmap"/>
           </Sequence>
-          <Wait wait_duration="5"/>
-          <BackUp backup_dist="0.15" backup_speed="0.025"/>
+          <Wait wait_duration="0.2"/>
         </RoundRobin>
       </ReactiveFallback>
     </RecoveryNode>

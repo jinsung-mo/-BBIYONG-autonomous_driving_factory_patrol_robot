@@ -62,7 +62,9 @@ bt_navigator:
     global_frame: map
     robot_base_frame: base_link
     odom_topic: /odom
-    bt_loop_duration: 10
+    # 20 Hz is sufficient for this base and avoids the repeated 100 Hz
+    # BehaviorTree overrun warnings on the Jetson.
+    bt_loop_duration: 50
     default_server_timeout: 20
     navigators: [navigate_to_pose, navigate_through_poses]
     navigate_to_pose:
@@ -86,14 +88,17 @@ controller_server:
     goal_checker_plugins: [general_goal_checker]
     controller_plugins: [FollowPath]
     progress_checker:
-      plugin: nav2_controller::SimpleProgressChecker
-      required_movement_radius: 0.20
-      movement_time_allowance: 15.0
+      plugin: nav2_controller::PoseProgressChecker
+      required_movement_radius: 0.05
+      required_movement_angle: 0.10
+      # Translation or a meaningful ~5.7 degree turn resets this window.
+      # If neither happens, fail promptly instead of waiting motionless.
+      movement_time_allowance: 3.0
     general_goal_checker:
       stateful: true
       plugin: nav2_controller::SimpleGoalChecker
-      xy_goal_tolerance: 0.20
-      yaw_goal_tolerance: 0.35
+      xy_goal_tolerance: 0.05
+      yaw_goal_tolerance: 0.052
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
       desired_linear_vel: 0.10
@@ -103,19 +108,24 @@ controller_server:
       lookahead_time: 1.5
       transform_tolerance: 0.2
       use_velocity_scaled_lookahead_dist: true
-      min_approach_linear_velocity: 0.03
+      # The base does not move reliably below about 0.06 m/s. Keeping Nav2's
+      # regulated minimum above that deadband prevents rotate/creep loops.
+      min_approach_linear_velocity: 0.07
       approach_velocity_scaling_dist: 0.40
       use_collision_detection: true
       max_allowed_time_to_collision_up_to_carrot: 1.0
       use_regulated_linear_velocity_scaling: true
       use_cost_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 0.50
-      regulated_linear_scaling_min_speed: 0.03
+      regulated_linear_scaling_min_speed: 0.07
       # --- 차동구동 변경점 ---
       # 경로 시작 방향과 로봇 방향이 크게 어긋나면 먼저 제자리에서 돌고 출발한다.
       # Ackermann 판에서는 둘 다 0/false 였다 (조향차는 제자리 회전 불가).
       use_rotate_to_heading: true
-      rotate_to_heading_angular_vel: 0.60      # rad/s. 180도 회전에 약 5초
+      # The chassis barely moves when an in-place turn is reduced below about
+      # 0.15 rad/s. Start decisively so rotate-before-drive does not consume
+      # the 30 second progress window.
+      rotate_to_heading_angular_vel: 0.60
       rotate_to_heading_min_angle: 0.785       # 45도 이상 어긋나면 제자리 회전
       max_angular_accel: 1.0
       allow_reversing: false                   # RPP 제약: rotate_to_heading 과 동시 true 불가
@@ -214,7 +224,9 @@ planner_server:
       tolerance: 0.25
       downsample_costmap: false
       downsampling_factor: 1
-      allow_unknown: true
+      # Frontier goals are deliberately placed in reachable known-free space.
+      # Do not let the global plan cut across the unseen wedge to reach them.
+      allow_unknown: false
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 5.0
@@ -259,9 +271,9 @@ behavior_server:
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     # Ackermann 판에서는 셋 다 0.0 이었다. 0 이면 Spin 이 등록돼도 실제로 돌지 않는다.
-    max_rotational_vel: 0.60
-    min_rotational_vel: 0.20
-    rotational_acc_lim: 1.0
+    max_rotational_vel: 0.50
+    min_rotational_vel: 0.42
+    rotational_acc_lim: 0.50
 
 waypoint_follower:
   ros__parameters:
@@ -286,8 +298,8 @@ velocity_smoother:
     # 선속도 0.10 m/s 는 원본 그대로 유지 (첫 실차 주행용 보수적 값).
     max_velocity: [0.10, 0.0, 0.60]
     min_velocity: [-0.05, 0.0, -0.60]
-    max_accel: [0.20, 0.0, 1.0]
-    max_decel: [-0.30, 0.0, -1.0]
+    max_accel: [0.20, 0.0, 1.00]
+    max_decel: [-0.30, 0.0, -1.00]
     odom_topic: odom
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

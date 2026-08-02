@@ -15,6 +15,7 @@ class OperatorShutdownWiringTest(unittest.TestCase):
             "cmd_mux_node.py",
             "ackermann_adapter_node.py",
             "differential_adapter_node.py",
+            "velocity_floor_node.py",
         ):
             source = (package / node_name).read_text()
             with self.subTest(node_name=node_name):
@@ -24,6 +25,7 @@ class OperatorShutdownWiringTest(unittest.TestCase):
             "cmd_mux_node.py",
             "ackermann_adapter_node.py",
             "differential_adapter_node.py",
+            "velocity_floor_node.py",
         ):
             source = (package / node_name).read_text()
             with self.subTest(node_name=f"{node_name}-interrupt"):

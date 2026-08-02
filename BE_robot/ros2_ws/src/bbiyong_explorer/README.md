@@ -22,9 +22,9 @@ Nav2 -> velocity_smoother -> Collision Monitor -> cmd_mux -> /cmd_vel
 An operator or supervisor must explicitly publish `estop=false` and select
 `autonomy` after checking the robot and its surroundings.
 
-Frontier goals are placed back inside known free space rather than directly on
-the free/unknown boundary. Their final heading faces the unknown region, and
-the explorer calls Nav2 `ComputePathToPose` before it sends `NavigateToPose`.
+Frontier goals use reachable known-free boundary cells and face the unknown
+region. The explorer sends each selected goal directly to `NavigateToPose`;
+Nav2 computes the path once inside the committed-path behavior tree.
 
 `slam_toolbox`가 발행하는 미완성 `/map`에서 frontier(탐색한 빈 공간과 미탐색
 공간의 경계)를 찾고, 가장 가치가 높은 지점을 Nav2 `NavigateToPose` 목표로
