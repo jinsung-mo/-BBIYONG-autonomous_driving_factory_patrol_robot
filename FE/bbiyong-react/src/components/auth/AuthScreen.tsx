@@ -1,4 +1,4 @@
-import { errMessage } from '../../live/errors.ts'
+import { errMessage, errStatus } from '../../live/errors.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { getDataSource, saveDataSource } from '../../live/config.ts'
@@ -60,7 +60,13 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
         })
       }
       reset() // 성공하면 입력을 남기지 않는다
-    } catch (e2) { setErr(errMessage(e2)) } finally { setBusy(false) }
+    } catch (e2) {
+      // 로그인 401의 서버 문구는 계정별로 달라질 수 있다. 화면은 계정 존재 여부를
+      // 드러내지 않는 한 문장으로 고정한다.
+      setErr(mode === 'login' && errStatus(e2) === 401
+        ? '이메일 또는 비밀번호가 올바르지 않습니다.'
+        : errMessage(e2))
+    } finally { setBusy(false) }
   }
 
   return (
