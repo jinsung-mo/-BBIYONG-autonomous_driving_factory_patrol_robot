@@ -20,6 +20,10 @@ import CameraTilt from './CameraTilt.tsx'
 // 단축키(S15P11E101-435): Shift 한 번 = 긴급 정지 ↔ 순찰 복귀 토글 · Space = 순찰 모드.
 // ESTOP은 fail-safe라 해제 명령이 없고(가이드 §5) 해제는 SET_MODE autonomy 뿐이라,
 // 두 동작을 한 키에 토글로 얹는 것이 프로토콜과 그대로 맞는다.
+// 순찰 복귀를 보낸 뒤 로봇이 E-STOP 을 풀 때까지 기다리는 시간.
+// 텔레메트리는 1Hz 라 두세 주기는 봐야 '처리하지 않았다'고 말할 수 있다.
+const RESUME_WAIT_MS = 4000
+
 export default function ControlPanel() {
   const { status, activeKeys, actions } = useSim()
   const {
@@ -31,6 +35,9 @@ export default function ControlPanel() {
   // 순찰 지점은 설정 탭에서 등록/편집한다(S15P11E101-475). 관제에서는 실행만 한다.
   const points = settings.points
   const [gotoId, setGotoId] = useState(points[0]?.id)
+  // 조작 결과 안내 — 명령이 조용히 버려지는 경우를 알린다(S15P11E101-595)
+  const [ctlMsg, setCtlMsg] = useState<{ kind: string, text: string } | null>(null)
+  const resumeTimer = useRef<any>(null)
   const goal = points.find((p: any) => p.id === gotoId) || points[0]
   const spd = speedParams(settings.vMax)
 
@@ -43,6 +50,9 @@ export default function ControlPanel() {
   // 값 자체는 LiveContext 가 들고 있다 — 키보드 주행을 발행하는 LiveSimBridge 도 봐야 한다(S15P11E101-513).
 
   const liveReady = enabled && connected
+  // 서버에는 붙었지만 로봇 세션이 없으면 BE 가 로그만 남기고 버린다(RobotControlStompController.relay).
+  // FE 로는 아무 응답이 오지 않으므로, 보낸 쪽에서 그 사실을 말해 주지 않으면 조작자는 먹은 줄 안다.
+  const robotOffline = enabled && connected && robotOnline === false
 
   // 연결 배지 3단계. '서버에 붙었다'와 '로봇이 켜져 있다'를 한 문구로 뭉뚱그리면,
   // 로봇이 꺼진 밤에도 LIVE 로 보여 조작자가 명령이 먹힌다고 오해한다.
@@ -93,19 +103,39 @@ export default function ControlPanel() {
   }
 
   // mock 경로의 E-STOP 체결/해제는 Simulation 이 직접 관리한다(emergencyStop / botResume).
+  // 로봇이 없으면 명령은 서버에서 버려진다 — 누른 사람에게 그대로 말한다
+  const warnIfOffline = () => {
+    if (!robotOffline) return false
+    setCtlMsg({ kind: 'warn', text: '로봇이 오프라인입니다 — 명령이 로봇에 전달되지 않았습니다.' })
+    return true
+  }
+
   const onEmergencyStop = () => {
-    if (liveReady) control.estop()
+    if (liveReady) { control.estop(); if (!warnIfOffline()) setCtlMsg(null) }
     else actions.emergencyStop()
   }
   const onReturnPatrol = () => {
     // 순찰 복귀도 SET_MODE autonomy 를 보내므로 '순찰 모드'를 고른 것과 같다 — 토글도 함께 맞춘다
     setSeg('patrol')
-    if (liveReady) control.setMode('autonomy')
-    else actions.returnPatrol()
+    if (!liveReady) { actions.returnPatrol(); return }
+    control.setMode('autonomy')
+    if (warnIfOffline()) return
+    setCtlMsg(null)
+    // 로봇이 SET_MODE 를 아직 처리하지 않으면(cloud_bridge.translate_command 가 noop 으로 버린다)
+    // E-STOP 이 풀리지 않는다. 화면 토글만 '순찰'로 바뀐 채 실제로는 체결 상태로 남아 조작자를 속인다.
+    // 잠시 기다렸다가 그대로면 사실대로 알린다 — 해제되면 아래 effect 가 이 안내를 지운다.
+    if (estopEngaged) {
+      clearTimeout(resumeTimer.current)
+      resumeTimer.current = setTimeout(() => {
+        if (latest.current.estopEngaged) {
+          setCtlMsg({ kind: 'err', text: '로봇이 순찰 복귀를 처리하지 않았습니다 — E-STOP 이 여전히 체결 상태입니다.' })
+        }
+      }, RESUME_WAIT_MS)
+    }
   }
   const onSetSeg = (man: any) => {
     setSeg(man ? 'manual' : 'patrol')
-    if (liveReady) control.setMode(man ? 'manual' : 'autonomy')
+    if (liveReady) { control.setMode(man ? 'manual' : 'autonomy'); warnIfOffline() }
     else actions.setSeg(man)
   }
   // 속도는 live(발행 배율)와 mock(표시 속도) 양쪽에 함께 반영한다 — 어느 모드에서도 죽은 버튼이 되지 않게
@@ -119,7 +149,7 @@ export default function ControlPanel() {
   const onGoto = () => {
     if (!goal) return
     // 저장값은 미터(map 프레임)다. 실서버는 그대로 보내고, 시뮬은 격자로 환산해 넘긴다.
-    if (liveReady) control.navigate(goal.x, goal.y, 0)
+    if (liveReady) { control.navigate(goal.x, goal.y, 0); warnIfOffline() }
     else {
       const { c, r } = worldToCell(goal.x, goal.y)
       actions.goto(`${c},${r}`, goal.label)
@@ -130,15 +160,35 @@ export default function ControlPanel() {
   // 리스너는 enabled/connected 가 바뀔 때만 다시 걸고, 그때그때의 상태·핸들러는 ref로 읽는다
   // (핸들러가 매 렌더 새로 만들어지므로 의존성에 넣으면 리스너를 계속 재등록하게 된다).
   const latest = useRef<any>(null)
-  latest.current = { estopEngaged, seg, onEmergencyStop, onReturnPatrol, onSetSeg }
+  latest.current = { estopEngaged, seg, ctlOff, onEmergencyStop, onReturnPatrol, onSetSeg }
+
+  // E-STOP 이 실제로 풀리면 경고를 지운다 — 해결된 안내가 남아 있으면 다음 판단을 흐린다.
+  useEffect(() => {
+    if (estopEngaged) return
+    clearTimeout(resumeTimer.current)
+    setCtlMsg((m) => (m?.kind === 'err' ? null : m))
+  }, [estopEngaged])
+  useEffect(() => () => clearTimeout(resumeTimer.current), [])
 
   useEffect(() => {
-    if (ctlOff) return undefined // 버튼 disabled 와 같은 게이트
+    // 게이트는 버튼과 같은 규칙을 쓴다(S15P11E101-595).
+    // 긴급 정지는 estopOff(권한 무관 안전 예외), 나머지는 ctlOff 다.
+    // 예전에는 리스너 전체를 ctlOff 로 막아, 버튼은 눌리는데 Shift 만 죽는 뷰어가 생겼다.
+    if (estopOff) return undefined
 
     // Shift 단독 탭만 단축키로 인정한다. keydown 시점에 실행하면 Shift+A 같은
     // 조합키를 누르는 순간에도 긴급 정지가 나가버리므로, 사이에 다른 키가 없었을 때만 keyup에서 실행한다.
     let shiftAlone = false
-    const isTyping = (el: any) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
+    // 글자를 입력하는 요소에서만 막는다. select 는 Shift 로 글자가 들어가지 않으므로
+    // 지점 이동 드롭다운을 건드렸다는 이유로 긴급 정지가 죽어서는 안 된다(S15P11E101-595).
+    const isTyping = (el: any) => {
+      if (!el) return false
+      if (el.isContentEditable) return true
+      if (el.tagName === 'TEXTAREA') return true
+      if (el.tagName !== 'INPUT') return false
+      // 체크박스·라디오·버튼형 input 은 글자를 받지 않는다
+      return !/^(checkbox|radio|button|submit|reset|range|color)$/i.test(el.type || 'text')
+    }
     // 주행 키 — 방향키도 WASD 와 같은 조작이다(useSimulation · LiveSimBridge 의 매핑과 동일)
     const DRIVE_KEYS = /^([wasd]|arrow(up|down|left|right))$/
 
@@ -150,6 +200,8 @@ export default function ControlPanel() {
       if (DRIVE_KEYS.test(e.key.toLowerCase())) return
       if (e.code !== 'Space') return
       if (isTyping(e.target)) return
+      // 모드 전환은 조작 권한이 필요하다 — 긴급 정지와 달리 안전 예외가 아니다
+      if (latest.current.ctlOff) return
       // 포커스된 버튼의 기본 활성화(=중복 실행)와 페이지 스크롤을 막는다
       e.preventDefault()
       if (e.repeat) return
@@ -162,7 +214,8 @@ export default function ControlPanel() {
       shiftAlone = false
       if (isTyping(e.target)) return
       const s = latest.current
-      if (s.estopEngaged) s.onReturnPatrol()
+      // 순찰 복귀는 조작 권한이 필요하고, 긴급 정지는 로그인만 하면 누구나 할 수 있다
+      if (s.estopEngaged) { if (!s.ctlOff) s.onReturnPatrol() }
       else s.onEmergencyStop()
     }
     const onBlur = () => { shiftAlone = false }
@@ -175,7 +228,7 @@ export default function ControlPanel() {
       window.removeEventListener('keyup', onUp)
       window.removeEventListener('blur', onBlur)
     }
-  }, [ctlOff])
+  }, [estopOff])
 
   return (
     <div className="panel" id="pControl">
@@ -211,6 +264,9 @@ export default function ControlPanel() {
             {estopEngaged && <kbd className="kbd">Shift</kbd>}
           </button>
 
+          {/* 주행 속도와 카메라 각도는 배치가 같아(− 게이지 +) 가로로 나란히 둔다.
+              세로로 쌓으면 낮은 창에서 카메라 각도가 먼저 밀려났다(S15P11E101-595). */}
+          <div className="gauges">
           {/* 주행 속도 — 방향 단위벡터에 이 값을 곱해 발행한다 */}
           <div className="spd">
             <div className="spdlab">
@@ -249,15 +305,17 @@ export default function ControlPanel() {
 
           {/* 카메라 상하 각도 — 주행 속도와 같은 '− 게이지 +' 배치(S15P11E101-521) */}
           <CameraTilt />
+          </div>
         </div>
 
-        <div>
+        {/* 우측 열 — 방향 패드·모드·지점 이동. 좌측 열과 아래 끝을 맞춘다(S15P11E101-595) */}
+        <div className="ctl-right">
           {/* 실제 키보드 방향키(inverted-T): △ 위 / ◁ ▽ ▷ 아래 한 줄 */}
           <div className="dpad">
             <span />{key('w')}<span />
             {key('a')}{key('s')}{key('d')}
           </div>
-          <div className="seg" style={{ marginTop: 12 }}>
+          <div className="seg">
             <button
               className={seg === 'patrol' ? 'on' : ''}
               onClick={() => onSetSeg(false)}
@@ -287,6 +345,8 @@ export default function ControlPanel() {
           </div>
         </div>
       </div>
+      {/* 명령이 조용히 버려진 경우를 알린다 — 패널 아래 한 줄로만 쓴다(S15P11E101-595) */}
+      {ctlMsg && <div className={`ctlmsg ${ctlMsg.kind}`} id="ctlMsg" role="status">{ctlMsg.text}</div>}
     </div>
   )
 }

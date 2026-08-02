@@ -208,10 +208,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .elog li.loadmore button:hover{border-color:#3a4452; color:var(--dk-ink);}
 
 /* 좌: 비상·복구 / 우: 이동·모드·지점이동 — 두 열을 세로 중앙에 맞춘다 */
-.ctl{display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:center; flex:1;}
+/* 두 열의 폭을 비슷하게 잡아 좌우 무게를 맞춘다. 예전에는 좌측이 auto 라 방향 패드
+   주변에 큰 여백이 남았다. 세로는 stretch — 두 열의 아래 끝이 함께 떨어진다(S15P11E101-595). */
+.ctl{display:grid; grid-template-columns:minmax(168px,1fr) minmax(168px,1fr);
+  gap:clamp(10px,1.6vh,16px); align-items:stretch; flex:1; min-height:0;
+  /* 낮은 창에서 압축해도 모자라면 스크롤한다 — 조작 수단이 화면 밖으로 사라지는 것보다 낫다.
+     안전 조작(긴급 정지·순찰 복귀)이 맨 위라 먼저 잘리지 않는다. */
+  overflow:auto;}
 /* 비상·복구 열 — 두 버튼의 크기·글자를 맞추고 라벨을 가운데로 모은다 */
-.ctl .col{display:flex; flex-direction:column; gap:10px; min-width:158px;}
-.ctl .col .dbtn{padding:14px 13px; font-size:13px;}
+.ctl .col{display:flex; flex-direction:column; gap:clamp(6px,1vh,10px); min-width:0; justify-content:flex-start;}
+/* 화면이 낮아지면 버튼 높이를 먼저 줄인다. 아래 한계는 손가락으로 누를 수 있는 크기다. */
+.ctl .col .dbtn{padding:clamp(7px,1.5vh,14px) 13px; font-size:13px;}
+.ctl-right{display:flex; flex-direction:column; gap:clamp(8px,1.2vh,12px); justify-content:flex-start; min-width:0;}
+/* 여기서는 간격을 flex gap 이 맡는다 — 다른 화면의 .gotor 여백 규칙은 건드리지 않는다 */
+.ctl-right .gotor{margin-top:0;}
 .ctl .col .dbtn.keyed{justify-content:center; gap:9px;}
 .dbtn{padding:9px 13px; border-radius:9px; border:1px solid var(--dk-line); background:var(--dk-panel2); color:var(--dk-ink); font-weight:600; font-size:12px;}
 .dbtn:hover{border-color:#3a4452;}
@@ -222,24 +232,27 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .dbtn.stop{background:rgba(255,86,72,.13); border-color:rgba(255,86,72,.5); color:#ff8d85;}
 .dbtn.go{background:rgba(61,220,151,.13); border-color:rgba(61,220,151,.5); color:#7deab8;}
 /* 방향키 패드 (로봇) — 실제 키보드 배열(inverted-T): W 위 / A S D 아래 한 줄 */
-.dpad{display:grid; grid-template-columns:repeat(3,52px); grid-template-rows:repeat(2,52px); gap:6px; justify-content:center;}
+/* 창이 낮아져도 마지막까지 크기를 지키는 축이다 — 아래 한계(42px)는 오조작을 막는 최소 크기. */
+.dpad{display:grid; grid-template-columns:repeat(3,clamp(42px,6.4vh,52px));
+  grid-template-rows:repeat(2,clamp(42px,6.4vh,52px)); gap:6px; justify-content:center;}
 .dpad button{border:1px solid var(--dk-line); border-bottom-width:3px; background:var(--dk-panel2); color:var(--dk-ink); border-radius:11px; font-size:18px; font-weight:800; transition:.08s; box-shadow:0 1px 0 rgba(0,0,0,.35);}
 .dpad button:active,.dpad button.active{background:#24466e; color:#dce9fb; border-color:#3a5a86; transform:translateY(1px); border-bottom-width:1px;}
 .dpad span{display:block;}
 .seg{display:flex; border:1px solid var(--dk-line); border-radius:9px; overflow:hidden;}
-.seg button{flex:1; padding:8px 0; background:var(--dk-panel2); color:var(--dk-sub); border:0; font-weight:700; font-size:12px;}
+.seg button{flex:1; padding:clamp(6px,1vh,8px) 0; background:var(--dk-panel2); color:var(--dk-sub); border:0; font-weight:700; font-size:12px;}
 .seg button.on{background:#24466e; color:#dce9fb;}
 /* 주행 속도 게이지 — 좁은 좌측 열에 들어가므로 값은 위 캡션에, 아래는 − / 게이지 / + */
-.spd{display:flex; flex-direction:column; gap:6px; margin-top:4px;}
+.spd{display:flex; flex-direction:column; gap:clamp(3px,.6vh,6px);}
+/* 간격은 .col 의 flex gap 이 맡는다 — 게이지마다 margin 을 더하면 세로가 두 번 벌어진다 */
 .spdlab{display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--dk-sub); gap:8px;}
 .spdlab b{font-size:12px; color:var(--dk-ink);}
 .spdr{display:flex; gap:6px; align-items:stretch;}
 /* .ctl .col .dbtn 의 큰 패딩을 덮어써야 하므로 선택자를 더 길게 잡는다 */
 .ctl .col .spdr .dbtn{width:32px; padding:0; font-size:16px; font-weight:800; line-height:1; flex:none;}
-.spdbar{flex:1; position:relative; min-height:30px; border:1px solid var(--dk-line); border-radius:9px; background:var(--dk-panel2); overflow:hidden;}
+.spdbar{flex:1; position:relative; min-height:clamp(22px,3.2vh,30px); border:1px solid var(--dk-line); border-radius:9px; background:var(--dk-panel2); overflow:hidden;}
 .spdbar i{position:absolute; left:0; top:0; bottom:0; background:rgba(61,220,151,.22); border-right:1px solid rgba(61,220,151,.5); transition:width .12s;}
 .gotor{display:flex; gap:8px; margin-top:10px;}
-.gotor select{flex:1; background:var(--dk-panel2); color:var(--dk-ink); border:1px solid var(--dk-line); border-radius:9px; padding:8px 10px;}
+.gotor select{flex:1; background:var(--dk-panel2); color:var(--dk-ink); border:1px solid var(--dk-line); border-radius:9px; padding:clamp(6px,1vh,8px) 10px;}
 /* 지도 방향 토글 — 오버레이라 영상 오버레이와 같은 반투명 배경 규칙을 따른다 */
 .mapview{position:absolute; left:10px; bottom:8px; font-size:10px; font-weight:700;
   color:#cfeeff; background:rgba(6,9,14,.62); border:1px solid rgba(255,255,255,.18);
@@ -477,7 +490,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .fleet-nm{display:flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700;}
 .fleet-nm .tag{font-size:9px; font-weight:700; font-style:normal; border-radius:4px; padding:1px 4px;
   border:1px solid var(--dk-line); color:var(--dk-sub);}
-.fleet-nm .tag.ctl{color:var(--dk-green); border-color:rgba(61,220,151,.5);}
+.fleet-nm .tag.ctrl{color:var(--dk-green); border-color:rgba(61,220,151,.5);}
 .fleet-nm .tag.sel{color:#9cc4f5; border-color:#3a5a86;}
 .fleet-st{font-size:11px; color:var(--dk-sub);}
 .fleet-kv{font-size:10.5px; color:var(--dk-sub);}
@@ -501,3 +514,16 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .elog li .logfix + .logdel{margin-left:6px;}
 .elog li .tag + .logfix{margin-left:6px;}
 .elog li .tag.done{color:var(--dk-green); border-color:rgba(61,220,151,.45);}
+
+/* 조작 결과 안내 — 명령이 조용히 버려진 경우(S15P11E101-595). 패널 아래 한 줄. */
+.ctlmsg{margin-top:8px; font-size:11.5px; line-height:1.5; padding:6px 9px; border-radius:8px;}
+.ctlmsg.warn{color:var(--dk-amber); background:rgba(245,166,35,.12); border:1px solid rgba(245,166,35,.4);}
+.ctlmsg.err{color:var(--dk-red); background:rgba(255,86,72,.12); border:1px solid rgba(255,86,72,.45);}
+
+/* 주행 속도 · 카메라 각도 — 가로 2열(S15P11E101-595).
+   세로로 쌓으면 좌열이 길어져 낮은 창에서 카메라 각도가 먼저 화면 밖으로 밀렸다. */
+.gauges{display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:end;}
+.gauges .spdlab{gap:4px;}
+/* 좁아진 칸에서 라벨이 두 줄로 접히지 않게 — 가동범위는 값 옆에 있어 없어도 뜻이 통한다 */
+.gauges .camtilt-range{display:none;}
+.gauges .spdlab span, .gauges .spdlab b{white-space:nowrap;}
