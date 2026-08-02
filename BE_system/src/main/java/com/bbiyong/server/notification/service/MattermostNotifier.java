@@ -2,7 +2,7 @@ package com.bbiyong.server.notification.service;
 
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.notification.domain.NotificationSetting;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;

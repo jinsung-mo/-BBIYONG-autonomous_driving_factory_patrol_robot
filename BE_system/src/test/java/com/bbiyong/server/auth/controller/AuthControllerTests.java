@@ -105,7 +105,7 @@ class AuthControllerTests {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(signupBody("weak@bbiyong.io", "abcdefg", "약한비번")))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("비밀번호에 다음을 포함하세요")));
+				.andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("비밀번호에 다음을 포함하세요")));
 	}
 
 	@Test
