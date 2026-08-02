@@ -62,5 +62,9 @@ def generate_launch_description():
                     "save_map_timeout": 10.0,
                 }
             ],
+            # Successful frontier completion leaves the explorer idle while
+            # this node finishes and validates PGM/YAML output.  Its exit is
+            # therefore the authoritative end of one `bbiyong explore` run.
+            on_exit=Shutdown(reason="exploration map saver finished"),
         ),
     ])

@@ -34,6 +34,8 @@ import json
 import os
 import time
 
+from mapping_orchestrator import MappingOrchestrator
+
 # websockets 는 pip 의존성이다. 순수 매핑 함수(테스트 대상)는 이것 없이도
 # import 되도록 지연 처리한다 — 개발 PC 에서 로직만 테스트할 수 있게.
 try:
@@ -111,7 +113,7 @@ def build_register(robot_id):
 
 
 def build_telemetry(robot_id, nav_live, drive_status, cam, now,
-                    latency_ms=None, estop="RELEASED"):
+                    latency_ms=None, estop="RELEASED", status_override=None):
     """RobotPacket TELEMETRY 를 조립한다. 없는 값은 아예 넣지 않는다.
 
     필드를 null 로 채우기보다 생략한다 — 서버 DTO 는 unknown 무시라서
@@ -139,6 +141,8 @@ def build_telemetry(robot_id, nav_live, drive_status, cam, now,
 
     if latency_ms is not None:
         packet["commLatencyMs"] = int(latency_ms)
+    if status_override:
+        packet["status"] = status_override
     packet["estop"] = estop
     return packet
 
@@ -236,7 +240,10 @@ def translate_command(cmd, now):
         # fail-safe: active=true 만 의미 있다. 정지 + armed=false 로 떨군다.
         return "drive", {"armed": False, "v": 0.0, "w": 0.0, "ts": now}, "ENGAGED"
 
-    if command in ("SET_MODE", "NAVIGATE", "SAVE_MAP"):
+    if command in ("START_MAPPING", "STOP_MAPPING", "SAVE_MAP"):
+        return "mapping", cmd
+
+    if command in ("SET_MODE", "NAVIGATE"):
         return "noop", f"{command} 은 2단계(ROS 오케스트레이션)에서 처리 예정"
 
     return "bad", f"알 수 없는 command: {cmd.get('command')}"
@@ -261,6 +268,18 @@ class Bridge:
         self.fire = FireConfirmer()
         self.estop = "RELEASED"
         self.video_seq = 0
+        self.mapping = None
+        if args.mapping_enabled:
+            self.mapping = MappingOrchestrator(
+                robot_id=self.robot_id,
+                upload_url=args.mapping_upload_url,
+                token=os.environ.get("BBIYONG_ROBOT_UPLOAD_TOKEN"),
+                map_dir=args.mapping_dir,
+                state_file=args.mapping_state_file,
+                launch_command=args.mapping_launch_command,
+                save_command=args.mapping_save_command,
+                upload_timeout=args.mapping_upload_timeout,
+            )
 
     async def sender(self, ws):
         """텔레메트리 + 화재 경보 루프."""
@@ -277,8 +296,16 @@ class Bridge:
             packet = build_telemetry(
                 self.robot_id, nav_live, drive_status, cam, now,
                 latency_ms=latency_ms, estop=self.estop,
+                status_override=(self.mapping.telemetry_status
+                                 if self.mapping else None),
             )
             await ws.send(json.dumps(packet))
+
+            if self.mapping:
+                completion = self.mapping.peek_completion_event()
+                if completion:
+                    await ws.send(json.dumps(completion))
+                    self.mapping.mark_completion_event_sent()
 
             emit, confidence = self.fire.update(cam if fresh(cam, now) else None, now)
             if emit:
@@ -319,6 +346,14 @@ class Bridge:
                           flush=True)
                 except OSError as exc:
                     print(f"[recv] drive.json 쓰기 실패: {exc}", flush=True)
+            elif action == "mapping":
+                if not self.mapping:
+                    print("[recv] mapping command rejected: mapping is disabled",
+                          flush=True)
+                    continue
+                accepted, reason = await self.mapping.handle_command(rest[0])
+                outcome = "accepted" if accepted else "rejected"
+                print(f"[recv] mapping {outcome}: {reason}", flush=True)
             else:
                 print(f"[recv] {action}: {rest[0]}", flush=True)
 
@@ -364,6 +399,44 @@ def parse_args():
     )
     parser.add_argument("--telemetry-hz", type=float, default=2.0)
     parser.add_argument("--video-hz", type=float, default=4.0)
+    parser.add_argument(
+        "--mapping-enabled",
+        action="store_true",
+        default=os.environ.get("ORINCAR_MAPPING_ENABLED", "0") == "1",
+        help="enable START_MAPPING/STOP_MAPPING/SAVE_MAP orchestration",
+    )
+    parser.add_argument(
+        "--mapping-upload-url",
+        default=os.environ.get(
+            "ORINCAR_MAPPING_UPLOAD_URL",
+            "https://i15e101.p.ssafy.io/api/maps/upload",
+        ),
+    )
+    parser.add_argument(
+        "--mapping-dir",
+        default=os.environ.get("ORINCAR_MAPPING_DIR", "~/maps"),
+    )
+    parser.add_argument(
+        "--mapping-state-file",
+        default=os.environ.get(
+            "ORINCAR_MAPPING_STATE_FILE", "~/.local/state/bbiyong/mapping.json"
+        ),
+    )
+    parser.add_argument(
+        "--mapping-launch-command",
+        default=os.environ.get("ORINCAR_MAPPING_LAUNCH_COMMAND"),
+        help="optional command template using {map_output}",
+    )
+    parser.add_argument(
+        "--mapping-save-command",
+        default=os.environ.get("ORINCAR_MAPPING_SAVE_COMMAND"),
+        help="optional command template using {map_output}",
+    )
+    parser.add_argument(
+        "--mapping-upload-timeout",
+        type=float,
+        default=float(os.environ.get("ORINCAR_MAPPING_UPLOAD_TIMEOUT", "20")),
+    )
     return parser.parse_args()
 
 

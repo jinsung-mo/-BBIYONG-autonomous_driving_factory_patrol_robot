@@ -142,9 +142,17 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(estop, "ENGAGED")
 
     def test_stage2_commands_are_noop(self):
-        for command in ("SET_MODE", "NAVIGATE", "SAVE_MAP"):
+        for command in ("SET_MODE", "NAVIGATE"):
             action, reason = translate_command({"command": command}, NOW)
             self.assertEqual(action, "noop", command)
+
+    def test_mapping_commands_are_dispatched(self):
+        for command in ("START_MAPPING", "STOP_MAPPING", "SAVE_MAP"):
+            action, payload = translate_command(
+                {"command": command, "name": "factory_01"}, NOW
+            )
+            self.assertEqual(action, "mapping", command)
+            self.assertEqual(payload["command"], command)
 
     def test_unknown_is_bad(self):
         action, reason = translate_command({"command": "FLY"}, NOW)

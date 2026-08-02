@@ -18,12 +18,24 @@ class ExplorationMapSaver(Node):
         self.declare_parameter("retry_delay_sec", 2.0)
         self.declare_parameter("overwrite_existing", False)
         self._saving = False
+        self._exit_code = None
         qos = QoSProfile(depth=1)
         qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
         qos.reliability = ReliabilityPolicy.RELIABLE
         self._saved_publisher = self.create_publisher(Bool, "~/saved", qos)
         self._saved_publisher.publish(Bool(data=False))
         self.create_subscription(Bool, "/frontier_explorer/completed", self._completed, qos)
+
+    @property
+    def finished(self) -> bool:
+        return self._exit_code is not None
+
+    @property
+    def exit_code(self) -> int:
+        return 1 if self._exit_code is None else self._exit_code
+
+    def _request_exit(self, exit_code: int) -> None:
+        self._exit_code = exit_code
 
     def _completed(self, message: Bool) -> None:
         if not message.data or self._saving:
@@ -39,7 +51,7 @@ class ExplorationMapSaver(Node):
         overwrite = bool(self.get_parameter("overwrite_existing").value)
         if not overwrite and any(path.exists() for path in files):
             self.get_logger().error(f"map output already exists; choose another map_output: {base}")
-            self._saving = False
+            self._request_exit(1)
             return
         command = [
             "ros2", "run", "nav2_map_server", "map_saver_cli", "-f", str(base),
@@ -54,19 +66,29 @@ class ExplorationMapSaver(Node):
                     raise RuntimeError("map files are missing or empty")
                 self._saved_publisher.publish(Bool(data=True))
                 self.get_logger().info(f"exploration map saved: {base}")
+                self._request_exit(0)
                 return
             except Exception as error:
                 self.get_logger().error(f"map save attempt {attempt}/{attempts} failed: {error}")
                 if attempt < attempts:
                     time.sleep(retry_delay)
-        self._saving = False
+        self.get_logger().error("map save failed after all retry attempts")
+        self._request_exit(1)
 
 
-def main(args=None) -> None:
+def main(args=None) -> int:
     rclpy.init(args=args)
     node = ExplorationMapSaver()
     try:
-        rclpy.spin(node)
+        # Map saving runs in a worker thread. Keep lifecycle ownership in this
+        # main thread and stop spinning as soon as that worker reports a result.
+        while rclpy.ok() and not node.finished:
+            rclpy.spin_once(node, timeout_sec=0.1)
+    except KeyboardInterrupt:
+        pass
     finally:
+        exit_code = node.exit_code
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
+    return exit_code
