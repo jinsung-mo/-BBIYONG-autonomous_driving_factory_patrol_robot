@@ -50,10 +50,10 @@ export function loginRequest(email: string, password: string) {
   return post('/api/auth/login', { email, password })
 }
 
-// phone·birth·gender 는 S15P11E101-493 에서 추가된 필수 입력이다.
-// 서버 스키마(명세 1.1)에는 아직 없어 지금은 무시되지만, BE 반영 시 FE 수정 없이 바로 저장되도록
-// 처음부터 실어 보낸다. 값이 없으면 필드를 빼서 보낸다(빈 문자열로 덮어쓰지 않는다).
-// phone 은 하이픈 없는 숫자만 온다(AuthContext 에서 정규화 — BE 협의).
+// phone·birth·gender 는 가입 화면의 내부 필드명이다. System API DTO는 각각
+// phoneNumber·birthDate·gender 를 받으므로, 이 경계에서 한 번만 계약명으로 변환한다.
+// 값이 없으면 필드를 빼서 빈 문자열로 기존 값을 덮어쓰지 않는다.
+// phone 은 하이픈 없는 숫자만 온다(AuthContext 에서 정규화).
 /**
  * @param {{ email: string, password: string, name?: string,
  *           phone?: string, birth?: string, gender?: string }} form
@@ -63,8 +63,8 @@ export function signupRequest({ email, password, name, phone, birth, gender }: {
             phone?: string, birth?: string, gender?: string }) {
   return post('/api/auth/signup', {
     email, password, name,
-    ...(phone ? { phone } : {}),
-    ...(birth ? { birth } : {}),
+    ...(phone ? { phoneNumber: phone } : {}),
+    ...(birth ? { birthDate: birth } : {}),
     ...(gender ? { gender } : {}),
   })
 }
