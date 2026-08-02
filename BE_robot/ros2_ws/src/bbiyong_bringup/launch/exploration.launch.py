@@ -1,6 +1,6 @@
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -47,6 +47,10 @@ def generate_launch_description():
             name="frontier_explorer",
             output="screen",
             parameters=[LaunchConfiguration("explorer_params")],
+            # If the single-instance lock rejects a duplicate explorer (or the
+            # explorer crashes), tear down this launch's duplicate Nav2 stack
+            # instead of leaving competing controllers and muxes alive.
+            on_exit=Shutdown(reason="frontier explorer exited"),
         ),
         Node(
             package="bbiyong_bringup",

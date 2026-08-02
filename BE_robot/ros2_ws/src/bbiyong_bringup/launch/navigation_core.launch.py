@@ -8,6 +8,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     share = get_package_share_directory("bbiyong_bringup")
     params = LaunchConfiguration("nav2_params")
+    committed_path_bt = f"{share}/config/navigate_to_pose_ackermann.xml"
     common = {
         "output": "screen",
         "parameters": [params],
@@ -21,6 +22,7 @@ def generate_launch_description():
         "bt_navigator",
         "waypoint_follower",
         "velocity_smoother",
+        "collision_slowdown_monitor",
         "collision_monitor",
     ]
     return LaunchDescription([
@@ -28,6 +30,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "collision_monitor_params",
             default_value=f"{share}/config/collision_monitor.yaml",
+        ),
+        DeclareLaunchArgument(
+            "collision_slowdown_monitor_params",
+            default_value=f"{share}/config/collision_slowdown_monitor.yaml",
+        ),
+        DeclareLaunchArgument(
+            "safety_scan_filter_params",
+            default_value=f"{share}/config/safety_scan_filter.yaml",
         ),
         DeclareLaunchArgument("log_level", default_value="info"),
         Node(
@@ -46,7 +56,21 @@ def generate_launch_description():
             remappings=[("cmd_vel", "cmd_vel_nav")],
             **common,
         ),
-        Node(package="nav2_bt_navigator", executable="bt_navigator", name="bt_navigator", **common),
+        Node(
+            package="nav2_bt_navigator",
+            executable="bt_navigator",
+            name="bt_navigator",
+            output="screen",
+            parameters=[
+                params,
+                {"default_nav_to_pose_bt_xml": committed_path_bt},
+            ],
+            arguments=[
+                "--ros-args",
+                "--log-level",
+                LaunchConfiguration("log_level"),
+            ],
+        ),
         Node(
             package="nav2_waypoint_follower",
             executable="waypoint_follower",
@@ -59,9 +83,53 @@ def generate_launch_description():
             name="velocity_smoother",
             remappings=[
                 ("cmd_vel", "cmd_vel_nav"),
-                ("cmd_vel_smoothed", "/cmd_vel/autonomy_raw"),
+                ("cmd_vel_smoothed", "/cmd_vel/autonomy_unfloored"),
             ],
             **common,
+        ),
+        Node(
+            package="bbiyong_base",
+            executable="velocity_floor",
+            name="bbiyong_velocity_floor",
+            output="screen",
+            parameters=[{
+                "input_topic": "/cmd_vel/autonomy_slowed",
+                "output_topic": "/cmd_vel/autonomy_raw",
+                "minimum_angular_speed": 0.42,
+                "minimum_input_angular_speed": 0.05,
+                "linear_epsilon": 0.01,
+            }],
+        ),
+        Node(
+            package="laser_filters",
+            executable="scan_to_scan_filter_chain",
+            name="safety_body_filter",
+            output="screen",
+            parameters=[LaunchConfiguration("safety_scan_filter_params")],
+            remappings=[
+                ("scan", "/scan_filtered"),
+                ("scan_filtered", "/scan_safety_body"),
+            ],
+        ),
+        Node(
+            package="laser_filters",
+            executable="scan_to_scan_filter_chain",
+            name="safety_speckle_filter",
+            output="screen",
+            parameters=[LaunchConfiguration("safety_scan_filter_params")],
+            remappings=[
+                ("scan", "/scan_safety_body"),
+                ("scan_filtered", "/scan_safety_confirmed"),
+            ],
+        ),
+        Node(
+            package="nav2_collision_monitor",
+            executable="collision_monitor",
+            name="collision_slowdown_monitor",
+            output="screen",
+            parameters=[
+                LaunchConfiguration("collision_slowdown_monitor_params")
+            ],
         ),
         Node(
             package="nav2_collision_monitor",

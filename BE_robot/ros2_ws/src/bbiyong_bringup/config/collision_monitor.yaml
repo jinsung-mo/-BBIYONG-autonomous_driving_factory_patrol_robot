@@ -12,27 +12,35 @@ collision_monitor:
     base_shift_correction: true
     stop_pub_timeout: 1.0
 
-    polygons: [stop_zone, slowdown_zone]
-    stop_zone:
-      type: polygon
-      points: [0.38, 0.34, 0.38, -0.34, -0.34, -0.34, -0.34, 0.34]
+    polygons: [immediate_stop, directional_approach]
+    immediate_stop:
+      type: circle
+      radius: 0.20
       action_type: stop
-      max_points: 3
+      # A non-self point inside the compact emergency zone always stops the
+      # robot, regardless of commanded direction.
+      max_points: 0
       visualize: true
-      polygon_pub_topic: /collision_monitor/stop_zone
+      polygon_pub_topic: /collision_monitor/immediate_stop
       enabled: true
-    slowdown_zone:
-      type: polygon
-      points: [0.65, 0.48, 0.65, -0.48, -0.48, -0.48, -0.48, 0.48]
-      action_type: slowdown
-      max_points: 3
-      slowdown_ratio: 0.35
+    directional_approach:
+      type: circle
+      radius: 0.30
+      action_type: approach
+      # Humble's approach model projects the circular footprint along the
+      # current linear/angular command. A nearby point outside the commanded
+      # sweep no longer blocks motion, while forward, reverse, and in-place
+      # rotation collisions remain protected.
+      # Project only half a second ahead. The independent 0.30 m immediate
+      # stop remains active for the physical footprint.
+      time_before_collision: 0.5
+      simulation_time_step: 0.05
+      max_points: 0
       visualize: true
-      polygon_pub_topic: /collision_monitor/slowdown_zone
-      enabled: true
-
+      polygon_pub_topic: /collision_monitor/directional_approach
+      enabled: false
     observation_sources: [scan]
     scan:
       type: scan
-      topic: /scan_filtered
+      topic: /scan_safety_body
       enabled: true

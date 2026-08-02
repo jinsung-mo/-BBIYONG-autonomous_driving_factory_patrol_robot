@@ -3,12 +3,31 @@
 set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-WORKSPACE_DIR="${BBIYONG_WS:-$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)}"
+SOURCE_WORKSPACE="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+if [[ -n "${BBIYONG_WS:-}" ]]; then
+  WORKSPACE_DIR="$BBIYONG_WS"
+elif [[ -f "$HOME/bbiyong_ros2_ws/install/setup.bash" ]]; then
+  WORKSPACE_DIR="$HOME/bbiyong_ros2_ws"
+else
+  WORKSPACE_DIR="$SOURCE_WORKSPACE"
+fi
 YDLIDAR_WORKSPACE="${YDLIDAR_WS:-$HOME/ydlidar_ros2_ws}"
 RF2O_WORKSPACE="${RF2O_WS:-$HOME/rf2o_ws}"
 
 die() { echo "bbiyong: $*" >&2; exit 2; }
 require_file() { [[ -f "$1" ]] || die "file not found: $1"; }
+require_topic() {
+  ros2 topic list 2>/dev/null | grep -Fxq "$1" ||
+    die "required topic is unavailable: $1"
+}
+refuse_legacy_cmd_vel_publishers() {
+  if pgrep -f '[e]xplore.py' >/dev/null; then
+    die "legacy explore.py is running; stop it before starting Nav2 exploration"
+  fi
+  if pgrep -f '[t]eleop_node.py' >/dev/null; then
+    die "legacy teleop_node.py bypasses the safety mux; run ~/calib/teleop_down.sh first"
+  fi
+}
 source_workspace() {
   require_file /opt/ros/humble/setup.bash
   require_file "$YDLIDAR_WORKSPACE/install/setup.bash"
@@ -35,9 +54,14 @@ Usage:
   bbiyong localize <map.yaml>
   bbiyong navigate <map.yaml> <vehicle.yaml> <nav2.yaml>
   bbiyong control <vehicle.yaml>
-  bbiyong explore <vehicle.yaml> <nav2.yaml> <map-output-prefix>
+  bbiyong explore <map-output-prefix> [nav2.yaml]
+  bbiyong arm-autonomy
+  bbiyong stop
   bbiyong status
 
+Nav2 exploration overlays the existing ~/calib/stack_up.sh processes. It starts
+DISARMED. In another terminal, run "bbiyong arm-autonomy" only after checking
+the Nav2 launch output. Run "bbiyong stop" for an immediate software e-stop.
 EOF
 }
 
@@ -72,15 +96,41 @@ case "$command" in
     exec ros2 launch bbiyong_bringup control.launch.py vehicle_config:="$1"
     ;;
   explore)
-    [[ $# -eq 3 ]] || die "explore requires vehicle.yaml nav2.yaml map-output-prefix"
-    require_file "$1"; require_file "$2"
-    mkdir -p "$(dirname "$3")"
-    exec ros2 launch bbiyong_bringup exploration.launch.py vehicle_config:="$1" nav2_params:="$2" odom_source:=wheel map_output:="$3"
+    [[ $# -ge 1 && $# -le 2 ]] ||
+      die "explore requires map-output-prefix and optionally nav2.yaml"
+    refuse_legacy_cmd_vel_publishers
+    require_topic /map
+    require_topic /odom
+    require_topic /scan_filtered
+    map_output="$1"
+    mkdir -p "$(dirname "$map_output")"
+    if [[ $# -eq 2 ]]; then
+      require_file "$2"
+      exec ros2 launch bbiyong_bringup exploration.launch.py \
+        map_output:="$map_output" nav2_params:="$2"
+    fi
+    exec ros2 launch bbiyong_bringup exploration.launch.py map_output:="$map_output"
+    ;;
+  arm-autonomy)
+    [[ $# -eq 0 ]] || die "arm-autonomy takes no arguments"
+    refuse_legacy_cmd_vel_publishers
+    require_topic /scan_filtered
+    echo "Arming Nav2 (run this only after 'Managed nodes are active')..."
+    timeout 25 ros2 run bbiyong_base control_command arm ||
+      die "arm failed; keep the explore terminal running and confirm both nodes started"
+    echo "Nav2 autonomy armed. Keep a second terminal ready with: bbiyong stop"
+    ;;
+  stop)
+    [[ $# -eq 0 ]] || die "stop takes no arguments"
+    timeout 8 ros2 run bbiyong_base control_command stop || true
     ;;
   status)
     [[ $# -eq 0 ]] || die "status takes no arguments"
     ros2 node list
     ros2 topic list | grep -E '^/(scan|odom|map|cmd_vel|bbiyong)' || true
+    echo
+    echo "/cmd_vel publishers (exactly one bbiyong_cmd_mux publisher is expected):"
+    ros2 topic info /cmd_vel --verbose || true
     ;;
   *) usage; exit 2 ;;
 esac
