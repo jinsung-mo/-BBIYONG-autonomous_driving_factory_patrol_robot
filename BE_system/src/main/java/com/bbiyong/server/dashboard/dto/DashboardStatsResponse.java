@@ -1,5 +1,6 @@
 package com.bbiyong.server.dashboard.dto;
 
+import com.bbiyong.server.equipment.domain.Equipment;
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.robot.dto.RobotResponse;
 import lombok.Builder;
@@ -23,6 +24,16 @@ public class DashboardStatsResponse {
      * 오늘 이벤트 통계
      */
     private TodayStats today;
+
+    /**
+     * 설비(분전반) 요약 통계
+     */
+    private EquipmentSummary equipment;
+
+    /**
+     * 설비 현재 상태 목록
+     */
+    private List<Equipment> equipmentStatus;
 
     /**
      * 최근 이벤트 (최대 5건)
@@ -90,5 +101,29 @@ public class DashboardStatsResponse {
          * 미해결 이벤트 수
          */
         private long unresolvedEvents;
+    }
+
+    @Data
+    @Builder
+    public static class EquipmentSummary {
+        /**
+         * 전체 설비 수
+         */
+        private int totalEquipments;
+
+        /**
+         * 과열 상태 설비 수 (status = OVER)
+         */
+        private int overheatingEquipments;
+
+        /**
+         * 정상 설비 수 (status = NORMAL)
+         */
+        private int normalEquipments;
+
+        /**
+         * 점검 이력 없는 설비 수 (status = UNKNOWN)
+         */
+        private int unknownEquipments;
     }
 }
