@@ -81,7 +81,11 @@ public class NotificationService {
      */
     public boolean shouldNotify(String userId, String eventLevel) {
         NotificationSetting setting = settingRepository.findByUserId(userId).orElse(null);
-        if (setting == null || !setting.getMattermostEnabled()) {
+        return setting != null && shouldNotify(setting, eventLevel);
+    }
+
+    public boolean shouldNotify(NotificationSetting setting, String eventLevel) {
+        if (!Boolean.TRUE.equals(setting.getMattermostEnabled())) {
             return false;
         }
 

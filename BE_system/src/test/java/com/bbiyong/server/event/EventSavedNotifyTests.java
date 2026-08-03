@@ -3,9 +3,7 @@ package com.bbiyong.server.event;
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.service.EventLogService;
-import com.bbiyong.server.notification.repository.NotificationSettingRepository;
-import com.bbiyong.server.notification.service.MattermostNotifier;
-import com.bbiyong.server.notification.service.NotificationService;
+import com.bbiyong.server.notification.service.NotificationDispatchService;
 import com.bbiyong.server.video.repository.VideoClipRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import com.bbiyong.server.wss.dto.RobotPacket;
@@ -30,15 +28,12 @@ import static org.mockito.Mockito.when;
 class EventSavedNotifyTests {
 
     private final EventLogRepository eventLogRepository = mock(EventLogRepository.class);
-    private final NotificationSettingRepository notificationSettingRepository = mock(NotificationSettingRepository.class);
-    private final NotificationService notificationService = mock(NotificationService.class);
-    private final MattermostNotifier mattermostNotifier = mock(MattermostNotifier.class);
+    private final NotificationDispatchService notificationDispatchService = mock(NotificationDispatchService.class);
     private final VideoClipRepository videoClipRepository = mock(VideoClipRepository.class);
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
 
     private final EventLogService service = new EventLogService(
-            eventLogRepository, notificationSettingRepository, notificationService,
-            mattermostNotifier, videoClipRepository, sessionManager);
+            eventLogRepository, notificationDispatchService, videoClipRepository, sessionManager);
 
     private RobotPacket firePacket(String robotId) {
         RobotPacket p = new RobotPacket();
@@ -56,7 +51,6 @@ class EventSavedNotifyTests {
 
     @Test
     void sendsEventSavedWithGeneratedEventIdOnFire() {
-        when(notificationSettingRepository.findAll()).thenReturn(List.of());
         when(eventLogRepository.save(any(EventLog.class))).thenAnswer(inv -> {
             EventLog e = inv.getArgument(0);
             e.setEventId(1234L); // DB 저장 시 부여되는 PK 를 흉내
@@ -78,7 +72,6 @@ class EventSavedNotifyTests {
 
     @Test
     void doesNotSendWhenRobotIdMissing() {
-        when(notificationSettingRepository.findAll()).thenReturn(List.of());
         when(eventLogRepository.save(any(EventLog.class))).thenAnswer(inv -> {
             EventLog e = inv.getArgument(0);
             e.setEventId(1L);

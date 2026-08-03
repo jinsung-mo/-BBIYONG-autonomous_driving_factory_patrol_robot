@@ -40,4 +40,8 @@ public class EventLog {
 
     @Column(nullable = false)
     private String status; // "UNRESOLVED", "RESOLVED"
+
+    /** 시연 API가 생성한 이벤트인지 구분한다. 실제 경보와 혼동되지 않도록 외부 알림에도 표기한다. */
+    @Column(nullable = false)
+    private boolean simulated = false;
 }

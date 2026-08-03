@@ -7,10 +7,7 @@ import com.bbiyong.server.event.dto.EventLogDetailResponse;
 import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.repository.EventLogSpecification;
-import com.bbiyong.server.notification.domain.NotificationSetting;
-import com.bbiyong.server.notification.repository.NotificationSettingRepository;
-import com.bbiyong.server.notification.service.MattermostNotifier;
-import com.bbiyong.server.notification.service.NotificationService;
+import com.bbiyong.server.notification.service.NotificationDispatchService;
 import com.bbiyong.server.video.dto.VideoResponses;
 import com.bbiyong.server.video.repository.VideoClipRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
@@ -41,23 +38,17 @@ public class EventLogService {
     private static final Set<String> ALLOWED_STATUS = Set.of("UNRESOLVED", "RESOLVED");
 
     private final EventLogRepository eventLogRepository;
-    private final NotificationSettingRepository notificationSettingRepository;
-    private final NotificationService notificationService;
-    private final MattermostNotifier mattermostNotifier;
+    private final NotificationDispatchService notificationDispatchService;
     private final VideoClipRepository videoClipRepository;
     private final RobotWebSocketSessionManager sessionManager;
 
     public EventLogService(
             EventLogRepository eventLogRepository,
-            NotificationSettingRepository notificationSettingRepository,
-            NotificationService notificationService,
-            MattermostNotifier mattermostNotifier,
+            NotificationDispatchService notificationDispatchService,
             VideoClipRepository videoClipRepository,
             RobotWebSocketSessionManager sessionManager) {
         this.eventLogRepository = eventLogRepository;
-        this.notificationSettingRepository = notificationSettingRepository;
-        this.notificationService = notificationService;
-        this.mattermostNotifier = mattermostNotifier;
+        this.notificationDispatchService = notificationDispatchService;
         this.videoClipRepository = videoClipRepository;
         this.sessionManager = sessionManager;
     }
@@ -164,7 +155,7 @@ public class EventLogService {
         if (event.getPacket() == null) {
             return;
         }
-        persist(AlertMessage.fromFire(event.getPacket()));
+        persist(AlertMessage.fromFire(event.getPacket()), null);
     }
 
     @EventListener
@@ -172,14 +163,18 @@ public class EventLogService {
         if (event.getPacket() == null) {
             return;
         }
-        persist(AlertMessage.fromOverheat(event.getPacket()));
+        persist(AlertMessage.fromOverheat(event.getPacket()), null);
     }
 
     /**
      * 실시간 경보(AlertMessage)와 동일한 필드로 이력을 영속화한다.
      * (열화상 thermalImage 는 설계상 미저장)
      */
-    private void persist(AlertMessage alert) {
+    public void persistSimulation(AlertMessage alert, String recipientUserId) {
+        persist(alert, recipientUserId);
+    }
+
+    private void persist(AlertMessage alert, String simulationRecipientUserId) {
         EventLog logEntry = new EventLog();
         logEntry.setType(alert.type());
         logEntry.setLevel(alert.level());
@@ -193,6 +188,7 @@ public class EventLogService {
         logEntry.setY(alert.y());
         logEntry.setTimestamp(Instant.now());
         logEntry.setStatus("UNRESOLVED");
+        logEntry.setSimulated("SIMULATION".equals(alert.source()));
 
         EventLog savedEvent = eventLogRepository.save(logEntry);
         log.info("Persisted {} event log for robot: {}", alert.type(), alert.robotId());
@@ -200,8 +196,7 @@ public class EventLogService {
         // 이벤트 클립 연결을 위해 로봇에 생성된 eventId 를 회신한다(블랙박스 파이프라인). (S15P11E101-588)
         notifyRobotEventSaved(savedEvent);
 
-        // Mattermost 알림 전송 (모든 사용자에게)
-        sendNotificationsToAllUsers(savedEvent);
+        notificationDispatchService.enqueue(savedEvent, simulationRecipientUserId);
     }
 
     /**
@@ -231,22 +226,4 @@ public class EventLogService {
         }
     }
 
-    /**
-     * 모든 사용자의 알림 설정을 확인하여 조건을 만족하는 경우 Mattermost 알림 전송
-     */
-    private void sendNotificationsToAllUsers(EventLog event) {
-        try {
-            List<NotificationSetting> allSettings = notificationSettingRepository.findAll();
-
-            for (NotificationSetting setting : allSettings) {
-                // shouldNotify로 필터링
-                if (notificationService.shouldNotify(setting.getUserId(), event.getLevel())) {
-                    mattermostNotifier.sendEventNotification(setting, event);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Mattermost 알림 전송 중 오류 발생: eventId={}, error={}",
-                    event.getEventId(), e.getMessage(), e);
-        }
-    }
 }
