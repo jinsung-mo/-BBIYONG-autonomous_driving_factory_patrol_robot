@@ -17,7 +17,7 @@ import { TILT_COMMAND } from './cameraTilt.ts'
 import { isFloorplanReady, loadActivePlan, releasePlan } from './floorplan.ts'
 import { authedGet, refreshAccessToken } from './authApi.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
-import { REASON } from '../auth/sessionPolicy.ts'
+import { REASON, STOMP_AUTH_GRACE_MS } from '../auth/sessionPolicy.ts'
 
 /**
  * 컨텍스트가 실제로 공급하는 값. Provider 안에서 만드는 value 객체에서 그대로 끌어온다 —
@@ -268,15 +268,40 @@ export function LiveProvider({ children }: any) {
   // 다만 access 가 1시간짜리가 되면서(S15P11E101-608) 재연결 때 만료된 토큰으로 거부되는 일이
   // 흔해졌다. 먼저 갱신을 시도하고, 살아나면 setToken() 이 새 토큰으로 다시 붙는다.
   // 갱신 수단이 없거나 실패했을 때만 로그아웃한다.
+  //
+  // 갱신은 인증 거부 한 번에 한 번만 시도한다(S15P11E101-627). stompjs 는 2초마다 다시 붙으므로,
+  // 거부가 이어지는 동안 매번 갱신하면 서버가 refresh 를 회전시키는 만큼 토큰이 계속 갈리고
+  // 실서버에는 2초 간격 갱신 요청이 쌓인다(검증에서 11초에 8회를 봤다).
+  // 새 토큰으로도 거부당하면 그때는 갱신으로 풀 수 없는 문제이므로 로그인으로 보낸다.
+  const authRefreshed = useRef(false)
+  const graceTimer = useRef<any>(null)
   useEffect(() => {
+    // 연결이 살아나면 유예를 걷고 다음 사고를 위해 기회를 되돌려 준다
+    if (connected && !authError) {
+      authRefreshed.current = false
+      clearTimeout(graceTimer.current); graceTimer.current = null
+      return undefined
+    }
     if (!authError || !accessToken) return undefined
+
+    // 이미 갱신해 봤다 — 토큰 문제가 아니라 서버 쪽 문제일 수 있다.
+    // 몇 초짜리 딸꾹질에 관제를 로그인으로 보내지 않고 유예 시간만큼 재연결을 기다린다.
+    if (authRefreshed.current) {
+      if (!graceTimer.current) {
+        graceTimer.current = setTimeout(() => { logout(REASON.EXPIRED) }, STOMP_AUTH_GRACE_MS)
+      }
+      return undefined
+    }
+    authRefreshed.current = true
     let alive = true
+    // 갱신 자체가 실패하면 토큰을 살릴 수 없다 — 그때는 곧바로 로그인으로 보낸다.
     refreshAccessToken().then((next) => {
       if (!alive) return
       if (!next) logout(REASON.EXPIRED)
     })
     return () => { alive = false }
-  }, [authError, accessToken, logout])
+  }, [authError, accessToken, connected, logout])
+  useEffect(() => () => clearTimeout(graceTimer.current), [])
 
   const dismissAlert = useCallback((id: any) => {
     setAlerts((prev) => prev.filter((a) => a._id !== id))
@@ -316,7 +341,7 @@ export function LiveProvider({ children }: any) {
     /**
      * 제어 명령 발행. body 는 판별 유니온이라 command 에 맞지 않는 필드를 실으면
      * 빌드에서 걸린다 — SET_MODE 에 linear 를 넣는 류의 실수를 여기서 막는다.
-     * @param {'/app/control/drive' | '/app/control/mode' | '/app/control/operation'} dest
+     * @param {'/app/control/drive' | '/app/control/mode' | '/app/control/operation' | '/app/control/camera'} dest
      * @param {import('./contracts').ControlCommandBody} body
      */
     const send = (dest: any, body: any) => publish(dest, /** @type {any} */ ({ robot_id: ROBOT_ID, ...body }))
@@ -337,13 +362,19 @@ export function LiveProvider({ children }: any) {
       estop: () => send('/app/control/mode', { command: 'ESTOP', active: true }),
       navigate: (x: any, y: any, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
       // 전면 카메라 상하 각도(S15P11E101-521). 절대각(도)으로 보낸다.
-      // 명령 이름은 cameraTilt.js 에 잠정 정의돼 있다 — 로봇 계약이 확정되면 그 파일만 고친다.
-      setCameraTilt: (deg: any) => send('/app/control/operation', { command: TILT_COMMAND, tilt: deg }),
+      //
+      // 목적지는 /app/control/camera 다(S15P11E101-627). 예전에는 operation 으로 보냈는데
+      // 서버의 operation 핸들러는 START_MAPPING/STOP_MAPPING/SAVE_MAP/NAVIGATE 만 받고
+      // 나머지는 drop 한다 — 카메라 각도 명령이 서버에서 통째로 버려지고 있었다.
+      // 서버가 가동범위로 클램프해 CAMERA_TILT 로 중계한다.
+      setCameraTilt: (deg: any) => send('/app/control/camera', { command: TILT_COMMAND, tilt: deg }),
       // 자율 주행하며 2D 맵 생성 시작(S15P11E101-483).
       // BE 는 /app/control/operation 에서 이 명령을 로봇으로 릴레이한다.
       startMapping: () => send('/app/control/operation', { command: 'START_MAPPING' }),
       // 지금 만들어진 맵을 이름 붙여 저장한다(가이드 §5 SAVE_MAP) — 운영 탭에서 쓴다
       saveMap: (name: any) => send('/app/control/operation', { command: 'SAVE_MAP', name }),
+      // 진행 중인 자율탐색 매핑 중단(S15P11E101-627). 로봇이 공장을 도는 중에 멈춰 세우는 명령이다.
+      stopMapping: () => send('/app/control/operation', { command: 'STOP_MAPPING' }),
     }
   }, [])
 

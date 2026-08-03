@@ -18,11 +18,15 @@ const num = (v: any, fallback: any) => {
   return Number.isFinite(n) ? n : fallback
 }
 
-export const TILT_COMMAND = 'SET_CAMERA_TILT'
+// 서버가 로봇으로 중계할 때 쓰는 이름이다(RobotControlStompController.camera).
+// FE 는 /app/control/camera 로 tilt 만 보내면 되고, 서버가 이 command 를 붙여 준다.
+export const TILT_COMMAND = 'CAMERA_TILT'
 
-// 가동 범위(도). 위가 +. 하드웨어가 정해지면 env 또는 이 상수를 고친다.
+// 가동 범위(도). 위가 +.
+// 서버 기본값과 같아야 한다 — bbiyong.camera.tilt-min:-30.0 / tilt-max:45.0.
+// 예전에는 상한이 30 이라, 로봇이 올라갈 수 있는 30~45 구간을 화면이 막고 있었다(S15P11E101-627).
 export const TILT_MIN = num(env.VITE_CAMERA_TILT_MIN, -30)
-export const TILT_MAX = num(env.VITE_CAMERA_TILT_MAX, 30)
+export const TILT_MAX = num(env.VITE_CAMERA_TILT_MAX, 45)
 export const TILT_STEP = Math.max(1, num(env.VITE_CAMERA_TILT_STEP, 5))
 
 export const clampTilt = (deg: any) => Math.min(TILT_MAX, Math.max(TILT_MIN, Math.round(deg)))

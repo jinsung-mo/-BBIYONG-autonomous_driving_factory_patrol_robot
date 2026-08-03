@@ -69,6 +69,15 @@ export default function OpsPage() {
     setRequested(true)
   }
 
+  // 매핑 중단(S15P11E101-627). 로봇이 공장을 돌고 있는 중이라 되돌릴 수 있어야 한다 —
+  // 지금까지는 시작만 있고 멈출 방법이 화면에 없었다.
+  // 여기까지 만든 맵은 로봇에 남으므로, 다시 시작하면 이어서가 아니라 처음부터다.
+  const onStopMapping = () => {
+    control.stopMapping()
+    setRequested(false)
+    setMsg({ kind: 'warn', text: '매핑 중단을 요청했습니다. 로봇이 멈추면 진행 표시가 사라집니다.' })
+  }
+
   // 'SAVE_MAP 발행 → 로봇 업로드 대기 → 활성 맵 지정' 한 흐름.
   // SAVE_MAP 은 STOMP 라 응답이 없으므로 이름으로 목록에서 되찾아 id 를 얻는다.
   const onSave = async () => {
@@ -132,6 +141,16 @@ export default function OpsPage() {
             >
               {phase === 'running' ? '매핑 진행 중…' : '맵 모델링 시작'}
             </button>
+            {/* 돌고 있을 때만 멈출 것이 있다 */}
+            {(phase === 'running' || phase === 'requested') && (
+              <button
+                type="button" id="btnStopMapping" className="dbtn stop"
+                onClick={onStopMapping}
+                disabled={offline}
+              >
+                매핑 중단
+              </button>
+            )}
           </div>
 
           {/* 진행 표시 */}

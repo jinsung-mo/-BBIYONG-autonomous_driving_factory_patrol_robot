@@ -600,6 +600,7 @@ export interface LiveContextValue {
     navigate: (x: number, y: number, yaw?: number) => void
     setCameraTilt: (deg: number) => void
     startMapping: () => void
+    stopMapping: () => void
     saveMap: (name: string) => void
   }
   robotId: string
