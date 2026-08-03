@@ -7,6 +7,7 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { putDriveSpeed, speedProblems } from '../../live/driveSpeed.ts'
 import EquipmentPanel from './EquipmentPanel.tsx'
+import DemoAlertPanel from './DemoAlertPanel.tsx'
 import NotifyPanel from './NotifyPanel.tsx'
 import UsersPanel from './UsersPanel.tsx'
 
@@ -136,6 +137,8 @@ export default function ConfigPage() {
         </div>
 
         <EquipmentPanel />
+
+        <DemoAlertPanel />
 
         <NotifyPanel />
 

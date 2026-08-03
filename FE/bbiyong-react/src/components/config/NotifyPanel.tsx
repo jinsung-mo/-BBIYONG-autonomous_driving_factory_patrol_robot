@@ -3,7 +3,7 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { errMessage } from '../../live/errors.ts'
 import {
-  fetchNotificationSetting, normalizeChannel, saveNotificationSetting,
+  fetchNotificationSetting, saveNotificationSetting,
   SEVERITY_HELP, webhookProblem,
 } from '../../live/notifications.ts'
 
@@ -19,7 +19,6 @@ export default function NotifyPanel() {
 
   const [on, setOn] = useState(false)
   const [url, setUrl] = useState('')
-  const [channel, setChannel] = useState('')
   const [severity, setSeverity] = useState<Level>('WARNING')
 
   const [loaded, setLoaded] = useState(false)
@@ -36,7 +35,6 @@ export default function NotifyPanel() {
       if (!alive.current) return
       setOn(!!s?.mattermostEnabled)
       setUrl(s?.mattermostWebhookUrl || '')
-      setChannel(s?.mattermostChannel || '')
       setSeverity(s?.minSeverity === 'CRITICAL' ? 'CRITICAL' : 'WARNING')
       setLoaded(true)
     } catch (e) {
@@ -56,14 +54,14 @@ export default function NotifyPanel() {
       const saved = await saveNotificationSetting({
         mattermostEnabled: on,
         mattermostWebhookUrl: url.trim(),
-        mattermostChannel: normalizeChannel(channel),
+        // 기존에 남아 있던 채널 값도 저장할 때 비운다. 전송은 웹훅 기본 채널을 사용한다.
+        mattermostChannel: '',
         minSeverity: severity,
       }, accessToken)
       if (!alive.current) return
       // 서버가 정규화해 돌려준 값으로 화면을 맞춘다 — 내가 보낸 값과 다를 수 있다
       if (saved) {
         setUrl(saved.mattermostWebhookUrl || '')
-        setChannel(saved.mattermostChannel || '')
       }
       setMsg({ kind: 'ok', text: on ? '알림 설정을 저장했습니다.' : '알림을 껐습니다.' })
     } catch (e) {
@@ -98,13 +96,6 @@ export default function NotifyPanel() {
               onChange={(e) => setUrl(e.target.value)} />
           </div>
           {problem && <div className="form-msg err">{problem}</div>}
-
-          <div className="form-row">
-            <label htmlFor="ntf-ch">채널</label>
-            <input id="ntf-ch" value={channel} disabled={!isAdmin}
-              placeholder="alerts (비우면 웹훅 기본 채널)"
-              onChange={(e) => setChannel(e.target.value)} />
-          </div>
 
           <div className="form-row">
             <label htmlFor="ntf-sev">알림 기준</label>
