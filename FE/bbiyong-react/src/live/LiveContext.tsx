@@ -15,7 +15,7 @@ import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.ts'
 import { isMappingComplete } from './mapping.ts'
 import { TILT_COMMAND } from './cameraTilt.ts'
 import { isFloorplanReady, loadActivePlan, releasePlan } from './floorplan.ts'
-import { authedGet } from './authApi.ts'
+import { authedGet, refreshAccessToken } from './authApi.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { REASON } from '../auth/sessionPolicy.ts'
 
@@ -264,8 +264,18 @@ export function LiveProvider({ children }: any) {
 
   // STOMP 가 인증을 거부하면 토큰이 죽은 것이다. 지금까지는 문구만 띄우고 화면에 남았다 —
   // 아무 데이터도 오지 않는 관제 화면을 계속 보여주는 것보다 로그인으로 보내는 편이 정직하다(S15P11E101-508).
+  //
+  // 다만 access 가 1시간짜리가 되면서(S15P11E101-608) 재연결 때 만료된 토큰으로 거부되는 일이
+  // 흔해졌다. 먼저 갱신을 시도하고, 살아나면 setToken() 이 새 토큰으로 다시 붙는다.
+  // 갱신 수단이 없거나 실패했을 때만 로그아웃한다.
   useEffect(() => {
-    if (authError && accessToken) logout(REASON.EXPIRED)
+    if (!authError || !accessToken) return undefined
+    let alive = true
+    refreshAccessToken().then((next) => {
+      if (!alive) return
+      if (!next) logout(REASON.EXPIRED)
+    })
+    return () => { alive = false }
   }, [authError, accessToken, logout])
 
   const dismissAlert = useCallback((id: any) => {

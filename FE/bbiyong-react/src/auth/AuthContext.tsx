@@ -4,11 +4,13 @@ import {
   getAuth, setAuth, clearToken,
 } from './authStore.ts'
 import { getDataSource } from '../live/config.ts'
-import { loginRequest, signupRequest, setUnauthorizedHandler } from '../live/authApi.ts'
+import {
+  loginRequest, signupRequest, setUnauthorizedHandler, setAuthBridge, refreshAccessToken,
+} from '../live/authApi.ts'
 import { phoneDigits } from './signupRules.ts'
 import { isAdminRole, ROLE_VIEWER } from './roles.ts'
 import {
-  REASON, WARN_MS, absoluteRemaining, idleRemaining, readActivity, writeActivity,
+  REASON, WARN_MS, refreshMargin, absoluteRemaining, idleRemaining, readActivity, writeActivity,
 } from './sessionPolicy.ts'
 
 // mock 모드: localStorage 목 저장소로 인증 흐름만 재현.
@@ -47,6 +49,8 @@ const rawRole = (role: any) => role || ROLE_VIEWER
 type SessionState = {
   user: import('../live/contracts').PublicUser | null
   accessToken: string | null
+  /** access 재발급용(S15P11E101-613). 서버가 주지 않으면 null 이고, 그때는 갱신하지 않는다. */
+  refreshToken: string | null
   expiresAt: number | null
   reason: import('../live/contracts').LogoutReason | null
 }
@@ -57,21 +61,28 @@ function restoreUser(): SessionState {
   const saved = getAuth()
   const s = getSession()
   const hasSession = !!(saved?.accessToken && saved.user) || !!s
-  if (!hasSession) return { user: null, accessToken: null, expiresAt: null, reason: null }
+  const empty = { user: null, accessToken: null, refreshToken: null, expiresAt: null }
+  if (!hasSession) return { ...empty, reason: null }
 
-  if (absoluteRemaining(saved?.expiresAt) <= 0) {
+  // refresh 토큰이 있으면 access 가 만료됐어도 세션은 살아 있다 — 곧 갱신 타이머가 살려낸다.
+  // 갱신 수단이 없을 때만 예전처럼 만료로 끊는다(S15P11E101-613).
+  if (!saved?.refreshToken && absoluteRemaining(saved?.expiresAt) <= 0) {
     clearSession()
-    return { user: null, accessToken: null, expiresAt: null, reason: REASON.EXPIRED }
+    return { ...empty, reason: REASON.EXPIRED }
   }
   if (idleRemaining() <= 0) {
     clearSession()
-    return { user: null, accessToken: null, expiresAt: null, reason: REASON.IDLE }
+    return { ...empty, reason: REASON.IDLE }
   }
 
   if (saved?.accessToken && saved.user) {
-    return { user: saved.user, accessToken: saved.accessToken, expiresAt: saved.expiresAt ?? null, reason: null }
+    return {
+      user: saved.user, accessToken: saved.accessToken,
+      refreshToken: saved.refreshToken ?? null,
+      expiresAt: saved.expiresAt ?? null, reason: null,
+    }
   }
-  return { user: publicUser(findUser(s.email)), accessToken: null, expiresAt: null, reason: null }
+  return { ...empty, user: publicUser(findUser(s.email)), reason: null }
 }
 
 // 로그인 응답의 expiresIn(초) → 절대 만료 시각. 값이 없으면 절대 만료를 걸지 않는다
@@ -81,7 +92,7 @@ const expiryFrom = (res: any) => (Number(res?.expiresIn) > 0 ? Date.now() + Numb
 
 export function AuthProvider({ children }: { children?: import('react').ReactNode }) {
   const [state, setState] = useState<SessionState>(restoreUser)
-  const { user, accessToken, expiresAt } = state
+  const { user, accessToken, refreshToken, expiresAt } = state
   // restoreUser() 는 만료를 발견하면 세션을 지운다 — 두 번 부르면 두 번째는 사유를 잃는다.
   // 최초 판정 결과를 그대로 쓴다.
   const [logoutReason, setLogoutReason] = useState(state.reason ?? null)
@@ -94,16 +105,17 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
       if (!u || u.password !== password) throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
       setSession(u.email)
       setLogoutReason(null); setWarning(false)
-      setState({ user: publicUser(u), accessToken: null, expiresAt: null, reason: null })
+      setState({ user: publicUser(u), accessToken: null, refreshToken: null, expiresAt: null, reason: null })
       return
     }
     const res = await loginRequest(email.trim().toLowerCase(), password)
     if (!res?.accessToken) throw new Error('로그인 응답에 accessToken이 없습니다.')
     const nu = { email: email.trim().toLowerCase(), name: email.split('@')[0], role: rawRole(res.role) }
     const exp = expiryFrom(res)
-    setAuth({ accessToken: res.accessToken, user: nu, expiresAt: exp })
+    const rt = res.refreshToken ?? null
+    setAuth({ accessToken: res.accessToken, user: nu, refreshToken: rt, expiresAt: exp, expiresIn: res.expiresIn ?? null })
     setLogoutReason(null); setWarning(false)
-    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp, reason: null })
+    setState({ user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp, reason: null })
   }
 
   // 휴대전화번호·생년월일·성별은 S15P11E101-493 에서 추가됐다.
@@ -120,7 +132,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
       const u = addUser({ email, password, name, phone: tel, birth, gender })
       setSession(u.email)
       setLogoutReason(null); setWarning(false)
-      setState({ user: publicUser(u), accessToken: null, expiresAt: null, reason: null })
+      setState({ user: publicUser(u), accessToken: null, refreshToken: null, expiresAt: null, reason: null })
       return
     }
     await signupRequest({ email: email.trim().toLowerCase(), password, name, phone: tel, birth, gender })
@@ -128,9 +140,10 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     const res = await loginRequest(email.trim().toLowerCase(), password)
     const nu = { email: email.trim().toLowerCase(), name, role: rawRole(res?.role) }
     const exp = expiryFrom(res)
-    setAuth({ accessToken: res.accessToken, user: nu, expiresAt: exp })
+    const rt = res?.refreshToken ?? null
+    setAuth({ accessToken: res.accessToken, user: nu, refreshToken: rt, expiresAt: exp, expiresIn: res?.expiresIn ?? null })
     setLogoutReason(null); setWarning(false)
-    setState({ user: nu, accessToken: res.accessToken, expiresAt: exp, reason: null })
+    setState({ user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp, reason: null })
   }
 
   // reason 이 MANUAL 이면 안내를 띄우지 않는다 — 스스로 누른 로그아웃이다.
@@ -138,7 +151,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     clearSession(); clearToken()
     setWarning(false)
     setLogoutReason(reason === REASON.MANUAL ? null : reason)
-    setState({ user: null, accessToken: null, expiresAt: null, reason: null })
+    setState({ user: null, accessToken: null, refreshToken: null, expiresAt: null, reason: null })
   }, [])
 
   // 활동 기록. 사용자 조작과 이벤트 로그 신규 기록이 모두 여기로 들어온다.
@@ -159,8 +172,34 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     setWarning(false)
   }, [])
 
+  // 갱신 결과를 저장소·상태에 함께 반영한다(S15P11E101-613).
+  // 서버가 refreshToken 을 회전시켜 새로 주므로 그것도 갈아 끼운다 — 예전 것을 남겨 두면
+  // 다음 갱신이 죽은 토큰으로 나간다.
+  const applyRefreshed = useCallback((res: any) => {
+    const exp = expiryFrom(res)
+    const rt = res?.refreshToken ?? getAuth()?.refreshToken ?? null
+    setState((prev) => {
+      if (!prev.user) return prev            // 그 사이 로그아웃했으면 되살리지 않는다
+      setAuth({ accessToken: res.accessToken, user: prev.user, refreshToken: rt, expiresAt: exp, expiresIn: res?.expiresIn ?? null })
+      // 서버가 role 을 함께 준다 — 승격·강등이 다음 갱신에 반영된다(S15P11E101-614 대비)
+      const user2 = res?.role ? { ...prev.user, role: rawRole(res.role) } : prev.user
+      return { ...prev, user: user2, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp }
+    })
+  }, [])
+
+  // authApi 는 리액트 상태를 모른다 — refresh 토큰을 읽고 결과를 돌려줄 다리를 놓는다.
+  // 저장소에서 읽는다: 다른 탭이 갱신했을 수도 있고, 이 콜백이 낡은 상태를 붙들면 안 된다.
+  useEffect(() => {
+    setAuthBridge({
+      getRefreshToken: () => getAuth()?.refreshToken ?? null,
+      onRefreshed: applyRefreshed,
+    })
+    return () => setAuthBridge(null)
+  }, [applyRefreshed])
+
   // 만료 감시. setTimeout 대신 짧은 주기로 확인한다 — 절전/최대 절전으로 타이머가
   // 밀려도 깨어난 직후 실제 경과 시간으로 판정된다.
+  const refreshing = useRef(false)
   useEffect(() => {
     if (!user) return undefined
     const tick = () => {
@@ -168,7 +207,16 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
       if (accessToken && !getAuth()?.accessToken) { logout(REASON.EXPIRED); return }
       if (!accessToken && !getSession()) { logout(REASON.MANUAL); return }
 
-      if (absoluteRemaining(expiresAt) <= 0) { logout(REASON.EXPIRED); return }
+      // access 만료가 가까우면 미리 갱신한다. 갱신 수단이 없으면(구버전 서버) 예전처럼 끊는다.
+      const untilExpiry = absoluteRemaining(expiresAt)
+      if (refreshToken && untilExpiry <= refreshMargin(getAuth()?.expiresIn) && !refreshing.current) {
+        refreshing.current = true
+        refreshAccessToken()
+          .then((next) => { if (!next) logout(REASON.EXPIRED) })
+          .finally(() => { refreshing.current = false })
+        return
+      }
+      if (!refreshToken && untilExpiry <= 0) { logout(REASON.EXPIRED); return }
       const left = idleRemaining()
       if (left <= 0) { logout(REASON.IDLE); return }
       setWarning(left <= WARN_MS)
@@ -179,12 +227,14 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     const onStorage = () => tick()
     window.addEventListener('storage', onStorage)
     return () => { clearInterval(id); window.removeEventListener('storage', onStorage) }
-  }, [user, accessToken, expiresAt, logout])
+  }, [user, accessToken, refreshToken, expiresAt, logout])
 
   // 활동 기록이 없는 채로 로그인 상태가 복원되면(배포 직후 등) 지금을 기준으로 시작한다
   useEffect(() => { if (user && !readActivity()) writeActivity() }, [user])
 
-  // REST 401/403 — 토큰이 죽었다는 뜻이다. 화면에 남겨두지 않고 로그인으로 보낸다.
+  // REST 401 — 여기까지 왔다는 것은 authApi 가 이미 갱신을 시도했고 실패했다는 뜻이다
+  // (성공했으면 재시도가 통과해 이 핸들러가 불리지 않는다). 그러니 곧바로 로그인으로 보낸다.
+  // 403 은 권한 문제라 authApi 가 이 핸들러를 부르지 않는다(S15P11E101-613).
   useEffect(() => {
     setUnauthorizedHandler(() => { if (accessToken) logout(REASON.EXPIRED) })
     return () => setUnauthorizedHandler(null)

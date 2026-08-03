@@ -266,7 +266,21 @@ export type ControlCommand = ControlCommandBody & { robot_id: string }
 export interface LoginResponse {
   tokenType: string
   accessToken: string
-  /** 초 */
+  /**
+   * access 재발급용. S15P11E101-608 에서 추가됐다 —
+   * 이 필드가 없는 응답(구버전 서버)도 그대로 동작해야 한다.
+   */
+  refreshToken?: string
+  /** 초. 608 이전 24시간(86400) → 이후 1시간(3600). 값을 그대로 쓴다. */
+  expiresIn: number
+  role: Role | string
+}
+
+/** POST /api/auth/refresh 응답 — 로그인 응답과 같은 형태다(refreshToken 도 새로 온다). */
+export interface RefreshResponse {
+  tokenType: string
+  accessToken: string
+  refreshToken?: string
   expiresIn: number
   role: Role | string
 }
@@ -498,8 +512,18 @@ export interface StoredSession {
 export interface StoredAuth {
   accessToken: string
   user: PublicUser
+  /**
+   * access 재발급용(S15P11E101-613). 서버가 주지 않으면 없다 —
+   * 그때는 예전처럼 절대 만료에 걸려 로그아웃된다.
+   */
+  refreshToken?: string | null
   /** 로그인 응답 expiresIn 으로 계산한 절대 만료 시각. 없으면 절대 만료를 걸지 않는다. */
   expiresAt?: number | null
+  /**
+   * 그때 받은 access 수명(초). 선제 갱신 여유를 수명에 맞춰 줄이는 데 쓴다 —
+   * 수명이 여유보다 짧으면 발급 즉시 갱신 조건이 서서 갱신이 반복된다(S15P11E101-613).
+   */
+  expiresIn?: number | null
 }
 
 /** 순찰 지점(설정 탭). 좌표는 미터·map 프레임이다. */
