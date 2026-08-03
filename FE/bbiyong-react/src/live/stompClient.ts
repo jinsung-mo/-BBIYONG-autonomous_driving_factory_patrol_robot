@@ -30,6 +30,11 @@ function emitState() {
 
 // 서버 payload는 전부 JSON — 파싱 실패 시 원문을 넘겨 핸들러가 판단하게 둔다.
 function parse(message: any) {
+  const contentType = String(message?.headers?.['content-type'] || '').toLowerCase()
+  if (contentType.startsWith('application/octet-stream')) {
+    // Copy because stompjs may reuse the backing frame after this callback returns.
+    return new Uint8Array(message.binaryBody)
+  }
   try { return JSON.parse(message.body) } catch { return message.body }
 }
 

@@ -161,6 +161,12 @@ export function LiveProvider({ children }: any) {
     })
 
     const offVideo = subscribe(`/topic/video/${ROBOT_ID}`, (frame: any) => {
+      if (frame instanceof Uint8Array) {
+        videoRef.current.FRONT = frame
+        setVideoSeen((prev) => (prev.FRONT ? prev : { ...prev, FRONT: true }))
+        videoListeners.current.forEach((fn) => fn('FRONT', frame))
+        return
+      }
       const ch = frame?.channel
       if (ch !== 'FRONT' && ch !== 'THERMAL') return
       videoRef.current[ch] = frame

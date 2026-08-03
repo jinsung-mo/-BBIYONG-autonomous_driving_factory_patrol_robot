@@ -9,6 +9,7 @@ import { useSim } from '../SimContext.ts'
 import { useLive } from './LiveContext.tsx'
 import { worldToCell } from './config.ts'
 import { DRIVE_VECTORS } from './mappers.ts'
+import { H264VideoDecoder } from './h264Video.ts'
 
 // 로봇 teleop_node 의 deadman 타임아웃은 0.4초다 — 마지막 명령의 ts 가 그보다 오래되면
 // 안전 정지한다(연속 스트림을 기대하는 설계). 그래서 키를 누르고 있는 동안 같은 방향을
@@ -39,7 +40,15 @@ export default function LiveSimBridge(): null {
   useEffect(() => {
     if (!enabled) { actions.clearExternalFrames(); return undefined }
 
+    const decoder = new H264VideoDecoder((canvas) => {
+      actions.setExternalFrame('FRONT', canvas, undefined)
+    })
+
     const off = onVideoFrame((channel: any, frame: any) => {
+      if (frame instanceof Uint8Array) {
+        decoder.push(frame)
+        return
+      }
       if (!frame?.data) return
       let img = imgs.current[channel]
       if (!img) {
@@ -52,7 +61,7 @@ export default function LiveSimBridge(): null {
       img.src = `data:image/${fmt};base64,${frame.data}`
     })
 
-    return () => { off(); actions.clearExternalFrames() }
+    return () => { off(); decoder.close(); actions.clearExternalFrames() }
   }, [enabled, onVideoFrame, actions])
 
   // ---- 키보드 WASD → DRIVE 발행 ----
