@@ -57,7 +57,10 @@ public class NotificationService {
             setting.setMattermostEnabled(request.getMattermostEnabled());
         }
         if (request.getMattermostWebhookUrl() != null) {
-            setting.setMattermostWebhookUrl(validateWebhookUrl(request.getMattermostWebhookUrl()));
+            String requestedUrl = request.getMattermostWebhookUrl().trim();
+            if (!requestedUrl.endsWith("/****")) {
+                setting.setMattermostWebhookUrl(validateWebhookUrl(requestedUrl));
+            }
         }
         if (request.getMattermostChannel() != null) {
             setting.setMattermostChannel(request.getMattermostChannel().trim());

@@ -35,4 +35,19 @@ class NotificationServiceTests {
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode().value())
                 .isEqualTo(400);
     }
+
+    @Test
+    void keepsExistingWebhookWhenClientSendsMaskedValueBack() {
+        NotificationSetting setting = new NotificationSetting();
+        setting.setMattermostWebhookUrl("https://meeting.ssafy.com/hooks/original-token");
+        setting.setMattermostEnabled(true);
+        NotificationSettingRequest request = new NotificationSettingRequest();
+        request.setMattermostWebhookUrl("https://meeting.ssafy.com/hooks/****");
+        when(repository.findByUserId("admin@bbiyong.io")).thenReturn(Optional.of(setting));
+        when(repository.save(setting)).thenReturn(setting);
+
+        service.updateSettings("admin@bbiyong.io", request);
+
+        assertThat(setting.getMattermostWebhookUrl()).isEqualTo("https://meeting.ssafy.com/hooks/original-token");
+    }
 }
