@@ -32,12 +32,14 @@ import argparse
 import asyncio
 import json
 import os
+from pathlib import Path
 import sys
 import time
 
 from mapping_orchestrator import MappingOrchestrator
 from navigation_orchestrator import NavigationOrchestrator
 from event_clip_pipeline import EventClipPipeline, MultipartVideoUploader
+from h264_protocol import decode_packet
 
 # websockets 는 pip 의존성이다. 순수 매핑 함수(테스트 대상)는 이것 없이도
 # import 되도록 지연 처리한다 — 개발 PC 에서 로직만 테스트할 수 있게.
@@ -55,6 +57,9 @@ CAM_FILE = os.environ.get("ORINCAR_CAM_FILE", "/tmp/orincar_cam.json")
 DRIVE_FILE = os.environ.get("ORINCAR_DRIVE_FILE", "/tmp/orincar_drive.json")
 DRIVE_STATUS_FILE = os.environ.get(
     "ORINCAR_DRIVE_STATUS", "/tmp/orincar_drive_status.json"
+)
+H264_FRAME_FILE = os.environ.get(
+    "ORINCAR_H264_FRAME_FILE", "/dev/shm/orincar_h264.bin"
 )
 
 # 신선도 판정 — 이보다 오래된 파일은 "지금 값이 아님" 으로 보고 해당 필드를 비운다.
@@ -276,6 +281,11 @@ class Bridge:
         self.robot_id = args.robot_id
         self.telemetry_period = 1.0 / args.telemetry_hz
         self.video_period = 1.0 / args.video_hz
+        self.video_transport = getattr(args, "video_transport", "jpeg")
+        self.h264_period = 1.0 / getattr(args, "h264_video_hz", 15.0)
+        self.h264_frame_file = str(
+            getattr(args, "h264_frame_file", H264_FRAME_FILE)
+        )
         self.fire = FireConfirmer()
         self.estop = "RELEASED"
         self.video_seq = 0
@@ -434,15 +444,57 @@ class Bridge:
 
     async def video_sender(self, ws):
         """FRONT 영상 루프. 텔레메트리와 주기를 분리해 대역폭을 따로 조절한다."""
+        last_stamp = None
         while True:
             now = time.time()
             cam = read_json(CAM_FILE)
-            if fresh(cam, now):
+            if fresh(cam, now) and cam.get("t") != last_stamp:
+                last_stamp = cam.get("t")
                 self.video_seq += 1
                 frame = build_video(self.robot_id, cam, self.video_seq)
                 if frame:
                     await ws.send(json.dumps(frame))
             await asyncio.sleep(self.video_period)
+
+    async def h264_video_sender(self, ws):
+        """Forward each validated H.264 access unit once as a binary WS frame."""
+        last_identity = None
+        active_stream = None
+        keyframe_seen = False
+        fallback_cam_stamp = None
+        last_error_log = 0.0
+        while True:
+            try:
+                payload = Path(self.h264_frame_file).read_bytes()
+                packet = decode_packet(payload)
+                if packet.robot_id != self.robot_id:
+                    raise ValueError("H.264 packet robot_id does not match bridge")
+                if abs(time.time() * 1000 - packet.timestamp_ms) > 2_000:
+                    raise ValueError("H.264 packet is stale")
+                identity = (packet.stream_id, packet.sequence)
+                if packet.stream_id != active_stream:
+                    active_stream = packet.stream_id
+                    keyframe_seen = False
+                    last_identity = None
+                if identity != last_identity:
+                    last_identity = identity
+                    if packet.keyframe:
+                        keyframe_seen = True
+                    if keyframe_seen:
+                        await ws.send(payload)
+            except (OSError, ValueError) as exc:
+                cam = read_json(CAM_FILE)
+                now = time.time()
+                if fresh(cam, now) and cam.get("t") != fallback_cam_stamp:
+                    fallback_cam_stamp = cam.get("t")
+                    self.video_seq += 1
+                    frame = build_video(self.robot_id, cam, self.video_seq)
+                    if frame:
+                        await ws.send(json.dumps(frame))
+                if now - last_error_log >= 10.0:
+                    last_error_log = now
+                    print(f"[video:h264] waiting for valid frame: {exc}", flush=True)
+            await asyncio.sleep(self.h264_period)
 
     async def receiver(self, ws):
         """서버 → 로봇 제어 명령 수신."""
@@ -544,9 +596,12 @@ class Bridge:
             await ws.send(json.dumps(build_register(self.robot_id)))
             print(f"[conn] 접속·REGISTER 완료 → {self.url} (robot_id={self.robot_id})",
                   flush=True)
-            await asyncio.gather(
-                self.sender(ws), self.video_sender(ws), self.receiver(ws)
-            )
+            tasks = [self.sender(ws), self.receiver(ws)]
+            if self.video_transport == "h264":
+                tasks.append(self.h264_video_sender(ws))
+            elif self.video_transport == "jpeg":
+                tasks.append(self.video_sender(ws))
+            await asyncio.gather(*tasks)
 
     async def _connection_loop(self):
         """끊기면 백오프 후 재접속. 로봇은 계속 켜져 있고 서버가 재기동될 수 있다."""
@@ -591,6 +646,21 @@ def parse_args(argv=None):
     )
     parser.add_argument("--telemetry-hz", type=float, default=2.0)
     parser.add_argument("--video-hz", type=float, default=4.0)
+    parser.add_argument(
+        "--video-transport",
+        choices=("jpeg", "h264", "off"),
+        default=os.environ.get("ORINCAR_VIDEO_TRANSPORT", "jpeg"),
+        help="jpeg compatibility mode, H.264 binary frames, or no live video",
+    )
+    parser.add_argument(
+        "--h264-video-hz",
+        type=float,
+        default=float(os.environ.get("ORINCAR_H264_VIDEO_HZ", "15")),
+    )
+    parser.add_argument(
+        "--h264-frame-file",
+        default=os.environ.get("ORINCAR_H264_FRAME_FILE", H264_FRAME_FILE),
+    )
     parser.add_argument(
         "--event-clip-enabled",
         action=argparse.BooleanOptionalAction,

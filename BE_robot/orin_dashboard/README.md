@@ -68,6 +68,35 @@ with `--no-blackbox`. Event clips are limited to 200 MiB and authenticated with
 `BBIYONG_ROBOT_UPLOAD_TOKEN`. `ORINCAR_EVENT_CLIP_ENABLED=0` disables only the
 upload consumer; pending jobs remain on disk for a later restart.
 
+### Optional H.264 binary mode
+
+The committed JPEG/base64 preview and MP4V recorder remain the default fallback.
+Set both processes explicitly to enable the coordinated H.264 mode:
+
+```bash
+ORINCAR_CAMERA_MODE=h264 \
+ORINCAR_H264_BITRATE_KBPS=1200 \
+python3 camera_node.py
+
+ORINCAR_VIDEO_TRANSPORT=h264 \
+python3 cloud_bridge.py
+```
+
+H.264 mode captures 640×480 at 15 FPS, runs fire inference on sampled frames,
+and disables the legacy COCO and floor-analysis callbacks. Because Orin Nano
+has no NVENC, GStreamer `x264enc speed-preset=veryfast tune=zerolatency` performs
+the encode. One encoded stream feeds both 10-second MP4 fragments and the latest
+Annex-B access unit in `/dev/shm/orincar_h264.bin`; it is not encoded twice.
+If the H.264 frame is absent, stale, or malformed, the bridge sends unique JPEG
+preview frames while telemetry and control continue normally.
+
+Each binary WebSocket message is `40-byte header + UTF-8 robot_id + Annex-B AU`.
+The network-order header is: magic `BBV1`, version, flags, header length,
+stream ID, sequence, timestamp milliseconds, payload length, width, height,
+FPS, and robot-ID length. Bit 0 marks an IDR/keyframe and bit 1 marks codec
+configuration. Receivers must reject unknown versions/flags, mismatched lengths,
+payloads above 2 MiB, and delta frames before the first keyframe of a stream.
+
 Mapping stays disabled unless `--mapping-enabled` is passed (or
 `ORINCAR_MAPPING_ENABLED=1` is set). The bridge also requires
 `BBIYONG_ROBOT_UPLOAD_TOKEN` in its process environment; never put that token in

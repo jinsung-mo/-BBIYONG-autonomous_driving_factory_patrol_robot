@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
+import time
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -18,6 +19,7 @@ from cloud_bridge import (
     select_mission_status,
     translate_command,
 )
+from h264_protocol import H264Packet, encode_packet
 
 NOW = 1000.0
 
@@ -98,6 +100,64 @@ class VideoTest(unittest.TestCase):
     def test_none_without_jpeg(self):
         self.assertIsNone(build_video("r1", {}, 1))
         self.assertIsNone(build_video("r1", None, 1))
+
+
+class BinaryVideoTest(unittest.IsolatedAsyncioTestCase):
+    class Ws:
+        def __init__(self):
+            self.sent = []
+
+        async def send(self, payload):
+            self.sent.append(payload)
+            raise RuntimeError("stop after first send")
+
+    def packet(self, keyframe=True):
+        return encode_packet(H264Packet(
+            robot_id="orinka_01",
+            stream_id=5,
+            sequence=1,
+            timestamp_ms=int(time.time() * 1000),
+            width=640,
+            height=480,
+            fps=15,
+            keyframe=keyframe,
+            codec_config=keyframe,
+            payload=b"\x00\x00\x00\x01\x65",
+        ))
+
+    def bridge(self, root):
+        values = dict(
+            server_url="ws://unused", robot_id="orinka_01",
+            telemetry_hz=2.0, video_hz=4.0, h264_video_hz=15.0,
+            video_transport="h264", h264_frame_file=root / "frame.bin",
+            event_clip_enabled=False, mapping_enabled=False,
+            navigation_enabled=False, manual_drive_file=root / "drive.json",
+            patrol_route_file=root / "route.json",
+            navigation_state_file=root / "navigation.json",
+            control_state_file=root / "control.json", scouting_state_file=None,
+            patrol_command=None, navigate_command=None, navigation_stop_timeout=1.0,
+        )
+        return Bridge(SimpleNamespace(**values))
+
+    async def test_binary_sender_forwards_valid_keyframe_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = self.packet(keyframe=True)
+            (root / "frame.bin").write_bytes(payload)
+            ws = self.Ws()
+            with self.assertRaisesRegex(RuntimeError, "stop after first"):
+                await self.bridge(root).h264_video_sender(ws)
+            self.assertEqual(ws.sent, [payload])
+
+    async def test_binary_sender_waits_for_keyframe_after_reconnect(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "frame.bin").write_bytes(self.packet(keyframe=False))
+            ws = self.Ws()
+            with patch("cloud_bridge.asyncio.sleep", AsyncMock(side_effect=RuntimeError("stop"))):
+                with self.assertRaisesRegex(RuntimeError, "stop"):
+                    await self.bridge(root).h264_video_sender(ws)
+            self.assertEqual(ws.sent, [])
 
 
 class FireConfirmerTest(unittest.TestCase):
