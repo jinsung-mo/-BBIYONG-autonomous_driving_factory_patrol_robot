@@ -1,16 +1,18 @@
-// 순찰 지점(waypoint) API — S15P11E101-514.
-// BE 계약: WaypointController (S15P11E101-509).
+// 순찰 지점(waypoint) API — S15P11E101-514 · 629.
+// BE 계약: PatrolRouteController (S15P11E101-520).
 //
-//   POST   /api/waypoints?robotId=       { x, y, yaw?, name?, seq? }  → 201 Item
-//   GET    /api/waypoints?robotId=                                    → Item[] (순서대로)
-//   PUT    /api/waypoints?robotId=       WaypointRequest[]            → Item[]  (일괄 교체)
-//   DELETE /api/waypoints/{id}                                        → 204
+//   GET    /api/patrol-route?robotId=                → { robotId, count, waypoints }
+//   PUT    /api/patrol-route?robotId=  { waypoints } → 같은 형태 (일괄 교체)
+//   POST   /api/patrol-route/points?robotId=  { x, y, yaw?, name?, seq? } → 201 Item
+//   DELETE /api/patrol-route/points/{id}             → 204
 //   POST   /api/patrol-route/apply?robotId=                           → { status, delivered, count }
 //   POST   /api/patrol-route/start?robotId=                           → PatrolStartResult
 //
-// 목록·편집은 /api/waypoints, 하달·시작은 /api/patrol-route 를 쓴다(S15P11E101-625).
-// 두 컨트롤러가 같은 서비스를 부르지만 /start 는 patrol-route 에만 있고,
-// patrol-route 의 목록 응답은 { robotId, count, waypoints } 로 감싸여 있어 형태가 다르다.
+// 목록·편집·하달·시작을 모두 /api/patrol-route 로 모았다(S15P11E101-629).
+// 예전에는 CRUD 만 /api/waypoints 였는데, 한 화면이 두 접두사를 쓰면 계약을 좇기 어렵다.
+// 두 컨트롤러가 같은 서비스를 부르므로 동작은 같고, 목록 응답 형태만 감싸여 있다.
+//
+// x/y 는 미터·map 프레임, yaw 는 radians 다 — 화면에서 도(degree)로 바꾸지 않는다.
 //
 // x/y 는 미터·map 프레임이다. 픽셀→미터 변환은 지도 쪽(navMap.canvasToWorld)이 담당하고
 // 여기서는 이미 변환된 값만 다룬다.
@@ -27,7 +29,10 @@ const q = (robotId: string = ROBOT_ID) => (robotId ? `?robotId=${encodeURICompon
  * @returns {Promise<import('./contracts').Waypoint[]>}
  */
 export function listWaypoints(accessToken: string | null | undefined, robotId?: string) {
-  return authedGet(`/api/waypoints${q(robotId)}`, accessToken).then((r) => (Array.isArray(r) ? r : (r?.content || [])))
+  // 응답이 { robotId, count, waypoints } 로 감싸여 온다. 예전 형태(배열·content)도 함께 받아
+  // 서버 버전이 섞여 있어도 같은 호출부를 쓴다.
+  return authedGet(`/api/patrol-route${q(robotId)}`, accessToken)
+    .then((r) => (Array.isArray(r) ? r : (r?.waypoints || r?.content || [])))
 }
 
 /**
@@ -41,7 +46,7 @@ export function addWaypoint(
   accessToken: string | null | undefined,
   robotId?: string,
 ) {
-  return authedSend(`/api/waypoints${q(robotId)}`, accessToken, {
+  return authedSend(`/api/patrol-route/points${q(robotId)}`, accessToken, {
     method: 'POST',
     body: { x, y, ...(yaw != null ? { yaw } : {}), ...(name ? { name } : {}), ...(seq != null ? { seq } : {}) },
   })
@@ -65,8 +70,9 @@ export function replaceWaypoints(
     ...(w.name ? { name: w.name } : {}),
     seq: i + 1,
   }))
-  return authedSend(`/api/waypoints${q(robotId)}`, accessToken, { method: 'PUT', body })
-    .then((r) => (Array.isArray(r) ? r : []))
+  // PUT 본문은 배열이 아니라 { waypoints } 로 감싼다(RouteRequest).
+  return authedSend(`/api/patrol-route${q(robotId)}`, accessToken, { method: 'PUT', body: { waypoints: body } })
+    .then((r) => (Array.isArray(r) ? r : (r?.waypoints || [])))
 }
 
 /**
@@ -76,7 +82,7 @@ export function replaceWaypoints(
  */
 export function deleteWaypoint(id: string, accessToken: string | null | undefined) {
   // 204 No Content — 본문이 없다. authedSend 는 JSON 파싱 실패를 null 로 흡수한다.
-  return authedSend(`/api/waypoints/${encodeURIComponent(id)}`, accessToken, { method: 'DELETE' })
+  return authedSend(`/api/patrol-route/points/${encodeURIComponent(id)}`, accessToken, { method: 'DELETE' })
 }
 
 // 저장된 경로를 로봇에 하달(SET_PATROL_ROUTE).

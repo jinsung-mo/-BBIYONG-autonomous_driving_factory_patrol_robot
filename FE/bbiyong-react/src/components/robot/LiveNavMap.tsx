@@ -83,13 +83,16 @@ export default function LiveNavMap({ route = null, onPick = null }: {
     const pick = pickRef.current
     const nav = lastRef.current
     const cv = cvRef.current
-    if (!pick || !nav?.map || !cv) return
+    // 배경이 도면이든 점유격자든, 화면에 그려진 것이 있으면 찍을 수 있다(S15P11E101-629).
+    // 예전에는 nav.map(SLAM)만 봐서 도면만 있는 상태에서는 클릭이 통째로 막혔다.
+    const bg = backgroundOf(nav, showPlanRef.current)
+    if (!pick || !bg || !cv) return
     const r = cv.getBoundingClientRect()
     // 캔버스 내부 해상도와 표시 크기가 다를 수 있다(ResizeObserver 사이 시점) — 비율로 환산한다
     const px = (e.clientX - r.left) * (cv.width / r.width)
     const py = (e.clientY - r.top) * (cv.height / r.height)
     const { x, y } = canvasToWorld(viewRef.current, nav, headingUpRef.current, px, py)
-    if (!insideMap(nav.map, x, y)) { pick(null); return }
+    if (!insideMap(bg, x, y)) { pick(null); return }
     pick({ x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) })
   }
 
