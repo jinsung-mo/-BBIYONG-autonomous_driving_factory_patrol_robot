@@ -5,10 +5,12 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from mapping_orchestrator import (
     MappingOrchestrator,
     MappingState,
+    check_navigation_runtime,
     encode_multipart,
     parse_map_yaml,
     rewrite_map_yaml_image,
@@ -36,6 +38,51 @@ def wait_for_state(orchestrator, state, timeout=3.0):
 
 
 class ArtifactTest(unittest.TestCase):
+    @patch("mapping_orchestrator.subprocess.run")
+    def test_navigation_runtime_requires_actions_and_mux(self, run):
+        run.side_effect = [
+            type("Result", (), {
+                "returncode": 0,
+                "stdout": "/navigate_to_pose\n/follow_waypoints\n",
+                "stderr": "",
+            })(),
+            type("Result", (), {
+                "returncode": 0,
+                "stdout": (
+                    "/bbiyong_cmd_mux\n"
+                    "/bbiyong_control_state_bridge\n"
+                    "/bbiyong_manual_drive_bridge\n"
+                ),
+                "stderr": "",
+            })(),
+        ]
+        self.assertEqual(
+            check_navigation_runtime(),
+            (True, "navigation runtime ready"),
+        )
+
+    @patch("mapping_orchestrator.subprocess.run")
+    def test_navigation_runtime_reports_missing_endpoint(self, run):
+        run.side_effect = [
+            type("Result", (), {
+                "returncode": 0,
+                "stdout": "/navigate_to_pose\n",
+                "stderr": "",
+            })(),
+            type("Result", (), {
+                "returncode": 0,
+                "stdout": (
+                    "/bbiyong_cmd_mux\n"
+                    "/bbiyong_control_state_bridge\n"
+                    "/bbiyong_manual_drive_bridge\n"
+                ),
+                "stderr": "",
+            })(),
+        ]
+        ready, reason = check_navigation_runtime()
+        self.assertFalse(ready)
+        self.assertIn("/follow_waypoints", reason)
+
     def test_yaml_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "map.yaml"
@@ -97,6 +144,7 @@ class OrchestratorTest(unittest.IsolatedAsyncioTestCase):
             launch_command=launch,
             save_command=save or command("save"),
             uploader=uploader or self.uploader,
+            runtime_checker=lambda: (True, "test runtime ready"),
         )
 
     async def test_natural_completion_uploads_before_event(self):
@@ -131,6 +179,8 @@ class OrchestratorTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_stop_terminates_owned_exploration_only(self):
         orchestrator = self.make(launch=command("sleep"))
+        stops = []
+        orchestrator.motion_stop = stops.append
         await orchestrator.start("one")
         process = orchestrator._process
         accepted, _ = await orchestrator.stop()
@@ -138,6 +188,7 @@ class OrchestratorTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(process.returncode)
         self.assertEqual(orchestrator.state, MappingState.IDLE)
         self.assertIsNone(orchestrator.peek_completion_event())
+        self.assertTrue(any("stop requested" in reason for reason in stops))
 
     async def test_upload_failure_never_creates_event(self):
         def fail(*args):
@@ -168,6 +219,17 @@ class OrchestratorTest(unittest.IsolatedAsyncioTestCase):
         accepted, reason = await orchestrator.start("one")
         self.assertFalse(accepted)
         self.assertIn("token", reason)
+        self.assertIsNone(orchestrator._process)
+
+    async def test_missing_navigation_runtime_rejects_before_launch(self):
+        orchestrator = self.make(launch=command("sleep"))
+        orchestrator.runtime_checker = lambda: (
+            False,
+            "navigation runtime is not ready; missing /navigate_to_pose",
+        )
+        accepted, reason = await orchestrator.start("one")
+        self.assertFalse(accepted)
+        self.assertIn("navigation runtime is not ready", reason)
         self.assertIsNone(orchestrator._process)
 
 

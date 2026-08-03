@@ -16,6 +16,8 @@ class OperatorShutdownWiringTest(unittest.TestCase):
             "ackermann_adapter_node.py",
             "differential_adapter_node.py",
             "velocity_floor_node.py",
+            "manual_drive_bridge.py",
+            "control_state_bridge.py",
         ):
             source = (package / node_name).read_text()
             with self.subTest(node_name=node_name):
@@ -26,6 +28,8 @@ class OperatorShutdownWiringTest(unittest.TestCase):
             "ackermann_adapter_node.py",
             "differential_adapter_node.py",
             "velocity_floor_node.py",
+            "manual_drive_bridge.py",
+            "control_state_bridge.py",
         ):
             source = (package / node_name).read_text()
             with self.subTest(node_name=f"{node_name}-interrupt"):
@@ -38,6 +42,17 @@ class OperatorShutdownWiringTest(unittest.TestCase):
         self.assertIn("set +u", script)
         self.assertIn("source /opt/ros/humble/setup.bash", script)
         self.assertIn("set -u", script)
+
+    def test_exploration_requires_the_persistent_runtime(self) -> None:
+        root = Path(__file__).parents[3]
+        script = (root / "scripts" / "bbiyong").read_text()
+        self.assertIn("bbiyong mapping-runtime [nav2.yaml]", script)
+        self.assertIn("navigation_runtime.launch.py", script)
+        self.assertIn("require_action /navigate_to_pose", script)
+        self.assertIn("require_action /follow_waypoints", script)
+        self.assertIn("require_node /bbiyong_cmd_mux", script)
+        self.assertIn("require_node /bbiyong_control_state_bridge", script)
+        self.assertIn("require_node /bbiyong_manual_drive_bridge", script)
 
 
 if __name__ == "__main__":

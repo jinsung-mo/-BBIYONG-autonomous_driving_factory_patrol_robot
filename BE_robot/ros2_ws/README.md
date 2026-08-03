@@ -213,11 +213,31 @@ ros2 topic pub --once /bbiyong/estop std_msgs/msg/Bool "{data: true}"
 실차 wheel odom, 측정 차량 설정, 생성 Nav2 설정, 실제 motor adapter가 모두 준비된 뒤 실행한다.
 
 ```bash
-ros2 launch bbiyong_bringup exploration.launch.py \
-  vehicle_config:=/home/e101/bbiyong_ros2_ws/config/vehicle.yaml \
-  nav2_params:=/home/e101/bbiyong_ros2_ws/generated/nav2.yaml \
-  odom_source:=wheel \
-  map_output:=/home/e101/maps/auto_factory
+bbiyong mapping-runtime /home/e101/bbiyong_ros2_ws/generated/nav2.yaml
+```
+
+This persistent runtime owns Nav2, Collision Monitor, exactly one command mux,
+the control-state authority, and the guarded manual-drive bridge. Do not run the
+legacy `tools/teleop_node.py` beside it because that node bypasses the mux by
+publishing directly to `/cmd_vel`.
+
+Manual cloud commands are file-backed and enter only `/cmd_vel/manual`. The
+bridge applies finite-value checks, speed limits, acceleration ramps, a command
+deadman, and a directional LiDAR stop before the mux. The runtime starts in
+`disabled` with e-stop engaged; arming is always explicit.
+
+With the runtime healthy, `bbiyong patrol <route.json>` starts the short-lived
+`FollowWaypoints` mission. It never publishes velocity directly. It waits for
+`autonomy`, pauses/cancels on manual, disabled, e-stop, or SIGTERM, retains the
+last unfinished waypoint for resume, reports missed indexes, and optionally
+loops. A validated route-file replacement is activated at the next patrol
+cycle so a file update alone does not interrupt motion.
+
+Keep that terminal running. In another terminal, start the short-lived mission:
+
+```bash
+bbiyong explore /home/e101/maps/auto_factory
+bbiyong arm-autonomy
 ```
 
 동작 순서:

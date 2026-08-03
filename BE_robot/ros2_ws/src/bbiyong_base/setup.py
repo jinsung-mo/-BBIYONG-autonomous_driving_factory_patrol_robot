@@ -20,6 +20,8 @@ setup(
         "console_scripts": [
             "cmd_mux = bbiyong_base.cmd_mux_node:main",
             "control_command = bbiyong_base.control_command:main",
+            "control_state_bridge = bbiyong_base.control_state_bridge:main",
+            "manual_drive_bridge = bbiyong_base.manual_drive_bridge:main",
             "ackermann_adapter = bbiyong_base.ackermann_adapter_node:main",
             "differential_adapter = bbiyong_base.differential_adapter_node:main",
             "velocity_floor = bbiyong_base.velocity_floor_node:main",

@@ -1,6 +1,12 @@
+import json
+from pathlib import Path
+from types import SimpleNamespace
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from cloud_bridge import (
+    Bridge,
     FireConfirmer,
     build_fire,
     build_register,
@@ -141,10 +147,11 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(payload, {"armed": False, "v": 0.0, "w": 0.0, "ts": NOW})
         self.assertEqual(estop, "ENGAGED")
 
-    def test_stage2_commands_are_noop(self):
-        for command in ("SET_MODE", "NAVIGATE"):
-            action, reason = translate_command({"command": command}, NOW)
-            self.assertEqual(action, "noop", command)
+    def test_navigation_commands_are_dispatched(self):
+        for command in ("SET_PATROL_ROUTE", "SET_MODE", "NAVIGATE"):
+            action, payload = translate_command({"command": command}, NOW)
+            self.assertEqual(action, "navigation", command)
+            self.assertEqual(payload["command"], command)
 
     def test_mapping_commands_are_dispatched(self):
         for command in ("START_MAPPING", "STOP_MAPPING", "SAVE_MAP"):
@@ -163,6 +170,42 @@ class CommandTest(unittest.TestCase):
             build_register("orinka_01"),
             {"source": "robot", "type": "REGISTER", "robot_id": "orinka_01"},
         )
+
+
+class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
+    async def test_backend_estop_always_latches_persistent_control(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            args = SimpleNamespace(
+                server_url="ws://unused",
+                robot_id="orinka_01",
+                telemetry_hz=2.0,
+                video_hz=4.0,
+                mapping_enabled=False,
+                navigation_enabled=False,
+                patrol_route_file=root / "route.json",
+                navigation_state_file=root / "navigation.json",
+                control_state_file=root / "control.json",
+                patrol_command=None,
+                navigate_command=None,
+                navigation_stop_timeout=1.0,
+            )
+            bridge = Bridge(args)
+
+            class Incoming:
+                def __aiter__(self):
+                    async def messages():
+                        yield json.dumps({"command": "ESTOP", "active": True})
+                    return messages()
+
+            drive_file = root / "drive.json"
+            with patch("cloud_bridge.DRIVE_FILE", str(drive_file)):
+                await bridge.receiver(Incoming())
+
+            self.assertFalse(json.loads(drive_file.read_text())["armed"])
+            control = json.loads((root / "control.json").read_text())
+            self.assertEqual(control["mode"], "disabled")
+            self.assertTrue(control["estop"])
 
 
 if __name__ == "__main__":

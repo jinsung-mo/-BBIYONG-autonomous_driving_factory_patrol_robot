@@ -20,6 +20,14 @@ require_topic() {
   ros2 topic list 2>/dev/null | grep -Fxq "$1" ||
     die "required topic is unavailable: $1"
 }
+require_action() {
+  ros2 action list 2>/dev/null | grep -Fxq "$1" ||
+    die "required action is unavailable: $1 (start 'bbiyong mapping-runtime' first)"
+}
+require_node() {
+  ros2 node list 2>/dev/null | grep -Fxq "$1" ||
+    die "required node is unavailable: $1 (start 'bbiyong mapping-runtime' first)"
+}
 refuse_legacy_cmd_vel_publishers() {
   if pgrep -f '[e]xplore.py' >/dev/null; then
     die "legacy explore.py is running; stop it before starting Nav2 exploration"
@@ -50,18 +58,21 @@ usage() {
   cat <<'EOF'
 Usage:
   bbiyong mapping
+  bbiyong mapping-runtime [nav2.yaml]
   bbiyong save-map <output-prefix>
   bbiyong localize <map.yaml>
   bbiyong navigate <map.yaml> <vehicle.yaml> <nav2.yaml>
   bbiyong control <vehicle.yaml>
   bbiyong explore <map-output-prefix> [nav2.yaml]
+  bbiyong patrol <route.json>
   bbiyong arm-autonomy
   bbiyong stop
   bbiyong status
 
-Nav2 exploration overlays the existing ~/calib/stack_up.sh processes. It starts
-DISARMED. In another terminal, run "bbiyong arm-autonomy" only after checking
-the Nav2 launch output. Run "bbiyong stop" for an immediate software e-stop.
+Start "bbiyong mapping-runtime" once after ~/calib/stack_up.sh. Repeated
+"bbiyong explore" commands then launch only the frontier mission and map saver.
+The runtime starts DISARMED. Run "bbiyong arm-autonomy" only after starting an
+exploration mission. Run "bbiyong stop" for an immediate software e-stop.
 EOF
 }
 
@@ -74,6 +85,18 @@ case "$command" in
   mapping)
     [[ $# -eq 0 ]] || die "mapping takes no arguments"
     exec ros2 launch bbiyong_bringup mapping.launch.py odom_source:=rf2o allow_unmeasured_lidar:=true
+    ;;
+  mapping-runtime)
+    [[ $# -le 1 ]] || die "mapping-runtime takes an optional nav2.yaml"
+    refuse_legacy_cmd_vel_publishers
+    require_topic /map
+    require_topic /odom
+    require_topic /scan_filtered
+    if [[ $# -eq 1 ]]; then
+      require_file "$1"
+      exec ros2 launch bbiyong_bringup navigation_runtime.launch.py nav2_params:="$1"
+    fi
+    exec ros2 launch bbiyong_bringup navigation_runtime.launch.py
     ;;
   save-map)
     [[ $# -eq 1 ]] || die "save-map requires an output prefix"
@@ -97,24 +120,40 @@ case "$command" in
     ;;
   explore)
     [[ $# -ge 1 && $# -le 2 ]] ||
-      die "explore requires map-output-prefix and optionally nav2.yaml"
+      die "explore requires map-output-prefix and accepts one deprecated nav2.yaml argument"
     refuse_legacy_cmd_vel_publishers
     require_topic /map
     require_topic /odom
     require_topic /scan_filtered
+    require_action /navigate_to_pose
+    require_action /follow_waypoints
+    require_node /bbiyong_cmd_mux
+    require_node /bbiyong_control_state_bridge
+    require_node /bbiyong_manual_drive_bridge
     map_output="$1"
     mkdir -p "$(dirname "$map_output")"
     if [[ $# -eq 2 ]]; then
       require_file "$2"
-      exec ros2 launch bbiyong_bringup exploration.launch.py \
-        map_output:="$map_output" nav2_params:="$2"
+      echo "bbiyong: nav2.yaml is owned by mapping-runtime and ignored by the mission" >&2
     fi
     exec ros2 launch bbiyong_bringup exploration.launch.py map_output:="$map_output"
+    ;;
+  patrol)
+    [[ $# -eq 1 ]] || die "patrol requires a route JSON file"
+    refuse_legacy_cmd_vel_publishers
+    require_file "$1"
+    require_action /follow_waypoints
+    require_node /bbiyong_cmd_mux
+    require_node /bbiyong_control_state_bridge
+    exec ros2 run bbiyong_bringup patrol_route --ros-args -p route_file:="$1"
     ;;
   arm-autonomy)
     [[ $# -eq 0 ]] || die "arm-autonomy takes no arguments"
     refuse_legacy_cmd_vel_publishers
     require_topic /scan_filtered
+    require_action /navigate_to_pose
+    require_node /bbiyong_cmd_mux
+    require_node /bbiyong_control_state_bridge
     echo "Arming Nav2 (run this only after 'Managed nodes are active')..."
     timeout 25 ros2 run bbiyong_base control_command arm ||
       die "arm failed; keep the explore terminal running and confirm both nodes started"

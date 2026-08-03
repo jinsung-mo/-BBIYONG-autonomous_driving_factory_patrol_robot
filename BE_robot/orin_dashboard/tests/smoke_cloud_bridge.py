@@ -63,6 +63,14 @@ async def main():
         robot_id = "orinka_test"
         telemetry_hz = 20.0
         video_hz = 20.0
+        mapping_enabled = False
+        navigation_enabled = False
+        patrol_route_file = os.path.join(TMP, "patrol_route.json")
+        navigation_state_file = os.path.join(TMP, "navigation_state.json")
+        control_state_file = os.path.join(TMP, "control_state.json")
+        patrol_command = None
+        navigate_command = None
+        navigation_stop_timeout = 1.0
 
     bridge = cloud_bridge.Bridge(Args())
     task = asyncio.create_task(bridge.run())

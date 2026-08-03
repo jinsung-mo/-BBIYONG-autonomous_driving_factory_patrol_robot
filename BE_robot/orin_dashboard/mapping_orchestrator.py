@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import time
 from enum import Enum
 from urllib import request
@@ -170,6 +171,48 @@ def upload_map(url, token, pgm_path, fields, timeout=20.0):
     return status
 
 
+def check_navigation_runtime(timeout=5.0):
+    """Verify that the independently owned Nav2/safety runtime is usable."""
+    try:
+        actions = subprocess.run(
+            ["ros2", "action", "list"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        nodes = subprocess.run(
+            ["ros2", "node", "list"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"navigation runtime check failed: {exc}"
+
+    if actions.returncode != 0:
+        detail = actions.stderr.strip() or f"ros2 action list exited {actions.returncode}"
+        return False, f"navigation runtime check failed: {detail}"
+    if nodes.returncode != 0:
+        detail = nodes.stderr.strip() or f"ros2 node list exited {nodes.returncode}"
+        return False, f"navigation runtime check failed: {detail}"
+
+    action_names = set(actions.stdout.splitlines())
+    node_names = set(nodes.stdout.splitlines())
+    missing = sorted(
+        ({"/navigate_to_pose", "/follow_waypoints"} - action_names)
+        | ({
+            "/bbiyong_cmd_mux",
+            "/bbiyong_control_state_bridge",
+            "/bbiyong_manual_drive_bridge",
+        } - node_names)
+    )
+    if missing:
+        return False, "navigation runtime is not ready; missing " + ", ".join(missing)
+    return True, "navigation runtime ready"
+
+
 class MappingOrchestrator:
     """Serialize mapping, saving, upload, and completion-event production."""
 
@@ -178,7 +221,8 @@ class MappingOrchestrator:
 
     def __init__(self, robot_id, upload_url, token, map_dir, state_file,
                  launch_command=None, save_command=None, upload_timeout=20.0,
-                 uploader=upload_map):
+                 uploader=upload_map, runtime_checker=check_navigation_runtime,
+                 motion_stop=None):
         self.robot_id = robot_id
         self.upload_url = upload_url
         self.token = token
@@ -188,6 +232,8 @@ class MappingOrchestrator:
         self.save_command = save_command
         self.upload_timeout = upload_timeout
         self.uploader = uploader
+        self.runtime_checker = runtime_checker
+        self.motion_stop = motion_stop
         self.state = MappingState.IDLE
         self.error = None
         self._operation = None
@@ -268,6 +314,9 @@ class MappingOrchestrator:
                 return False, "mapping upload token is not configured"
             if self._another_explorer_is_running():
                 return False, "another frontier_explorer is already running"
+            ready, reason = await asyncio.to_thread(self.runtime_checker)
+            if not ready:
+                return False, reason
             name = safe_map_name(name or time.strftime("map_%Y%m%d_%H%M%S"))
             operation_id = uuid.uuid4().hex[:12]
             work_base = self.map_dir / f".{name}.{operation_id}"
@@ -321,6 +370,7 @@ class MappingOrchestrator:
 
     async def _monitor_exploration(self):
         return_code = await self._process.wait()
+        self._stop_motion("exploration process exited")
         if self._stopping or self._expected_process_exit:
             return
         if return_code != 0:
@@ -340,6 +390,7 @@ class MappingOrchestrator:
                 return False, f"cannot save while {self.state.value}"
             if not self.token:
                 return False, "mapping upload token is not configured"
+            self._stop_motion("mapping save started")
             selected = safe_map_name(name or (self._operation or {}).get("name")
                                      or time.strftime("map_%Y%m%d_%H%M%S"))
             if not self._operation or selected != self._operation.get("name"):
@@ -414,6 +465,7 @@ class MappingOrchestrator:
             if self.state not in self.ACTIVE:
                 return False, f"mapping is not active ({self.state.value})"
             self._stopping = True
+            self._stop_motion("mapping stop requested")
             self._expected_process_exit = True
             self._transition(MappingState.STOPPING)
             for process in (self._save_process, self._process):
@@ -429,3 +481,11 @@ class MappingOrchestrator:
                 await asyncio.gather(self._pipeline_task, return_exceptions=True)
             self._transition(MappingState.IDLE)
             return True, "mapping stopped"
+
+    def _stop_motion(self, reason):
+        if self.motion_stop is None:
+            return
+        try:
+            self.motion_stop(reason)
+        except Exception as exc:
+            print(f"[mapping] failed to request motion stop: {exc}", flush=True)

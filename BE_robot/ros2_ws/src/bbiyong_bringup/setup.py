@@ -27,6 +27,7 @@ setup(
             "generate_nav2_config = bbiyong_bringup.generate_nav2_config:main",
             "save_map = bbiyong_bringup.save_map:main",
             "exploration_map_saver = bbiyong_bringup.exploration_map_saver:main",
+            "patrol_route = bbiyong_bringup.patrol_route:main",
         ]
     },
 )

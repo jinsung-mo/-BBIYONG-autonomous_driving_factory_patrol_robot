@@ -35,6 +35,7 @@ import os
 import time
 
 from mapping_orchestrator import MappingOrchestrator
+from navigation_orchestrator import NavigationOrchestrator
 
 # websockets 는 pip 의존성이다. 순수 매핑 함수(테스트 대상)는 이것 없이도
 # import 되도록 지연 처리한다 — 개발 PC 에서 로직만 테스트할 수 있게.
@@ -243,8 +244,8 @@ def translate_command(cmd, now):
     if command in ("START_MAPPING", "STOP_MAPPING", "SAVE_MAP"):
         return "mapping", cmd
 
-    if command in ("SET_MODE", "NAVIGATE"):
-        return "noop", f"{command} 은 2단계(ROS 오케스트레이션)에서 처리 예정"
+    if command in ("SET_PATROL_ROUTE", "SET_MODE", "NAVIGATE"):
+        return "navigation", cmd
 
     return "bad", f"알 수 없는 command: {cmd.get('command')}"
 
@@ -269,7 +270,8 @@ class Bridge:
         self.estop = "RELEASED"
         self.video_seq = 0
         self.mapping = None
-        if args.mapping_enabled:
+        self.navigation_enabled = getattr(args, "navigation_enabled", False)
+        if getattr(args, "mapping_enabled", False):
             self.mapping = MappingOrchestrator(
                 robot_id=self.robot_id,
                 upload_url=args.mapping_upload_url,
@@ -280,6 +282,32 @@ class Bridge:
                 save_command=args.mapping_save_command,
                 upload_timeout=args.mapping_upload_timeout,
             )
+        # Always create the control authority so backend ESTOP and bridge
+        # restart remain fail-safe even while patrol/navigation is feature-gated.
+        self.navigation = NavigationOrchestrator(
+            robot_id=self.robot_id,
+            route_file=getattr(
+                args,
+                "patrol_route_file",
+                "~/.local/state/bbiyong/patrol_route.json",
+            ),
+            state_file=getattr(
+                args,
+                "navigation_state_file",
+                "~/.local/state/bbiyong/navigation.json",
+            ),
+            control_file=getattr(
+                args, "control_state_file", "/tmp/bbiyong_control.json"
+            ),
+            patrol_command=getattr(args, "patrol_command", None),
+            navigate_command=getattr(args, "navigate_command", None),
+            process_stop_timeout=getattr(args, "navigation_stop_timeout", 3.0),
+        )
+        if self.mapping:
+            self.mapping.motion_stop = self.navigation.request_emergency_stop
+
+    def _mapping_active(self):
+        return self.mapping is not None and self.mapping.state in self.mapping.ACTIVE
 
     async def sender(self, ws):
         """텔레메트리 + 화재 경보 루프."""
@@ -293,11 +321,17 @@ class Bridge:
             if ws.latency:  # websockets 가 ping/pong 으로 관측한 왕복(초)
                 latency_ms = ws.latency * 1000.0
 
+            mapping_status = self.mapping.telemetry_status if self.mapping else None
+            navigation_status = (
+                self.navigation.telemetry_status if self.navigation else None
+            )
+            effective_estop = (
+                "ENGAGED" if self.navigation.estop_engaged else "RELEASED"
+            )
             packet = build_telemetry(
                 self.robot_id, nav_live, drive_status, cam, now,
-                latency_ms=latency_ms, estop=self.estop,
-                status_override=(self.mapping.telemetry_status
-                                 if self.mapping else None),
+                latency_ms=latency_ms, estop=effective_estop,
+                status_override=mapping_status or navigation_status,
             )
             await ws.send(json.dumps(packet))
 
@@ -346,14 +380,48 @@ class Bridge:
                           flush=True)
                 except OSError as exc:
                     print(f"[recv] drive.json 쓰기 실패: {exc}", flush=True)
+                if (cmd.get("command") or "").upper() == "ESTOP":
+                    _, reason = await self.navigation.emergency_stop()
+                    print(f"[recv] navigation ESTOP: {reason}", flush=True)
+                    if self._mapping_active():
+                        _, reason = await self.mapping.stop()
+                        print(f"[recv] mapping ESTOP: {reason}", flush=True)
             elif action == "mapping":
                 if not self.mapping:
                     print("[recv] mapping command rejected: mapping is disabled",
                           flush=True)
                     continue
+                mapping_command = (rest[0].get("command") or "").upper()
+                if mapping_command == "START_MAPPING":
+                    await self.navigation.prepare_for_mapping()
                 accepted, reason = await self.mapping.handle_command(rest[0])
+                if accepted and mapping_command == "START_MAPPING":
+                    self.navigation.enable_mapping_autonomy()
                 outcome = "accepted" if accepted else "rejected"
                 print(f"[recv] mapping {outcome}: {reason}", flush=True)
+            elif action == "navigation":
+                if not self.navigation_enabled:
+                    print(
+                        "[recv] navigation command rejected: navigation is disabled",
+                        flush=True,
+                    )
+                    continue
+                navigation_command = (rest[0].get("command") or "").upper()
+                mode = str(rest[0].get("mode") or "").lower()
+                if self._mapping_active() and navigation_command != "SET_PATROL_ROUTE":
+                    if navigation_command == "SET_MODE" and mode in {
+                        "manual", "disabled"
+                    }:
+                        await self.mapping.stop()
+                    else:
+                        print(
+                            "[recv] navigation rejected: mapping is active",
+                            flush=True,
+                        )
+                        continue
+                accepted, reason = await self.navigation.handle_command(rest[0])
+                outcome = "accepted" if accepted else "rejected"
+                print(f"[recv] navigation {outcome}: {reason}", flush=True)
             else:
                 print(f"[recv] {action}: {rest[0]}", flush=True)
 
@@ -436,6 +504,47 @@ def parse_args():
         "--mapping-upload-timeout",
         type=float,
         default=float(os.environ.get("ORINCAR_MAPPING_UPLOAD_TIMEOUT", "20")),
+    )
+    parser.add_argument(
+        "--navigation-enabled",
+        action="store_true",
+        default=os.environ.get("ORINCAR_NAVIGATION_ENABLED", "0") == "1",
+        help="enable SET_PATROL_ROUTE/SET_MODE/NAVIGATE orchestration",
+    )
+    parser.add_argument(
+        "--patrol-route-file",
+        default=os.environ.get(
+            "ORINCAR_PATROL_ROUTE_FILE",
+            "~/.local/state/bbiyong/patrol_route.json",
+        ),
+    )
+    parser.add_argument(
+        "--navigation-state-file",
+        default=os.environ.get(
+            "ORINCAR_NAVIGATION_STATE_FILE",
+            "~/.local/state/bbiyong/navigation.json",
+        ),
+    )
+    parser.add_argument(
+        "--control-state-file",
+        default=os.environ.get(
+            "ORINCAR_CONTROL_STATE_FILE", "/tmp/bbiyong_control.json"
+        ),
+    )
+    parser.add_argument(
+        "--patrol-command",
+        default=os.environ.get("ORINCAR_PATROL_COMMAND"),
+        help="optional command template using {route_file}",
+    )
+    parser.add_argument(
+        "--navigate-command",
+        default=os.environ.get("ORINCAR_NAVIGATE_COMMAND"),
+        help="optional command template using {x}, {y}, and {yaw}",
+    )
+    parser.add_argument(
+        "--navigation-stop-timeout",
+        type=float,
+        default=float(os.environ.get("ORINCAR_NAVIGATION_STOP_TIMEOUT", "3")),
     )
     return parser.parse_args()
 

@@ -7,9 +7,11 @@ starts the LiDAR, scan filter, `/odom`, `odom -> base_link`, the ESP32
 `/cmd_vel` bridge, and `slam_toolbox`.
 
 After `stack_up.sh` reports healthy `/scan_filtered`, `/odom`, `/map`, and TF,
-start `bbiyong_bringup/launch/exploration.launch.py`. The exploration launch
-starts Nav2, Collision Monitor, `cmd_mux`, the frontier explorer, and the map
-saver only. It must not start `mapping.launch.py` or a second hardware adapter.
+start `bbiyong mapping-runtime` once. It owns Nav2, Collision Monitor, the
+single `cmd_mux`, the control-state authority, and the guarded manual-drive
+bridge. Each later `bbiyong explore <map-output-prefix>` starts only the
+frontier explorer and map saver. Mission completion does not restart the
+runtime.
 
 The command path is:
 
@@ -18,9 +20,18 @@ Nav2 -> velocity_smoother -> Collision Monitor -> cmd_mux -> /cmd_vel
      -> stack_up.sh's esp32_base_node.py
 ```
 
+Manual commands follow the parallel guarded path
+`cloud_bridge -> drive file -> manual_drive_bridge -> /cmd_vel/manual -> cmd_mux`.
+The legacy `teleop_node.py` publishes directly to `/cmd_vel` and must not run
+with this architecture.
+
 `cmd_mux` intentionally starts with emergency stop active and mode `disabled`.
 An operator or supervisor must explicitly publish `estop=false` and select
 `autonomy` after checking the robot and its surroundings.
+
+Stopping the mission engages the software stop and cancels its accepted or
+in-flight Nav2 goal before the explorer exits. The persistent runtime must not
+be stopped merely to end one exploration mission.
 
 Frontier goals use reachable known-free boundary cells and face the unknown
 region. The explorer sends each selected goal directly to `NavigateToPose`;
