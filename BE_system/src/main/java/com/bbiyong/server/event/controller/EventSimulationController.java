@@ -3,6 +3,7 @@ package com.bbiyong.server.event.controller;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.SimulatedRobotFireEvent;
 import com.bbiyong.server.wss.event.SimulatedRobotOverheatEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
@@ -30,6 +31,7 @@ public class EventSimulationController {
     private final ConcurrentHashMap<String, Instant> lastSimulationAt = new ConcurrentHashMap<>();
 
     // 운영에서는 UTC 시스템 시간을 쓴다. 테스트만 별도 Clock으로 경계 시점을 고정한다.
+    @Autowired
     public EventSimulationController(ApplicationEventPublisher publisher,
             @Value("${bbiyong.event.simulation.enabled:false}") boolean enabled) {
         this(publisher, enabled, Clock.systemUTC());
