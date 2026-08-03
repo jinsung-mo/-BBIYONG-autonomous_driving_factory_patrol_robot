@@ -34,6 +34,8 @@ export interface FleetContextValue {
   robotName: (id: string | null | undefined) => string
   equipments: Equipment[]
   equipmentName: (id: string | null | undefined) => string
+  /** 설비 집계(S15P11E101-630). 예전 서버는 주지 않는다 — 그때는 null 이다. */
+  equipmentSummary: import('./contracts.d.ts').EquipmentSummary | null
   error: string | null
   reload: () => void
 }
@@ -78,16 +80,26 @@ export function FleetProvider({ children }: { children?: import('react').ReactNo
     return () => clearInterval(t)
   }, [load, enabled, accessToken])
 
-  // 설비 목록은 이름표(통계 축·이벤트 필터)로만 쓴다 — 자주 바뀌지 않아 한 번만 받는다.
+  // 설비 목록은 이름표(통계 축·이벤트 필터)와 과열 표시에 쓴다.
+  //
+  // 대시보드 응답이 equipmentStatus 를 함께 주면(S15P11E101-630) 그것을 쓴다 —
+  // 같은 목록을 두 번 긁을 이유가 없다. 예전 서버라 없을 때만 /api/equipments 를 부른다.
+  const fromDashboard = stats?.equipmentStatus
+  // 대시보드 응답을 아직 못 받았으면 기다린다 — 곧 도착할 목록을 두고 미리 긁지 않는다.
+  // 조회가 실패해도(error) 더 기다릴 이유가 없으므로 그때는 따로 받는다.
+  const statsKnown = !!stats || !!error
   useEffect(() => {
-    if (!enabled || !accessToken) { setEquipments([]); return }
+    if (!enabled || !accessToken) { setEquipments([]); return undefined }
+    if (!statsKnown) return undefined
+    if (Array.isArray(fromDashboard)) { setEquipments(fromDashboard); return undefined }
     let ok = true
     listEquipments(accessToken)
       .then((rows) => { if (ok && alive.current) setEquipments(rows || []) })
       // 이름표가 없어도 화면은 ID 로 돌아간다 — 여기서 오류를 띄우지 않는다
       .catch(() => { if (ok && alive.current) setEquipments([]) })
     return () => { ok = false }
-  }, [enabled, accessToken])
+    // fromDashboard 가 계속 undefined 인 서버에서는 이 의존성이 바뀌지 않아 30초마다 다시 긁지 않는다
+  }, [enabled, accessToken, statsKnown, fromDashboard])
 
   const robots = useMemo(() => stats?.robotStatus ?? [], [stats])
 
@@ -116,6 +128,7 @@ export function FleetProvider({ children }: { children?: import('react').ReactNo
     robotName,
     equipments,
     equipmentName,
+    equipmentSummary: stats?.equipment ?? null,
     error,
     reload: load,
   }), [stats, robots, selected, robotName, equipments, equipmentName, error, load])
