@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/AuthContext.tsx'
 import { putDriveSpeed, speedProblems } from '../../live/driveSpeed.ts'
 import EquipmentPanel from './EquipmentPanel.tsx'
 import NotifyPanel from './NotifyPanel.tsx'
+import UsersPanel from './UsersPanel.tsx'
 
 // 설정 (S15P11E101-475) — 가끔 바꾸는 값. 관리자만 들어온다.
 // 주행 속도 상한은 서버에 저장되고 로봇에 하달된다(S15P11E101-515).
@@ -137,6 +138,9 @@ export default function ConfigPage() {
         <EquipmentPanel />
 
         <NotifyPanel />
+
+        {/* 관리자만 들어오는 탭이지만, 서버가 최종 판단한다(403) — S15P11E101-614 */}
+        <UsersPanel />
 
         <div className="panel cfg-points">
           <h3>순찰 지점 <span className="k">WAYPOINTS</span></h3>

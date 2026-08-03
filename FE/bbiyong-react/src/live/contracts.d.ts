@@ -749,3 +749,22 @@ export interface HealthDataPoint {
 
 /** health-history 의 period 파라미터. 서버가 받는 값만 넣는다. */
 export type HealthPeriod = '1h' | '6h' | '24h' | '7d' | '30d'
+
+// ---------------------------------------------------------------- 사용자 관리 (S15P11E101-614)
+//
+// BE 계약: AdminUserController · UserSummaryResponse. 관리자 전용이라 비관리자에게는 403 이 온다.
+
+/** GET /api/admin/users 의 한 건. */
+export interface AdminUser {
+  id: number
+  email: string
+  name?: string | null
+  /** ROLE_ADMIN | ROLE_USER — 서버 enum 원문 */
+  role: string
+}
+
+/** PATCH /api/admin/users/role 본문. role 은 표시 문구가 아니라 enum 이름이다. */
+export interface ChangeRoleRequest {
+  email: string
+  role: string
+}
