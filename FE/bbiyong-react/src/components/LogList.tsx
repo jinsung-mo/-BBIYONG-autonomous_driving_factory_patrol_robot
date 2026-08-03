@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext.tsx'
 import { alertToLog, eventToLog, TYPE_LABEL } from '../live/mappers.ts'
 import { deleteEvent, fetchEvents, updateEventStatus, LEVEL_LABEL, EVENT_STATUS_LABEL } from '../live/events.ts'
 import Modal from './ui/Modal.tsx'
+import EventDetailModal from './EventDetailModal.tsx'
 
 // 이벤트 로그 (순찰 로봇 관제의 .elog).
 //
@@ -76,6 +77,8 @@ export default function LogList({ variant = 'elog' }) {
   // 해결 처리 중인 행과 그 결과 안내(S15P11E101-593)
   const [resolving, setResolving] = useState<number | null>(null)
   const [resolveErr, setResolveErr] = useState<string | null>(null)
+  // 상세로 열어 둔 이벤트. 영상은 여기서만 본다(S15P11E101-628)
+  const [detailId, setDetailId] = useState<number | null>(null)
 
   const load = useCallback(async (nextPage: any, reset: any) => {
     if (!enabled || !accessToken) return
@@ -232,7 +235,15 @@ export default function LogList({ variant = 'elog' }) {
         {rows.map((log) => (
           <li key={log.id} className={log.kind}>
             <span className="t mono">{log.date ? `${log.date} ` : ''}{log.time}</span>
-            <b>{log.msg}</b>
+            {/* 이력 행은 눌러서 상세를 연다. 실시간 행은 서버 id 가 없어 열 것이 없다. */}
+            {log.eventId != null
+              ? (
+                <button type="button" className="logopen" title="상세와 영상 보기"
+                  onClick={() => setDetailId(log.eventId)}>
+                  {log.msg}
+                </button>
+              )
+              : <b>{log.msg}</b>}
             {log.live && <span className="tag live">실시간</span>}
             {/* 긴급과 미해결만 표시한다 — 경고·해결까지 다 붙이면 줄이 태그로 덮인다 */}
             {log.level === 'CRITICAL' && <span className="tag crit">{LEVEL_LABEL.CRITICAL}</span>}
@@ -274,6 +285,19 @@ export default function LogList({ variant = 'elog' }) {
           </li>
         )}
       </ul>
+
+      {detailId != null && (
+        <EventDetailModal
+          eventId={detailId}
+          onClose={() => setDetailId(null)}
+          // 상세에서 상태를 바꾸면 목록의 그 행도 함께 맞춘다 — 두 곳이 어긋나 보이면 안 된다
+          onStatusChange={(updated: any) => {
+            setHistory((prev) => prev.map((l) => (
+              l.eventId === updated?.eventId ? { ...l, ...eventToLog(updated) } : l
+            )))
+          }}
+        />
+      )}
 
       {pending && (
         <Modal title="이벤트를 삭제할까요?" onClose={() => setPending(null)} width={400}>
