@@ -26,8 +26,9 @@ public class User {
     @Column(nullable = false)
     private String name;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String role; // "ROLE_ADMIN"
+    private Role role; // ROLE_ADMIN | ROLE_USER (DB 저장은 enum name 문자열)
 
     @Column(nullable = false)
     private Instant createdAt;

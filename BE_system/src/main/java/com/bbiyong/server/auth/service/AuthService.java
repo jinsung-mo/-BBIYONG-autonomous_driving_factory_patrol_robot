@@ -1,12 +1,17 @@
 package com.bbiyong.server.auth.service;
 
+import com.bbiyong.server.auth.domain.Role;
 import com.bbiyong.server.auth.domain.User;
 import com.bbiyong.server.auth.dto.LoginRequest;
 import com.bbiyong.server.auth.dto.LoginResponse;
+import com.bbiyong.server.auth.dto.RefreshResponse;
 import com.bbiyong.server.auth.dto.SignupRequest;
 import com.bbiyong.server.auth.dto.SignupResponse;
 import com.bbiyong.server.auth.jwt.JwtTokenProvider;
 import com.bbiyong.server.auth.repository.UserRepository;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jws;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,7 +27,8 @@ import java.util.Set;
 @Service
 public class AuthService {
 
-    private static final String DEFAULT_ROLE = "ROLE_ADMIN";
+    /** 회원가입 시 부여되는 기본 권한. 관리자 승격은 별도(관리 API / 시드)로만 이뤄진다. */
+    private static final Role DEFAULT_ROLE = Role.ROLE_USER;
     private static final Set<String> ALLOWED_GENDERS = Set.of("MALE", "FEMALE", "NONE");
     private static final LocalDate MIN_BIRTH_DATE = LocalDate.of(1900, 1, 1);
 
@@ -114,7 +120,43 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        String accessToken = jwtTokenProvider.generate(user.getEmail(), user.getRole());
-        return new LoginResponse("Bearer", accessToken, jwtTokenProvider.getExpirationSeconds(), user.getRole());
+        String role = user.getRole().name();
+        String accessToken = jwtTokenProvider.generate(user.getEmail(), role);
+        String refreshToken = jwtTokenProvider.generateRefresh(user.getEmail());
+        return new LoginResponse("Bearer", accessToken, refreshToken,
+                jwtTokenProvider.getAccessExpirationSeconds(), role);
+    }
+
+    /**
+     * refresh 토큰으로 access 토큰을 재발급한다. refresh 토큰도 함께 회전(rotate)하여
+     * 활동 중에는 세션이 만료되지 않도록 한다(야간 무인 관제 대응).
+     *
+     * <p>실패 시 401: 서명/형식 오류·만료, typ 불일치, 삭제된 사용자.
+     */
+    @Transactional(readOnly = true)
+    public RefreshResponse refresh(String refreshToken) {
+        final Claims claims;
+        try {
+            Jws<Claims> jws = jwtTokenProvider.parse(refreshToken);
+            claims = jws.getPayload();
+        } catch (JwtException | IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 refresh 토큰입니다.");
+        }
+
+        String type = claims.get(JwtTokenProvider.CLAIM_TYPE, String.class);
+        if (!JwtTokenProvider.TYPE_REFRESH.equals(type)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "refresh 토큰이 아닙니다.");
+        }
+
+        String email = claims.getSubject();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "존재하지 않는 사용자입니다."));
+
+        String role = user.getRole().name();
+        String newAccess = jwtTokenProvider.generate(user.getEmail(), role);
+        String newRefresh = jwtTokenProvider.generateRefresh(user.getEmail());
+        return new RefreshResponse("Bearer", newAccess, newRefresh,
+                jwtTokenProvider.getAccessExpirationSeconds(), role);
     }
 }
