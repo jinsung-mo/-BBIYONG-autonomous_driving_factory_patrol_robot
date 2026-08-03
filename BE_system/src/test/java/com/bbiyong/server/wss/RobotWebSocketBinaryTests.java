@@ -36,7 +36,7 @@ class RobotWebSocketBinaryTests {
 
         verify(publisher).publishEvent(argThat(event -> event instanceof RobotBinaryVideoEvent video
                 && video.getRobotId().equals("orinka_01")
-                && Arrays.equals(video.getPayload(), packet))));
+                && Arrays.equals(video.getPayload(), packet)));
     }
 
     @Test
