@@ -4,16 +4,66 @@
 
 import { REST_BASE } from './config.ts'
 
-// 인증이 깨졌을 때(401/403) 알릴 곳. AuthProvider 가 등록해 세션을 정리한다(S15P11E101-508).
+// 인증이 깨졌을 때 알릴 곳. AuthProvider 가 등록해 세션을 정리한다(S15P11E101-508).
 // 조회 함수마다 로그아웃을 부르면 순환 참조가 생겨서 이 한 지점으로 모은다.
 /** @type {(() => void) | null} */
 let onUnauthorized: (() => void) | null = null
 /** @param {(() => void) | null} fn */
 export function setUnauthorizedHandler(fn: any) { onUnauthorized = fn }
 
+// 401 과 403 은 다른 사건이다(S15P11E101-613).
+//   401 — 토큰이 죽었다. refresh 로 살릴 수 있고, 못 살리면 로그아웃이다.
+//   403 — 토큰은 멀쩡한데 그 일을 할 권한이 없다. 로그아웃시키면 안 된다.
+// 예전에는 둘 다 로그아웃이었다. 608 에서 ROLE_USER 가 생기면 관리자 전용 API 의 403 이
+// 정상 흐름이 되므로, 그때 로그아웃되면 화면을 쓸 수 없다.
 /** @param {number} status */
 function checkAuthFailure(status: number) {
-  if (status === 401 || status === 403) onUnauthorized?.()
+  if (status === 401) onUnauthorized?.()
+}
+
+// ---- refresh 연동 (S15P11E101-613) ----
+//
+// AuthProvider 가 다리를 놓는다. authApi 는 리액트 상태를 모르고, AuthProvider 는
+// 매 호출부를 모르기 때문에 이 한 지점으로 주고받는다.
+type AuthBridge = {
+  /** 지금 들고 있는 refreshToken. 없으면 갱신을 시도하지 않는다(구버전 서버). */
+  getRefreshToken: () => string | null | undefined
+  /** 갱신 성공 — 저장소·상태·STOMP 토큰을 함께 맞춘다 */
+  onRefreshed: (res: import('./contracts').RefreshResponse) => void
+}
+let bridge: AuthBridge | null = null
+export function setAuthBridge(b: AuthBridge | null) { bridge = b }
+
+/**
+ * refresh 토큰으로 access 를 재발급한다.
+ * @param {string} refreshToken
+ * @returns {Promise<import('./contracts').RefreshResponse>}
+ */
+export function refreshRequest(refreshToken: string) {
+  return post('/api/auth/refresh', { refreshToken })
+}
+
+// 동시에 여러 요청이 401 을 받으면 갱신도 여러 번 나간다. 서버가 refresh 를 회전시키면
+// 뒤의 것이 죽은 토큰을 쓰게 되므로, 진행 중인 갱신 하나를 모두가 기다린다.
+let inflight: Promise<string | null> | null = null
+
+/**
+ * 갱신을 한 번만 돌리고 새 accessToken 을 돌려준다. 갱신할 수 없거나 실패하면 null.
+ * @returns {Promise<string | null>}
+ */
+export function refreshAccessToken(): Promise<string | null> {
+  if (inflight) return inflight
+  const rt = bridge?.getRefreshToken()
+  if (!rt) return Promise.resolve(null)
+  inflight = refreshRequest(rt)
+    .then((res: any) => {
+      if (!res?.accessToken) return null
+      bridge?.onRefreshed(res)
+      return res.accessToken as string
+    })
+    .catch(() => null)
+    .finally(() => { inflight = null })
+  return inflight
 }
 
 const NETWORK_ERROR_MESSAGE = '실서버에 연결할 수 없습니다. 네트워크를 확인하세요.'
@@ -27,6 +77,19 @@ function responseMessage(data: unknown, status: number) {
     if (typeof body.message === 'string' && body.message.trim()) return body.message
   }
   return `요청 실패 (HTTP ${status})`
+}
+
+// 요청 한 번. 네트워크 실패는 같은 문구로 던지고, 그 밖에는 응답과 본문을 그대로 돌려준다
+// (401 재시도를 위해 호출부가 status 를 봐야 한다).
+async function sendRequest(url: string, init: RequestInit) {
+  let res
+  try {
+    res = await fetch(url, init)
+  } catch {
+    throw new Error(NETWORK_ERROR_MESSAGE)
+  }
+  const data = await res.json().catch((): any => null)
+  return { res, data }
 }
 
 function responseError(data: unknown, status: number) {
@@ -95,15 +158,17 @@ export function signupRequest({ email, password, name, phone, birth, gender }: {
  * @returns {Promise<any>}
  */
 export async function authedGet(path: string, accessToken: string | null | undefined) {
-  let res
-  try {
-    res = await fetch(`${REST_BASE}${path}`, {
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    })
-  } catch {
-    throw new Error(NETWORK_ERROR_MESSAGE)
+  // 401 이면 한 번만 갱신하고 같은 요청을 다시 보낸다(S15P11E101-613).
+  // 호출부는 이 사실을 몰라도 된다 — 시그니처가 그대로라 기존 코드가 바뀌지 않는다.
+  const run = (token: string | null | undefined) => sendRequest(`${REST_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+
+  let { res, data } = await run(accessToken)
+  if (res.status === 401) {
+    const next = await refreshAccessToken()
+    if (next) ({ res, data } = await run(next))
   }
-  const data = await res.json().catch((): any => null)
   if (!res.ok) {
     checkAuthFailure(res.status)
     throw responseError(data, res.status)
@@ -125,20 +190,22 @@ export async function authedSend(
   accessToken: string | null | undefined,
   { method = 'POST', body }: { method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE', body?: unknown } = {},
 ) {
-  let res
-  try {
-    res = await fetch(`${REST_BASE}${path}`, {
-      method,
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    })
-  } catch {
-    throw new Error(NETWORK_ERROR_MESSAGE)
+  // 본문은 한 번만 직렬화해 둔다 — 재시도 때 같은 내용을 그대로 보낸다
+  const payload = body ? JSON.stringify(body) : undefined
+  const run = (token: string | null | undefined) => sendRequest(`${REST_BASE}${path}`, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(payload ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(payload ? { body: payload } : {}),
+  })
+
+  let { res, data } = await run(accessToken)
+  if (res.status === 401) {
+    const next = await refreshAccessToken()
+    if (next) ({ res, data } = await run(next))
   }
-  const data = await res.json().catch((): any => null)
   if (!res.ok) {
     checkAuthFailure(res.status)
     throw responseError(data, res.status)

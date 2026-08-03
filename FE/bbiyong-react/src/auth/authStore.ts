@@ -77,8 +77,11 @@ export function clearSession() {
 export function getAuth() {
   try { return JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null') } catch { return null }
 }
+// refreshToken 도 함께 보관한다(S15P11E101-613). 새로고침·탭 복원 뒤에도 갱신할 수 있어야
+// 야간 무인 관제에서 세션이 끊기지 않는다. 서버가 주지 않으면 null 로 남고, 그때는
+// 예전처럼 절대 만료에 걸려 로그아웃된다.
 /** @param {import('../live/contracts').StoredAuth} auth */
-export function setAuth({ accessToken, user, expiresAt = null }: import('../live/contracts').StoredAuth) {
-  localStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, user, expiresAt }))
+export function setAuth({ accessToken, user, refreshToken = null, expiresAt = null, expiresIn = null }: import('../live/contracts').StoredAuth) {
+  localStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, user, refreshToken, expiresAt, expiresIn }))
 }
 export function clearToken() { localStorage.removeItem(TOKEN_KEY) }

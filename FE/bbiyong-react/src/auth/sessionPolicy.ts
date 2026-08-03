@@ -22,6 +22,24 @@ const minutes = (v: any, fallback: any) => {
 export const IDLE_MS = minutes(env.VITE_SESSION_IDLE_MIN, 60)
 export const WARN_MS = minutes(env.VITE_SESSION_WARN_MIN, 2)
 
+// access 만료 이 시간 전부터는 선제로 갱신한다(S15P11E101-613).
+// 만료된 뒤 401 을 받고 나서 갱신해도 되지만, 그러면 그 요청 한 번이 왕복 두 번이 된다.
+// access 수명이 1시간(608)이라 5분 여유는 충분히 짧고, 절전에서 깨어난 직후에도
+// 5초 주기 감시가 곧바로 잡아낸다.
+export const REFRESH_MARGIN_MS = 5 * 60 * 1000
+
+// 다만 access 수명이 그보다 짧으면(테스트·짧은 수명 설정) 발급 즉시 갱신 조건이 서서
+// 갱신이 끝없이 반복된다. 수명의 절반을 넘지 않게 잘라 준다.
+/**
+ * @param {number | null | undefined} expiresInSec 그때 받은 access 수명(초)
+ * @returns {number} 선제 갱신 여유(ms)
+ */
+export function refreshMargin(expiresInSec: number | null | undefined) {
+  const life = Number(expiresInSec) * 1000
+  if (!Number.isFinite(life) || life <= 0) return REFRESH_MARGIN_MS
+  return Math.min(REFRESH_MARGIN_MS, life / 2)
+}
+
 export const ACTIVITY_KEY = 'bbiyong.activity'
 
 /**
