@@ -1,6 +1,8 @@
 package com.bbiyong.server.dashboard.service;
 
 import com.bbiyong.server.dashboard.dto.DashboardStatsResponse;
+import com.bbiyong.server.equipment.domain.Equipment;
+import com.bbiyong.server.equipment.repository.EquipmentRepository;
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.robot.dto.RobotResponse;
@@ -23,10 +25,14 @@ public class DashboardService {
 
     private final RobotService robotService;
     private final EventLogRepository eventLogRepository;
+    private final EquipmentRepository equipmentRepository;
 
-    public DashboardService(RobotService robotService, EventLogRepository eventLogRepository) {
+    public DashboardService(RobotService robotService,
+                            EventLogRepository eventLogRepository,
+                            EquipmentRepository equipmentRepository) {
         this.robotService = robotService;
         this.eventLogRepository = eventLogRepository;
+        this.equipmentRepository = equipmentRepository;
     }
 
     /**
@@ -45,11 +51,34 @@ public class DashboardService {
         // 4. 최근 이벤트 5건
         List<EventLog> recentEvents = eventLogRepository.findLatestEvents(PageRequest.of(0, 5));
 
+        // 5. 설비(분전반) 현황
+        List<Equipment> equipments = equipmentRepository.findAll();
+        DashboardStatsResponse.EquipmentSummary equipmentSummary = calculateEquipmentSummary(equipments);
+
         return DashboardStatsResponse.builder()
                 .summary(summary)
                 .today(todayStats)
+                .equipment(equipmentSummary)
+                .equipmentStatus(equipments)
                 .recentEvents(recentEvents)
                 .robotStatus(robots)
+                .build();
+    }
+
+    /**
+     * 설비 요약 통계 계산. 과열 판단은 로봇이 통지한 status("OVER") 로 한다. (S15P11E101-573)
+     */
+    private DashboardStatsResponse.EquipmentSummary calculateEquipmentSummary(List<Equipment> equipments) {
+        int total = equipments.size();
+        int overheating = (int) equipments.stream().filter(e -> "OVER".equals(e.getStatus())).count();
+        int normal = (int) equipments.stream().filter(e -> "NORMAL".equals(e.getStatus())).count();
+        int unknown = (int) equipments.stream().filter(e -> "UNKNOWN".equals(e.getStatus())).count();
+
+        return DashboardStatsResponse.EquipmentSummary.builder()
+                .totalEquipments(total)
+                .overheatingEquipments(overheating)
+                .normalEquipments(normal)
+                .unknownEquipments(unknown)
                 .build();
     }
 
