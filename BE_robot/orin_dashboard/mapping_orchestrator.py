@@ -11,12 +11,10 @@ import os
 from pathlib import Path
 import re
 import shlex
-import struct
 import time
 from enum import Enum
 from urllib import request
 import uuid
-import zlib
 
 try:
     import fcntl
@@ -136,30 +134,6 @@ def read_pgm(path):
         return width, height, samples
 
 
-def _png_chunk(kind, data):
-    return (struct.pack(">I", len(data)) + kind + data
-            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF))
-
-
-def convert_pgm_to_png(pgm_path, png_path):
-    """Convert without flipping rows so occupancy-grid orientation is preserved."""
-    width, height, pixels = read_pgm(pgm_path)
-    rows = b"".join(
-        b"\x00" + pixels[row * width:(row + 1) * width]
-        for row in range(height)
-    )
-    payload = (b"\x89PNG\r\n\x1a\n"
-               + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
-               + _png_chunk(b"IDAT", zlib.compress(rows))
-               + _png_chunk(b"IEND", b""))
-    target = Path(png_path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(target.name + ".tmp")
-    temporary.write_bytes(payload)
-    os.replace(temporary, target)
-    return width, height
-
-
 def encode_multipart(fields, file_path, boundary=None):
     boundary = boundary or ("----bbiyong-" + uuid.uuid4().hex)
     marker = boundary.encode("ascii")
@@ -174,16 +148,16 @@ def encode_multipart(fields, file_path, boundary=None):
     chunks.extend([
         b"--" + marker + b"\r\n",
         (f'Content-Disposition: form-data; name="file"; filename="{file_path.name}"\r\n'
-         'Content-Type: image/png\r\n\r\n').encode("utf-8"),
+         'Content-Type: image/x-portable-graymap\r\n\r\n').encode("utf-8"),
         file_path.read_bytes(), b"\r\n", b"--" + marker + b"--\r\n",
     ])
     return b"".join(chunks), boundary
 
 
-def upload_map(url, token, png_path, fields, timeout=20.0):
+def upload_map(url, token, pgm_path, fields, timeout=20.0):
     if not token:
         raise RuntimeError("BBIYONG_ROBOT_UPLOAD_TOKEN is not configured")
-    body, boundary = encode_multipart(fields, png_path)
+    body, boundary = encode_multipart(fields, pgm_path)
     upload = request.Request(url, data=body, method="POST", headers={
         "Content-Type": f"multipart/form-data; boundary={boundary}",
         "X-Robot-Token": token,
@@ -408,16 +382,16 @@ class MappingOrchestrator:
             os.replace(pgm, final_pgm)
             os.replace(yaml_path, final_yaml)
             rewrite_map_yaml_image(final_yaml, final_pgm.name)
-            png = Path(f"{final_base}.png")
-            width, height = await asyncio.to_thread(
-                convert_pgm_to_png, final_pgm, png)
+            # Validate and measure the original ROS artifact, but upload its
+            # bytes unchanged so the backend can decode the PGM with OpenCV.
+            width, height, _ = await asyncio.to_thread(read_pgm, final_pgm)
             fields = {"robotId": self.robot_id, "name": self._operation["name"],
                       "widthPx": width, "heightPx": height, **metadata}
             if self._stopping:
                 return
             self._transition(MappingState.UPLOADING)
             status = await asyncio.to_thread(
-                self.uploader, self.upload_url, self.token, png, fields,
+                self.uploader, self.upload_url, self.token, final_pgm, fields,
                 self.upload_timeout)
             if status != 201:
                 raise RuntimeError(f"map upload returned HTTP {status}")

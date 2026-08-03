@@ -1,17 +1,14 @@
 import asyncio
 import json
 from pathlib import Path
-import struct
 import sys
 import tempfile
 import time
 import unittest
-import zlib
 
 from mapping_orchestrator import (
     MappingOrchestrator,
     MappingState,
-    convert_pgm_to_png,
     encode_multipart,
     parse_map_yaml,
     rewrite_map_yaml_image,
@@ -55,36 +52,19 @@ class ArtifactTest(unittest.TestCase):
             rewrite_map_yaml_image(path, "factory_01.pgm")
             self.assertIn("image: factory_01.pgm", path.read_text())
 
-    def test_pgm_to_png_keeps_dimensions_and_row_order(self):
-        with tempfile.TemporaryDirectory() as directory:
-            pgm = Path(directory) / "map.pgm"
-            png = Path(directory) / "map.png"
-            pixels = b"\x01\x02\x03\x04\x05\x06"
-            pgm.write_bytes(b"P5\n3 2\n255\n" + pixels)
-            self.assertEqual(convert_pgm_to_png(pgm, png), (3, 2))
-            data = png.read_bytes()
-            self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
-            offset, compressed = 8, b""
-            while offset < len(data):
-                size = struct.unpack(">I", data[offset:offset + 4])[0]
-                kind = data[offset + 4:offset + 8]
-                body = data[offset + 8:offset + 8 + size]
-                if kind == b"IDAT":
-                    compressed += body
-                offset += 12 + size
-            self.assertEqual(zlib.decompress(compressed),
-                             b"\x00\x01\x02\x03\x00\x04\x05\x06")
-
     def test_multipart_contains_contract_fields_and_header_safe_file(self):
         with tempfile.TemporaryDirectory() as directory:
-            png = Path(directory) / "map.png"
-            png.write_bytes(b"PNG")
+            pgm = Path(directory) / "map.pgm"
+            original = b"P5\n3 2\n255\n\x01\x02\x03\x04\x05\x06"
+            pgm.write_bytes(original)
             body, boundary = encode_multipart(
-                {"robotId": "orinka_01", "resolution": 0.05}, png, "BOUNDARY"
+                {"robotId": "orinka_01", "resolution": 0.05}, pgm, "BOUNDARY"
             )
             self.assertEqual(boundary, "BOUNDARY")
             self.assertIn(b'name="robotId"\r\n\r\norinka_01', body)
-            self.assertIn(b'name="file"; filename="map.png"', body)
+            self.assertIn(b'name="file"; filename="map.pgm"', body)
+            self.assertIn(b"Content-Type: image/x-portable-graymap", body)
+            self.assertIn(original, body)
 
     def test_rejects_unsafe_empty_name(self):
         with self.assertRaises(ValueError):
@@ -100,9 +80,9 @@ class OrchestratorTest(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def uploader(self, url, token, png_path, fields, timeout):
+    def uploader(self, url, token, pgm_path, fields, timeout):
         self.uploads.append({
-            "url": url, "token": token, "png": Path(png_path).read_bytes(),
+            "url": url, "token": token, "pgm": Path(pgm_path).read_bytes(),
             "fields": fields, "timeout": timeout,
         })
         return 201
@@ -126,6 +106,9 @@ class OrchestratorTest(unittest.IsolatedAsyncioTestCase):
         await wait_for_state(orchestrator, MappingState.COMPLETED)
         self.assertEqual(len(self.uploads), 1)
         self.assertEqual(self.uploads[0]["fields"]["widthPx"], 2)
+        self.assertEqual(
+            self.uploads[0]["pgm"], b"P5\n2 2\n255\n\x00\x40\x80\xff"
+        )
         event = orchestrator.peek_completion_event()
         self.assertEqual(event["type"], "EVENT_MAPPING_COMPLETE")
         self.assertEqual(event["name"], "factory_01")
