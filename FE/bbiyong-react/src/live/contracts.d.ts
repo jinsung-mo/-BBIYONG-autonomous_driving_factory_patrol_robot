@@ -785,3 +785,26 @@ export interface PatrolStartResult {
   patrolStarted: boolean
   count: number
 }
+
+// ---------------------------------------------------------------- 이벤트 상세·영상 (S15P11E101-628)
+//
+// BE 계약: EventLogDetailResponse · VideoResponses. 영상 경로는 인증이 필요해
+// <video src> 로 바로 걸 수 없다 — videos.ts 주석 참고.
+
+/** GET /api/videos 계열의 목록 한 건. */
+export interface VideoSummary {
+  id: string
+  robotId?: string | null
+  eventId?: number | null
+  /** EVENT · FIRE · OVERHEAT · PATROL 등. 서버가 문자열로 준다. */
+  clipType?: string | null
+  durationSec?: number | null
+  /** 서버가 주는 썸네일 경로. 없으면 /api/videos/{id}/thumbnail 을 쓴다. */
+  thumbnailUrl?: string | null
+  startedAt?: string | null
+}
+
+/** GET /api/events/{eventId} — 목록 한 건에 연관 영상이 붙은 형태. */
+export interface EventDetail extends EventLog {
+  videos?: VideoSummary[]
+}
