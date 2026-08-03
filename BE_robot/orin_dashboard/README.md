@@ -85,7 +85,8 @@ python3 cloud_bridge.py
 H.264 mode captures 640×480 at 15 FPS, runs fire inference on sampled frames,
 and disables the legacy COCO and floor-analysis callbacks. Because Orin Nano
 has no NVENC, GStreamer `x264enc speed-preset=veryfast tune=zerolatency` performs
-the encode. One encoded stream feeds both 10-second MP4 fragments and the latest
+the encode. The output is constrained to H.264 baseline profile for browser
+WebCodecs compatibility. One encoded stream feeds both 10-second MP4 fragments and the latest
 Annex-B access unit in `/dev/shm/orincar_h264.bin`; it is not encoded twice.
 If the H.264 frame is absent, stale, or malformed, the bridge sends unique JPEG
 preview frames while telemetry and control continue normally.

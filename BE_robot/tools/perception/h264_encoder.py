@@ -107,6 +107,7 @@ class H264Encoder:
             "! videoconvert ! video/x-raw,format=I420 "
             f"! x264enc speed-preset=veryfast tune=zerolatency bitrate={self.bitrate_kbps} "
             f"key-int-max={self.key_interval} bframes=0 byte-stream=true aud=true "
+            "! video/x-h264,profile=baseline,stream-format=byte-stream,alignment=au "
             "! tee name=encoded "
             "encoded. ! queue leaky=downstream max-size-buffers=2 "
             "! h264parse config-interval=-1 "
