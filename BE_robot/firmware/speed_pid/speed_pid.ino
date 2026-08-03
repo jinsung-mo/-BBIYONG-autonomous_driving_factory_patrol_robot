@@ -53,27 +53,14 @@ float mlxFrame[32*24];
 //    ⚠️ raw 바이너리(1,536B = 134ms)가 더 빠르지만 데이터에 0x0A 가 섞이면
 //       Orin 의 readline() 이 줄을 잘못 자른다. base64 알파벳에는 개행이 없다.
 //    🔴 스택이 아니라 전역이다. loop() 지역변수로 두면 3.6KB 를 스택에 얹는다.
+//    🔴 인코더 **함수**는 여기 두면 안 된다 — struct Wheel 뒤로 내렸다.
+//       Arduino .ino→.cpp 변환기가 자동생성 프로토타입을 "파일 내 첫 함수 정의"
+//       지점에 통째로 삽입한다. 여기에 함수를 두면 그게 첫 함수가 되어
+//       controlWheel(Wheel&, ...) 프로토타입이 struct Wheel 보다 먼저 삽입돼
+//       컴파일이 깨진다. (DHT/INA 블록이 같은 이유로 아래에 있다)
+//       버퍼는 함수가 아니라서 여기 남겨도 된다.
 uint8_t  mlxRaw[32*24*2];      // int16 big-endian ×768 = 1,536B
 char     mlxB64[2052];         // ceil(1536/3)*4 = 2,048 + 여유
-
-// 최소 base64 인코더. 라이브러리를 끌어오지 않는다 — 12줄이면 되고,
-// mbedtls/Arduino String 경로는 힙 할당이 붙어 이 블록에 넣기에 부적절하다.
-static size_t b64Encode(const uint8_t *in, size_t len, char *out) {
-  static const char T[] =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  size_t o = 0;
-  for (size_t i = 0; i < len; i += 3) {
-    uint32_t v = (uint32_t)in[i] << 16;
-    if (i + 1 < len) v |= (uint32_t)in[i + 1] << 8;
-    if (i + 2 < len) v |= in[i + 2];
-    out[o++] = T[(v >> 18) & 0x3F];
-    out[o++] = T[(v >> 12) & 0x3F];
-    out[o++] = (i + 1 < len) ? T[(v >> 6) & 0x3F] : '=';
-    out[o++] = (i + 2 < len) ? T[v & 0x3F]        : '=';
-  }
-  out[o] = '\0';
-  return o;
-}
 
 // ---------- 핀 (docs/실측_데이터.md §A) ----------
 constexpr int L_A = 32, L_B = 33, R_A = 25, R_B = 26;
@@ -123,6 +110,28 @@ struct Wheel {
   float   integ = 0.0f;
   float   duty = 0.0f;       // 정규화 duty % (+ = 전진)
 } wl, wr;
+
+// 최소 base64 인코더 (S15P11E101-663). 라이브러리를 끌어오지 않는다 —
+// 12줄이면 되고, mbedtls/Arduino String 경로는 힙 할당이 붙어 제어 루프를
+// 막는 이 블록에 넣기에 부적절하다.
+// 🔴 반드시 struct Wheel **뒤**에 있어야 한다. 위 주석 참조 — 실제로 여기를
+//    위로 올렸다가 컴파일이 깨졌다 (2026-08-04).
+static size_t b64Encode(const uint8_t *in, size_t len, char *out) {
+  static const char T[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  size_t o = 0;
+  for (size_t i = 0; i < len; i += 3) {
+    uint32_t v = (uint32_t)in[i] << 16;
+    if (i + 1 < len) v |= (uint32_t)in[i + 1] << 8;
+    if (i + 2 < len) v |= in[i + 2];
+    out[o++] = T[(v >> 18) & 0x3F];
+    out[o++] = T[(v >> 12) & 0x3F];
+    out[o++] = (i + 1 < len) ? T[(v >> 6) & 0x3F] : '=';
+    out[o++] = (i + 2 < len) ? T[v & 0x3F]        : '=';
+  }
+  out[o] = '\0';
+  return o;
+}
 
 enum Mode { MODE_IDLE, MODE_OPENLOOP, MODE_VELOCITY };
 Mode mode = MODE_IDLE;
