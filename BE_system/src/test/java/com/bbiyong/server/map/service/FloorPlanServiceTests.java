@@ -90,4 +90,24 @@ class FloorPlanServiceTests {
         when(repo.findLatestRaw(eq("orinka_01"), any())).thenReturn(List.of());
         assertThat(service.generateFloorPlan("orinka_01")).isEmpty();
     }
+
+    @Test
+    void skipsWhenDecodedDimensionsMismatchMetadata() throws Exception {
+        MapArtifact raw = new MapArtifact();
+        raw.setId("raw-2");
+        raw.setRobotId("orinka_01");
+        raw.setName("factory_01");
+        raw.setFilePath("orinka_01/raw.png");
+        // 실제 이미지는 16x16 이지만 메타는 다른 치수 → 불일치로 도면 미생성
+        raw.setWidthPx(999);
+        raw.setHeightPx(999);
+
+        when(repo.findLatestRaw(eq("orinka_01"), any())).thenReturn(List.of(raw));
+        when(storage.load("orinka_01/raw.png")).thenReturn(new ByteArrayResource(samplePng()));
+
+        assertThat(service.generateFloorPlan("orinka_01")).isEmpty();
+        // 깨진 도면이 저장/활성화되지 않아야 함
+        verify(repo, org.mockito.Mockito.never()).save(any());
+        verify(mapService, org.mockito.Mockito.never()).setActive(any());
+    }
 }

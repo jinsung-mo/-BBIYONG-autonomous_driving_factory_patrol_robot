@@ -96,6 +96,11 @@ public class MapStorageService {
         } catch (IOException ignored) {
             // fall through
         }
+        // ROS 원본 PGM 은 OS(Linux)의 probeContentType 이 인식하지 못하므로 확장자로 보정한다. (S15P11E101-616)
+        String name = resource.getFilename();
+        if (name != null && name.toLowerCase().endsWith(".pgm")) {
+            return "image/x-portable-graymap";
+        }
         return fallback;
     }
 
