@@ -573,6 +573,8 @@ export interface AuthContextValue {
   extendSession: () => void
   logoutReason: LogoutReason | null
   clearLogoutReason: () => void
+  /** 서버가 403 을 줬을 때 서버 판단 role 을 다시 받아 온다(S15P11E101-626) */
+  syncRole: () => Promise<void>
 }
 
 /** LiveProvider 가 공급하는 값 (S15P11E101-576). */
