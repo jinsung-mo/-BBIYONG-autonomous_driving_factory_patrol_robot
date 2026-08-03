@@ -16,6 +16,25 @@ function checkAuthFailure(status: number) {
   if (status === 401 || status === 403) onUnauthorized?.()
 }
 
+const NETWORK_ERROR_MESSAGE = '실서버에 연결할 수 없습니다. 네트워크를 확인하세요.'
+
+// Spring ProblemDetail 은 detail 에 사람이 읽을 메시지를 담는다. 이전 ErrorResponse(message)도
+// 함께 받아야 서버 버전이 다른 환경에서도 같은 호출부를 쓸 수 있다.
+function responseMessage(data: unknown, status: number) {
+  if (data && typeof data === 'object') {
+    const body = data as { detail?: unknown, message?: unknown }
+    if (typeof body.detail === 'string' && body.detail.trim()) return body.detail
+    if (typeof body.message === 'string' && body.message.trim()) return body.message
+  }
+  return `요청 실패 (HTTP ${status})`
+}
+
+function responseError(data: unknown, status: number) {
+  const err = new Error(responseMessage(data, status)) as Error & { status?: number }
+  err.status = status
+  return err
+}
+
 /**
  * @param {string} path
  * @param {Record<string, unknown>} body
@@ -30,13 +49,12 @@ async function post(path: string, body: Record<string, unknown>) {
       body: JSON.stringify(body),
     })
   } catch {
-    throw new Error('실서버에 연결할 수 없습니다. 네트워크를 확인하세요.')
+    throw new Error(NETWORK_ERROR_MESSAGE)
   }
 
   const data = await res.json().catch((): any => null)
   if (!res.ok) {
-    // 공통 에러 응답 포맷의 message를 우선 노출 (§1.0)
-    throw new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
+    throw responseError(data, res.status)
   }
   return data
 }
@@ -77,13 +95,18 @@ export function signupRequest({ email, password, name, phone, birth, gender }: {
  * @returns {Promise<any>}
  */
 export async function authedGet(path: string, accessToken: string | null | undefined) {
-  const res = await fetch(`${REST_BASE}${path}`, {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-  })
+  let res
+  try {
+    res = await fetch(`${REST_BASE}${path}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    })
+  } catch {
+    throw new Error(NETWORK_ERROR_MESSAGE)
+  }
   const data = await res.json().catch((): any => null)
   if (!res.ok) {
     checkAuthFailure(res.status)
-    throw new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
+    throw responseError(data, res.status)
   }
   return data
 }
@@ -113,15 +136,12 @@ export async function authedSend(
       ...(body ? { body: JSON.stringify(body) } : {}),
     })
   } catch {
-    throw new Error('실서버에 연결할 수 없습니다. 네트워크를 확인하세요.')
+    throw new Error(NETWORK_ERROR_MESSAGE)
   }
   const data = await res.json().catch((): any => null)
   if (!res.ok) {
     checkAuthFailure(res.status)
-    const err: import('./contracts').HttpError =
-      new Error(data?.message || `요청 실패 (HTTP ${res.status})`)
-    err.status = res.status
-    throw err
+    throw responseError(data, res.status)
   }
   return data
 }
