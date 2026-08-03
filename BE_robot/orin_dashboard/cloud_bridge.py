@@ -276,6 +276,7 @@ class Bridge:
         self.estop = "RELEASED"
         self.video_seq = 0
         self.mapping = None
+        self.drive_file = str(getattr(args, "manual_drive_file", DRIVE_FILE))
         legacy_navigation = bool(getattr(args, "navigation_enabled", False))
         self.backend_control_enabled = bool(
             getattr(args, "backend_control_enabled", legacy_navigation)
@@ -317,6 +318,7 @@ class Bridge:
             control_file=getattr(
                 args, "control_state_file", "/tmp/bbiyong_control.json"
             ),
+            drive_file=self.drive_file,
             scouting_state_file=getattr(
                 args,
                 "scouting_state_file",
@@ -325,6 +327,9 @@ class Bridge:
             patrol_command=getattr(args, "patrol_command", None),
             navigate_command=getattr(args, "navigate_command", None),
             patrol_loop=self.patrol_loop_enabled,
+            handoff_settle_seconds=getattr(
+                args, "control_handoff_settle_seconds", 0.15
+            ),
             process_stop_timeout=getattr(args, "navigation_stop_timeout", 3.0),
         )
         if self.mapping:
@@ -422,7 +427,7 @@ class Bridge:
                     )
                     continue
                 try:
-                    atomic_write(DRIVE_FILE, payload)
+                    atomic_write(self.drive_file, payload)
                     self.estop = estop
                     print(f"[recv] {cmd.get('command')} → drive.json {payload}",
                           flush=True)
@@ -617,6 +622,19 @@ def parse_args(argv=None):
         default=os.environ.get(
             "ORINCAR_CONTROL_STATE_FILE", "/tmp/bbiyong_control.json"
         ),
+    )
+    parser.add_argument(
+        "--manual-drive-file",
+        default=os.environ.get("ORINCAR_DRIVE_FILE", DRIVE_FILE),
+        help="atomic command file consumed by the maintained manual drive bridge",
+    )
+    parser.add_argument(
+        "--control-handoff-settle-seconds",
+        type=float,
+        default=float(
+            os.environ.get("ORINCAR_CONTROL_HANDOFF_SETTLE_SECONDS", "0.15")
+        ),
+        help="zero-command boundary before granting manual or autonomy control",
     )
     parser.add_argument(
         "--scouting-state-file",

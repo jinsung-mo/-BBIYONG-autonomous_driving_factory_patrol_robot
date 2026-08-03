@@ -22,13 +22,12 @@ setsid nohup python3 "$HOME/calib/esp32_base_node.py" \
 disown
 sleep 7
 
-setsid nohup python3 "$HOME/calib/teleop_node.py" \
-    < /dev/null > /tmp/teleop.log 2>&1 &
-disown
-sleep 5
-
 echo "── 상태 ──"
 pgrep -f 'esp32_base_node\.py' >/dev/null && echo "  ✓ esp32_base" || echo "  ✗ esp32_base"
-pgrep -f 'teleop_node\.py'     >/dev/null && echo "  ✓ teleop"     || echo "  ✗ teleop"
+if pgrep -f '[t]eleop_node\.py' >/dev/null; then
+    echo "  ERROR: retired teleop_node.py is still running" >&2
+    exit 2
+fi
+echo "  manual control: use the resident bbiyong_manual_drive_bridge"
 grep -E "주행로그|우측 채널 부호|ESP32 연결" /tmp/base.log | tail -3
 ls -d "$HOME"/drivelog/*/ 2>/dev/null | tail -1

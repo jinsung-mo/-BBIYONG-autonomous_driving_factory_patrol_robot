@@ -1971,7 +1971,7 @@ function renderDrive(){
   $('drvAlert').innerHTML =
     dead ? `<div class="alert bad"><span class="sys">TELEOP</span><span>
              조종 노드가 응답하지 않는다 (503). Orin 에서
-             <code>python3 ~/calib/teleop_node.py</code> 를 띄워야 한다.</span></div>`
+             영속 BBIYONG 런타임의 <code>bbiyong_manual_drive_bridge</code>가 필요하다.</span></div>`
     : patrol ? `<div class="alert warn"><span class="sys">PATROL</span><span>
              순찰이 실행 중이라 수동 조종이 차단됐다 — 같은 <code>/cmd_vel</code> 을
              두 곳에서 쓰면 서로 덮어쓴다.</span></div>` : '';

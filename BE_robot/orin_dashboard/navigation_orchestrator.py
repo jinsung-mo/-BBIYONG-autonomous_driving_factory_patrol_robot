@@ -30,9 +30,17 @@ MAX_WAYPOINTS = 500
 def atomic_write_json(path, payload):
     target = Path(path).expanduser()
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(target.name + ".tmp")
-    temporary.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
-    os.replace(temporary, target)
+    temporary = target.with_name(
+        f".{target.name}.{os.getpid()}.{time.time_ns()}.tmp"
+    )
+    try:
+        temporary.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+        os.replace(temporary, target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _finite_number(value, field):
@@ -93,10 +101,12 @@ class NavigationOrchestrator:
         route_file,
         state_file,
         control_file,
+        drive_file="/tmp/orincar_drive.json",
         scouting_state_file=None,
         patrol_command=None,
         navigate_command=None,
         patrol_loop=False,
+        handoff_settle_seconds=0.15,
         process_stop_timeout=3.0,
         termination_success_codes=(0, 130),
     ):
@@ -104,13 +114,21 @@ class NavigationOrchestrator:
         self.route_file = Path(route_file).expanduser()
         self.state_file = Path(state_file).expanduser()
         self.control_file = Path(control_file).expanduser()
+        self.drive_file = Path(drive_file).expanduser()
         self.scouting_state_file = (
             Path(scouting_state_file).expanduser() if scouting_state_file else None
         )
         self.patrol_command = patrol_command
         self.navigate_command = navigate_command
         self.patrol_loop = bool(patrol_loop)
+        self.handoff_settle_seconds = float(handoff_settle_seconds)
         self.process_stop_timeout = float(process_stop_timeout)
+        if (
+            not math.isfinite(self.handoff_settle_seconds)
+            or self.handoff_settle_seconds < 0.0
+            or self.handoff_settle_seconds > 2.0
+        ):
+            raise ValueError("handoff_settle_seconds must be between 0 and 2")
         self.termination_success_codes = set(termination_success_codes)
         self.state = NavigationState.DISABLED
         self.error = None
@@ -122,6 +140,7 @@ class NavigationOrchestrator:
         self._control_sequence = self._load_control_sequence()
         self._lock = asyncio.Lock()
         # Reconnect or process restart must never resume motion.
+        self._disarm_manual()
         self._write_control("disabled", True)
         self._persist()
 
@@ -226,6 +245,20 @@ class NavigationOrchestrator:
             "updatedAt": time.time(),
         })
 
+    def _disarm_manual(self):
+        """Invalidate every previously accepted DRIVE command atomically."""
+        atomic_write_json(self.drive_file, {
+            "armed": False,
+            "v": 0.0,
+            "w": 0.0,
+            "ts": time.time(),
+        })
+
+    async def _settle_handoff(self):
+        """Keep the mux at zero long enough for the disabled state to be observed."""
+        if self.handoff_settle_seconds > 0.0:
+            await asyncio.sleep(self.handoff_settle_seconds)
+
     def _save_route(self, route):
         session = self._scouting_session()
         session_id = session.get("sessionId") if session else None
@@ -266,10 +299,6 @@ class NavigationOrchestrator:
                 return False, "route update was superseded"
             self._save_route(route)
             if self.state == NavigationState.PATROLLING:
-                if not await self._terminate_locked():
-                    self._write_control("disabled", True)
-                    self._transition(NavigationState.FAILED, "route replacement cancellation was not confirmed")
-                    return False, self.error
                 return await self._start_patrol_locked(request_generation)
             return True, f"stored patrol route with {len(route)} waypoints"
 
@@ -285,14 +314,20 @@ class NavigationOrchestrator:
             if requested == "manual":
                 self._write_control("disabled", False)
                 if not await self._terminate_locked():
+                    self._disarm_manual()
                     self._write_control("disabled", True)
                     self._transition(NavigationState.FAILED, "navigation cancellation was not confirmed")
                     return False, self.error
+                # The receiver is serialized while this awaits, so a DRIVE command
+                # accepted after the handoff cannot be overwritten by this disarm.
+                self._disarm_manual()
+                await self._settle_handoff()
                 self._write_control("manual", False)
                 self._transition(NavigationState.MANUAL)
                 return True, "manual control enabled"
             if requested == "disabled":
                 self._write_control("disabled", False)
+                self._disarm_manual()
                 safe = await self._terminate_locked()
                 self._write_control("disabled", not safe)
                 if not safe:
@@ -311,10 +346,12 @@ class NavigationOrchestrator:
         if not ready:
             return False, detail
         self._write_control("disabled", False)
+        self._disarm_manual()
         if not await self._terminate_locked():
             self._write_control("disabled", True)
             self._transition(NavigationState.FAILED, "patrol cancellation was not confirmed")
             return False, self.error
+        await self._settle_handoff()
         try:
             await self._start_process_locked(
                 self.patrol_command,
@@ -360,10 +397,12 @@ class NavigationOrchestrator:
             if not ready:
                 return False, detail
             self._write_control("disabled", False)
+            self._disarm_manual()
             if not await self._terminate_locked():
                 self._write_control("disabled", True)
                 self._transition(NavigationState.FAILED, "patrol cancellation was not confirmed")
                 return False, self.error
+            await self._settle_handoff()
             try:
                 await self._start_process_locked(
                     self.navigate_command, values, NavigationState.NAVIGATING
@@ -399,18 +438,21 @@ class NavigationOrchestrator:
         """Latch stop synchronously; safe for mapping lifecycle callbacks."""
         self._request_generation += 1
         request_generation = self._request_generation
+        self._disarm_manual()
         self._write_control("disabled", True)
         self._transition(NavigationState.ESTOPPED, reason)
         return request_generation
 
     def enable_mapping_autonomy(self):
         self._request_generation += 1
+        self._disarm_manual()
         self._write_control("autonomy", False)
         self._transition(NavigationState.AUTONOMY_IDLE)
 
     async def prepare_for_mapping(self):
         self._request_generation += 1
         request_generation = self._request_generation
+        self._disarm_manual()
         self._write_control("disabled", True)
         async with self._lock:
             if request_generation != self._request_generation:
@@ -439,6 +481,7 @@ class NavigationOrchestrator:
                 return
             self._process = None
             if return_code == 0:
+                self._disarm_manual()
                 self._write_control("disabled", False)
                 self._transition(NavigationState.AUTONOMY_IDLE)
             else:

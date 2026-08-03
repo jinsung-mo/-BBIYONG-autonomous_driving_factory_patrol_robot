@@ -218,13 +218,19 @@ bbiyong mapping-runtime /home/e101/bbiyong_ros2_ws/generated/nav2.yaml
 
 This persistent runtime owns Nav2, Collision Monitor, exactly one command mux,
 the control-state authority, and the guarded manual-drive bridge. Do not run the
-legacy `tools/teleop_node.py` beside it because that node bypasses the mux by
-publishing directly to `/cmd_vel`.
+retired `tools/teleop_node.py` beside it; publishing directly to final
+`/cmd_vel` is forbidden.
 
 Manual cloud commands are file-backed and enter only `/cmd_vel/manual`. The
 bridge applies finite-value checks, speed limits, acceleration ramps, a command
 deadman, and a directional LiDAR stop before the mux. The runtime starts in
 `disabled` with e-stop engaged; arming is always explicit.
+
+Backend ownership changes use an observable zero-command boundary. The cloud
+orchestrator atomically disarms the manual drive file, selects `disabled`,
+cancels the previous mission, waits 0.15 seconds, and only then grants manual or
+autonomy control. Override the settling interval only for commissioning with
+`ORINCAR_CONTROL_HANDOFF_SETTLE_SECONDS` (valid range: 0 to 2 seconds).
 
 For saved-map scouting, stop the mapping session through its owner and run:
 

@@ -8,6 +8,28 @@ ROS2_WS = PACKAGE.parents[1]
 
 
 class ManualControlWiringTest(unittest.TestCase):
+    def test_legacy_teleop_is_a_non_ros_retirement_shim(self) -> None:
+        source = (
+            ROS2_WS.parents[0]
+            / "tools"
+            / "diff_drive"
+            / "teleop_node.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("has been retired", source)
+        self.assertNotIn("import rclpy", source)
+        self.assertNotIn("create_publisher", source)
+        self.assertNotIn('"/cmd_vel"', source)
+        self.assertNotIn("pgrep", source)
+
+        relog = (
+            ROS2_WS.parents[0]
+            / "tools"
+            / "diff_drive"
+            / "base_relog.sh"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn('nohup python3 "$HOME/calib/teleop_node.py"', relog)
+        self.assertIn("resident bbiyong_manual_drive_bridge", relog)
+
     def test_manual_bridge_only_publishes_to_mux_input(self) -> None:
         source = (
             PACKAGE / "bbiyong_base" / "manual_drive_bridge.py"

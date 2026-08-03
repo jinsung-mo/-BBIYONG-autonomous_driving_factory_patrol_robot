@@ -189,6 +189,7 @@ class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
             patrol_route_file=root / "route.json",
             navigation_state_file=root / "navigation.json",
             control_state_file=root / "control.json",
+            manual_drive_file=root / "drive.json",
             scouting_state_file=None,
             patrol_command=None,
             navigate_command=None,
@@ -213,10 +214,9 @@ class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
             bridge = self.make_bridge(root)
 
             drive_file = root / "drive.json"
-            with patch("cloud_bridge.DRIVE_FILE", str(drive_file)):
-                await bridge.receiver(self.Incoming(
-                    {"command": "ESTOP", "active": True}
-                ))
+            await bridge.receiver(self.Incoming(
+                {"command": "ESTOP", "active": True}
+            ))
 
             self.assertFalse(json.loads(drive_file.read_text())["armed"])
             control = json.loads((root / "control.json").read_text())
@@ -228,17 +228,15 @@ class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
             root = Path(directory)
             drive_file = root / "drive.json"
             disabled = self.make_bridge(root)
-            with patch("cloud_bridge.DRIVE_FILE", str(drive_file)):
-                await disabled.receiver(self.Incoming(
-                    {"command": "DRIVE", "linear": 0.2, "angular": 0.0}
-                ))
-            self.assertFalse(drive_file.exists())
+            await disabled.receiver(self.Incoming(
+                {"command": "DRIVE", "linear": 0.2, "angular": 0.0}
+            ))
+            self.assertFalse(json.loads(drive_file.read_text())["armed"])
 
             enabled = self.make_bridge(root, backend_control_enabled=True)
-            with patch("cloud_bridge.DRIVE_FILE", str(drive_file)):
-                await enabled.receiver(self.Incoming(
-                    {"command": "DRIVE", "linear": 0.2, "angular": 0.0}
-                ))
+            await enabled.receiver(self.Incoming(
+                {"command": "DRIVE", "linear": 0.2, "angular": 0.0}
+            ))
             self.assertTrue(json.loads(drive_file.read_text())["armed"])
 
     async def test_navigation_capabilities_are_independent(self):
