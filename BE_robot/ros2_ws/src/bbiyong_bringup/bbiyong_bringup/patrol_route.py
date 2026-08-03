@@ -26,7 +26,7 @@ class PatrolRoute(Node):
         super().__init__("bbiyong_patrol_route")
         self.declare_parameter("route_file", "")
         self.declare_parameter("frame_id", "map")
-        self.declare_parameter("loop_route", True)
+        self.declare_parameter("loop_route", False)
         self.declare_parameter("consecutive_failure_limit", 3)
         self.declare_parameter("route_check_period_sec", 1.0)
         self.declare_parameter("retry_delay_sec", 2.0)

@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from cloud_bridge import (
     Bridge,
@@ -14,6 +14,7 @@ from cloud_bridge import (
     build_video,
     fresh,
     infer_status,
+    parse_args,
     select_mission_status,
     translate_command,
 )
@@ -177,40 +178,118 @@ class CommandTest(unittest.TestCase):
 
 
 class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
+    def make_bridge(self, root, **capabilities):
+        values = dict(
+            server_url="ws://unused",
+            robot_id="orinka_01",
+            telemetry_hz=2.0,
+            video_hz=4.0,
+            mapping_enabled=False,
+            navigation_enabled=False,
+            patrol_route_file=root / "route.json",
+            navigation_state_file=root / "navigation.json",
+            control_state_file=root / "control.json",
+            scouting_state_file=None,
+            patrol_command=None,
+            navigate_command=None,
+            navigation_stop_timeout=1.0,
+        )
+        values.update(capabilities)
+        return Bridge(SimpleNamespace(**values))
+
+    class Incoming:
+        def __init__(self, *commands):
+            self.commands = commands
+
+        def __aiter__(self):
+            async def messages():
+                for command in self.commands:
+                    yield json.dumps(command)
+            return messages()
+
     async def test_backend_estop_always_latches_persistent_control(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            args = SimpleNamespace(
-                server_url="ws://unused",
-                robot_id="orinka_01",
-                telemetry_hz=2.0,
-                video_hz=4.0,
-                mapping_enabled=False,
-                navigation_enabled=False,
-                patrol_route_file=root / "route.json",
-                navigation_state_file=root / "navigation.json",
-                control_state_file=root / "control.json",
-                scouting_state_file=None,
-                patrol_command=None,
-                navigate_command=None,
-                navigation_stop_timeout=1.0,
-            )
-            bridge = Bridge(args)
-
-            class Incoming:
-                def __aiter__(self):
-                    async def messages():
-                        yield json.dumps({"command": "ESTOP", "active": True})
-                    return messages()
+            bridge = self.make_bridge(root)
 
             drive_file = root / "drive.json"
             with patch("cloud_bridge.DRIVE_FILE", str(drive_file)):
-                await bridge.receiver(Incoming())
+                await bridge.receiver(self.Incoming(
+                    {"command": "ESTOP", "active": True}
+                ))
 
             self.assertFalse(json.loads(drive_file.read_text())["armed"])
             control = json.loads((root / "control.json").read_text())
             self.assertEqual(control["mode"], "disabled")
             self.assertTrue(control["estop"])
+
+    async def test_drive_requires_backend_control_capability(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            drive_file = root / "drive.json"
+            disabled = self.make_bridge(root)
+            with patch("cloud_bridge.DRIVE_FILE", str(drive_file)):
+                await disabled.receiver(self.Incoming(
+                    {"command": "DRIVE", "linear": 0.2, "angular": 0.0}
+                ))
+            self.assertFalse(drive_file.exists())
+
+            enabled = self.make_bridge(root, backend_control_enabled=True)
+            with patch("cloud_bridge.DRIVE_FILE", str(drive_file)):
+                await enabled.receiver(self.Incoming(
+                    {"command": "DRIVE", "linear": 0.2, "angular": 0.0}
+                ))
+            self.assertTrue(json.loads(drive_file.read_text())["armed"])
+
+    async def test_navigation_capabilities_are_independent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = self.make_bridge(
+                Path(directory),
+                backend_control_enabled=True,
+                one_off_navigation_enabled=False,
+                patrol_enabled=False,
+            )
+            bridge.navigation.handle_command = AsyncMock(return_value=(True, "ok"))
+            await bridge.receiver(self.Incoming(
+                {"command": "SET_MODE", "mode": "manual"},
+                {"command": "SET_MODE", "mode": "disabled"},
+                {"command": "SET_MODE", "mode": "autonomy"},
+                {"command": "SET_PATROL_ROUTE", "waypoints": []},
+                {"command": "NAVIGATE", "x": 0, "y": 0},
+            ))
+            self.assertEqual(bridge.navigation.handle_command.await_count, 2)
+            self.assertEqual(
+                bridge.navigation.handle_command.await_args_list[0].args[0],
+                {"command": "SET_MODE", "mode": "manual"},
+            )
+            self.assertEqual(
+                bridge.navigation.handle_command.await_args_list[1].args[0],
+                {"command": "SET_MODE", "mode": "disabled"},
+            )
+
+
+class CapabilityArgumentTest(unittest.TestCase):
+    def test_legacy_cli_switch_enables_all_capabilities(self):
+        with patch.dict("os.environ", {}, clear=True):
+            args = parse_args(["--navigation-enabled"])
+        self.assertTrue(args.backend_control_enabled)
+        self.assertTrue(args.one_off_navigation_enabled)
+        self.assertTrue(args.patrol_enabled)
+        self.assertTrue(args.patrol_loop_enabled)
+
+    def test_environment_capabilities_are_independent(self):
+        environment = {
+            "ORINCAR_BACKEND_CONTROL_ENABLED": "1",
+            "ORINCAR_ONE_OFF_NAVIGATION_ENABLED": "0",
+            "ORINCAR_PATROL_ENABLED": "1",
+            "ORINCAR_PATROL_LOOP_ENABLED": "0",
+        }
+        with patch.dict("os.environ", environment, clear=True):
+            args = parse_args([])
+        self.assertTrue(args.backend_control_enabled)
+        self.assertFalse(args.one_off_navigation_enabled)
+        self.assertTrue(args.patrol_enabled)
+        self.assertFalse(args.patrol_loop_enabled)
 
 
 if __name__ == "__main__":
