@@ -545,3 +545,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .usr-list select{flex:1; background:var(--dk-panel2); color:var(--dk-ink);
   border:1px solid var(--dk-line); border-radius:8px; padding:6px 9px; font-size:12px;}
 .usr-busy{font-size:11px; color:var(--dk-sub); white-space:nowrap;}
+
+/* 단축키가 먹었음을 버튼으로 보여 준다 — 방향 패드가 WASD 에 반응하는 것과 같은 규칙.
+   색은 바꾸지 않고 눌린 깊이만 준다: 긴급 정지의 빨강·순찰 복귀의 초록이 상태색이라
+   그것을 덮으면 무슨 버튼인지 읽기 어려워진다. */
+.dbtn.active{transform:translateY(1px); filter:brightness(1.35);
+  box-shadow:inset 0 0 0 1px currentColor;}

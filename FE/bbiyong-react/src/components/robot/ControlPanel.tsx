@@ -37,6 +37,10 @@ export default function ControlPanel() {
   const [gotoId, setGotoId] = useState(points[0]?.id)
   // 조작 결과 안내 — 명령이 조용히 버려지는 경우를 알린다(S15P11E101-595)
   const [ctlMsg, setCtlMsg] = useState<{ kind: string, text: string } | null>(null)
+  // Shift 를 누르고 있는 동안 그 키가 실행할 버튼을 눌린 모양으로 보여 준다.
+  // 방향 버튼이 WASD 에 반응하는 것과 같은 규칙이다 — 키가 먹었는지 화면으로 알 수 있어야
+  // '단축키가 안 듣는다'는 오해가 생기지 않는다.
+  const [shiftHeld, setShiftHeld] = useState(false)
   const resumeTimer = useRef<any>(null)
   const goal = points.find((p: any) => p.id === gotoId) || points[0]
   const spd = speedParams(settings.vMax)
@@ -193,7 +197,12 @@ export default function ControlPanel() {
     const DRIVE_KEYS = /^([wasd]|arrow(up|down|left|right))$/
 
     const onDown = (e: any) => {
-      if (e.key === 'Shift') { if (!e.repeat && !isTyping(e.target)) shiftAlone = true; return }
+      if (e.key === 'Shift') {
+        if (!e.repeat && !isTyping(e.target)) { shiftAlone = true; setShiftHeld(true) }
+        return
+      }
+      // Shift 와 다른 키를 함께 누르면 단축키가 아니다 — 눌린 표시도 함께 거둔다
+      if (shiftAlone) setShiftHeld(false)
       shiftAlone = false
       // 주행 키는 모드를 건드리지 않는다(S15P11E101-513). 실제 주행 발행은
       // live 는 LiveSimBridge, mock 은 useSimulation 의 키 리스너가 맡는다.
@@ -210,6 +219,7 @@ export default function ControlPanel() {
     }
     const onUp = (e: any) => {
       if (e.key !== 'Shift') return
+      setShiftHeld(false)
       if (!shiftAlone) return
       shiftAlone = false
       if (isTyping(e.target)) return
@@ -218,7 +228,8 @@ export default function ControlPanel() {
       if (s.estopEngaged) { if (!s.ctlOff) s.onReturnPatrol() }
       else s.onEmergencyStop()
     }
-    const onBlur = () => { shiftAlone = false }
+    // 창을 벗어나면 keyup 을 못 받는다 — 눌린 채로 굳지 않게 함께 푼다
+    const onBlur = () => { shiftAlone = false; setShiftHeld(false) }
 
     window.addEventListener('keydown', onDown)
     window.addEventListener('keyup', onUp)
@@ -246,7 +257,7 @@ export default function ControlPanel() {
         <div className="col">
           {/* Shift 뱃지는 지금 그 키가 실행할 버튼에만 붙인다 — 어느 쪽으로 토글되는지 화면으로 알 수 있게 */}
           <button
-            className="dbtn stop keyed"
+            className={`dbtn stop keyed${shiftHeld && !estopEngaged ? ' active' : ''}`}
             onClick={onEmergencyStop}
             disabled={estopOff}
             aria-keyshortcuts={estopEngaged ? undefined : 'Shift'}
@@ -254,8 +265,9 @@ export default function ControlPanel() {
             <span>■ 긴급 정지</span>
             {!estopEngaged && <kbd className="kbd">Shift</kbd>}
           </button>
+          {/* 순찰 복귀는 조작 권한이 필요하다 — 눌러도 나가지 않을 버튼을 눌린 것처럼 보이면 안 된다 */}
           <button
-            className="dbtn go keyed"
+            className={`dbtn go keyed${shiftHeld && estopEngaged && !ctlOff ? ' active' : ''}`}
             onClick={onReturnPatrol}
             disabled={ctlOff}
             aria-keyshortcuts={estopEngaged ? 'Shift' : undefined}
