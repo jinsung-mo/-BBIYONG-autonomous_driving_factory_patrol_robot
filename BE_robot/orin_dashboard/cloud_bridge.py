@@ -73,6 +73,7 @@ def websocket_auth_kwargs(connect_callable=None):
 # (env 로 덮어쓸 수 있게 해 두면 테스트·다른 배치에서 재사용된다)
 # ─────────────────────────────────────────────────────────────
 NAV_LIVE_FILE = os.environ.get("ORINCAR_NAV_LIVE_FILE", "/tmp/orincar_nav_live.json")
+NAV_MAP_FILE = os.environ.get("ORINCAR_NAV_MAP_FILE", "/tmp/orincar_nav_map.json")
 CAM_FILE = os.environ.get("ORINCAR_CAM_FILE", "/tmp/orincar_cam.json")
 DRIVE_FILE = os.environ.get("ORINCAR_DRIVE_FILE", "/tmp/orincar_drive.json")
 DRIVE_STATUS_FILE = os.environ.get(
@@ -92,6 +93,11 @@ H264_FRAME_FILE = os.environ.get(
 CLOUD_LINK_FILE = os.environ.get(
     "ORINCAR_CLOUD_LINK_FILE", "/tmp/orincar_cloud_link.json"
 )
+
+# 🔑 STOMP 는 지난 메시지를 새 구독자에게 재전송하지 않는다. 맵이 정지 상태여도
+#    이 주기마다 한 번은 현재 맵을 다시 보내야, 도중에 접속한 대시보드가
+#    빈 화면을 보지 않는다.
+MAP_REEMIT_SEC = 10.0
 
 # 신선도 판정 — 이보다 오래된 파일은 "지금 값이 아님" 으로 보고 해당 필드를 비운다.
 # 오래된 pose 를 살아있는 값처럼 올리면 관제 지도에 로봇이 유령처럼 남는다.
@@ -189,6 +195,44 @@ def build_telemetry(robot_id, nav_live, drive_status, cam, now,
 def select_mission_status(mapping_status, navigation_status):
     """Mapping retains backend-compatible telemetry precedence."""
     return mapping_status or navigation_status
+
+
+def build_map(robot_id, nav_map):
+    """nav_map.json(RLE snapshot)을 MAP 패킷으로. 없거나 sequence 없으면 None.
+
+    nav_bridge 가 만든 원문({sequence, w, h, res, ox, oy, encoding, cells})에
+    source/type/robot_id 만 얹어 그대로 보낸다. 서버는 이 원문을 해석하지 않고
+    /topic/nav/{robot_id} 로 중계하며, RLE 디코드·렌더는 대시보드(FE)가 한다.
+    """
+    if not nav_map or nav_map.get("sequence") is None:
+        return None
+    return {**nav_map, "source": "robot", "type": "MAP", "robot_id": robot_id}
+
+
+def build_nav_live(robot_id, nav_live):
+    """nav_live.json 의 pose·scan 을 NAV_LIVE 패킷으로. 둘 다 없으면 None.
+
+    맵(MAP)과 같은 /topic/nav 채널로 흘러 대시보드가 실시간 자세·LiDAR 스캔을
+    지도 위에 겹쳐 그린다. scan 은 {angle_min, angle_inc, ranges} (nav_bridge 포맷).
+    """
+    if not nav_live:
+        return None
+    pose = nav_live.get("pose")
+    scan = nav_live.get("scan")
+    if pose is None and scan is None:
+        return None
+    packet = {
+        "source": "robot",
+        "type": "NAV_LIVE",
+        "robot_id": robot_id,
+        "t": nav_live.get("t"),
+        "map_sequence": nav_live.get("map_sequence"),
+    }
+    if pose is not None:
+        packet["pose"] = pose
+    if scan is not None:
+        packet["scan"] = scan
+    return packet
 
 
 def build_video(robot_id, cam, seq):
@@ -297,7 +341,11 @@ def translate_command(cmd, now):
 
 
 def atomic_write(path, payload):
-    tmp = path + ".tmp"
+    # 🔑 [2026-08-04] 임시파일 이름에 PID 를 넣는다. 종전에는 프로세스마다 같은
+    #    "<path>.tmp" 를 써서, 브리지가 실수로 두 개 뜨면 한쪽이 rename 한 뒤
+    #    다른 쪽의 os.replace 가 ENOENT 로 계속 실패했다(하트비트가 통째로 죽음).
+    #    실제로 발생했다 — 2026-08-04 03:22.
+    tmp = f"{path}.{os.getpid()}.tmp"
     with open(tmp, "w", encoding="utf-8") as file:
         json.dump(payload, file)
     os.replace(tmp, path)
@@ -338,6 +386,12 @@ class Bridge:
         self.h264_frame_file = str(
             getattr(args, "h264_frame_file", H264_FRAME_FILE)
         )
+        # 🆕 지도·자세 송신 (S15P11E101-660). hz 가 0 이면 끈다.
+        self.map_enabled = getattr(args, "map_hz", 0.0) > 0
+        self.map_period = (1.0 / args.map_hz) if self.map_enabled else None
+        self.map_seq_sent = None
+        self.nav_enabled = getattr(args, "nav_hz", 0.0) > 0
+        self.nav_period = (1.0 / args.nav_hz) if self.nav_enabled else None
         self.fire = FireConfirmer()
         self.estop = "RELEASED"
         self.video_seq = 0
@@ -498,6 +552,41 @@ class Bridge:
 
             await asyncio.sleep(self.telemetry_period)
 
+    async def map_sender(self, ws):
+        """실시간 2D 점유격자 맵 송신. sequence 가 바뀐 경우에만 보낸다.
+
+        nav_map.json 은 nav_bridge 가 지도 내용이 실제로 바뀔 때만 다시 쓰므로,
+        sequence 비교로 중복 전송을 막는다(대역폭 절약).
+
+        단, STOMP 는 지난 메시지를 새 구독자에게 재전송하지 않으므로, 맵이 정지
+        상태여도 MAP_REEMIT_SEC 마다 한 번은 현재 맵을 다시 보낸다 — 대시보드가
+        도중에 접속해도 곧 맵을 받게 하기 위한 초기 스냅샷 보완이다.
+        """
+        last_emit = 0.0
+        while True:
+            now = time.time()
+            nav_map = read_json(NAV_MAP_FILE)
+            packet = build_map(self.robot_id, nav_map)
+            if packet is not None:
+                changed = packet["sequence"] != self.map_seq_sent
+                due = (now - last_emit) >= MAP_REEMIT_SEC
+                if changed or due:
+                    await ws.send(json.dumps(packet))
+                    self.map_seq_sent = packet["sequence"]
+                    last_emit = now
+                    kind = "송신" if changed else "재전송(구독자 초기화용)"
+                    print(f"[map] MAP {kind} sequence={packet['sequence']} "
+                          f"({packet.get('w')}x{packet.get('h')})", flush=True)
+            await asyncio.sleep(self.map_period)
+
+    async def nav_live_sender(self, ws):
+        """라이브 자세·LiDAR 스캔 송신 (NAV_LIVE). 고정 주기."""
+        while True:
+            packet = build_nav_live(self.robot_id, read_json(NAV_LIVE_FILE))
+            if packet is not None:
+                await ws.send(json.dumps(packet))
+            await asyncio.sleep(self.nav_period)
+
     async def video_sender(self, ws):
         """FRONT 영상 루프. 텔레메트리와 주기를 분리해 대역폭을 따로 조절한다."""
         last_stamp = None
@@ -568,6 +657,16 @@ class Bridge:
                 if command == "DRIVE" and not self.backend_control_enabled:
                     print(
                         "[recv] DRIVE rejected: backend control is disabled",
+                        flush=True,
+                    )
+                    continue
+                if command == "DRIVE" and not self.navigation.manual_control_allowed:
+                    # ESTOP and mode transitions atomically disarm the manual file.
+                    # Never let a later or queued DRIVE packet re-arm it.
+                    state = self.navigation.state.value
+                    print(
+                        f"[recv] DRIVE rejected: manual control is unavailable "
+                        f"(state={state}, estop={self.navigation.estop_engaged})",
                         flush=True,
                     )
                     continue
@@ -656,7 +755,13 @@ class Bridge:
             await ws.send(json.dumps(build_register(self.robot_id)))
             print(f"[conn] 접속·REGISTER 완료 → {self.url} (robot_id={self.robot_id})",
                   flush=True)
+            # 재접속하면 서버·구독자가 맵을 잊었을 수 있다. 한 번 다시 보낸다.
+            self.map_seq_sent = None
             tasks = [self.sender(ws), self.receiver(ws)]
+            if self.map_enabled:
+                tasks.append(self.map_sender(ws))
+            if self.nav_enabled:
+                tasks.append(self.nav_live_sender(ws))
             if self.video_transport == "h264":
                 tasks.append(self.h264_video_sender(ws))
             elif self.video_transport == "jpeg":
@@ -720,6 +825,18 @@ def parse_args(argv=None):
         "--h264-video-hz",
         type=float,
         default=float(os.environ.get("ORINCAR_H264_VIDEO_HZ", "15")),
+    )
+    parser.add_argument(
+        "--map-hz",
+        type=float,
+        default=float(os.environ.get("ORINCAR_MAP_HZ", "1")),
+        help="점유격자 맵 송신 주기(Hz). 0 이면 끈다. 실제 전송은 지도가 바뀔 때만",
+    )
+    parser.add_argument(
+        "--nav-hz",
+        type=float,
+        default=float(os.environ.get("ORINCAR_NAV_HZ", "2")),
+        help="자세·LiDAR 스캔(NAV_LIVE) 송신 주기(Hz). 0 이면 끈다",
     )
     parser.add_argument(
         "--h264-frame-file",
