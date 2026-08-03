@@ -42,7 +42,13 @@ from blackbox_recorder import BlackboxRecorder
 from h264_encoder import H264Encoder
 
 CAM_W, CAM_H = 640, 480
-H264_HZ = 15.0
+# 🔑 [2026-08-04] cloud_bridge 와 **같은 환경변수**를 본다.
+#    둘은 반드시 같은 fps 여야 하는데 종전에는 여기가 하드코딩,
+#    브리지는 ORINCAR_H264_VIDEO_HZ 라 한쪽만 바꾸면 조용히 어긋났다.
+#    (같은 구조의 사고: stack_up 이 카메라 모드를 모른 채 먼저 띄워
+#     h264 프레임이 영영 안 생겼던 건 — run_bridge.sh 주석 참조)
+#    값을 바꿀 곳은 run_bridge.sh 한 곳뿐이다.
+H264_HZ = float(os.environ.get("ORINCAR_H264_VIDEO_HZ", "15"))
 DET_HZ = 4.0                 # 화재 탐지 주기 (불은 빨리 안 움직인다)
 FLOOR_HZ = 10.0              # 바닥 판정은 주행 안전이라 더 자주
 OUT_FILE = "/tmp/orincar_cam.json"
@@ -328,9 +334,16 @@ class CameraNode(Node):
         fire = sum(self.fire_hist) >= FIRE_M      # N 프레임 중 M 번 이상
         self.pub_fire.publish(Bool(data=bool(fire)))
         if fire:
+            # The M-of-N vote can remain true when this frame has no fire box.
+            # max() without a default crashed the node in that transition,
+            # stopping both the camera producer and the H.264 stream.
+            fire_conf = max(
+                (d["conf"] for d in self.dets if d["cls"] == 1),
+                default=0.0,
+            )
             self.get_logger().warn(
                 f"🔥 화재 확정 ({sum(self.fire_hist)}/{len(self.fire_hist)} 프레임) "
-                f"conf={max(d['conf'] for d in self.dets if d['cls']==1):.2f}")
+                f"conf={fire_conf:.2f}")
 
     # ── 대시보드용 파일 ─────────────────────────────────────────
     def dump(self):
