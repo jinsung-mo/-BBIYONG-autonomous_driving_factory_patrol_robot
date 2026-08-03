@@ -640,8 +640,20 @@ export interface LiveContextValue {
 export interface DashboardStats {
   summary: RobotSummary
   today: TodayStats
+  /** 설비(분전반) 집계. S15P11E101-573 에서 추가됐다 — 예전 서버에는 없다. */
+  equipment?: EquipmentSummary
+  /** 설비 목록. 설정 탭의 /api/equipments 와 같은 형태다. */
+  equipmentStatus?: Equipment[]
   recentEvents: EventLog[]
   robotStatus: RobotResponse[]
+}
+
+/** 설비 상태 집계(S15P11E101-630). 필드 이름은 BE EquipmentSummary 그대로다. */
+export interface EquipmentSummary {
+  totalEquipments: number
+  overheatingEquipments: number
+  normalEquipments: number
+  unknownEquipments: number
 }
 
 export interface RobotSummary {
