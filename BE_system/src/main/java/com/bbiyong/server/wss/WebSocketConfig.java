@@ -15,7 +15,15 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     // 로봇 VIDEO_FRAME(base64 JPEG)·MAP(RLE)은 컨테이너 기본 텍스트 버퍼(8KB)를 넘어
     // "1009 message too big" 으로 /ws/robot 연결을 끊는다. 여유 있게 512KB 로 올린다.
-    private static final int WS_BUFFER_BYTES = 512 * 1024;
+    private static final int WS_TEXT_BUFFER_BYTES = 512 * 1024;
+
+    // H.264 바이너리(BBV1) 는 프로토콜상 payload 최대 2MB (H264BinaryFrame.MAX_PAYLOAD_BYTES).
+    // 버퍼가 이보다 작으면 키프레임(스트림 첫 패킷)이 매번 1009 로 세션을 끊어
+    // "접속→끊김" 무한 반복이 된다(S15P11E101-635). 헤더+robot_id 여유 포함 상한에 동기화.
+    private static final int WS_BINARY_BUFFER_BYTES =
+            com.bbiyong.server.wss.dto.H264BinaryFrame.MAX_PAYLOAD_BYTES
+                    + com.bbiyong.server.wss.dto.H264BinaryFrame.FIXED_HEADER_SIZE
+                    + com.bbiyong.server.wss.dto.H264BinaryFrame.MAX_ROBOT_ID_BYTES;
 
     private final RobotWebSocketHandler robotWebSocketHandler;
 
@@ -48,9 +56,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
     public WebServerFactoryCustomizer<TomcatServletWebServerFactory> webSocketBufferCustomizer() {
         return factory -> factory.addContextCustomizers(context -> {
             context.addParameter(
-                    "org.apache.tomcat.websocket.textBufferSize", String.valueOf(WS_BUFFER_BYTES));
+                    "org.apache.tomcat.websocket.textBufferSize", String.valueOf(WS_TEXT_BUFFER_BYTES));
             context.addParameter(
-                    "org.apache.tomcat.websocket.binaryBufferSize", String.valueOf(WS_BUFFER_BYTES));
+                    "org.apache.tomcat.websocket.binaryBufferSize", String.valueOf(WS_BINARY_BUFFER_BYTES));
         });
     }
 }
