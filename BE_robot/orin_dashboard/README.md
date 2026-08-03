@@ -52,6 +52,21 @@ Inbound (server → robot, `ControlCommand`):
   PGM bytes, and queues `EVENT_MAPPING_COMPLETE` only after HTTP 201. Backend
   support for decoding RAW PGM before `FloorPlanRenderer` is a deployment
   prerequisite owned by the backend team.
+- `EVENT_SAVED {eventId, type}` is validated and placed in a durable local
+  queue. The matching finalized blackbox MP4 is uploaded asynchronously to
+  `POST /api/videos/upload` with `clipType=EVENT`; a slow or offline upload does
+  not block WebSocket commands or cause the backend event to be recreated.
+
+`camera_node.py` owns both camera capture and a bounded rolling recorder so a
+second process never opens `/dev/video0`. By default it finalizes a 10-second
+MP4 segment and retains five minutes under
+`~/.local/state/bbiyong/blackbox`. Its manifest and the bridge upload queue are
+atomically persisted. Configure the shared manifest with
+`ORINCAR_BLACKBOX_MANIFEST`, retention with
+`ORINCAR_BLACKBOX_RETENTION_SECONDS`, and disable recording only for diagnostics
+with `--no-blackbox`. Event clips are limited to 200 MiB and authenticated with
+`BBIYONG_ROBOT_UPLOAD_TOKEN`. `ORINCAR_EVENT_CLIP_ENABLED=0` disables only the
+upload consumer; pending jobs remain on disk for a later restart.
 
 Mapping stays disabled unless `--mapping-enabled` is passed (or
 `ORINCAR_MAPPING_ENABLED=1` is set). The bridge also requires

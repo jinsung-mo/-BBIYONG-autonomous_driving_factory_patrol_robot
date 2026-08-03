@@ -158,6 +158,13 @@ class CommandTest(unittest.TestCase):
             self.assertEqual(action, "navigation", command)
             self.assertEqual(payload["command"], command)
 
+    def test_event_saved_is_dispatched(self):
+        action, payload = translate_command(
+            {"command": "EVENT_SAVED", "eventId": 42, "type": "FIRE"}, NOW
+        )
+        self.assertEqual(action, "event_saved")
+        self.assertEqual(payload["eventId"], 42)
+
     def test_mapping_commands_are_dispatched(self):
         for command in ("START_MAPPING", "STOP_MAPPING", "SAVE_MAP"):
             action, payload = translate_command(
@@ -194,6 +201,9 @@ class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
             patrol_command=None,
             navigate_command=None,
             navigation_stop_timeout=1.0,
+            event_clip_state_file=root / "event_clips.json",
+            blackbox_manifest_file=root / "manifest.json",
+            video_upload_url="http://unused/api/videos/upload",
         )
         values.update(capabilities)
         return Bridge(SimpleNamespace(**values))
@@ -264,6 +274,17 @@ class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
                 bridge.navigation.handle_command.await_args_list[1].args[0],
                 {"command": "SET_MODE", "mode": "disabled"},
             )
+
+    async def test_event_saved_is_durably_queued_without_blocking_receiver(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bridge = self.make_bridge(root)
+            await bridge.receiver(self.Incoming(
+                {"command": "EVENT_SAVED", "eventId": 42, "type": "FIRE"}
+            ))
+            state = json.loads((root / "event_clips.json").read_text())
+            self.assertEqual(state["jobs"]["42"]["status"], "pending")
+            self.assertEqual(state["jobs"]["42"]["eventType"], "FIRE")
 
 
 class CapabilityArgumentTest(unittest.TestCase):
