@@ -61,7 +61,9 @@ def encode_packet(packet):
         MAGIC,
         VERSION,
         flags,
-        FIXED_HEADER_SIZE,
+        # 🔑 서버 정의: payload 직전까지의 **전체** 헤더 길이.
+        #    고정 40 만 보내면 H264BinaryFrame.java:69 가 패킷을 버린다.
+        FIXED_HEADER_SIZE + len(robot_id),
         packet.stream_id,
         packet.sequence,
         packet.timestamp_ms,
@@ -92,12 +94,16 @@ def decode_packet(data):
         fps,
         robot_id_size,
     ) = FIXED_HEADER.unpack_from(data)
-    if magic != MAGIC or version != VERSION or header_size != FIXED_HEADER_SIZE:
+    if magic != MAGIC or version != VERSION:
         raise ValueError("unsupported H.264 packet envelope")
     if flags & ~(FLAG_KEYFRAME | FLAG_CODEC_CONFIG):
         raise ValueError("unsupported H.264 packet flags")
     if not 1 <= robot_id_size <= MAX_ROBOT_ID_BYTES:
         raise ValueError("robot_id length is invalid")
+    # header_size 는 robot_id_size 를 읽은 뒤에야 검증할 수 있다 —
+    # 서버 정의상 payload 직전까지의 전체 길이이기 때문이다.
+    if header_size != FIXED_HEADER_SIZE + robot_id_size:
+        raise ValueError("H.264 header_size does not match robot_id length")
     if not 1 <= payload_size <= MAX_PAYLOAD_BYTES:
         raise ValueError("H.264 payload length is invalid")
     expected = FIXED_HEADER_SIZE + robot_id_size + payload_size
