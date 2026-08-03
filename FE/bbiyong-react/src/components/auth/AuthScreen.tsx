@@ -29,7 +29,12 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
   const setPhone = (e: any) => setForm((f) => ({ ...f, phone: formatPhone(e.target.value) }))
 
   const switchMode = (m: any) => { setMode(m); reset() }
-  const switchSource = (v: any) => { saveDataSource(v); setSource(v); setErr('') }
+  const switchSource = (v: any) => {
+    if (v === source) return
+    // 실서버와 시뮬레이션은 계정 저장소가 다르다. 이전 모드의 개인정보·비밀번호를
+    // 다음 모드로 들고 가지 않도록, 전환 시 전체 입력을 비운다.
+    saveDataSource(v); setSource(v); reset()
+  }
 
   // 뒤로가기(bfcache)로 이 화면에 돌아오면 이전 입력이 그대로 살아 있다.
   // bfcache 는 JS 힙까지 복원하므로 컴포넌트 상태도 남는다 — 복원 시점에 비운다.
@@ -41,7 +46,15 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
   }, [reset])
 
   const submit = async (e: any) => {
-    e.preventDefault(); setErr(''); setBusy(true)
+    e.preventDefault()
+    // disabled 버튼만으로는 Enter 재제출을 완전히 막는다는 보장이 없다.
+    if (busy) return
+    setErr('')
+    if (mode === 'login') {
+      if (!form.email.trim()) { setErr('이메일을 입력하세요.'); return }
+      if (!form.password) { setErr('비밀번호를 입력하세요.'); return }
+    }
+    setBusy(true)
     try {
       if (mode === 'login') {
         await login(form.email.trim(), form.password)
@@ -74,41 +87,41 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
       <div className="auth-card">
         <div className="auth-brand">삐용(BBIYONG)<span> 통합 관제 시스템</span></div>
         <div className="auth-tabs">
-          <button className={mode === 'login' ? 'on' : ''} onClick={() => switchMode('login')}>로그인</button>
-          <button className={mode === 'signup' ? 'on' : ''} onClick={() => switchMode('signup')}>회원가입</button>
+          <button type="button" className={mode === 'login' ? 'on' : ''} onClick={() => switchMode('login')} disabled={busy}>로그인</button>
+          <button type="button" className={mode === 'signup' ? 'on' : ''} onClick={() => switchMode('signup')} disabled={busy}>회원가입</button>
         </div>
         <div className="auth-source">
-          <button type="button" className={!live ? 'on' : ''} onClick={() => switchSource('mock')}>시뮬레이션</button>
-          <button type="button" className={live ? 'on' : ''} onClick={() => switchSource('live')}>실서버</button>
+          <button type="button" className={!live ? 'on' : ''} onClick={() => switchSource('mock')} disabled={busy}>시뮬레이션</button>
+          <button type="button" className={live ? 'on' : ''} onClick={() => switchSource('live')} disabled={busy}>실서버</button>
         </div>
         <form onSubmit={submit}>
           {mode === 'signup' && (
             <div className="form-row">
               <label htmlFor="su-name">이름</label>
-              <input id="su-name" value={form.name} onChange={set('name')} placeholder="관리자 이름" autoComplete="name" />
+              <input id="su-name" value={form.name} onChange={set('name')} placeholder="관리자 이름" autoComplete="name" disabled={busy} />
             </div>
           )}
           <div className="form-row">
             <label htmlFor="au-email">이메일</label>
-            <input id="au-email" type="email" value={form.email} onChange={set('email')} placeholder="safety@bbiyong.io" autoComplete="username" />
+            <input id="au-email" type="email" value={form.email} onChange={set('email')} placeholder="safety@bbiyong.io" autoComplete="username" disabled={busy} />
           </div>
           <div className="form-row">
             <label htmlFor="au-pw">비밀번호</label>
-            <input id="au-pw" type="password" value={form.password} onChange={set('password')} placeholder={mode === 'signup' ? '영문·숫자·특수문자 포함 8자 이상' : '비밀번호'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+            <input id="au-pw" type="password" value={form.password} onChange={set('password')} placeholder={mode === 'signup' ? '영문·숫자·특수문자 포함 8자 이상' : '비밀번호'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} disabled={busy} />
           </div>
           {mode === 'signup' && (
             <>
               <div className="form-row">
                 <label htmlFor="su-pw2">비밀번호 확인</label>
-                <input id="su-pw2" type="password" value={form.password2} onChange={set('password2')} placeholder="비밀번호 확인" autoComplete="new-password" />
+                <input id="su-pw2" type="password" value={form.password2} onChange={set('password2')} placeholder="비밀번호 확인" autoComplete="new-password" disabled={busy} />
               </div>
               <div className="form-row">
                 <label htmlFor="su-phone">휴대전화번호</label>
-                <input id="su-phone" type="tel" inputMode="numeric" value={form.phone} onChange={setPhone} placeholder="010-0000-0000" autoComplete="tel" />
+                <input id="su-phone" type="tel" inputMode="numeric" value={form.phone} onChange={setPhone} placeholder="010-0000-0000" autoComplete="tel" disabled={busy} />
               </div>
               <div className="form-row">
                 <label htmlFor="su-birth">생년월일</label>
-                <input id="su-birth" type="date" value={form.birth} onChange={set('birth')} min={MIN_BIRTH_ISO} max={todayISO()} autoComplete="bday" />
+                <input id="su-birth" type="date" value={form.birth} onChange={set('birth')} min={MIN_BIRTH_ISO} max={todayISO()} autoComplete="bday" disabled={busy} />
               </div>
               <div className="form-row">
                 <label id="su-gender-label">성별</label>
@@ -121,6 +134,7 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
                       aria-checked={form.gender === g.value}
                       className={form.gender === g.value ? 'on' : ''}
                       onClick={() => setForm((f) => ({ ...f, gender: g.value }))}
+                      disabled={busy}
                     >
                       {g.label}
                     </button>
@@ -144,7 +158,7 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
             : '데모 계정 — safety@bbiyong.io / bbiyong'}
         </div>
         {onBack && (
-          <button type="button" className="auth-back" onClick={() => { reset(); onBack() }}>← 처음으로</button>
+          <button type="button" className="auth-back" onClick={() => { reset(); onBack() }} disabled={busy}>← 처음으로</button>
         )}
       </div>
     </div>
