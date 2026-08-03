@@ -40,6 +40,16 @@ export function refreshMargin(expiresInSec: number | null | undefined) {
   return Math.min(REFRESH_MARGIN_MS, life / 2)
 }
 
+// STOMP 가 인증을 거부한 뒤 재연결을 기다려 주는 시간(S15P11E101-627).
+// 갱신을 한 번 했는데도 계속 거부되면 서버 쪽 문제일 수 있다 — 몇 초짜리 딸꾹질에
+// 관제 화면을 로그인으로 보내면 야간 무인 시간대에 감시가 끊긴다. 이 시간이 지나도
+// 붙지 못하면 그때 로그아웃한다.
+const secs = (v: any, fallback: number) => {
+  const n = Number(v)
+  return (Number.isFinite(n) && n > 0 ? n : fallback) * 1000
+}
+export const STOMP_AUTH_GRACE_MS = secs(env.VITE_STOMP_AUTH_GRACE_SEC, 20)
+
 export const ACTIVITY_KEY = 'bbiyong.activity'
 
 /**
