@@ -2,6 +2,7 @@ package com.bbiyong.server.stomp;
 
 import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
+import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
@@ -12,6 +13,10 @@ import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageHeaders;
+import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.util.MimeTypeUtils;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -70,6 +75,14 @@ public class RobotEventListener {
         } catch (Exception e) {
             log.error("Failed to serialize/relay video frame for robot [{}]", robotId, e);
         }
+    }
+
+    @EventListener
+    public void handleBinaryVideoEvent(RobotBinaryVideoEvent event) {
+        Message<byte[]> message = MessageBuilder.withPayload(event.getPayload())
+                .setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.APPLICATION_OCTET_STREAM)
+                .build();
+        messagingTemplate.send("/topic/video/" + event.getRobotId(), message);
     }
 
     @EventListener

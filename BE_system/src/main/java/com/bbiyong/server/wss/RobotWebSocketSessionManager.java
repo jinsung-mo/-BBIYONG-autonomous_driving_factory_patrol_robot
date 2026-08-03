@@ -85,6 +85,10 @@ public class RobotWebSocketSessionManager {
         return session != null && session.isOpen();
     }
 
+    public String getRobotIdBySessionId(String sessionId) {
+        return sessionId == null ? null : sessionIdToRobotId.get(sessionId);
+    }
+
     public void closeAll() {
         log.info("Closing all active WSS robot sessions...");
         robotSessions.forEach((robotId, session) -> {

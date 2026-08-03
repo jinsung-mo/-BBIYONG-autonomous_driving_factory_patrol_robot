@@ -1,6 +1,8 @@
 package com.bbiyong.server.wss;
 
 import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.dto.H264BinaryFrame;
+import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
@@ -14,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -112,6 +115,30 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
             }
         } catch (Exception e) {
             log.error("Failed to parse WSS JSON packet: {}, error: {}", payload, e.getMessage());
+        }
+    }
+
+    @Override
+    protected void handleBinaryMessage(WebSocketSession session, BinaryMessage message) {
+        try {
+            String registeredRobotId = sessionManager.getRobotIdBySessionId(session.getId());
+            if (registeredRobotId == null) {
+                log.warn("Dropping binary video from unregistered WSS session [{}]", session.getId());
+                return;
+            }
+
+            byte[] payload = new byte[message.getPayloadLength()];
+            message.getPayload().get(payload);
+            H264BinaryFrame frame = H264BinaryFrame.parse(payload);
+            if (!registeredRobotId.equals(frame.robotId())) {
+                log.warn("Dropping binary video with robot mismatch: session=[{}], packet=[{}]",
+                        registeredRobotId, frame.robotId());
+                return;
+            }
+            eventPublisher.publishEvent(new RobotBinaryVideoEvent(this, registeredRobotId, payload));
+        } catch (IllegalArgumentException e) {
+            log.warn("Dropping malformed H.264 binary packet from session [{}]: {}",
+                    session.getId(), e.getMessage());
         }
     }
 
