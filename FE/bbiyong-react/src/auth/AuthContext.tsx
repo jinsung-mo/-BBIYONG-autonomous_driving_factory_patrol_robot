@@ -207,6 +207,21 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
       if (accessToken && !getAuth()?.accessToken) { logout(REASON.EXPIRED); return }
       if (!accessToken && !getSession()) { logout(REASON.MANUAL); return }
 
+      // 다른 탭이 갱신했으면 그 결과를 그대로 받아 쓴다(S15P11E101-626).
+      // 각 탭이 따로 갱신하면 서버가 refresh 를 회전시키는 만큼 서로의 토큰을 무효로 만들고,
+      // 이 탭의 STOMP 는 낡은 access 로 붙어 있게 된다. 저장소가 유일한 진실이다.
+      const saved = getAuth()
+      if (saved?.accessToken && saved.accessToken !== accessToken) {
+        setState((prev) => (prev.user ? {
+          ...prev,
+          user: saved.user ?? prev.user,   // 승격·강등도 함께 따라온다
+          accessToken: saved.accessToken,
+          refreshToken: saved.refreshToken ?? null,
+          expiresAt: saved.expiresAt ?? null,
+        } : prev))
+        return
+      }
+
       // access 만료가 가까우면 미리 갱신한다. 갱신 수단이 없으면(구버전 서버) 예전처럼 끊는다.
       const untilExpiry = absoluteRemaining(expiresAt)
       if (refreshToken && untilExpiry <= refreshMargin(getAuth()?.expiresIn) && !refreshing.current) {
@@ -240,6 +255,14 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     return () => setUnauthorizedHandler(null)
   }, [accessToken, logout])
 
+  // 서버가 권한을 거절했다(403). 화면은 관리자로 알고 있는데 서버는 아니라는 뜻이므로,
+  // 갱신을 한 번 돌려 서버가 판단한 role 을 받아 온다 — refresh 응답에 role 이 실려 있다.
+  // 이렇게 하지 않으면 강등된 관리자가 다음 정기 갱신(최대 1시간)까지 관리자 메뉴를 계속 본다.
+  const syncRole = useCallback(async () => {
+    if (!accessToken) return
+    await refreshAccessToken()
+  }, [accessToken])
+
   // 아래 두 기능은 실서버 API 계약에 없다 — mock 모드에서만 동작한다.
   const changePassword = (current: any, next: any) => {
     if (accessToken) throw new Error('실서버 모드에서는 비밀번호 변경을 지원하지 않습니다.')
@@ -258,6 +281,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     <AuthContext.Provider value={{
       user, accessToken, login, signup, logout, changePassword, updateProfile,
       isAdmin: isAdminRole(user?.role),
+      syncRole,
       touch, warning, extendSession, logoutReason, clearLogoutReason: () => setLogoutReason(null),
     }}>
       {children}

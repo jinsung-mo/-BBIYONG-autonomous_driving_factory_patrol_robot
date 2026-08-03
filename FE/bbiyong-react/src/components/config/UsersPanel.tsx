@@ -14,7 +14,7 @@ type AdminUser = import('../../live/contracts.d.ts').AdminUser
 // 승격시켜 줘야 하므로, 그 일을 하는 화면이 여기다.
 export default function UsersPanel() {
   const { enabled } = useLive()
-  const { accessToken, isAdmin, user } = useAuth()
+  const { accessToken, isAdmin, user, syncRole } = useAuth()
 
   const [rows, setRows] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(false)
@@ -38,11 +38,16 @@ export default function UsersPanel() {
       // 화면에서 관리자로 보이는데 서버가 거절하는 경우(다른 곳에서 강등됨)가 여기 걸린다.
       if (!alive.current) return
       setRows([])
-      setMsg(errStatus(e) === 403
-        ? { kind: 'err', text: '이 계정에는 사용자 관리 권한이 없습니다. 다시 로그인하면 최신 권한이 반영됩니다.' }
-        : { kind: 'err', text: `사용자 목록을 불러오지 못했습니다 — ${errMessage(e)}` })
+      if (errStatus(e) === 403) {
+        // 화면은 관리자로 알고 있는데 서버는 아니다 — 서버 판단을 받아 와 메뉴까지 맞춘다.
+        // 이렇게 해야 강등된 계정이 관리자 화면을 계속 붙들고 있지 않는다(S15P11E101-626).
+        setMsg({ kind: 'err', text: '이 계정에는 사용자 관리 권한이 없습니다. 권한을 다시 확인합니다…' })
+        syncRole()
+      } else {
+        setMsg({ kind: 'err', text: `사용자 목록을 불러오지 못했습니다 — ${errMessage(e)}` })
+      }
     } finally { if (alive.current) setLoading(false) }
-  }, [enabled, accessToken, isAdmin])
+  }, [enabled, accessToken, isAdmin, syncRole])
 
   useEffect(() => { load() }, [load])
 
@@ -58,9 +63,12 @@ export default function UsersPanel() {
       }
     } catch (e) {
       if (alive.current) {
-        setMsg(errStatus(e) === 403
-          ? { kind: 'err', text: '권한이 없어 변경하지 못했습니다.' }
-          : { kind: 'err', text: `변경하지 못했습니다 — ${errMessage(e)}` })
+        if (errStatus(e) === 403) {
+          setMsg({ kind: 'err', text: '권한이 없어 변경하지 못했습니다. 권한을 다시 확인합니다…' })
+          syncRole()
+        } else {
+          setMsg({ kind: 'err', text: `변경하지 못했습니다 — ${errMessage(e)}` })
+        }
       }
     } finally { if (alive.current) { setBusy(null); setConfirming(null) } }
   }
