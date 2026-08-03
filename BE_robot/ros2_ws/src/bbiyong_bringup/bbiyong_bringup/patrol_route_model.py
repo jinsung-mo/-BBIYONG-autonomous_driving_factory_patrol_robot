@@ -56,14 +56,28 @@ def validate_route(waypoints):
 
 
 def load_route(path):
+    route, _payload = load_route_document(path)
+    return route
+
+
+def load_route_document(path):
     payload = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
     waypoints = payload.get("waypoints") if isinstance(payload, dict) else payload
-    return validate_route(waypoints)
+    metadata = payload if isinstance(payload, dict) else {}
+    return validate_route(waypoints), metadata
 
 
 def yaw_quaternion(yaw):
     value = _finite(yaw, "yaw")
     return math.sin(value / 2.0), math.cos(value / 2.0)
+
+
+def validate_goal(x, y, yaw=None):
+    return {
+        "x": _finite(x, "x"),
+        "y": _finite(y, "y"),
+        "yaw": _finite(0.0 if yaw is None else yaw, "yaw"),
+    }
 
 
 def resume_order(route_size, unfinished_index, loop_route):

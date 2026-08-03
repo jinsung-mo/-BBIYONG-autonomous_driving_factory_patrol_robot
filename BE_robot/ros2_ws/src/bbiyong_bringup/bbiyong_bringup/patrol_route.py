@@ -17,7 +17,8 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, Int32, Int32MultiArray, String
 
-from .patrol_route_model import load_route, resume_order, yaw_quaternion
+from .patrol_route_model import load_route_document, resume_order, yaw_quaternion
+from .scouting_session import read_ready_session, route_matches_session
 
 
 class PatrolRoute(Node):
@@ -30,6 +31,9 @@ class PatrolRoute(Node):
         self.declare_parameter("route_check_period_sec", 1.0)
         self.declare_parameter("retry_delay_sec", 2.0)
         self.declare_parameter("cancel_timeout_sec", 2.0)
+        self.declare_parameter(
+            "scouting_state_file", "/tmp/bbiyong_scouting_session.json"
+        )
 
         self.route_file = Path(
             str(self.get_parameter("route_file").value)
@@ -46,6 +50,9 @@ class PatrolRoute(Node):
         self.cancel_timeout = float(
             self.get_parameter("cancel_timeout_sec").value
         )
+        self.scouting_state_file = Path(
+            str(self.get_parameter("scouting_state_file").value)
+        ).expanduser()
         if (
             self.failure_limit <= 0
             or min(check_period, self.retry_delay, self.cancel_timeout) <= 0
@@ -92,6 +99,8 @@ class PatrolRoute(Node):
         self.shutdown_requested = False
         self.retry_not_before = 0.0
         self.cancel_deadline = None
+        self.pending_cancel_reason = None
+        self.route_session_id = None
         self._reload_route(initial=True)
         self.create_timer(0.1, self._drive_state)
         self.create_timer(check_period, self._check_route_update)
@@ -113,8 +122,11 @@ class PatrolRoute(Node):
 
     def _reload_route(self, initial=False):
         try:
-            route = load_route(self.route_file)
+            route, document = load_route_document(self.route_file)
             mtime_ns = self.route_file.stat().st_mtime_ns
+            session = read_ready_session(self.scouting_state_file)
+            if not route_matches_session(document, session):
+                raise ValueError("route must be reapplied for the active scouting map")
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             if initial:
                 self._publish_state("FAILED", f"invalid route: {exc}")
@@ -122,11 +134,11 @@ class PatrolRoute(Node):
                 self.get_logger().error(f"ignored invalid route replacement: {exc}")
             return False
         self.route_mtime_ns = mtime_ns
+        self.route_session_id = session["sessionId"]
         if self.goal_handle is not None or self.goal_response_future is not None:
-            # Conservative replacement: finish/cancel the current accepted goal;
-            # use the new route on the next patrol cycle or mode transition.
             self.pending_route = route
-            self.get_logger().info("validated route replacement; activation deferred")
+            self.get_logger().info("validated route replacement; cancelling active goal")
+            self._request_cancel("route replaced")
         else:
             self.route = route
             self.resume_index = 0
@@ -166,6 +178,12 @@ class PatrolRoute(Node):
                 self.get_logger().error("patrol cancellation timed out during shutdown")
                 if rclpy.ok(context=self.context):
                     rclpy.shutdown(context=self.context)
+            return
+        session = read_ready_session(self.scouting_state_file)
+        if not session or session.get("sessionId") != self.route_session_id:
+            if self.goal_handle is not None or self.goal_response_future is not None:
+                self._request_cancel("scouting session changed")
+            self._publish_state("WAITING_FOR_ROUTE", "reapply route for active map")
             return
         if (
             self.cancel_deadline is not None
@@ -235,7 +253,11 @@ class PatrolRoute(Node):
         self.goal_handle = handle
         self._publish_state("RUNNING", "")
         handle.get_result_async().add_done_callback(self._on_result)
-        if not self._motion_allowed():
+        if self.pending_cancel_reason is not None:
+            reason = self.pending_cancel_reason
+            self.pending_cancel_reason = None
+            self._request_cancel(reason)
+        elif not self._motion_allowed():
             self._request_cancel("control changed before goal acceptance")
 
     def _on_feedback(self, feedback_message):
@@ -258,6 +280,7 @@ class PatrolRoute(Node):
         self.goal_handle = None
         self.cancel_future = None
         self.cancel_deadline = None
+        self.pending_cancel_reason = None
         try:
             wrapped = future.result()
             missed = self._missed_from_result(wrapped.result)
@@ -301,7 +324,10 @@ class PatrolRoute(Node):
 
     def _request_cancel(self, reason):
         if self.goal_handle is None:
-            if self.goal_response_future is None:
+            if self.goal_response_future is not None:
+                self.pending_cancel_reason = reason
+                self._publish_state("PAUSING", reason)
+            else:
                 self._publish_state("PAUSED", reason)
             return
         if self.cancel_future is not None:

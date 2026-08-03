@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 
 from navigation_orchestrator import (
@@ -50,15 +51,25 @@ class NavigationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def make(self, patrol=None, navigate=None):
+    def make(self, patrol=None, navigate=None, scouting=False):
+        scouting_file = self.root / "scouting.json" if scouting else None
+        if scouting:
+            scouting_file.write_text(json.dumps({
+                "sessionId": "map-session-a",
+                "mapFile": "/maps/a.yaml",
+                "ready": True,
+                "updatedAt": time.time(),
+            }))
         return NavigationOrchestrator(
             robot_id="orinka_01",
             route_file=self.root / "route.json",
             state_file=self.root / "state.json",
             control_file=self.root / "control.json",
+            scouting_state_file=scouting_file,
             patrol_command=patrol,
             navigate_command=navigate,
             process_stop_timeout=1.0,
+            termination_success_codes=(0, 1, 130),
         )
 
     def control(self):
@@ -89,6 +100,24 @@ class NavigationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.control()["mode"], "manual")
         self.assertFalse(self.control()["estop"])
 
+    async def test_unconfirmed_preemption_keeps_estop_latched(self):
+        class UnsafeProcess:
+            returncode = None
+
+            def terminate(self):
+                self.returncode = 7
+
+            async def wait(self):
+                return self.returncode
+
+        orchestrator = self.make()
+        orchestrator._process = UnsafeProcess()
+        accepted, reason = await orchestrator.set_mode("manual")
+        self.assertFalse(accepted)
+        self.assertIn("not confirmed", reason)
+        self.assertTrue(self.control()["estop"])
+        self.assertEqual(orchestrator.state, NavigationState.FAILED)
+
     async def test_autonomy_requires_route_and_command(self):
         orchestrator = self.make()
         accepted, reason = await orchestrator.set_mode("autonomy")
@@ -117,7 +146,7 @@ class NavigationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(orchestrator.state, NavigationState.ESTOPPED)
         self.assertTrue(self.control()["estop"])
 
-    async def test_route_replacement_does_not_interrupt_active_patrol(self):
+    async def test_route_replacement_cancels_and_restarts_active_patrol(self):
         orchestrator = self.make(patrol=fake_command("sleep", "{route_file}"))
         await orchestrator.set_route([{"seq": 0, "x": 0, "y": 0}])
         accepted, _ = await orchestrator.set_mode("autonomy")
@@ -128,9 +157,40 @@ class NavigationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
             {"seq": 0, "x": 4, "y": 2, "yaw": 0.25}
         ])
         self.assertTrue(accepted)
-        self.assertIn("unchanged", reason)
-        self.assertIs(orchestrator._process, process)
-        self.assertIsNone(process.returncode)
+        self.assertIn("started", reason)
+        self.assertIsNot(orchestrator._process, process)
+        self.assertIsNotNone(process.returncode)
+        self.assertEqual(orchestrator.state, NavigationState.PATROLLING)
+        await orchestrator.emergency_stop()
+
+    async def test_route_must_be_reapplied_after_scouting_session_changes(self):
+        orchestrator = self.make(
+            patrol=fake_command("sleep", "{route_file}"), scouting=True
+        )
+        await orchestrator.set_route([{"seq": 0, "x": 0, "y": 0}])
+        scouting = self.root / "scouting.json"
+        scouting.write_text(json.dumps({
+            "sessionId": "map-session-b",
+            "mapFile": "/maps/b.yaml",
+            "ready": True,
+            "updatedAt": time.time(),
+        }))
+        accepted, reason = await orchestrator.set_mode("autonomy")
+        self.assertFalse(accepted)
+        self.assertIn("reapplied", reason)
+
+    async def test_one_off_goal_preempts_patrol(self):
+        orchestrator = self.make(
+            patrol=fake_command("sleep", "{route_file}"),
+            navigate=fake_command("sleep", "{x}"),
+        )
+        await orchestrator.set_route([{"seq": 0, "x": 0, "y": 0}])
+        await orchestrator.set_mode("autonomy")
+        patrol = orchestrator._process
+        accepted, _ = await orchestrator.navigate(3, 4, 0.5)
+        self.assertTrue(accepted)
+        self.assertIsNotNone(patrol.returncode)
+        self.assertEqual(orchestrator.state, NavigationState.NAVIGATING)
         await orchestrator.emergency_stop()
 
     async def test_navigate_validates_goal_and_starts_configured_client(self):

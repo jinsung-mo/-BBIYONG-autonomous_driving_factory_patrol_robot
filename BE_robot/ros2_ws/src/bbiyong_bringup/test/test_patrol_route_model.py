@@ -7,6 +7,7 @@ import unittest
 from bbiyong_bringup.patrol_route_model import (
     load_route,
     resume_order,
+    validate_goal,
     validate_route,
     yaw_quaternion,
 )
@@ -45,6 +46,12 @@ class PatrolRouteModelTest(unittest.TestCase):
         self.assertAlmostEqual(w, 0.0)
         self.assertEqual(resume_order(4, 2, False), [2, 3])
         self.assertEqual(resume_order(4, 2, True), [2, 3, 0, 1])
+
+    def test_one_off_goal_validation(self):
+        self.assertEqual(validate_goal(1, -2, None), {"x": 1.0, "y": -2.0, "yaw": 0.0})
+        for invalid in (None, float("nan"), float("inf"), True):
+            with self.assertRaises(ValueError):
+                validate_goal(invalid, 0, 0)
 
 
 if __name__ == "__main__":

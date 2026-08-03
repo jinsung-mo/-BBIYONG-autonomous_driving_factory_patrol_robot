@@ -148,6 +148,11 @@ def build_telemetry(robot_id, nav_live, drive_status, cam, now,
     return packet
 
 
+def select_mission_status(mapping_status, navigation_status):
+    """Mapping retains backend-compatible telemetry precedence."""
+    return mapping_status or navigation_status
+
+
 def build_video(robot_id, cam, seq):
     """cam.json 의 FRONT(RGB) jpeg 를 VIDEO_FRAME 으로. 없으면 None.
 
@@ -299,6 +304,11 @@ class Bridge:
             control_file=getattr(
                 args, "control_state_file", "/tmp/bbiyong_control.json"
             ),
+            scouting_state_file=getattr(
+                args,
+                "scouting_state_file",
+                "/tmp/bbiyong_scouting_session.json",
+            ),
             patrol_command=getattr(args, "patrol_command", None),
             navigate_command=getattr(args, "navigate_command", None),
             process_stop_timeout=getattr(args, "navigation_stop_timeout", 3.0),
@@ -331,7 +341,9 @@ class Bridge:
             packet = build_telemetry(
                 self.robot_id, nav_live, drive_status, cam, now,
                 latency_ms=latency_ms, estop=effective_estop,
-                status_override=mapping_status or navigation_status,
+                status_override=select_mission_status(
+                    mapping_status, navigation_status
+                ),
             )
             await ws.send(json.dumps(packet))
 
@@ -393,7 +405,13 @@ class Bridge:
                     continue
                 mapping_command = (rest[0].get("command") or "").upper()
                 if mapping_command == "START_MAPPING":
-                    await self.navigation.prepare_for_mapping()
+                    prepared, reason = await self.navigation.prepare_for_mapping()
+                    if not prepared:
+                        print(
+                            f"[recv] mapping rejected: navigation preemption failed: {reason}",
+                            flush=True,
+                        )
+                        continue
                 accepted, reason = await self.mapping.handle_command(rest[0])
                 if accepted and mapping_command == "START_MAPPING":
                     self.navigation.enable_mapping_autonomy()
@@ -532,13 +550,27 @@ def parse_args():
         ),
     )
     parser.add_argument(
+        "--scouting-state-file",
+        default=os.environ.get(
+            "ORINCAR_SCOUTING_STATE_FILE", "/tmp/bbiyong_scouting_session.json"
+        ),
+    )
+    parser.add_argument(
         "--patrol-command",
-        default=os.environ.get("ORINCAR_PATROL_COMMAND"),
+        default=os.environ.get(
+            "ORINCAR_PATROL_COMMAND",
+            "ros2 run bbiyong_bringup patrol_route --ros-args "
+            "-p route_file:={route_file}",
+        ),
         help="optional command template using {route_file}",
     )
     parser.add_argument(
         "--navigate-command",
-        default=os.environ.get("ORINCAR_NAVIGATE_COMMAND"),
+        default=os.environ.get(
+            "ORINCAR_NAVIGATE_COMMAND",
+            "ros2 run bbiyong_bringup navigate_goal --ros-args "
+            "-p x:={x} -p y:={y} -p yaw:={yaw}",
+        ),
         help="optional command template using {x}, {y}, and {yaw}",
     )
     parser.add_argument(

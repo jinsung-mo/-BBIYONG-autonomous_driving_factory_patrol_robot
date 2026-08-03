@@ -27,6 +27,8 @@ class ManualControlWiringTest(unittest.TestCase):
                 topics.append(topic.value)
         self.assertIn("/cmd_vel/manual", topics)
         self.assertNotIn("/cmd_vel", topics)
+        self.assertIn("deadman timeout", source)
+        self.assertIn("self.linear_output = 0.0", source)
 
     def test_control_bridge_is_the_persistent_mode_estop_authority(self) -> None:
         source = (
@@ -37,6 +39,7 @@ class ManualControlWiringTest(unittest.TestCase):
         self.assertIn('"/bbiyong/estop_request"', source)
         self.assertIn('self.mode = "disabled"', source)
         self.assertIn("self.estop = True", source)
+        self.assertIn("Never replay a release left by a previous runtime", source)
 
     def test_mux_clears_stale_inputs_on_handoff_and_estop(self) -> None:
         source = (
@@ -56,6 +59,13 @@ class ManualControlWiringTest(unittest.TestCase):
         for callback_source in (mode_source, estop_source):
             self.assertIn("self.manual = TimedTwist()", callback_source)
             self.assertIn("self.autonomy = TimedTwist()", callback_source)
+        publish = next(
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "_publish"
+        )
+        publish_source = ast.get_source_segment(source, publish)
+        self.assertIn('self.mode == "manual"', publish_source)
+        self.assertIn('self.mode == "autonomy"', publish_source)
 
     def test_persistent_runtime_launches_manual_and_control_bridges(self) -> None:
         source = (

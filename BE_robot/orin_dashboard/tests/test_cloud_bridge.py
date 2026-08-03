@@ -14,6 +14,7 @@ from cloud_bridge import (
     build_video,
     fresh,
     infer_status,
+    select_mission_status,
     translate_command,
 )
 
@@ -33,6 +34,9 @@ class FreshnessTest(unittest.TestCase):
 
 
 class StatusTest(unittest.TestCase):
+    def test_mapping_status_has_navigation_precedence(self):
+        self.assertEqual(select_mission_status("MAPPING", "AUTO_PATROL"), "MAPPING")
+        self.assertEqual(select_mission_status(None, "AUTO_PATROL"), "AUTO_PATROL")
     def test_patrol_running_is_auto_patrol(self):
         self.assertEqual(
             infer_status({"patrol_running": True, "v": 0.0, "w": 0.0}, NOW),
@@ -186,6 +190,7 @@ class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
                 patrol_route_file=root / "route.json",
                 navigation_state_file=root / "navigation.json",
                 control_state_file=root / "control.json",
+                scouting_state_file=None,
                 patrol_command=None,
                 navigate_command=None,
                 navigation_stop_timeout=1.0,
