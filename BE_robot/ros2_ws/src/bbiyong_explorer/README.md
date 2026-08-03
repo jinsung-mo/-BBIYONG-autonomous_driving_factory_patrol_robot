@@ -22,7 +22,7 @@ Nav2 -> velocity_smoother -> Collision Monitor -> cmd_mux -> /cmd_vel
 
 Manual commands follow the parallel guarded path
 `cloud_bridge -> drive file -> manual_drive_bridge -> /cmd_vel/manual -> cmd_mux`.
-The legacy `teleop_node.py` publishes directly to `/cmd_vel` and must not run
+The legacy `teleop_node.py` entry point is retired and must not run
 with this architecture.
 
 `cmd_mux` intentionally starts with emergency stop active and mode `disabled`.

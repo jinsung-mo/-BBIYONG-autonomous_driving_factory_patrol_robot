@@ -23,7 +23,7 @@ OrinCar 개발 대시보드 — Orin 측 데이터 수집·서빙 서버
   GET  /api/nav/map   변경 시에만 받는 RLE 지도 snapshot/patch
   GET  /api/nav       구형 클라이언트 호환용 전체 지도
   GET  /api/cam     카메라 영상·검출 (camera_node.py 가 떨군 것)
-  GET  /api/drive   수동 조종 상태 (teleop_node.py 가 떨군 것)
+  GET  /api/drive   수동 조종 상태 (bbiyong_manual_drive_bridge가 기록)
   POST /api/drive   🔴 **수동 조종 명령 — 유일하게 로봇을 움직이는 경로**
   GET /*            static/ 아래 정적 파일
 """
@@ -285,7 +285,7 @@ NAV_MAP_UPDATE_FILE = os.environ.get(
 )
 # camera_node.py 가 여기에 JPEG(base64) + 검출 + 바닥판정을 떨군다
 CAM_FILE = os.environ.get("ORINCAR_CAM_FILE", "/tmp/orincar_cam.json")
-# 수동 조종 — 대시보드가 여기에 명령을 쓰고 teleop_node.py 가 읽어 /cmd_vel 로 낸다.
+# 수동 조종 — 파일 명령은 resident manual bridge와 cmd mux를 거쳐 /cmd_vel로 전달된다.
 # server.py 는 표준 라이브러리만 쓰므로 ROS 발행은 그 노드가 맡는다.
 DRIVE_FILE = os.environ.get("ORINCAR_DRIVE_FILE", "/tmp/orincar_drive.json")
 DRIVE_STATUS_FILE = os.environ.get("ORINCAR_DRIVE_STATUS", "/tmp/orincar_drive_status.json")
@@ -460,7 +460,7 @@ class Handler(BaseHTTPRequestHandler):
                     body = f.read()
             except OSError:
                 return self._json({"error": "teleop_node 가 실행 중이 아닙니다",
-                                   "hint": "python3 teleop_node.py"}, 503)
+                                   "hint": "start the persistent BBIYONG runtime"}, 503)
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body.encode())))
@@ -518,7 +518,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._static(path)
 
     def do_POST(self):                                # noqa: N802
-        """수동 조종 명령. 파일로 떨구고 teleop_node.py 가 읽어 간다.
+        """수동 조종 명령. 파일로 떨구고 resident manual bridge가 읽어 간다.
 
         🔴 이 엔드포인트만이 **물리 로봇을 움직인다.** 나머지는 전부 조회다.
            서버에서 상한을 자르고, teleop_node 가 데드맨·라이다 가드·순찰 충돌
