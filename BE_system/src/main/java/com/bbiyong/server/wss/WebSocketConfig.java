@@ -1,6 +1,6 @@
 package com.bbiyong.server.wss;
 
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -11,7 +11,6 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 @Configuration
 @EnableWebSocket
-@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketConfigurer {
 
     // 로봇 VIDEO_FRAME(base64 JPEG)·MAP(RLE)은 컨테이너 기본 텍스트 버퍼(8KB)를 넘어
@@ -20,9 +19,19 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final RobotWebSocketHandler robotWebSocketHandler;
 
+    /** 로봇 핸드셰이크 인증용 공유 토큰(업로드 필터와 동일 시크릿). 비면 인증 비활성. */
+    private final String robotToken;
+
+    public WebSocketConfig(RobotWebSocketHandler robotWebSocketHandler,
+                           @Value("${bbiyong.robot.upload-token:}") String robotToken) {
+        this.robotWebSocketHandler = robotWebSocketHandler;
+        this.robotToken = robotToken;
+    }
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(robotWebSocketHandler, "/ws/robot")
+                .addInterceptors(new RobotHandshakeAuthInterceptor(robotToken))
                 .setAllowedOrigins("*");
     }
 
