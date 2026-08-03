@@ -5,7 +5,12 @@
 //   GET    /api/waypoints?robotId=                                    → Item[] (순서대로)
 //   PUT    /api/waypoints?robotId=       WaypointRequest[]            → Item[]  (일괄 교체)
 //   DELETE /api/waypoints/{id}                                        → 204
-//   POST   /api/waypoints/apply?robotId=                              → { status, delivered, count }
+//   POST   /api/patrol-route/apply?robotId=                           → { status, delivered, count }
+//   POST   /api/patrol-route/start?robotId=                           → PatrolStartResult
+//
+// 목록·편집은 /api/waypoints, 하달·시작은 /api/patrol-route 를 쓴다(S15P11E101-625).
+// 두 컨트롤러가 같은 서비스를 부르지만 /start 는 patrol-route 에만 있고,
+// patrol-route 의 목록 응답은 { robotId, count, waypoints } 로 감싸여 있어 형태가 다르다.
 //
 // x/y 는 미터·map 프레임이다. 픽셀→미터 변환은 지도 쪽(navMap.canvasToWorld)이 담당하고
 // 여기서는 이미 변환된 값만 다룬다.
@@ -83,7 +88,41 @@ export function deleteWaypoint(id: string, accessToken: string | null | undefine
  * @returns {Promise<import('./contracts').WaypointApplyResult>}
  */
 export function applyWaypoints(accessToken: string | null | undefined, robotId?: string) {
-  return authedSend(`/api/waypoints/apply${q(robotId)}`, accessToken, { method: 'POST' })
+  return authedSend(`/api/patrol-route/apply${q(robotId)}`, accessToken, { method: 'POST' })
+}
+
+// 순찰 시작 — 경로 재하달(SET_PATROL_ROUTE) 직후 SET_MODE autonomy 를 한 번에 처리한다.
+//
+// 반드시 이 API 로 시작한다. /apply 뒤에 STOMP 로 SET_MODE autonomy 를 따로 보내면 안 된다:
+// 로봇이 경로에 저장맵 scouting 세션 ID 를 stamp 하므로(MR !250), 활성 맵이 바뀐 뒤
+// 예전 세션 경로로 autonomy 를 요청하면 'route must be reapplied' 로 거절된다.
+// 두 명령이 붙어 나가야 세션이 맞는다.
+/**
+ * @param {string | null | undefined} accessToken
+ * @param {string} [robotId]
+ * @returns {Promise<import('./contracts').PatrolStartResult>}
+ */
+export function startPatrol(accessToken: string | null | undefined, robotId?: string) {
+  return authedSend(`/api/patrol-route/start${q(robotId)}`, accessToken, { method: 'POST' })
+}
+
+// 시작 결과를 사람이 읽는 한 줄로 바꾼다. 세 가지가 서로 다른 사건이라 뭉뚱그리지 않는다.
+//   NO_ROUTE          — 저장된 경로가 없다. 로봇은 빈 경로로 autonomy 를 거절하므로 보내지도 않는다.
+//   routeDelivered=false — 로봇이 꺼져 있다. 경로는 서버에 남아 있다.
+//   patrolStarted=false  — 경로는 갔는데 시작 명령이 못 갔다(그 사이 끊김).
+/** @param {import('./contracts').PatrolStartResult | null | undefined} r */
+export function startPatrolMessage(r: import('./contracts').PatrolStartResult | null | undefined) {
+  if (!r) return { kind: 'err', text: '순찰 시작 결과를 받지 못했습니다.' }
+  if (r.status === 'NO_ROUTE') {
+    return { kind: 'warn', text: '저장된 순찰 경로가 없습니다 — 지점을 찍고 경로 저장을 먼저 하세요.' }
+  }
+  if (!r.routeDelivered) {
+    return { kind: 'warn', text: '로봇이 연결되지 않아 경로가 전달되지 않았습니다 — 로봇이 켜지면 다시 시작하세요.' }
+  }
+  if (!r.patrolStarted) {
+    return { kind: 'warn', text: `경로 ${r.count ?? 0}개 지점은 전달됐지만 순찰 시작 명령이 로봇에 닿지 않았습니다.` }
+  }
+  return { kind: 'ok', text: `순찰을 시작했습니다 — 경로 ${r.count ?? 0}개 지점.` }
 }
 
 /** @param {import('./contracts').Waypoint | null | undefined} w */

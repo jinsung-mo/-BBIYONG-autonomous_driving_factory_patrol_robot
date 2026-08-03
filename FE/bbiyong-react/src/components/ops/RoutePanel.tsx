@@ -1,10 +1,12 @@
 import { errMessage } from '../../live/errors.ts'
+import { ROBOT_ID } from '../../live/config.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import LiveNavMap from '../robot/LiveNavMap.tsx'
 import {
-  addWaypoint, applyWaypoints, deleteWaypoint, listWaypoints, replaceWaypoints, wpLabel,
+  addWaypoint, applyWaypoints, deleteWaypoint, listWaypoints, replaceWaypoints,
+  startPatrol, startPatrolMessage, wpLabel,
 } from '../../live/waypoints.ts'
 
 // 순찰 경로 (S15P11E101-514) — 2D 지도를 클릭해 순찰 지점을 찍고, 순서를 정해 로봇에 하달한다.
@@ -93,18 +95,35 @@ export default function RoutePanel() {
     } finally { if (alive.current) setBusy(false) }
   }
 
+  // 경로 적용 — 로봇에 보내기만 한다. 순찰은 시작되지 않는다(로봇 계약상 SET_PATROL_ROUTE
+  // 만으로는 돌지 않는다). 경로만 갈아 끼우고 지금은 돌리고 싶지 않을 때 쓴다.
   const onApply = async () => {
     if (busy) return
     setBusy(true)
     try {
-      const r = await applyWaypoints(accessToken)
+      const r = await applyWaypoints(accessToken, ROBOT_ID)
       if (!alive.current) return
       // 로봇이 꺼져 있어도 200 이 온다 — delivered 로 구분해 알린다(저장은 이미 끝났다).
       setMsg(r?.delivered
-        ? { kind: 'ok', text: `순찰 경로 ${r.count ?? route.length}개 지점을 로봇에 하달했습니다.` }
-        : { kind: 'warn', text: '경로는 서버에 저장돼 있지만 로봇에 전달되지 않았습니다 — 로봇이 연결되면 다시 하달하세요.' })
+        ? { kind: 'ok', text: `순찰 경로 ${r.count ?? route.length}개 지점을 로봇에 적용했습니다. 순찰은 아직 시작되지 않았습니다.` }
+        : { kind: 'warn', text: '경로는 서버에 저장돼 있지만 로봇에 전달되지 않았습니다 — 로봇이 연결되면 다시 적용하세요.' })
     } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `하달하지 못했습니다 — ${errMessage(e)}` })
+      if (alive.current) setMsg({ kind: 'err', text: `적용하지 못했습니다 — ${errMessage(e)}` })
+    } finally { if (alive.current) setBusy(false) }
+  }
+
+  // 순찰 시작 — 반드시 /start 로 한다(S15P11E101-625).
+  // 로봇이 경로에 저장맵 세션 ID 를 stamp 하므로, 활성 맵이 바뀐 뒤 예전 경로로 autonomy 를
+  // 요청하면 거절된다. 경로 재하달과 시작이 한 요청 안에서 붙어 나가야 세션이 맞는다.
+  const onStart = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const r = await startPatrol(accessToken, ROBOT_ID)
+      if (!alive.current) return
+      setMsg(startPatrolMessage(r))
+    } catch (e) {
+      if (alive.current) setMsg({ kind: 'err', text: `순찰을 시작하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
@@ -117,8 +136,9 @@ export default function RoutePanel() {
       {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
       {enabled && (
         <p className="cfg-help">
-          지도를 클릭하면 그 자리에 순찰 지점이 추가됩니다. 순서를 정한 뒤 <b>경로 저장</b>,
-          로봇에 반영하려면 <b>로봇에 하달</b>을 누르세요.
+          지도를 클릭하면 그 자리에 순찰 지점이 추가됩니다. 순서를 정한 뒤 <b>경로 저장</b>으로
+          서버에 남기고, <b>순찰 시작</b>을 누르면 로봇이 그 경로로 돕니다.
+          <b>경로 적용</b>은 로봇에 경로만 보내고 순찰은 시작하지 않습니다.
         </p>
       )}
 
@@ -154,8 +174,12 @@ export default function RoutePanel() {
         <button type="button" id="btnSaveRoute" className="dbtn go" onClick={onSave} disabled={offline || busy || !route.length || !dirty}>
           경로 저장{dirty ? ' *' : ''}
         </button>
-        <button type="button" id="btnApplyRoute" className="dbtn go" onClick={onApply} disabled={offline || busy || !route.length}>
-          로봇에 하달
+        <button type="button" id="btnApplyRoute" className="dbtn" onClick={onApply} disabled={offline || busy || !route.length}>
+          경로 적용
+        </button>
+        {/* 시작은 눈에 띄게 둔다 — 로봇이 실제로 움직이기 시작하는 버튼이다 */}
+        <button type="button" id="btnStartPatrol" className="dbtn go" onClick={onStart} disabled={offline || busy || !route.length}>
+          순찰 시작
         </button>
       </div>
       {dirty && <div className="cfg-note">순서·이름이 바뀌었습니다. <b>경로 저장</b>을 눌러야 서버에 반영됩니다.</div>}
