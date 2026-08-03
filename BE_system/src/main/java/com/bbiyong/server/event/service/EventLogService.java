@@ -13,6 +13,7 @@ import com.bbiyong.server.notification.service.MattermostNotifier;
 import com.bbiyong.server.notification.service.NotificationService;
 import com.bbiyong.server.video.dto.VideoResponses;
 import com.bbiyong.server.video.repository.VideoClipRepository;
+import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Slf4j
@@ -42,18 +45,21 @@ public class EventLogService {
     private final NotificationService notificationService;
     private final MattermostNotifier mattermostNotifier;
     private final VideoClipRepository videoClipRepository;
+    private final RobotWebSocketSessionManager sessionManager;
 
     public EventLogService(
             EventLogRepository eventLogRepository,
             NotificationSettingRepository notificationSettingRepository,
             NotificationService notificationService,
             MattermostNotifier mattermostNotifier,
-            VideoClipRepository videoClipRepository) {
+            VideoClipRepository videoClipRepository,
+            RobotWebSocketSessionManager sessionManager) {
         this.eventLogRepository = eventLogRepository;
         this.notificationSettingRepository = notificationSettingRepository;
         this.notificationService = notificationService;
         this.mattermostNotifier = mattermostNotifier;
         this.videoClipRepository = videoClipRepository;
+        this.sessionManager = sessionManager;
     }
 
     /**
@@ -191,8 +197,38 @@ public class EventLogService {
         EventLog savedEvent = eventLogRepository.save(logEntry);
         log.info("Persisted {} event log for robot: {}", alert.type(), alert.robotId());
 
+        // 이벤트 클립 연결을 위해 로봇에 생성된 eventId 를 회신한다(블랙박스 파이프라인). (S15P11E101-588)
+        notifyRobotEventSaved(savedEvent);
+
         // Mattermost 알림 전송 (모든 사용자에게)
         sendNotificationsToAllUsers(savedEvent);
+    }
+
+    /**
+     * 이벤트 저장 직후, 로봇에게 생성된 {@code eventId} 를 EVENT_SAVED 로 회신한다.
+     *
+     * <p>로봇은 회신받은 eventId 로 {@code POST /api/videos/upload?eventId=..&clipType=EVENT}
+     * 업로드해 이벤트-클립을 연결한다(설계문서 §3 옵션1). 로봇 미연결/전송 실패는 이벤트
+     * 영속화에 영향을 주지 않도록 조용히 로깅만 한다.
+     */
+    private void notifyRobotEventSaved(EventLog event) {
+        String robotId = event.getRobotId();
+        if (robotId == null || robotId.isBlank()) {
+            return;
+        }
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("command", "EVENT_SAVED");
+            payload.put("eventId", event.getEventId());
+            payload.put("type", event.getType());
+            boolean sent = sessionManager.sendCommand(robotId, payload);
+            if (!sent) {
+                log.warn("EVENT_SAVED 회신 실패(로봇 미연결): robot={}, eventId={}", robotId, event.getEventId());
+            }
+        } catch (Exception e) {
+            log.error("EVENT_SAVED 회신 중 오류: robot={}, eventId={}, error={}",
+                    robotId, event.getEventId(), e.getMessage(), e);
+        }
     }
 
     /**
