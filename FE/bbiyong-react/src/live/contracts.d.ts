@@ -768,3 +768,17 @@ export interface ChangeRoleRequest {
   email: string
   role: string
 }
+
+/**
+ * POST /api/patrol-route/start — 경로 하달 + 순찰 시작을 한 번에 한 결과(S15P11E101-625).
+ * 로봇이 꺼져 있어도 200 이고, 무엇이 안 됐는지는 아래 두 불리언으로 갈린다.
+ */
+export interface PatrolStartResult {
+  /** SUCCESS | NO_ROUTE */
+  status: string
+  /** SET_PATROL_ROUTE 가 로봇에 전달됐는가 */
+  routeDelivered: boolean
+  /** SET_MODE autonomy 가 로봇에 전달됐는가 */
+  patrolStarted: boolean
+  count: number
+}
