@@ -68,6 +68,7 @@ async def main():
         patrol_route_file = os.path.join(TMP, "patrol_route.json")
         navigation_state_file = os.path.join(TMP, "navigation_state.json")
         control_state_file = os.path.join(TMP, "control_state.json")
+        scouting_state_file = None
         patrol_command = None
         navigate_command = None
         navigation_stop_timeout = 1.0

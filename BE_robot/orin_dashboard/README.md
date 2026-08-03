@@ -59,17 +59,18 @@ Mapping stays disabled unless `--mapping-enabled` is passed (or
 this repository or in `run_bridge.sh`.
 
 Autonomous navigation stays disabled unless `--navigation-enabled` is passed
-(or `ORINCAR_NAVIGATION_ENABLED=1` is set). Patrol and point navigation also
-require explicit `ORINCAR_PATROL_COMMAND` and `ORINCAR_NAVIGATE_COMMAND`
-templates. Supported placeholders are `{route_file}` for patrol and
-`{x}`, `{y}`, `{yaw}` for point navigation. Leave these unset until the Nav2
-mission clients are deployed; commands then fail safely instead of moving.
+(or `ORINCAR_NAVIGATION_ENABLED=1` is set). The built-in subprocess templates
+run `patrol_route` and `navigate_goal`; deployments may override them with
+`ORINCAR_PATROL_COMMAND` and `ORINCAR_NAVIGATE_COMMAND`. Supported placeholders
+are `{route_file}` for patrol and `{x}`, `{y}`, `{yaw}` for point navigation.
+Both commands still reject motion unless a fresh saved-map scouting session is
+ready.
 
-The Phase 3 patrol client is available as `ros2 run bbiyong_bringup
+The patrol client is available as `ros2 run bbiyong_bringup
 patrol_route --ros-args -p route_file:=<route.json>` (or `bbiyong patrol
-<route.json>`). A supervised deployment may set `ORINCAR_PATROL_COMMAND` to
-that command. One-off `NAVIGATE` remains gated until its separate client is
-implemented.
+<route.json>`). One-off goals use `navigate_goal`. Routes are bound to the
+current `scoutingSessionId`; after changing maps the backend must send
+`SET_PATROL_ROUTE` again before autonomy can start.
 
 The default mapping commands assume both the base sensor/SLAM stack and
 `bbiyong mapping-runtime` are already running. The orchestrator verifies

@@ -210,7 +210,59 @@ def check_navigation_runtime(timeout=5.0):
     )
     if missing:
         return False, "navigation runtime is not ready; missing " + ", ".join(missing)
+    lifecycle_nodes = (
+        "/controller_server",
+        "/smoother_server",
+        "/planner_server",
+        "/behavior_server",
+        "/bt_navigator",
+        "/waypoint_follower",
+        "/velocity_smoother",
+        "/collision_slowdown_monitor",
+        "/collision_monitor",
+    )
+    inactive = []
+    for node in lifecycle_nodes:
+        try:
+            result = subprocess.run(
+                ["ros2", "lifecycle", "get", node],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return False, f"lifecycle readiness check failed for {node}: {exc}"
+        if result.returncode != 0 or "active [3]" not in result.stdout:
+            inactive.append(node)
+    if inactive:
+        return False, "navigation lifecycle nodes are not active: " + ", ".join(inactive)
     return True, "navigation runtime ready"
+
+
+def check_mapping_session(timeout=5.0):
+    """Require the externally owned SLAM map provider, never stop providers here."""
+    try:
+        result = subprocess.run(
+            ["ros2", "node", "list"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"mapping session check failed: {exc}"
+    if result.returncode != 0:
+        return False, "mapping session check failed: " + (
+            result.stderr.strip() or f"ros2 node list exited {result.returncode}"
+        )
+    nodes = set(result.stdout.splitlines())
+    scouting_nodes = {"/amcl", "/map_server", "/bbiyong_scouting_guard"} & nodes
+    if scouting_nodes:
+        return False, "saved-map scouting session is active: " + ", ".join(sorted(scouting_nodes))
+    if "/slam_toolbox" not in nodes:
+        return False, "mapping session is not ready; /slam_toolbox is unavailable"
+    return True, "mapping session ready"
 
 
 class MappingOrchestrator:
@@ -222,7 +274,7 @@ class MappingOrchestrator:
     def __init__(self, robot_id, upload_url, token, map_dir, state_file,
                  launch_command=None, save_command=None, upload_timeout=20.0,
                  uploader=upload_map, runtime_checker=check_navigation_runtime,
-                 motion_stop=None):
+                 motion_stop=None, mapping_session_checker=check_mapping_session):
         self.robot_id = robot_id
         self.upload_url = upload_url
         self.token = token
@@ -234,6 +286,7 @@ class MappingOrchestrator:
         self.uploader = uploader
         self.runtime_checker = runtime_checker
         self.motion_stop = motion_stop
+        self.mapping_session_checker = mapping_session_checker
         self.state = MappingState.IDLE
         self.error = None
         self._operation = None
@@ -314,6 +367,9 @@ class MappingOrchestrator:
                 return False, "mapping upload token is not configured"
             if self._another_explorer_is_running():
                 return False, "another frontier_explorer is already running"
+            ready, reason = await asyncio.to_thread(self.mapping_session_checker)
+            if not ready:
+                return False, reason
             ready, reason = await asyncio.to_thread(self.runtime_checker)
             if not ready:
                 return False, reason

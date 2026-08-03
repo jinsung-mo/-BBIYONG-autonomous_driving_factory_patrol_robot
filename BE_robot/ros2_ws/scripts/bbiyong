@@ -28,6 +28,14 @@ require_node() {
   ros2 node list 2>/dev/null | grep -Fxq "$1" ||
     die "required node is unavailable: $1 (start 'bbiyong mapping-runtime' first)"
 }
+node_exists() { ros2 node list 2>/dev/null | grep -Fxq "$1"; }
+require_lifecycle_active() {
+  ros2 lifecycle get "$1" 2>/dev/null | grep -Fq 'active [3]' ||
+    die "lifecycle node is not active: $1"
+}
+map_publisher_count() {
+  ros2 topic info /map 2>/dev/null | awk '/Publisher count:/ {print $3}'
+}
 refuse_legacy_cmd_vel_publishers() {
   if pgrep -f '[e]xplore.py' >/dev/null; then
     die "legacy explore.py is running; stop it before starting Nav2 exploration"
@@ -59,12 +67,14 @@ usage() {
 Usage:
   bbiyong mapping
   bbiyong mapping-runtime [nav2.yaml]
+  bbiyong scouting-runtime <map.yaml> [nav2.yaml]
   bbiyong save-map <output-prefix>
   bbiyong localize <map.yaml>
   bbiyong navigate <map.yaml> <vehicle.yaml> <nav2.yaml>
   bbiyong control <vehicle.yaml>
   bbiyong explore <map-output-prefix> [nav2.yaml]
   bbiyong patrol <route.json>
+  bbiyong navigate-goal <x> <y> [yaw]
   bbiyong arm-autonomy
   bbiyong stop
   bbiyong status
@@ -98,6 +108,40 @@ case "$command" in
     fi
     exec ros2 launch bbiyong_bringup navigation_runtime.launch.py
     ;;
+  scouting-runtime)
+    [[ $# -ge 1 && $# -le 2 ]] ||
+      die "scouting-runtime requires map.yaml and optionally nav2.yaml"
+    refuse_legacy_cmd_vel_publishers
+    require_file "$1"
+    map_yaml="$(readlink -f "$1")"
+    node_exists /slam_toolbox &&
+      die "slam_toolbox is active; its session owner must stop it before scouting"
+    publishers="$(map_publisher_count || true)"
+    [[ -z "$publishers" || "$publishers" == "0" ]] ||
+      die "a /map publisher already exists; stop the current map-provider session"
+    start_runtime=true
+    if node_exists /bbiyong_cmd_mux; then
+      start_runtime=false
+      require_action /navigate_to_pose
+      require_action /follow_waypoints
+      require_lifecycle_active /controller_server
+      require_lifecycle_active /planner_server
+      require_lifecycle_active /bt_navigator
+      require_lifecycle_active /waypoint_follower
+      require_lifecycle_active /collision_monitor
+    elif node_exists /controller_server; then
+      die "partial Nav2 runtime detected; stop it before starting scouting"
+    fi
+    nav2_params="${2:-}"
+    if [[ -n "$nav2_params" ]]; then
+      require_file "$nav2_params"
+      exec ros2 launch bbiyong_bringup scouting_runtime.launch.py \
+        map:="$map_yaml" nav2_params:="$nav2_params" \
+        start_navigation_runtime:="$start_runtime"
+    fi
+    exec ros2 launch bbiyong_bringup scouting_runtime.launch.py \
+      map:="$map_yaml" start_navigation_runtime:="$start_runtime"
+    ;;
   save-map)
     [[ $# -eq 1 ]] || die "save-map requires an output prefix"
     mkdir -p "$(dirname "$1")"
@@ -130,6 +174,9 @@ case "$command" in
     require_node /bbiyong_cmd_mux
     require_node /bbiyong_control_state_bridge
     require_node /bbiyong_manual_drive_bridge
+    require_lifecycle_active /controller_server
+    require_lifecycle_active /planner_server
+    require_lifecycle_active /bt_navigator
     map_output="$1"
     mkdir -p "$(dirname "$map_output")"
     if [[ $# -eq 2 ]]; then
@@ -145,7 +192,21 @@ case "$command" in
     require_action /follow_waypoints
     require_node /bbiyong_cmd_mux
     require_node /bbiyong_control_state_bridge
+    require_node /bbiyong_scouting_guard
+    require_topic /bbiyong/scouting/ready
+    require_lifecycle_active /waypoint_follower
     exec ros2 run bbiyong_bringup patrol_route --ros-args -p route_file:="$1"
+    ;;
+  navigate-goal)
+    [[ $# -ge 2 && $# -le 3 ]] || die "navigate-goal requires x y and optional yaw"
+    refuse_legacy_cmd_vel_publishers
+    require_action /navigate_to_pose
+    require_node /bbiyong_cmd_mux
+    require_node /bbiyong_control_state_bridge
+    require_node /bbiyong_scouting_guard
+    require_lifecycle_active /bt_navigator
+    exec ros2 run bbiyong_bringup navigate_goal --ros-args \
+      -p x:="$1" -p y:="$2" -p yaw:="${3:-0.0}"
     ;;
   arm-autonomy)
     [[ $# -eq 0 ]] || die "arm-autonomy takes no arguments"
@@ -154,6 +215,8 @@ case "$command" in
     require_action /navigate_to_pose
     require_node /bbiyong_cmd_mux
     require_node /bbiyong_control_state_bridge
+    require_lifecycle_active /controller_server
+    require_lifecycle_active /bt_navigator
     echo "Arming Nav2 (run this only after 'Managed nodes are active')..."
     timeout 25 ros2 run bbiyong_base control_command arm ||
       die "arm failed; keep the explore terminal running and confirm both nodes started"

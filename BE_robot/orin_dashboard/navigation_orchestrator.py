@@ -93,17 +93,23 @@ class NavigationOrchestrator:
         route_file,
         state_file,
         control_file,
+        scouting_state_file=None,
         patrol_command=None,
         navigate_command=None,
         process_stop_timeout=3.0,
+        termination_success_codes=(0, 130),
     ):
         self.robot_id = robot_id
         self.route_file = Path(route_file).expanduser()
         self.state_file = Path(state_file).expanduser()
         self.control_file = Path(control_file).expanduser()
+        self.scouting_state_file = (
+            Path(scouting_state_file).expanduser() if scouting_state_file else None
+        )
         self.patrol_command = patrol_command
         self.navigate_command = navigate_command
         self.process_stop_timeout = float(process_stop_timeout)
+        self.termination_success_codes = set(termination_success_codes)
         self.state = NavigationState.DISABLED
         self.error = None
         self.route = self._load_route()
@@ -138,13 +144,47 @@ class NavigationOrchestrator:
             return True
 
     def _load_route(self):
+        self.route_session_id = None
         try:
             payload = json.loads(self.route_file.read_text(encoding="utf-8"))
             if payload.get("robotId") != self.robot_id:
                 return []
+            self.route_session_id = payload.get("scoutingSessionId")
             return validate_route(payload.get("waypoints"))
-        except (OSError, ValueError, TypeError):
+        except (OSError, ValueError, TypeError, AttributeError):
             return []
+
+    def _scouting_session(self):
+        if self.scouting_state_file is None:
+            return {"sessionId": None, "ready": True}
+        try:
+            payload = json.loads(
+                self.scouting_state_file.read_text(encoding="utf-8")
+            )
+            age = time.time() - float(payload["updatedAt"])
+        except (OSError, ValueError, TypeError, KeyError):
+            return None
+        if (
+            payload.get("ready") is not True
+            or not payload.get("sessionId")
+            or not math.isfinite(age)
+            or age < -1.0
+            or age > 3.0
+        ):
+            return None
+        return payload
+
+    def _navigation_ready(self, require_bound_route=False):
+        session = self._scouting_session()
+        if session is None:
+            return False, "saved-map scouting localization is not ready"
+        if (
+            require_bound_route
+            and self.scouting_state_file is not None
+            and self.route_session_id != session.get("sessionId")
+        ):
+            return False, "patrol route must be reapplied for the active map session"
+        return True, session
 
     def _load_control_sequence(self):
         try:
@@ -185,13 +225,17 @@ class NavigationOrchestrator:
         })
 
     def _save_route(self, route):
+        session = self._scouting_session()
+        session_id = session.get("sessionId") if session else None
         atomic_write_json(self.route_file, {
             "schemaVersion": 1,
             "robotId": self.robot_id,
             "updatedAt": time.time(),
+            "scoutingSessionId": session_id,
             "waypoints": route,
         })
         self.route = route
+        self.route_session_id = session_id
         self._persist()
 
     async def handle_command(self, command):
@@ -220,10 +264,11 @@ class NavigationOrchestrator:
                 return False, "route update was superseded"
             self._save_route(route)
             if self.state == NavigationState.PATROLLING:
-                return True, (
-                    f"stored patrol route with {len(route)} waypoints; "
-                    "active patrol is unchanged"
-                )
+                if not await self._terminate_locked():
+                    self._write_control("disabled", True)
+                    self._transition(NavigationState.FAILED, "route replacement cancellation was not confirmed")
+                    return False, self.error
+                return await self._start_patrol_locked(request_generation)
             return True, f"stored patrol route with {len(route)} waypoints"
 
     async def set_mode(self, mode):
@@ -237,13 +282,20 @@ class NavigationOrchestrator:
                 return False, "mode change was superseded"
             if requested == "manual":
                 self._write_control("disabled", False)
-                await self._terminate_locked()
+                if not await self._terminate_locked():
+                    self._write_control("disabled", True)
+                    self._transition(NavigationState.FAILED, "navigation cancellation was not confirmed")
+                    return False, self.error
                 self._write_control("manual", False)
                 self._transition(NavigationState.MANUAL)
                 return True, "manual control enabled"
             if requested == "disabled":
                 self._write_control("disabled", False)
-                await self._terminate_locked()
+                safe = await self._terminate_locked()
+                self._write_control("disabled", not safe)
+                if not safe:
+                    self._transition(NavigationState.FAILED, "navigation cancellation was not confirmed")
+                    return False, self.error
                 self._transition(NavigationState.DISABLED)
                 return True, "navigation disabled"
             return await self._start_patrol_locked(request_generation)
@@ -253,8 +305,14 @@ class NavigationOrchestrator:
             return False, "no patrol route is configured"
         if not self.patrol_command:
             return False, "patrol command is not configured"
+        ready, detail = self._navigation_ready(require_bound_route=True)
+        if not ready:
+            return False, detail
         self._write_control("disabled", False)
-        await self._terminate_locked()
+        if not await self._terminate_locked():
+            self._write_control("disabled", True)
+            self._transition(NavigationState.FAILED, "patrol cancellation was not confirmed")
+            return False, self.error
         try:
             await self._start_process_locked(
                 self.patrol_command,
@@ -269,7 +327,10 @@ class NavigationOrchestrator:
             request_generation is not None
             and request_generation != self._request_generation
         ):
-            await self._terminate_locked()
+            if not await self._terminate_locked():
+                self._write_control("disabled", True)
+                self._transition(NavigationState.FAILED, "navigation cancellation was not confirmed")
+                return False, self.error
             return False, "patrol start was superseded"
         self._write_control("autonomy", False)
         return True, "patrol started"
@@ -290,8 +351,14 @@ class NavigationOrchestrator:
                 return False, "navigation goal was superseded"
             if not self.navigate_command:
                 return False, "navigate command is not configured"
+            ready, detail = self._navigation_ready()
+            if not ready:
+                return False, detail
             self._write_control("disabled", False)
-            await self._terminate_locked()
+            if not await self._terminate_locked():
+                self._write_control("disabled", True)
+                self._transition(NavigationState.FAILED, "patrol cancellation was not confirmed")
+                return False, self.error
             try:
                 await self._start_process_locked(
                     self.navigate_command, values, NavigationState.NAVIGATING
@@ -303,7 +370,10 @@ class NavigationOrchestrator:
                 )
                 return False, self.error
             if request_generation != self._request_generation:
-                await self._terminate_locked()
+                if not await self._terminate_locked():
+                    self._write_control("disabled", True)
+                    self._transition(NavigationState.FAILED, "navigation cancellation was not confirmed")
+                    return False, self.error
                 return False, "navigation goal was superseded"
             self._write_control("autonomy", False)
             return True, "navigation goal started"
@@ -314,8 +384,11 @@ class NavigationOrchestrator:
         async with self._lock:
             if request_generation != self._request_generation:
                 return False, "emergency stop was superseded by a newer command"
-            await self._terminate_locked()
-        return True, "emergency stop engaged"
+            safe = await self._terminate_locked()
+        return safe, (
+            "emergency stop engaged" if safe
+            else "emergency stop engaged; action cancellation was not confirmed"
+        )
 
     def request_emergency_stop(self, reason=None):
         """Latch stop synchronously; safe for mapping lifecycle callbacks."""
@@ -337,7 +410,9 @@ class NavigationOrchestrator:
         async with self._lock:
             if request_generation != self._request_generation:
                 return False, "mapping transition was superseded"
-            await self._terminate_locked()
+            if not await self._terminate_locked():
+                self._transition(NavigationState.FAILED, "navigation cancellation was not confirmed")
+                return False, self.error
             self._transition(NavigationState.DISABLED)
         return True, "navigation stopped for mapping"
 
@@ -372,7 +447,7 @@ class NavigationOrchestrator:
         process = self._process
         if process is None or process.returncode is not None:
             self._process = None
-            return
+            return process is None or process.returncode in self.termination_success_codes
         self._generation += 1
         self._process = None
         process.terminate()
@@ -383,3 +458,5 @@ class NavigationOrchestrator:
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()
+            return False
+        return process.returncode in self.termination_success_codes

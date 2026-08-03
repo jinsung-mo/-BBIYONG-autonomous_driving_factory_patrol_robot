@@ -1,9 +1,17 @@
 import sys
+import signal
 import time
 from pathlib import Path
 
 
 mode = sys.argv[1]
+def raise_system_exit():
+    raise SystemExit(0)
+
+
+signal.signal(signal.SIGTERM, lambda _signum, _frame: raise_system_exit())
+
+
 if mode in ("save", "natural"):
     base = Path(sys.argv[2])
     base.parent.mkdir(parents=True, exist_ok=True)

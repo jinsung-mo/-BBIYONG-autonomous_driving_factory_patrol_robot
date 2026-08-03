@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -11,6 +12,7 @@ from mapping_orchestrator import (
     MappingOrchestrator,
     MappingState,
     check_navigation_runtime,
+    check_mapping_session,
     encode_multipart,
     parse_map_yaml,
     rewrite_map_yaml_image,
@@ -39,6 +41,18 @@ def wait_for_state(orchestrator, state, timeout=3.0):
 
 class ArtifactTest(unittest.TestCase):
     @patch("mapping_orchestrator.subprocess.run")
+    def test_mapping_session_requires_slam_without_scouting(self, run):
+        run.return_value = SimpleNamespace(
+            returncode=0, stderr="", stdout="/slam_toolbox\n/bbiyong_cmd_mux\n"
+        )
+        self.assertEqual(check_mapping_session(), (True, "mapping session ready"))
+        run.return_value = SimpleNamespace(
+            returncode=0, stderr="", stdout="/slam_toolbox\n/amcl\n/map_server\n"
+        )
+        ready, reason = check_mapping_session()
+        self.assertFalse(ready)
+        self.assertIn("scouting", reason)
+    @patch("mapping_orchestrator.subprocess.run")
     def test_navigation_runtime_requires_actions_and_mux(self, run):
         run.side_effect = [
             type("Result", (), {
@@ -55,7 +69,9 @@ class ArtifactTest(unittest.TestCase):
                 ),
                 "stderr": "",
             })(),
-        ]
+        ] + [type("Result", (), {
+            "returncode": 0, "stdout": "active [3]\n", "stderr": ""
+        })() for _ in range(9)]
         self.assertEqual(
             check_navigation_runtime(),
             (True, "navigation runtime ready"),
@@ -82,6 +98,20 @@ class ArtifactTest(unittest.TestCase):
         ready, reason = check_navigation_runtime()
         self.assertFalse(ready)
         self.assertIn("/follow_waypoints", reason)
+
+    @patch("mapping_orchestrator.subprocess.run")
+    def test_navigation_runtime_rejects_inactive_lifecycle_node(self, run):
+        run.side_effect = [
+            SimpleNamespace(returncode=0, stderr="", stdout="/navigate_to_pose\n/follow_waypoints\n"),
+            SimpleNamespace(returncode=0, stderr="", stdout=(
+                "/bbiyong_cmd_mux\n/bbiyong_control_state_bridge\n"
+                "/bbiyong_manual_drive_bridge\n"
+            )),
+            SimpleNamespace(returncode=0, stderr="", stdout="inactive [2]\n"),
+        ] + [SimpleNamespace(returncode=0, stderr="", stdout="active [3]\n") for _ in range(8)]
+        ready, reason = check_navigation_runtime()
+        self.assertFalse(ready)
+        self.assertIn("/controller_server", reason)
 
     def test_yaml_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -145,6 +175,7 @@ class OrchestratorTest(unittest.IsolatedAsyncioTestCase):
             save_command=save or command("save"),
             uploader=uploader or self.uploader,
             runtime_checker=lambda: (True, "test runtime ready"),
+            mapping_session_checker=lambda: (True, "test mapping session ready"),
         )
 
     async def test_natural_completion_uploads_before_event(self):

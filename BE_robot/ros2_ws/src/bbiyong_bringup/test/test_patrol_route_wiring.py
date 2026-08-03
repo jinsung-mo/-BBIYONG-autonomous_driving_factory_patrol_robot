@@ -18,6 +18,8 @@ class PatrolRouteWiringTest(unittest.TestCase):
         setup = (ROOT / "setup.py").read_text()
         package = (ROOT / "package.xml").read_text()
         self.assertIn("patrol_route = bbiyong_bringup.patrol_route:main", setup)
+        self.assertIn("navigate_goal = bbiyong_bringup.navigate_goal:main", setup)
+        self.assertIn("scouting_guard = bbiyong_bringup.scouting_guard:main", setup)
         for dependency in ("action_msgs", "geometry_msgs", "nav2_msgs"):
             self.assertIn(f"<exec_depend>{dependency}</exec_depend>", package)
 
