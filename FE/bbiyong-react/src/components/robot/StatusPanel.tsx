@@ -3,6 +3,7 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { telemetryToStatus } from '../../live/mappers.ts'
 import LogList from '../LogList.tsx'
 import FleetList from '../dashboard/FleetList.tsx'
+import RadialGauge from './RadialGauge.tsx'
 
 // 순찰 로봇 상태 + 환경 + 이벤트 로그
 // live 모드에서는 /topic/robots 텔레메트리를 그대로 표시한다.
@@ -22,6 +23,10 @@ export default function StatusPanel() {
   const name = enabled ? robotId : '삐용'
 
   // 상태를 색만으로 구분하지 않는다 — 색각 이상에서도 읽히도록 기호와 문구를 함께 준다.
+  // 시뮬레이션 지표 카드용 — 화재·과열로 기록된 줄만 센다(정상 복귀 로그는 경보가 아니다)
+  const alarmCount = enabled ? 0
+    : (status.logs || []).filter((l: any) => l.kind === 'fire' || l.kind === 'heat').length
+
   const estopReleased = estop === 'RELEASED'
   const estopUnknown = estop === '—'
   const commOk = !live || connected
@@ -31,8 +36,16 @@ export default function StatusPanel() {
       <h3>순찰 로봇 상태 <span className="k">ORINCA FLEET</span></h3>
       <div className="stat-card">
         <div className="rid">{name} <span className={`pillm ${modeClass}`}>{modeText}</span></div>
-        <div className="kv"><span>배터리</span><b className="num">{batt == null ? '—' : `${batt} %`}</b></div>
-        <div className="bar"><i style={{ width: `${batt ?? 0}%` }} /></div>
+        {/* 시뮬레이션 화면에서는 배터리를 대표 지표로 세운다 — 막대보다 멀리서 읽힌다.
+            실서버 화면은 기존 표기를 그대로 둔다. */}
+        {enabled ? (
+          <>
+            <div className="kv"><span>배터리</span><b className="num">{batt == null ? '—' : `${batt} %`}</b></div>
+            <div className="bar"><i style={{ width: `${batt ?? 0}%` }} /></div>
+          </>
+        ) : (
+          <RadialGauge value={batt} label="배터리" caption="BATTERY" />
+        )}
         <div className="kv"><span>속도</span><b className="num">{spd}</b></div>
         <div className="kv">
           <span>E-STOP</span>
@@ -56,11 +69,16 @@ export default function StatusPanel() {
         <div className="env">
           <div><b className="mono">{status.envT}</b><span>주변 온도</span></div>
           <div><b className="mono">{status.envH}</b><span>습도</span></div>
+          {/* 경보 건수는 로그를 세어 만든다. 0 이 아닐 때만 붉게 — 평소에 붉은 숫자가
+              상주하면 정작 경보가 났을 때 눈에 들어오지 않는다. */}
+          <div className={alarmCount > 0 ? 'hot' : ''}>
+            <b className="mono">{alarmCount}</b><span>경보 이벤트</span>
+          </div>
         </div>
       )}
       {/* 편성이 2대 이상이면 나머지 로봇도 여기서 본다(S15P11E101-591) */}
       <FleetList />
-      <h3 style={{ marginTop: 12 }}>이벤트 로그</h3>
+      <h3 className="event-title">이벤트 로그</h3>
       <LogList variant="elog" />
     </div>
   )

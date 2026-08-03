@@ -1,4 +1,5 @@
 import { useSim } from '../SimContext.ts'
+import { useLive } from '../live/LiveContext.tsx'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { roleText } from '../auth/roles.ts'
 import UserMenu from './auth/UserMenu.tsx'
@@ -17,6 +18,7 @@ import UserMenu from './auth/UserMenu.tsx'
 export default function Nav({ section, onSection }: { section: 'live' | 'ops' | 'config',
             onSection: (s: 'live' | 'ops' | 'config') => void }) {
   const { clock, theme, toggleTheme } = useSim()
+  const { enabled } = useLive()
   const { user, isAdmin } = useAuth()
 
   // key 를 리터럴로 고정한다 — 그냥 두면 string 으로 넓어져 onSection 이 받지 못한다.
@@ -31,10 +33,10 @@ export default function Nav({ section, onSection }: { section: 'live' | 'ops' | 
   ]
 
   return (
-    <nav id="nav">
+    <nav id="nav" className={section === 'live' && !enabled ? 'sim-nav' : undefined}>
       <div className="logo">
         삐용(BBIYONG)
-        <span style={{ fontSize: 11, color: '#7c8596', fontWeight: 400 }}> 순찰 로봇 관제</span>
+        <span className="nav-subtitle"> 순찰 로봇 관제</span>
       </div>
       <div className="navtabs" role="tablist" aria-label="화면 전환">
         {tabs.map((t) => (
