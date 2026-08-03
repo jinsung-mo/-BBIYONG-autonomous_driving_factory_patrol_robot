@@ -6,7 +6,10 @@ import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,8 +42,10 @@ public class MattermostNotifier {
             String jsonPayload = objectMapper.writeValueAsString(payload);
 
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<String> request = new HttpEntity<>(jsonPayload, headers);
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("payload", jsonPayload);
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(form, headers);
 
             ResponseEntity<String> response = restTemplate.postForEntity(
                     setting.getMattermostWebhookUrl(),
@@ -54,8 +59,11 @@ public class MattermostNotifier {
                 throw new IllegalStateException("Mattermost 응답이 성공이 아닙니다: " + response.getStatusCode());
             }
         } catch (Exception e) {
-            log.error("Mattermost 알림 전송 중 오류 발생: userId={}, eventId={}, error={}",
-                    setting.getUserId(), event.getEventId(), e.getMessage(), e);
+            String failure = e instanceof RestClientResponseException responseException
+                    ? "HTTP " + responseException.getStatusCode().value()
+                    : e.getClass().getSimpleName();
+            log.error("Mattermost 알림 전송 실패: userId={}, eventId={}, failure={}",
+                    setting.getUserId(), event.getEventId(), failure);
             throw new IllegalStateException("Mattermost 알림 전송 실패", e);
         }
     }
