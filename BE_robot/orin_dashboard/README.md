@@ -43,8 +43,10 @@ Inbound (server → robot, `ControlCommand`):
   `/tmp/orincar_drive.json`; `teleop_node.py` consumes it and re-clamps limits.
 - `SET_MODE` and `NAVIGATE` are logged but not yet acted on.
 - `START_MAPPING`, `STOP_MAPPING`, and `SAVE_MAP` are handled by the opt-in
-  mapping orchestrator. It saves PGM/YAML, converts the PGM to PNG, uploads the
-  PNG, and queues `EVENT_MAPPING_COMPLETE` only after HTTP 201.
+  mapping orchestrator. It saves and validates PGM/YAML, uploads the original
+  PGM bytes, and queues `EVENT_MAPPING_COMPLETE` only after HTTP 201. Backend
+  support for decoding RAW PGM before `FloorPlanRenderer` is a deployment
+  prerequisite owned by the backend team.
 
 Mapping stays disabled unless `--mapping-enabled` is passed (or
 `ORINCAR_MAPPING_ENABLED=1` is set). The bridge also requires
