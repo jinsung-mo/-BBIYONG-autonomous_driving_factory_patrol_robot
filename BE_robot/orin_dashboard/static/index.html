@@ -293,6 +293,13 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
 .camstage.drive{max-width:min(100%,calc(64vh * var(--camarn,1.3333)))}
 .camstage img{width:100%;height:100%;display:block;object-fit:contain;background:#000}
 .camstage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+/* 🆕 [2026-08-04] H.264 영상 canvas. 검출 오버레이(ovXxx)와 **같은 상자**를 채우되
+   z-index 로 아래에 깔린다: 영상(vid) → JPEG img → 검출 박스(ov).
+   h264 가 붙으면 img 를 숨기고, 끊기면 img 가 다시 보인다(JPEG 폴백). */
+.camstage canvas.vid{object-fit:contain;background:#000;z-index:0}
+.camstage img{position:relative;z-index:1}
+.camstage canvas:not(.vid){z-index:2}
+.camstage.h264 img{display:none}
 .camstage .nofeed{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
                   color:var(--faint);font-size:12px;flex-direction:column;gap:6px}
 /* 폭이 남아도 세 칸을 무한정 늘리지 않는다 — 숫자 3개가 화면을 가로지르면
@@ -313,10 +320,20 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
 .obj .meta{grid-column:1/-1;font-family:var(--mono);font-size:10px;color:var(--faint);
            display:flex;gap:10px;flex-wrap:wrap;letter-spacing:.02em}
 .obj.living{border-color:rgba(224,165,58,.3)}
-.obj.fire{border-color:rgba(217,86,79,.42);background:rgba(217,86,79,.06)}
 .tagl{font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:var(--r2);
       background:var(--s3);color:var(--muted)}
 .tagl.warn{background:rgba(224,165,58,.14);color:var(--warn)}
+
+/* ── 열화상(IR) ─────────────────────────────────────────────── */
+.therm-stage{position:relative;background:#000;border-radius:var(--r2);overflow:hidden;
+             aspect-ratio:4/3;width:100%;margin:0 auto;border:1px solid var(--line)}
+.therm-stage.big{max-width:min(100%,calc(50vh * 1.3333))}
+.therm-stage.mini{max-width:260px}
+.therm-stage canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+.therm-stage .nofeed{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                     color:var(--faint);font-size:12px;flex-direction:column;gap:6px;text-align:center;padding:8px}
+.therm-legend{display:flex;justify-content:space-between;font-family:var(--mono);
+              font-size:11px;color:var(--muted);margin-top:6px}
 
 /* ══ 제어 — 화면에서 유일하게 로봇을 움직이는 곳 ══════════════ */
 .ctl{border-color:var(--line2)}
@@ -331,6 +348,63 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
 .arm button.on{background:var(--s3);color:var(--ink);font-weight:600}
 .arm button[data-arm="1"].on{background:var(--arm);color:#1a1408}
 .arm button:disabled{opacity:.35;cursor:not-allowed}
+/* 🆕 제어권 — 배타 잠금. "왜 내 조작이 안 먹지"의 답이 여기 먼저 나온다 */
+.lease{display:flex;align-items:baseline;gap:8px;margin-bottom:9px}
+.lease .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+          text-transform:uppercase;color:var(--faint)}
+.lease b{font-size:12px;font-weight:600;color:var(--muted)}
+.lease.mine b{color:var(--ok)}
+.lease.locked b{color:var(--warn)}
+/* 🆕 출력 제한 = 펌웨어 duty_max. 제어권자만 만질 수 있다 */
+.pwr{background:var(--s2);border:1px solid var(--line);border-radius:var(--r2);
+     padding:9px 10px;margin-bottom:11px}
+.pwr-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+.pwr-h .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+          text-transform:uppercase;color:var(--faint)}
+.pwr-h b{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink)}
+/* 🆕 기기 확인값(되읽기). 🔴 **색으로만** 구분하지 않는다 — 문자로도
+   '불일치'·'회신 없음'을 적는다. 색각 이상·저대비 화면·흑백 캡처에서도
+   위험 상태가 읽혀야 한다. 이 표시가 없던 동안 화면은 명령값만 보여
+   노드가 죽어도 정상처럼 보였다. */
+.pwr-r{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.pwr-ack{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.pwr-ack.ok{color:var(--ok)}
+.pwr-ack.bad{color:var(--warn);font-weight:600}
+.pwr input[type=range]{width:100%;margin:0;accent-color:var(--arm);
+                       cursor:pointer;min-height:30px;touch-action:none}
+.pwr input[type=range]:disabled{opacity:.35;cursor:not-allowed}
+.pwr .hint{margin-top:2px}
+/* 🆕 카메라 틸트(서보) — 출력 제한 바로 아래. 서보에 위치 피드백 배선이 없어
+   슬라이더는 순수 게이지(항상 비활성 — 조작 불가, 시각 표시 전용)이고, 실제
+   명령은 입력창+버튼으로만 나간다. 값의 의미는 아래 tilt-r 참조. */
+.tilt{background:var(--s2);border:1px solid var(--line);border-radius:var(--r2);
+      padding:9px 10px;margin-bottom:11px}
+.tilt-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+.tilt-h .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+           text-transform:uppercase;color:var(--faint)}
+/* 🆕 tilt-r = servo_angle_sent 되읽기. **실측 서보 위치가 아니다** — SG90 류는
+   위치 피드백이 없어 "로봇에 마지막으로 전송된 명령각"이 지금 얻을 수 있는
+   전부다. "현재값/적용됨"처럼 실측을 암시하는 단어 대신 "전송됨" 계열로만
+   말한다(agy(gemini-3.1-pro-high) 검토 반영 — 실측인 줄 오해하기 쉽다는 지적). */
+.tilt-r{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.tilt-r b{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink);
+          border-bottom:1px dashed var(--line2)}
+/* 게이지 — 이중으로 막는다: disabled 속성 + pointer-events:none.
+   🔄 2026-08-03 저녁 [사용자 지침]: 표시 전용이던 것을 **조작 가능**으로 바꿨다.
+   따라서 "만질 수 없어 보이게" 하던 pointer-events:none 과 중성 accent 를 걷는다 —
+   실제로 만져지는 컨트롤이 못 만질 것처럼 보이면 그게 더 나쁜 거짓말이다.
+   조종 슬라이더(--arm, 호박색)와는 여전히 구분한다: 틸트는 주행이 아니라
+   카메라라 상태색을 쓰지 않는다(tokens.css 원칙 ① — 색은 상태가 변할 때만). */
+.tilt input[type=range]{width:100%;margin:5px 0 9px;accent-color:var(--ink);
+                        cursor:pointer;touch-action:none}
+.tilt-in{display:flex;align-items:center;gap:6px}
+.tilt-in input[type=number]{width:60px;background:var(--s1);color:var(--ink);
+     border:1px solid var(--line2);border-radius:var(--r2);padding:6px 7px;
+     font:inherit;font-family:var(--mono);font-size:13px;text-align:right}
+.tilt-in input[type=number]:focus{border-color:var(--muted);outline:none}
+.tilt-in .u{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.tilt-in .btn{margin-left:auto;min-width:64px;text-align:center}
+.tilt .hint{margin-top:6px}
 /* reason — 로봇이 왜 안 움직이는지가 여기 다 있다. 가공하지 않고 그대로 보여준다 */
 .reason{background:var(--s2);border:1px solid var(--line);border-radius:var(--r2);
         padding:8px 10px;margin-bottom:9px;min-height:48px}
@@ -437,6 +511,7 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
   .content{padding:15px 13px 36px}
   .mapbox.tall{height:52vh}
   .camstage.big,.camstage.drive{max-width:100%}
+  .therm-stage.big,.therm-stage.mini{max-width:100%}
 }
 @media (max-width:720px){
   .g3,.g2{grid-template-columns:1fr}
@@ -506,13 +581,20 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
     <header class="statusbar">
       <div class="sb"><span class="dot" id="sbDot"></span><span class="v sm" id="sbConn">연결 확인 중</span></div>
       <div class="sb"><span class="l">LiDAR</span><span class="v" id="sbHz">—</span><span class="u">Hz</span></div>
-      <div class="sb"><span class="l">화재</span><span class="v sm" id="sbFire">—</span></div>
+      <div class="sb"><span class="l">열화상</span><span class="v sm" id="sbTherm">—</span></div>
       <div class="sb"><span class="l">CPU</span><span class="v" id="sbCpu">—</span><span class="u">%</span></div>
       <div class="sb"><span class="l">Tj</span><span class="v" id="sbTemp">—</span><span class="u">°C</span></div>
       <div class="sb" id="sbPwrBox"
            title="Orin 모듈 입력 전력(VDD_IN). 모터는 MDD10A에 배터리가 직결돼 있어 포함되지 않는다. 25W 는 nvpmodel 전력모드 상한.">
         <span class="l">Orin 전력</span><span class="v" id="sbPwr">—</span>
         <span class="u">W / 25</span></div>
+      <div class="sb" id="sbBatBox"
+           title="6S 리튬팩 전압(ESP32 INA226). 미배선/미연결이면 — 로 표시된다. % 는 19.0~25.2V 구간 대충 매핑이라 정밀 SoC 가 아니다.">
+        <span class="l">배터리</span><span class="v" id="sbBat">—</span>
+        <span class="u">V</span></div>
+      <div class="sb" id="sbEnvBox"
+           title="ESP32 DHT11 온습도(1Hz). 로컬 로그용 참고값 — 미연결이면 — 로 표시된다.">
+        <span class="l">온습도</span><span class="v sm" id="sbEnv">—</span></div>
 
       <!-- ═══════════════════════════════════════════════════════════════
            시간 예산 슬롯 (TIME BUDGET)
@@ -560,9 +642,14 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
           </div>
           <div class="card">
             <div class="card-t">카메라<span class="r" id="allCamSt">—</span></div>
-            <div class="camstage"><img id="imgMini" alt="카메라 축소 화면"><canvas id="ovMini"></canvas>
+            <div class="camstage"><canvas class="vid" id="vidMini"></canvas><img id="imgMini" alt="카메라 축소 화면"><canvas id="ovMini"></canvas>
               <div class="nofeed" id="nfMini">영상 없음</div></div>
             <div class="floor" id="floorMini"></div>
+            <div class="card-t" style="margin:10px 0 6px">열화상<span class="r" id="allThermSt">—</span></div>
+            <div class="therm-stage mini">
+              <canvas id="thermMini" width="32" height="24"></canvas>
+              <div class="nofeed" id="nfThermMini">열화상 데이터 없음</div>
+            </div>
           </div>
           <div class="card">
             <div class="card-t">지금<span class="r" id="aAge">—</span></div>
@@ -572,7 +659,7 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
             <div class="kv"><span>스캔 포인트</span><b id="aPts">—</b></div>
             <div class="kv"><span>탐색 면적</span><b id="aArea">—</b></div>
             <div class="card-t" style="margin:16px 0 8px">인지</div>
-            <div class="kv"><span>화재 · 연기</span><b id="aFire">—</b></div>
+            <div class="kv"><span>열화상 최고온도</span><b id="aTherm">—</b></div>
             <div class="kv"><span>COCO 객체</span><b id="aObj">—</b></div>
             <div class="kv"><span>생물 추정</span><b id="aLiving">—</b></div>
             <div class="kv"><span>바닥 최저</span><b id="aFloor">—</b></div>
@@ -764,14 +851,22 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
 
       <!-- ══ 카메라 ═════════════════════════════════════════ -->
       <section class="page" data-page="cam">
-        <div class="ph"><h1>카메라</h1><span class="sub">Brio 100 · YOLO11 화재/연기 · COCO 객체 · 바닥 판정</span></div>
+        <div class="ph"><h1>카메라</h1><span class="sub">Brio 100 · YOLO11 COCO 객체 · MLX90640 열화상 · 바닥 판정</span></div>
         <div id="camAlert"></div>
         <div class="grid g3 top">
           <div class="card span2">
             <div class="card-t">영상<span class="r" id="camSt">—</span></div>
-            <div class="camstage big"><img id="imgMain" alt="카메라 화면"><canvas id="ovMain"></canvas>
+            <div class="camstage big"><canvas class="vid" id="vidMain"></canvas><img id="imgMain" alt="카메라 화면"><canvas id="ovMain"></canvas>
               <div class="nofeed" id="nfMain"><b>영상 없음</b><span>camera_node.py 확인</span></div></div>
             <div class="btnrow" style="margin-top:11px">
+              <!-- 🆕 [2026-08-04] 영상 경로 토글. 기본은 H.264(30fps)이고
+                   끊기면 자동으로 JPEG(10fps)이 보인다 — 화면이 사라지지 않게. -->
+              <button type="button" class="btn" id="vidToggle">H.264 켜기</button>
+              <!-- 🆕 보간 토글. 30fps 사이를 크로스페이드로 메워 저더를 줄인다.
+                   🔴 지연이 한 프레임(약 33ms) 늘고 빠른 움직임엔 잔상이 는다 —
+                      조종할 때는 끄는 쪽이 맞다. 켜고 끄며 눈으로 비교할 것. -->
+              <button type="button" class="btn" id="vidInterp" title="30fps 사이를 크로스페이드로 메운다. 지연 +1프레임(약 33ms), 빠른 움직임엔 잔상. 조종 중엔 끄는 쪽을 권한다.">보간 끄기</button>
+              <span class="chip" id="vidBadge">JPEG 10fps</span>
               <span class="chip" id="cTrt">TensorRT —</span>
               <span class="chip" id="cCoco">COCO —</span>
               <span class="chip" id="cImg">프레임 —</span>
@@ -783,10 +878,21 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
               프레임을 못 읽으면 <b>"트임"이 아니라 "모름"</b>이다.</div>
           </div>
           <div class="card">
-            <div class="card-t">화재 · 연기<span class="r" id="fireN">—</span></div>
-            <div id="fireList"></div>
-            <div class="card-t" style="margin:18px 0 8px">COCO 객체<span class="r" id="objN">—</span></div>
+            <div class="card-t">COCO 객체<span class="r" id="objN">—</span></div>
             <div class="objs" id="objList"></div>
+          </div>
+        </div>
+
+        <div class="grid g3 top" style="margin-top:16px">
+          <div class="card span2">
+            <div class="card-t">열화상 (MLX90640)<span class="r" id="thermSt">—</span></div>
+            <div class="therm-stage big">
+              <canvas id="thermMain" width="32" height="24"></canvas>
+              <div class="nofeed" id="nfThermMain"><b>열화상 데이터 없음</b><span>ESP32 IR 파싱 확인 — /tmp/ir.json</span></div>
+            </div>
+            <div class="therm-legend" id="thermLegend"><span>최저 —</span><span>최고 —</span></div>
+            <div class="hint">32×24, MLX90640 4Hz 갱신. 색은 실온 구간에서는 무채색이고
+              ~35°C 부터 주황, ~45°C 부터 빨강으로 경보색이 들어온다(잠정 문턱 — 실측 전).</div>
           </div>
         </div>
       </section>
@@ -800,18 +906,64 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
         <div class="grid g3 top">
           <div class="card span2">
             <div class="card-t">조종 시야<span class="r" id="drvCamSt">—</span></div>
-            <div class="camstage drive"><img id="imgDrv" alt="조종 시야"><canvas id="ovDrv"></canvas>
+            <div class="camstage drive"><canvas class="vid" id="vidDrv"></canvas><img id="imgDrv" alt="조종 시야"><canvas id="ovDrv"></canvas>
               <div class="nofeed" id="nfDrv"><b>영상 없음</b><span>보이지 않으면 움직이지 마라</span></div></div>
             <div class="card-t" style="margin:14px 0 0">바닥 트임 (좌 · 중 · 우)</div>
             <div class="floor" id="floorDrv"></div>
+            <div class="card-t" style="margin:14px 0 6px">열화상<span class="r" id="drvThermSt">—</span></div>
+            <div class="therm-stage mini">
+              <canvas id="thermDrv" width="32" height="24"></canvas>
+              <div class="nofeed" id="nfThermDrv">열화상 데이터 없음</div>
+            </div>
           </div>
 
           <div class="card ctl" id="ctlCard">
             <div class="card-t">조종<span class="r" id="drvLim">—</span></div>
 
+            <!-- 🆕 제어권. 두 사람이 동시에 조종하면 로봇이 명령을 번갈아 받는다 -->
+            <div class="lease" id="drvLease">
+              <span class="l">제어권</span><b id="drvLeaseTxt">대기</b>
+            </div>
+
             <div class="arm" id="armSw">
               <button type="button" class="arm-b on" data-arm="0">잠금</button>
               <button type="button" class="arm-b" data-arm="1">무장</button>
+            </div>
+
+            <!-- 🆕 출력 제한 → 펌웨어 duty_max. 놓는 순간에만 전송한다 -->
+            <div class="pwr">
+              <!-- 🆕 pwrVal = 우리가 **명령한** 값 / pwrAck = 기기가 **회신한** 값.
+                   둘을 나란히 두는 것이 이 UI 의 요점이다 — 명령만 보이면
+                   esp32_base_node 가 죽었을 때 화면이 조용히 거짓말을 한다. -->
+              <div class="pwr-h"><span class="l">출력 제한</span>
+                <span class="pwr-r"><b id="pwrVal">—</b><span class="pwr-ack" id="pwrAck">—</span></span>
+              </div>
+              <input type="range" id="pwrSlider" min="0" max="100" step="1"
+                     value="30" disabled aria-label="출력 제한 퍼센트">
+              <div class="hint" id="pwrHint">모든 화면이 같은 값을 본다.</div>
+            </div>
+
+            <!-- 🆕 카메라 틸트(서보). 요구사항: 입력창(전송) + 되읽기(읽기전용) +
+                 게이지(비활성 슬라이더)를 분리한다. 하드웨어에 위치 피드백이
+                 없어 "현재값"이 아니라 "전송됨"으로만 말한다 — tiltAck 툴팁 참조. -->
+            <div class="tilt">
+              <div class="tilt-h"><span class="l">카메라 틸트</span>
+                <span class="tilt-r"
+                      title="서보 위치 피드백 배선이 없다(SG90류) — 로봇에 마지막으로 전송된 명령각이다. 실제 축 각도가 아니다.">
+                  <b id="tiltVal">—</b><span class="pwr-ack" id="tiltAck">—</span>
+                </span>
+              </div>
+              <!-- 게이지 전용 — disabled + pointer-events:none 이중으로 조작을 막는다.
+                   servo_angle_sent 되읽기를 시각으로만 보여준다. -->
+              <input type="range" id="tiltGauge" min="0" max="180" step="5" value="90"
+                     aria-label="카메라 틸트 각도 (도, 0~180 절대각). 손을 놓으면 전송된다">
+              <div class="tilt-in">
+                <input type="number" id="tiltInput" min="0" max="180" step="5" value="90"
+                       inputmode="numeric" aria-label="카메라 틸트 각도 입력 (도, 절대각)">
+                <span class="u">°</span>
+                <button type="button" class="btn" id="tiltSend">전송</button>
+              </div>
+              <div class="hint" id="tiltHint">슬라이더를 놓거나, 입력 후 Enter/전송으로 확정한다. 0~180 절대각 — 90이 기어설계상 중립(수평), 그 외 극단값은 아직 실측 전이라 막아두지 않는다.</div>
             </div>
 
             <div class="reason off" id="drvReasonBox">
@@ -899,6 +1051,9 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b) => v<a?a:(v>b?b:v);
 const lvl = (v,w,b) => v==null ? '' : (v>=b ? 'bad' : (v>=w ? 'warn' : 'ok'));
+// 배터리는 lvl() 과 반대로 **낮을수록 나쁘다** — 별도 함수.
+// 임계값 근거: CLAUDE.md 배터리 스펙 — 만충 25.2V(6S) · 19V 미만 30초 지속 시 복귀충전 트리거.
+const battLvl = v => v==null ? '' : (v<19 ? 'bad' : (v<20 ? 'warn' : 'ok'));
 const COL = {ok:'#4fb883', warn:'#e0a53a', bad:'#d9564f', acc:'#8b929b', '':'#8b929b'};
 
 function setMeter(el, frac, level){
@@ -1223,8 +1378,7 @@ function MapView(canvas, opt){
       for(let i=0;i<s.ranges.length;i++){
         const r = s.ranges[i];
         if(!r) continue;
-        // Match the backward-facing base_link -> laser_frame yaw used by ROS.
-        // The 6 cm translation offset is normally below one screen pixel.
+        // 스캔은 laser 기준이나 base_link 근사로 그린다(오프셋 6cm 는 대개 1px 미만)
         const a = p.yaw + LIDAR_MOUNT_YAW + s.angle_min + i*s.angle_inc;
         const q = point(p.x + r*Math.cos(a), p.y + r*Math.sin(a));
         ctx.fillRect(q[0]-1, q[1]-1, 2, 2);
@@ -1361,6 +1515,16 @@ function renderState(s){
   const eP = $('sbPwr');
   eP.textContent = pwW==null ? '—' : pwW.toFixed(1);
   eP.className = 'v ' + (pwW==null ? '' : lvl(pwW/PWR_CAP_W*100, 80, 95));
+  // ── 배터리(INA226)·온습도(DHT11) — 상태 레일. 값 없거나 미연결이면 '—'.
+  const nbat = s.battery || {}, nenv = s.env || {};
+  const eBatT = $('sbBat');
+  const batVolts = (nbat.connected && nbat.volts != null) ? nbat.volts : null;
+  eBatT.textContent = batVolts == null ? '—' : batVolts.toFixed(1);
+  eBatT.className = 'v ' + battLvl(batVolts);
+  const eEnvT = $('sbEnv');
+  eEnvT.textContent = (nenv.connected && nenv.temp_c != null && nenv.humidity_pct != null)
+    ? `${nenv.temp_c.toFixed(1)}℃ · ${Math.round(nenv.humidity_pct)}%`
+    : '—';
   renderTimeBudget(s);                                   // ← 시간 예산 슬롯
   setTxt('sbTick', new Date().toLocaleTimeString('ko-KR',{hour12:false}));
 
@@ -1637,9 +1801,255 @@ function renderNav(nav){
 const CAM = { data:null, err:null };
 const FLOOR_LAB = ['좌','중','우'];
 const CAM_IMGS = [['imgMain','ovMain'], ['imgMini','ovMini'], ['imgDrv','ovDrv']];
+
+/* ══ H.264 라이브 영상 (WebCodecs) ═══════════════════════════════
+   왜 만들었나
+     종전에는 /api/cam 의 base64 JPEG 를 100ms 마다 폴링했다(10fps). base64 는
+     원본보다 33% 크고 매 프레임이 독립(키프레임급)이라 프레임률을 올리기 어렵다.
+     H.264 는 움직임이 없으면 P프레임이 거의 공짜다 — 실측에서 키프레임 22KB 대
+     P프레임 1.5KB(15배)로, **같은 대역폭에 3배 프레임률**이 나온다.
+
+   경로
+     camera_node(x264) → /dev/shm/orincar_h264.bin → server.py /api/wsvideo
+     → 이 코드(WebCodecs VideoDecoder) → canvas
+     🔑 로봇은 **재인코딩하지 않는다.** 인코더가 낸 바이트가 그대로 온다.
+        cloud_bridge 가 팀 백엔드에 하는 것과 같은 방식이다.
+
+   🔴 JPEG 폴백을 반드시 남긴다
+     WebCodecs 는 Chrome/Edge 는 되지만 Firefox 는 제한적이고, 무엇보다
+     h264 파이프라인이 죽으면 화면이 통째로 사라진다. 실제로 2026-08-04 에
+     카메라 모드 불일치로 h264 가 안 나온 적이 있다. 그때도 JPEG 는 보였다.
+     → 프레임이 STALL_MS 동안 안 오면 자동으로 img(JPEG)로 되돌린다.        */
+const VID_STAGES = [['vidMain','imgMain'], ['vidMini','imgMini'], ['vidDrv','imgDrv']];
+const VID_STALL_MS = 2500;        // 이 시간 동안 프레임이 없으면 JPEG 로 폴백
+const VID_RETRY_MS = 3000;        // 소켓이 끊기면 이 간격으로 재연결
+const VID = {
+  enabled: ('VideoDecoder' in window),   // WebCodecs 지원 여부
+  on: false,            // 사용자가 켰나
+  ws: null, dec: null,
+  lastFrame: 0,         // 마지막 디코딩 성공 시각(ms)
+  fps: 0, _fpsN: 0, _fpsT: 0,
+  err: null,
+  configured: false,
+  interp: false,        // 🆕 프레임 블렌딩 보간. 지연이 한 프레임 늘어나므로 기본 꺼짐
+  presentFps: 0, _prN: 0, _prT: 0,   // 실제로 화면에 그린 횟수 (추정하지 않는다)
+};
+
+/* BBV1 헤더 파서 — server.py 의 _h264_peek / h264_protocol.py 와 같은 포맷.
+   >4sBBHIQQIHHHH · 고정 40바이트 + robot_id + payload (전부 빅엔디언) */
+function parseBBV1(buf){
+  const dv = new DataView(buf);
+  if(buf.byteLength < 40) throw new Error('헤더가 짧다');
+  if(dv.getUint32(0) !== 0x42425631) throw new Error('BBV1 매직이 아니다');  // "BBV1"
+  const flags = dv.getUint8(5);
+  const seq   = Number(dv.getBigUint64(12));
+  const tsMs  = Number(dv.getBigUint64(20));
+  const paySz = dv.getUint32(28);
+  const w = dv.getUint16(32), h = dv.getUint16(34), fps = dv.getUint16(36);
+  const idSz = dv.getUint16(38);
+  return {flags, seq, tsMs, w, h, fps,
+          keyframe: !!(flags & 0x01),
+          payload: new Uint8Array(buf, 40 + idSz, paySz)};
+}
+
+function vidSetStage(active){
+  for(const [vidId, imgId] of VID_STAGES){
+    const cv = $(vidId); if(!cv) continue;
+    cv.parentElement.classList.toggle('h264', active);
+  }
+}
+
+/* ── 프레임 버퍼 + 보간 표시기 ──────────────────────────────────
+   소스는 30fps 인데 화면은 보통 60Hz 다. 그 사이를 **크로스페이드**로 메워
+   저더를 줄인다(보간 토글). 중간 한 장만 끼우지 않고 화면 주사율마다
+   비율을 다시 계산해 **연속으로** 섞는다 — 60Hz 든 120Hz 든 그대로 쓴다.
+
+   🔴 이건 "진짜 60fps"가 아니다. 없던 순간을 그리는 게 아니라 **두 실제
+      프레임을 반투명으로 겹치는 것**이다. 느린 움직임에서는 부드러워 보이고
+      빠른 움직임에서는 **잔상(모션 블러)** 이 는다. 그래서 토글로 뒀다 —
+      켜고 끄며 눈으로 비교해 판단할 것.
+
+   🔴 지연이 정확히 **한 프레임 간격(약 33ms)** 늘어난다.
+      N 과 N+1 사이를 그리려면 N+1 이 이미 와 있어야 하기 때문이다.
+      alpha=0 시점에 옛 프레임(a)을 보여주는 것이 곧 그 지연이다.
+      끄면 최신 프레임을 즉시 그린다 — 지연 0. 조종할 때는 끄는 쪽이 맞다. */
+const VIDBUF = {
+  a: null, b: null,          // a=이전, b=최신 (오프스크린 캔버스)
+  bAt: 0,                    // b 가 도착한 시각(performance.now)
+  interval: 1000 / 30,       // 프레임 간격 EMA — 실제 도착 간격으로 보정한다
+  w: 0, h: 0,
+};
+
+function vidBufCanvas(w, h){
+  const c = (typeof OffscreenCanvas !== 'undefined')
+    ? new OffscreenCanvas(w, h) : document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
+function vidDrawFrame(frame){
+  const w = frame.displayWidth, h = frame.displayHeight;
+  if(VIDBUF.w !== w || VIDBUF.h !== h){       // 해상도가 바뀌면 버퍼를 다시 만든다
+    VIDBUF.w = w; VIDBUF.h = h;
+    VIDBUF.a = vidBufCanvas(w, h);
+    VIDBUF.b = vidBufCanvas(w, h);
+    VIDBUF.bAt = 0;
+  }
+  // 버퍼를 핑퐁으로 돌린다: 지금의 b 가 a 가 되고, 새 프레임이 b 가 된다.
+  const next = VIDBUF.a;
+  next.getContext('2d').drawImage(frame, 0, 0, w, h);
+  VIDBUF.a = VIDBUF.b;
+  VIDBUF.b = next;
+  const now = performance.now();
+  if(VIDBUF.bAt){                              // 도착 간격을 EMA 로 추적
+    const dt = now - VIDBUF.bAt;
+    if(dt > 5 && dt < 500) VIDBUF.interval += 0.2 * (dt - VIDBUF.interval);
+  }
+  VIDBUF.bAt = now;
+}
+
+/* 화면 주사율마다 호출된다. 보간이 꺼져 있으면 최신 프레임을 그대로 그린다. */
+function vidPresent(){
+  requestAnimationFrame(vidPresent);
+  const b = VIDBUF.b;
+  if(!b || !VID.on) return;
+
+  // 실제로 **그린** 횟수를 센다. 소스 fps × 2 로 추정하면 안 된다 —
+  // 우리는 화면 주사율마다 그리므로 60Hz 면 60, 120Hz 면 120 이다.
+  // 배지가 지어낸 숫자를 보여주지 않게 하려는 것이다.
+  VID._prN++;
+  {
+    const t = performance.now();
+    if(t - VID._prT >= 1000){ VID.presentFps = VID._prN * 1000 / (t - VID._prT); VID._prN = 0; VID._prT = t; }
+  }
+
+  let alpha = 1;
+  if(VID.interp && VIDBUF.a && VIDBUF.bAt){
+    alpha = (performance.now() - VIDBUF.bAt) / VIDBUF.interval;
+    alpha = alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha);
+  }
+
+  for(const [vidId] of VID_STAGES){
+    const cv = $(vidId); if(!cv) continue;
+    if(cv.width !== VIDBUF.w)  cv.width  = VIDBUF.w;
+    if(cv.height !== VIDBUF.h) cv.height = VIDBUF.h;
+    // 화면에 안 보이는 stage 는 그리지 않는다 — 3개를 매 주사율마다 그리면 낭비다.
+    if(cv.offsetParent === null) continue;
+    const ctx = cv.getContext('2d');
+    if(alpha >= 0.999){
+      ctx.globalAlpha = 1;
+      ctx.drawImage(b, 0, 0, cv.width, cv.height);
+    }else{
+      ctx.globalAlpha = 1;      ctx.drawImage(VIDBUF.a, 0, 0, cv.width, cv.height);
+      ctx.globalAlpha = alpha;  ctx.drawImage(b, 0, 0, cv.width, cv.height);
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function vidStop(){
+  VID.on = false;
+  try{ VID.ws && VID.ws.close(); }catch(e){}
+  try{ VID.dec && VID.dec.state !== 'closed' && VID.dec.close(); }catch(e){}
+  VID.ws = null; VID.dec = null; VID.configured = false; VID.fps = 0;
+  vidSetStage(false);
+  renderVidBadge();
+}
+
+function vidStart(){
+  if(!VID.enabled){ VID.err = '이 브라우저는 WebCodecs 를 지원하지 않는다'; renderVidBadge(); return; }
+  VID.on = true; VID.err = null;
+  vidConnect();
+  renderVidBadge();
+}
+
+function vidConnect(){
+  if(!VID.on) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let ws;
+  try{ ws = new WebSocket(`${proto}//${location.host}/api/wsvideo`); }
+  catch(e){ VID.err = '소켓 생성 실패'; setTimeout(vidConnect, VID_RETRY_MS); return; }
+  ws.binaryType = 'arraybuffer';
+  VID.ws = ws;
+
+  ws.onopen = () => { VID.err = null; };
+  ws.onclose = () => { if(VID.on) setTimeout(vidConnect, VID_RETRY_MS); };
+  ws.onerror = () => { VID.err = '영상 소켓 오류'; };
+
+  ws.onmessage = (ev) => {
+    if(!(ev.data instanceof ArrayBuffer)) return;
+    let p;
+    try{ p = parseBBV1(ev.data); }
+    catch(e){ VID.err = '패킷 형식 오류: ' + e.message; return; }
+
+    // 디코더는 SPS/PPS + IDR 없이는 아무것도 못 편다. 첫 키프레임까지 버린다.
+    if(!VID.configured){
+      if(!p.keyframe) return;
+      try{
+        VID.dec = new VideoDecoder({
+          output: (frame) => {
+            VID.lastFrame = Date.now();
+            VID._fpsN++;
+            const now = performance.now();
+            if(now - VID._fpsT >= 1000){
+              VID.fps = VID._fpsN * 1000 / (now - VID._fpsT);
+              VID._fpsN = 0; VID._fpsT = now;
+            }
+            try{ vidDrawFrame(frame); } finally { frame.close(); }
+          },
+          error: (e) => { VID.err = '디코더 오류: ' + e.message; VID.configured = false; },
+        });
+        // Annex-B(byte-stream) baseline. 인코더 파이프라인이
+        // `profile=baseline, stream-format=byte-stream` 이라 avc1.42E01E 다.
+        VID.dec.configure({codec: 'avc1.42E01E', optimizeForLatency: true});
+        VID.configured = true;
+      }catch(e){ VID.err = '디코더 생성 실패: ' + e.message; return; }
+    }
+
+    try{
+      VID.dec.decode(new EncodedVideoChunk({
+        type: p.keyframe ? 'key' : 'delta',
+        timestamp: p.tsMs * 1000,        // µs
+        data: p.payload,
+      }));
+    }catch(e){ VID.err = '디코딩 실패: ' + e.message; VID.configured = false; }
+  };
+}
+
+/* 프레임이 멈추면 JPEG 로 되돌린다. h264 가 죽어도 화면이 사라지지 않게. */
+function vidWatchdog(){
+  const live = VID.on && VID.configured && (Date.now() - VID.lastFrame < VID_STALL_MS);
+  vidSetStage(live);
+  // 🔴 h264 가 살아 있으면 "영상 없음" 오버레이를 숨긴다.
+  //    이 오버레이는 JPEG 경로(camLoop)가 자기 기준으로만 켜고 끈다 — h264 로
+  //    화면이 잘 나오는데도 글자가 겹쳐 뜨던 버그가 있었다(2026-08-04 육안 확인).
+  if(live) for(const id of ['nfMain','nfMini','nfDrv']){ const e=$(id); if(e) e.style.display='none'; }
+  renderVidBadge(live);
+  setTimeout(vidWatchdog, 500);
+}
+
+function renderVidBadge(live){
+  const el = $('vidBadge'); if(!el) return;
+  if(!VID.enabled){ el.textContent = 'H.264 미지원 브라우저'; el.className = 'chip'; return; }
+  if(!VID.on){ el.textContent = 'JPEG 10fps'; el.className = 'chip'; return; }
+  if(live === undefined) live = VID.on && VID.configured && (Date.now() - VID.lastFrame < VID_STALL_MS);
+  if(live){
+    // 소스 fps 와 **표시** fps 를 같이 적는다. 보간을 켜면 표시가 소스보다 높은데,
+    // 그 차이가 곧 "합성된 만큼"이다 — 숫자 하나만 보이면 진짜 30fps 로 오해한다.
+    el.textContent = VID.interp
+      ? `H.264 ${VID.fps.toFixed(0)}fps → 표시 ${VID.presentFps.toFixed(0)}fps (보간)`
+      : `H.264 ${VID.fps.toFixed(0)} fps`;
+    el.className = 'chip on'; return;
+  }
+  el.textContent = VID.err ? ('H.264 ' + VID.err) : 'H.264 연결 중… (JPEG 표시 중)';
+  el.className = 'chip';
+}
 let camFails = 0;
+let camBusy = false;          // 요청 중복 방지 — RTT 가 주기보다 길면 쌓인다
 
 async function pollCam(){
+  if(camBusy) return;         // 앞 요청이 아직 안 왔으면 건너뛴다
+  camBusy = true;
   try{
     const r = await fetch('api/cam', {cache:'no-store'});
     if(!r.ok){
@@ -1654,7 +2064,27 @@ async function pollCam(){
     renderCam();
   }catch(e){
     if(++camFails > 2){ CAM.err = '서버 연결 끊김'; CAM.data = null; renderCam(); }
+  }finally{
+    camBusy = false;
   }
+}
+
+/* 🔴 카메라만 별도 루프를 돈다. 공통 tick(500ms) 격자에 묶으면 1 Hz 가 천장이다.
+   **응답을 받은 뒤 다음 요청을 낸다** — setInterval 로 100ms 마다 쏘면 왕복지연
+   (AWS 터널 실측 82.6 ms)보다 빨라지는 순간 요청이 겹쳐 쌓이고 프레임 순서가
+   뒤섞인다. 자기 페이싱이면 회선이 느려질 때 저절로 느려진다.
+   실측 상한: keep-alive 단일 연결 12.1 req/s. CAM_MIN_GAP_MS 로 그 아래에 둔다.
+   근거: docs/대시보드_영상_30fps_검토_2026-07-27.md §3-3 */
+const CAM_MIN_GAP_MS = 100;              // 10 fps 목표 (= dump 주기와 맞춘다)
+const CAM_COLD_GAP_MS = 3000;            // 카메라 화면이 아닐 때
+async function camLoop(){
+  const hot = !document.hidden &&
+              (PAGE==='cam' || PAGE==='all' || PAGE==='drive');
+  const t0 = performance.now();
+  if(!document.hidden) await pollCam();
+  const spent = performance.now() - t0;
+  const gap = hot ? CAM_MIN_GAP_MS : CAM_COLD_GAP_MS;
+  setTimeout(camLoop, Math.max(0, gap - spent));
 }
 
 function floorHTML(f){
@@ -1676,10 +2106,9 @@ function renderCam(){
     for(const id of ['nfMain','nfMini','nfDrv']) $(id).style.display = 'flex';
     $('camAlert').innerHTML = CAM.err ?
       `<div class="alert bad"><span class="sys">CAM</span><span>${CAM.err}</span></div>` : '';
-    setTxt('sbFire','—'); $('sbFire').className = 'v sm';
     $('tagCam').textContent = '—'; $('tagCam').className = 'tag hot';
     for(const id of ['floorMain','floorMini','floorDrv']) $(id).innerHTML = floorHTML(null);
-    for(const id of ['aFire','aObj','aLiving']){ const e=$(id); e.textContent='—'; e.className='dim'; }
+    for(const id of ['aObj','aLiving']){ const e=$(id); e.textContent='—'; e.className='dim'; }
     $('aFloor').textContent = '모름'; $('aFloor').className = 'warn';
     return;
   }
@@ -1729,26 +2158,8 @@ function renderCam(){
     ? '1.0 = 완전히 트임 · 0 에 가까울수록 막힘. 0.3 미만이면 정지 판단 대상이다.'
     : '<b style="color:var(--warn)">프레임을 못 읽어 판정 불가 — "트임"이 아니라 "모름"이다.</b>';
 
-  // 화재/연기
-  const dets = c.dets || [];
-  const fire = dets.some(d => d.cls===1 || d.name==='fire');
-  const eF = $('sbFire');
-  eF.textContent = dets.length ? (fire?'화재':'연기') : '없음';
-  eF.className = 'v sm ' + (dets.length ? (fire?'bad':'warn') : 'ok');
-  $('tagCam').textContent = dets.length ? '!' : (c.objs? c.objs.length : 0);
-  $('tagCam').className = 'tag ' + (dets.length?'hot':'live');
-  setTxt('fireN', dets.length + '건');
-  const eaf = $('aFire');
-  eaf.textContent = dets.length ? `${dets.length}건 · ${fire?'화재':'연기'}` : '없음';
-  eaf.className = dets.length ? (fire?'bad':'warn') : 'ok';
-  $('fireList').innerHTML = dets.length
-    ? dets.map(d => `<div class="obj fire">
-        <div class="nm"><span class="sw2" style="background:var(--crit)"></span>
-          <b>${d.name||('cls '+d.cls)}</b></div>
-        <div class="cf">${(d.conf*100).toFixed(0)}%</div>
-        ${d.box?`<div class="meta"><span>box ${d.box.map(v=>Math.round(v)).join(', ')}</span></div>`:''}
-      </div>`).join('')
-    : `<div style="font-size:12.5px;color:var(--ok);padding:5px 0">화재·연기 없음</div>`;
+  $('tagCam').textContent = c.objs ? c.objs.length : 0;
+  $('tagCam').className = 'tag live';
 
   // COCO 객체
   const objs = c.objs || [];
@@ -1797,10 +2208,8 @@ function drawCamOverlays(){
     const ox = (r.width-dw)/2, oy = (r.height-dh)/2;
     const kx = dw/sw, ky = dh/sh;                            // 축별로 환산
     const small = (imgId==='imgMini');
-    const boxes = [].concat(
-      (c.dets||[]).map(d => ({b:d.box, t:d.name||'det', col:'#d9564f'})),
-      (c.objs||[]).map(o => ({b:o.box, t:`${o.name} ${(o.conf*100)|0}%`,
-                              col:o.living?'#e0a53a':'#7fa3cf'})));
+    const boxes = (c.objs||[]).map(o => ({b:o.box, t:`${o.name} ${(o.conf*100)|0}%`,
+                              col:o.living?'#e0a53a':'#7fa3cf'}));
     g.lineWidth = small?1.25:1.75;
     g.font = (small?9:11)+'px ' + getComputedStyle(document.body).fontFamily;
     for(const bx of boxes){
@@ -1817,6 +2226,82 @@ function drawCamOverlays(){
 }
 for(const [id] of CAM_IMGS) $(id).addEventListener('load', drawCamOverlays);
 
+/* ══ /api/thermal — MLX90640 열화상 ═══════════════════════════
+   화재/연기 판정 UI(YOLO 기반)는 제거했다. 열이 실제로 어디서 나는지는
+   여기 32×24 열화상으로만 본다 — 지어낸 값이 아니라 없으면 "없음"으로. */
+const THERM = { data:null, err:null };
+const THERM_CANVASES = ['thermMain','thermMini','thermDrv'];
+// tokens.css 원칙 ① 을 따른다 — 실온은 무채색, 뜨거울 때만 색이 들어온다.
+// 🔴 [확인 필요 — 실측 근거 없음, 잠정값] nav.html 의 같은 상수와 맞춤.
+const IR_COOL_C = 20, IR_WARM_C = 35, IR_HOT_C = 45;
+function irColor(t){
+  if(t <= IR_WARM_C){
+    const k = Math.max(0, Math.min(1, (t-IR_COOL_C)/(IR_WARM_C-IR_COOL_C)));
+    const g = 30 + k*200;
+    return [g,g,g];
+  }
+  if(t <= IR_HOT_C){
+    const k = (t-IR_WARM_C)/(IR_HOT_C-IR_WARM_C);
+    return [230+k*(255-230), 230+k*(140-230), 230+k*(0-230)];
+  }
+  const k = Math.max(0, Math.min(1, (t-IR_HOT_C)/15));
+  return [255, 40+k*(255-40), 0+k*(255-0)];
+}
+
+async function pollThermal(){
+  try{
+    const r = await fetch('api/thermal', {cache:'no-store'});
+    const j = await r.json();
+    THERM.data = j.connected ? j : null;
+    THERM.err = j.connected ? null : (j.error || '연결 안 됨');
+  }catch(e){
+    THERM.data = null; THERM.err = '서버 연결 끊김';
+  }
+  renderThermal();
+}
+
+function renderThermal(){
+  const t = THERM.data;
+  const st = t ? `${t.min.toFixed(1)}~${t.max.toFixed(1)}°C` : (THERM.err||'—');
+  setTxt('thermSt', st); setTxt('drvThermSt', st); setTxt('allThermSt', st);
+  setTxt('sbTherm', t ? `${t.max.toFixed(1)}°C` : '—');
+  $('sbTherm').className = 'v sm' + (t && t.max>=IR_HOT_C ? ' bad' : (t && t.max>=IR_WARM_C ? ' warn' : ''));
+  const eat = $('aTherm');
+  eat.textContent = t ? `최고 ${t.max.toFixed(1)}°C` : '없음';
+  eat.className = t && t.max>=IR_HOT_C ? 'bad' : (t && t.max>=IR_WARM_C ? 'warn' : 'dim');
+
+  // nofeed 토글 (id 규칙: therm{Main,Mini,Drv} → nfTherm{Main,Mini,Drv})
+  for(const suf of ['Main','Mini','Drv']){
+    const nf = document.getElementById('nfTherm'+suf);
+    if(nf) nf.style.display = t ? 'none' : 'flex';
+  }
+  if(!t) return;
+
+  const w = t.width, h = t.height, px = t.pixels;
+  if(!px || px.length !== w*h) return;
+  for(const id of THERM_CANVASES){
+    const cv = $(id);
+    if(!cv) continue;
+    if(cv.width!==w) cv.width = w;
+    if(cv.height!==h) cv.height = h;
+    const g = cv.getContext('2d');
+    const img = g.createImageData(w, h);
+    for(let i=0;i<w*h;i++){
+      const [r,gr,b] = irColor(px[i]);
+      img.data[i*4]=r; img.data[i*4+1]=gr; img.data[i*4+2]=b; img.data[i*4+3]=255;
+    }
+    g.putImageData(img, 0, 0);
+  }
+  const leg = $('thermLegend');
+  if(leg) leg.innerHTML = `<span>최저 ${t.min.toFixed(1)}°C</span><span>최고 ${t.max.toFixed(1)}°C</span>`;
+}
+
+const THERM_GAP_MS = 1000;   // MLX90640 생산 주기 0.5s(2Hz) 보다 넉넉히 느리게 폴링
+async function thermLoop(){
+  if(!document.hidden) await pollThermal();
+  setTimeout(thermLoop, THERM_GAP_MS);
+}
+
 /* ══════════════════════════════════════════════════════════════
    제어 — /api/drive
    ──────────────────────────────────────────────────────────────
@@ -1832,6 +2317,21 @@ for(const [id] of CAM_IMGS) $(id).addEventListener('load', drawCamOverlays);
    그래서 POST 응답으로 상태를 덮어쓰면 reason 이 사라진다.
    둘을 따로 보관하고, **무장 중에도 GET 을 계속 돌린다** —
    "왜 안 움직이는지"는 오직 GET 의 reason 에만 들어 있기 때문이다. */
+/* 🆕 제어권(리스)과 출력 제한이 붙었다.
+   - client_id 는 **탭마다** 다르다. sessionStorage 라 새 탭 = 새 조종자다.
+     localStorage 로 하면 두 탭이 같은 신분이 되어 배타 잠금이 무의미해진다.
+   - 서버 리스는 2초. 조종 POST 가 10Hz 라 정상 조종 중에는 절대 만료되지 않고,
+     탭을 닫으면 2초 뒤 저절로 풀린다. */
+const CLIENT_ID = (() => {
+  let v = null;
+  try { v = sessionStorage.getItem('orincar_cid'); } catch(e){}
+  if(!v){
+    v = 'c' + Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-3);
+    try { sessionStorage.setItem('orincar_cid', v); } catch(e){}
+  }
+  return v;
+})();
+
 const DRV = {
   armed:false,
   avail:null,                 // null=미확인 · true=조종 가능 · false=teleop 미실행(503)
@@ -1840,9 +2340,38 @@ const DRV = {
   keys:new Set(),             // 키보드로 눌린 방향
   pads:new Set(),             // 화면 버튼으로 눌린 방향
   busy:false,
-  fails:0
+  fails:0,
+  /* 🆕 제어권·출력 — teleop 이 죽어(503) st 가 null 이어도 살아 있어야 하므로
+     st 와 **따로** 보관한다. 출력 제한은 teleop 이 아니라 esp32_base_node 담당이다. */
+  ctl:null,                   // {power_pct, owner, owner_active, you_own, lease_left}
+  lockMsg:null,               // 409 를 받은 사유. 화면에 그대로 띄운다
+  pwrTouch:0,                 // 슬라이더를 마지막으로 만진 시각(ms)
+  pwrBusy:false
 };
 const DIRS = ['f','b','l','r'];
+
+/** 200·503·POST·409 어느 응답에서든 제어권 필드를 뽑아 한 곳에 모은다. */
+function drvTakeCtl(o){
+  if(o && typeof o === 'object' && 'owner_active' in o){
+    DRV.ctl = {power_pct:o.power_pct, owner:o.owner, owner_active:o.owner_active,
+               you_own:o.you_own, lease_left:o.lease_left,
+               /* 🆕 되읽기 3종. 서버가 안 주면 undefined 로 남고,
+                  renderDrive 가 그걸 '아직 모른다'(중립)로 표시한다 —
+                  '기기 회신 없음'(경고)과 구분해야 한다. */
+               power_pct_actual:o.power_pct_actual,
+               power_ack_age:o.power_ack_age,
+               power_synced:o.power_synced};
+  }
+}
+
+/** 409 응답에는 되읽기 필드가 없다. 마지막으로 알던 값을 그대로 이어받는다.
+    (여기서 빠뜨리면 남이 조종을 잡는 순간 화면이 '기기 회신 없음'으로 깜빡인다) */
+function drvKeepPwr(){
+  const c = DRV.ctl || {};
+  return {power_pct:c.power_pct, power_pct_actual:c.power_pct_actual,
+          power_ack_age:c.power_ack_age, power_synced:c.power_synced};
+}
+function drvOthersOwn(){ return !!(DRV.ctl && DRV.ctl.owner_active && !DRV.ctl.you_own); }
 
 function drvHeld(){ return new Set([...DRV.keys, ...DRV.pads]); }
 function drvVec(){
@@ -1866,10 +2395,23 @@ async function drvSend(force){
     const r = await fetch('api/drive', {
       method:'POST', cache:'no-store',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({armed: DRV.armed, v, w})
+      body: JSON.stringify({client_id: CLIENT_ID, armed: DRV.armed, v, w})
     });
     if(r.status === 503){ DRV.avail = false; DRV.st = null; DRV.echo = null; DRV.armed = false; }
-    else if(r.ok){ DRV.avail = true; DRV.echo = await r.json(); DRV.fails = 0; }
+    else if(r.status === 409){
+      // 🔴 남이 조종 중이다. 명령은 서버에서 버려졌다 — 무장을 유지하면
+      //    "무장했는데 안 간다"가 된다. 즉시 풀고 사유를 띄운다.
+      //    여기서 drvDisarm() 을 부르면 또 POST → 또 409 다. 상태만 끈다.
+      const b = await r.json().catch(() => ({}));
+      DRV.lockMsg = b.detail || '다른 사용자가 조종 중입니다';
+      DRV.ctl = Object.assign(drvKeepPwr(),
+                              {owner:b.owner, owner_active:true, you_own:false,
+                               lease_left:b.lease_left});
+      DRV.armed = false; DRV.keys.clear(); DRV.pads.clear();
+      document.querySelectorAll('#dpad button').forEach(b2 => b2.classList.remove('hold'));
+    }
+    else if(r.ok){ DRV.avail = true; DRV.echo = await r.json(); DRV.fails = 0;
+                   DRV.lockMsg = null; drvTakeCtl(DRV.echo); }
     else { DRV.avail = false; }
   }catch(e){
     if(++DRV.fails > 2){ DRV.avail = false; DRV.armed = false; }
@@ -1882,16 +2424,176 @@ async function drvSend(force){
 /** GET — reason·한계값·순찰 여부의 유일한 출처. 무장 중에도 계속 돈다. */
 async function pollDrive(){
   try{
-    const r = await fetch('api/drive', {cache:'no-store'});
+    // client_id 를 붙여야 서버가 you_own 을 판정해 준다 —
+    // owner 는 마스킹돼 오므로("a3f9…") 브라우저 혼자서는 내 것인지 알 수 없다.
+    const r = await fetch('api/drive?client_id=' + encodeURIComponent(CLIENT_ID),
+                          {cache:'no-store'});
     if(r.status === 503){
       DRV.avail = false; DRV.st = null;
+      // 🆕 503 본문에도 제어권·출력값이 들어 있다. teleop 이 죽어도
+      //    출력 제한은 esp32_base_node 소관이라 계속 유효하다.
+      drvTakeCtl(await r.json().catch(() => null));
       if(DRV.armed) drvDisarm();          // 노드가 죽으면 무장을 유지할 이유가 없다
     }
-    else if(r.ok){ DRV.avail = true; DRV.st = await r.json(); }
+    else if(r.ok){ DRV.avail = true; DRV.st = await r.json(); drvTakeCtl(DRV.st);
+                   if(!drvOthersOwn()) DRV.lockMsg = null; }
     else DRV.avail = false;
   }catch(e){ DRV.avail = false; }
   renderDrive();
 }
+
+/* ── 🆕 출력 제한 슬라이더 ────────────────────────────────────
+   🔴 `change`(놓았을 때)에만 POST 한다. `input` 마다 쏘면 드래그 한 번에
+      수십 발이 나가 10Hz 조종 POST 와 큐에서 경합한다 — 데드맨이 0.4초라
+      조종 명령이 밀리면 로봇이 끊긴다.
+   🔑 남이 바꾼 값도 pollDrive 의 power_pct 로 따라온다. 단 **내가 방금 만졌으면**
+      덮어쓰지 않는다(드래그 중 되감김·POST 왕복 중 옛값 복귀 방지). */
+const PWR = $('pwrSlider');
+function pwrTouched(){ DRV.pwrTouch = Date.now(); }
+PWR.addEventListener('input', () => { pwrTouched(); setTxt('pwrVal', PWR.value + '%'); });
+PWR.addEventListener('pointerdown', pwrTouched);
+PWR.addEventListener('keydown', pwrTouched);
+PWR.addEventListener('change', async () => {
+  if(DRV.pwrBusy) return;
+  DRV.pwrBusy = true; pwrTouched();
+  const pct = parseInt(PWR.value, 10);
+  try{
+    const r = await fetch('api/power', {
+      method:'POST', cache:'no-store',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({client_id: CLIENT_ID, pct})
+    });
+    const b = await r.json().catch(() => ({}));
+    if(r.status === 409){
+      DRV.lockMsg = b.detail || '다른 사용자가 조종 중입니다';
+      DRV.ctl = Object.assign(drvKeepPwr(),
+                              {owner:b.owner, owner_active:true, you_own:false,
+                               lease_left:b.lease_left});
+    } else if(r.ok){ DRV.lockMsg = null; drvTakeCtl(b); }
+  }catch(e){ /* 다음 pollDrive 가 실제 값으로 되돌려 준다 */ }
+  finally{ DRV.pwrBusy = false; pwrTouched(); renderDrive(); }
+});
+
+/* ── 🆕 카메라 틸트(서보) ─────────────────────────────────────────
+   🔴 **0~180 절대각. 이것이 유일한 단위다.** [사용자 지침 2026-08-03]
+   화면에 찍는 값, 입력하는 값, POST /api/servo 로 나가는 값, 되읽기로 돌아오는 값이
+   전부 같은 절대각이다. **어디에서도 변환하지 않는다** — 120을 넣으면 120이 나간다.
+   90°는 기어설계상 중립(수평)이라 진입 기본값으로만 쓰고, 입력을 제약하지는 않는다
+   (극단값은 아직 [실측 전]이라 하드코딩해서 막지 않는다). TILT_STEP=5.
+
+   되읽기(servo_angle_sent)는 **실측 서보 위치가 아니다.** SG90 류 RC 서보는
+   위치 피드백 배선이 없어 축이 진짜 그 각도에 있는지 알 방법이 없다 — 여기
+   보이는 값은 "esp32_base_node 가 마지막으로 시리얼에 실제로 내보낸 명령각"
+   뿐이다. 그래서 UI 문구는 "현재값"이 아니라 "전송됨" 계열로만 말한다.
+
+   agy(gemini-3.1-pro-high, plan 모드) 검토 반영:
+   ① 되읽기를 1Hz 하트비트에만 의존하면 확정 지연이 최대 1초라는 지적을 받아,
+      esp32_base_node.servo_tick 을 5Hz(이미 그 주기로 SERVO_FILE 을 읽고 있었다)
+      에서 매 틱 상태파일을 쓰도록 바꿨다 — 프런트는 이 변경의 결과(더 빠른 반영)를
+      기존 0.5초 폴링(pollDrive)만으로 그냥 물려받는다. 새 폴링 루프를 만들지 않았다.
+   ② "확정 전 즉시 피드백"은 되읽기 배지(tiltAck)의 숫자를 낙관적으로 앞당겨
+      보여주지 않는다 — 대신 전송 버튼 쪽에 "전송 중…" 표시를 잠깐 띄운다.
+      이유: 되읽기 배지가 실제로 서버가 확인해 준 값이 아닌 걸 보여주면
+      "독립된 확인 채널"이라는 존재 이유가 무너진다(§pwr-ack 와 같은 이유로
+      이미 이 파일에 있던 원칙 — pending 표시는 하되 값 자체는 앞당기지 않는다). */
+const TILT_MIN = 0, TILT_MAX = 180, TILT_STEP = 5, TILT_NEUTRAL_HINT = 90;
+const TGauge = $('tiltGauge'), TInput = $('tiltInput'), TSend = $('tiltSend');
+let tiltReqAt = 0, tiltReqDeg = null, tiltBusy = false;
+// 🆕 게이지를 손으로 끄는 중인가. renderDrive 의 되읽기 덮어쓰기를 그동안만 멈춘다.
+let tiltDragging = false;
+
+function clampTilt(v){
+  if(!Number.isFinite(v)) return TILT_NEUTRAL_HINT;
+  const stepped = Math.round(v / TILT_STEP) * TILT_STEP;
+  return Math.min(TILT_MAX, Math.max(TILT_MIN, stepped));
+}
+
+/* 🆕 서보 스톨 완화 [사용자 지침 2026-08-03] — 실차에서 SG90 이 과열됐다.
+   증상: 각도를 올리면 목표에 못 닿고 계속 힘을 주다 뜨거워진다.
+   원리: RC 서보는 **내부 포텐셔미터와 지령각의 차이**만큼 계속 토크를 낸다.
+   도달 못 하는 각을 지령해두면 오차가 영원히 안 줄어 최대 전류를 계속 먹는다.
+   완화: 올린 뒤 잠깐 있다가 목표−RELIEF_DEG 를 한 번 더 보낸다. 실제 도달
+   가능한 각으로 지령을 낮추면 오차가 0 이 되어 힘주기를 멈춘다.
+   **올릴 때만** 한다 — 내릴 때는 중력이 돕는 방향이라 스톨이 안 난다.
+
+   ⚠️ 이건 완화지 해결이 아니다. 근본 원인은 둘 중 하나이고 아직 안 갈렸다:
+     ① 토크 부족(레버비·카메라 무게) → 이 완화가 듣는다
+     ② 기어가 출력축에서 슬립 → 중력이 되밀고 서보가 다시 쫓아가는 **헌팅**이라
+        이 완화만으로는 안 멎는다. now.md C-5 의 M2 볼트 고정이 진짜 해결이다
+   🔴 되읽기(servo_angle_sent)는 완화 후 목표−5 를 보여준다. 그게 **실제로 나간 값**이라
+      일부러 안 감춘다 — 이 파일의 "되읽기는 앞당기지도 지어내지도 않는다" 원칙과 같다. */
+const SERVO_RELIEF_DEG = 5;
+const SERVO_RELIEF_MS = 700;      // 서보가 그 근처까지 실제로 가는 데 걸리는 시간
+let tiltLastDeg = null, tiltReliefTimer = null, tiltReliefAt = 0;
+
+function postServo(deg){
+  // deg 는 이미 0~180 절대각이다 — /api/servo 도 절대각을 받으므로 그대로 보낸다.
+  return fetch('api/servo', {
+    method:'POST', cache:'no-store',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({client_id: CLIENT_ID, angle: deg})
+  });
+}
+
+async function tiltSend(){
+  if(tiltBusy) return;
+  const deg = clampTilt(parseFloat(TInput.value));
+  TInput.value = deg; TGauge.value = deg;   // 숫자칸·게이지를 한 값으로 묶는다
+  const raising = tiltLastDeg != null && deg > tiltLastDeg;
+  tiltBusy = true; tiltReqAt = Date.now(); tiltReqDeg = deg;
+  const prevLabel = TSend.textContent;
+  TSend.disabled = true; TSend.textContent = '전송 중…';
+  // 이전 완화 예약이 남아 있으면 취소한다 — 드래그로 연속 전송될 때 옛 각도가 뒤늦게 나가면 안 된다
+  if(tiltReliefTimer){ clearTimeout(tiltReliefTimer); tiltReliefTimer = null; }
+  try{
+    await postServo(deg);
+    tiltLastDeg = deg;
+  }catch(e){ /* 다음 pollDrive 의 servo_angle_sent 가 실제 상태를 알려준다 */ }
+  finally{
+    tiltBusy = false; TSend.disabled = false; TSend.textContent = prevLabel;
+    renderDrive();
+  }
+  if(raising && deg - SERVO_RELIEF_DEG >= TILT_MIN){
+    tiltReliefTimer = setTimeout(() => {
+      tiltReliefTimer = null;
+      tiltReliefAt = Date.now();
+      postServo(deg - SERVO_RELIEF_DEG).catch(() => {});
+    }, SERVO_RELIEF_MS);
+  }
+}
+TSend.addEventListener('click', tiltSend);
+TInput.addEventListener('keydown', e => {
+  if(e.key === 'Enter'){ e.preventDefault(); tiltSend(); }
+});
+
+/* 🆕 2026-08-03 저녁 [사용자 지침] "내가 조절하면 해당 각도로 옮길 수 있게,
+   120도로 바꾸면 120도로 옮길 수 있게" — 게이지를 직접 끌어 각도를 정한다.
+     · input  = 끄는 중   → 숫자칸만 따라온다. **명령은 안 보낸다**
+     · change = 손을 놓음 → 그때 딱 한 번 보낸다
+   끄는 동안 매 스텝 보내면 SG90 하나에 초당 수십 건이 몰리고, 시리얼도
+   20Hz 텔레메트리와 같은 선을 쓰므로 같이 막힌다. 놓을 때 한 번이면 충분하다.
+   (키보드 화살표도 input→change 순으로 같은 경로를 탄다) */
+TGauge.addEventListener('input', () => {
+  tiltDragging = true;
+  TInput.value = clampTilt(parseFloat(TGauge.value));
+});
+TGauge.addEventListener('change', () => {
+  tiltDragging = false;
+  TInput.value = clampTilt(parseFloat(TGauge.value));
+  tiltSend();
+});
+
+/* 🆕 진입 시 90도 [사용자 지침 2026-08-03] — 페이지를 열 때마다 무조건 보낸다.
+   왜 "보이기만" 하면 안 되나: SG90 류는 위치 피드백 배선이 없어 브라우저는
+   축이 실제로 어디 있는지 알 방법이 없다. 화면의 90 과 실제 축을 맞추는
+   유일한 방법이 진짜로 90 을 내보내는 것이다.
+   load 까지 미루는 이유: tiltSend 가 finally 에서 renderDrive 를 부르는데
+   그 정의가 이 스크립트 아래쪽에 있다. */
+window.addEventListener('load', () => {
+  TInput.value = TILT_NEUTRAL_HINT;
+  TGauge.value = TILT_NEUTRAL_HINT;
+  tiltSend();
+});
 
 function drvDisarm(){
   const was = DRV.armed || DRV.keys.size || DRV.pads.size;
@@ -1901,6 +2603,7 @@ function drvDisarm(){
 }
 function drvArm(on){
   if(on && DRV.avail === false) return;    // 조종 불가면 무장 자체를 막는다
+  if(on && drvOthersOwn()) return;         // 🆕 남이 잡고 있으면 무장도 막는다
   if(!on) return drvDisarm();
   DRV.armed = true;
   drvSend(true);
@@ -1908,23 +2611,108 @@ function drvArm(on){
 
 function renderDrive(){
   const st = DRV.st, armed = DRV.armed, dead = DRV.avail === false;
+  const ctl = DRV.ctl || {}, locked = drvOthersOwn();
+
+  // 🆕 제어권 표시 — 세 상태뿐이다: 내가 조종 / 남이 조종(잠김) / 대기
+  const lbox = $('drvLease');
+  lbox.className = 'lease' + (ctl.you_own ? ' mine' : (locked ? ' locked' : ''));
+  setTxt('drvLeaseTxt',
+    ctl.you_own ? `내가 조종 중 (리스 ${(ctl.lease_left||0).toFixed(1)}s 남음)`
+    : locked    ? `${ctl.owner || '다른 사용자'} 님이 조종 중 — 잠김`
+    : '대기 — 아무도 잡고 있지 않다');
+
+  // 🆕 출력 제한 슬라이더. 제어권자만 조작 가능.
+  //    내가 방금 만졌으면(1.5초) 서버값으로 덮어쓰지 않는다 — 드래그가 되감긴다.
+  const fresh = Date.now() - DRV.pwrTouch < 1500;
+  if(ctl.power_pct != null && !fresh) PWR.value = ctl.power_pct;
+  setTxt('pwrVal', (ctl.power_pct != null || fresh) ? PWR.value + '%' : '—');
+  PWR.disabled = locked;
+
+  /* 🆕 되읽기 표시 — 명령값 옆에 **기기가 회신한 값**을 붙인다.
+     🔴 이 블록이 이 기능의 전부다. 예전에는 명령값만 보여서
+        esp32_base_node 가 죽어도 화면은 새 값을 표시했다. 파일은 갱신되는데
+        펌웨어는 못 받으므로 **로봇은 옛 duty_max 로 달린다** — 화면만 보고는
+        그걸 알 방법이 없었다.
+     🔑 신선도(power_ack_age)까지 봐야 한다. 값이 같아도 회신이 늙었으면
+        '지금 동기'가 아니라 '옛날에 동기였던 흔적'이다.
+     🔑 색만으로 구분하지 않는다 — '불일치'·'회신 없음'을 문자로 적는다. */
+  const aPct = ctl.power_pct_actual, aAge = ctl.power_ack_age;
+  const known = ('power_synced' in ctl);          // 서버가 알려준 적이 있는가
+  // 드래그 직후엔 아직 POST 가 안 끝났을 수 있다. 그 순간의 불일치는
+  // 고장이 아니라 정상적인 왕복 지연이므로 경고로 올리지 않는다.
+  const pending = fresh && ctl.power_pct != null
+                        && parseInt(PWR.value, 10) !== ctl.power_pct;
+  let ackTxt = '—', ackCls = '';
+  if(!known)            { ackTxt = '기기 확인 중…'; }
+  else if(pending)      { ackTxt = '기기 ' + (aPct == null ? '?' : aPct + '%') + ' · 전송 중…'; }
+  else if(aPct == null) { ackTxt = '⚠️ 기기 회신 없음 (esp32_base 확인)'; ackCls = 'bad'; }
+  else if(ctl.power_synced){ ackTxt = '기기 ' + aPct + '% ✓'; ackCls = 'ok'; }
+  else if(aAge != null && aAge > 15){
+    ackTxt = '⚠️ 기기 ' + aPct + '% (회신 ' + Math.round(aAge) + '초 전 — 끊김)'; ackCls = 'bad';
+  }
+  else { ackTxt = '⚠️ 기기 ' + aPct + '% (불일치)'; ackCls = 'bad'; }
+  setTxt('pwrAck', ackTxt);
+  const ackEl = $('pwrAck'); if(ackEl) ackEl.className = 'pwr-ack ' + ackCls;
+
+  setTxt('pwrHint', locked
+    ? '다른 사용자가 조종 중 — 조작할 수 없다'
+    : (known && !pending && !ctl.power_synced
+        ? '🔴 화면값이 로봇에 반영되지 않았다 — 로봇은 기기값으로 달린다'
+        : '놓는 순간 전송된다. 모든 화면이 같은 값을 본다.'));
+
+  /* 🆕 카메라 틸트 되읽기 — servo_angle_sent. **실측 위치가 아니다**(위 상단
+     주석·tiltSend 주석 참조) — "esp32_base_node 가 마지막으로 시리얼에 실제로
+     내보낸 명령각"일 뿐이다. 그래서 여기서도 pwrAck 처럼 색만으로 구분하지
+     않고 문자로 "전송됨"/"확인 전"/"회신 끊김"을 그대로 적는다. */
+  const sAngleRaw = ctl.servo_angle_sent, sAge = ctl.servo_angle_age,
+        sFresh = ctl.servo_fresh, sKnown = sAngleRaw != null;
+  // 🔄 2026-08-03: servo_angle_sent 는 이미 0~180 절대각이다 — 예전엔 여기서
+  // TILT_CENTER(90)를 빼 상대값으로 보여줬으나, 입력을 절대각으로 바꾸면서
+  // 되읽기도 변환 없이 그대로 표시한다.
+  const sDeg = sKnown ? Math.round(sAngleRaw * 10) / 10 : null;
+  // 방금 내가 보낸 요청이 아직 다음 폴링에 안 잡혔으면 '전송 중' — pwr의
+  // pending 판정과 같은 방침(1.5초 유예, 값 자체는 앞당겨 보여주지 않는다).
+  const tiltPending = tiltReqDeg != null && (Date.now() - tiltReqAt < 1500)
+                      && (!sKnown || sDeg !== tiltReqDeg);
+  // 🔴 끄는 중에는 덮어쓰지 않는다 — 0.5초마다 들어오는 되읽기가 손잡이를
+  //    손에서 튕겨낸다. tiltDragging 은 change(손 놓음)에서 풀린다.
+  if(sKnown && !tiltDragging) TGauge.value = Math.min(TILT_MAX, Math.max(TILT_MIN, sDeg));
+  setTxt('tiltVal', sKnown ? sDeg + '°' : '—');
+  let tAckTxt = '—', tAckCls = '';
+  if(tiltPending)   { tAckTxt = '전송 중…'; }
+  else if(!sKnown)  { tAckTxt = '확인 전 (esp32_base 미기동?)'; }
+  else if(sFresh)   { tAckTxt = '전송됨 · ' + (sAge != null ? sAge.toFixed(1) : '?') + 's 전'; tAckCls = 'ok'; }
+  else              { tAckTxt = '⚠️ 회신 끊김 (' + (sAge != null ? Math.round(sAge) : '?') + 's 전)'; tAckCls = 'bad'; }
+  setTxt('tiltAck', tAckTxt);
+  const tAckEl = $('tiltAck'); if(tAckEl) tAckEl.className = 'pwr-ack ' + tAckCls;
+  // 🆕 스톨 완화가 방금 나갔으면 그 사실을 밝힌다 — 되읽기가 목표보다 5° 낮게
+  //    보이는 것이 버그가 아니라 의도임을 알려야 한다(값 자체는 절대 안 꾸민다).
+  const reliefJustFired = tiltReliefAt && (Date.now() - tiltReliefAt < 6000);
+  setTxt('tiltHint', tiltPending
+    ? '로봇 확인 대기 중…'
+    : (reliefJustFired
+        ? `과열 방지로 −${SERVO_RELIEF_DEG}° 완화 지령을 보냈다. 위 값이 목표보다 낮은 건 정상이다.`
+        : '슬라이더를 놓거나, 입력 후 Enter/전송으로 확정한다. 위 값은 실제 축 각도가 아니라 '
+          + '로봇에 마지막으로 전송된 명령각이다(서보 위치 피드백 없음).'));
 
   // 무장 스위치
   document.querySelectorAll('#armSw button').forEach(b => {
     b.classList.toggle('on', (b.dataset.arm === '1') === armed);
-    b.disabled = dead;
+    b.disabled = dead || (locked && b.dataset.arm === '1');   // 잠기면 무장 불가
   });
   $('ctlCard').classList.toggle('armed', armed);
 
-  // 순찰 중이면 수동이 차단된다
+  // 순찰 중이면 수동이 차단된다. 남이 잡고 있어도 마찬가지다.
   const patrol = !!(st && st.patrol_running);
-  const blocked = dead || patrol;
+  const blocked = dead || patrol || locked;
   document.querySelectorAll('#dpad button[data-d]').forEach(b => b.disabled = !armed || blocked);
 
   // reason 은 가공하지 않는다 — 로봇이 왜 안 움직이는지가 전부 거기 있다
   const box = $('drvReasonBox');
   let cls = 'off', txt;
   if(dead){ txt = '조종 불가 — teleop_node 가 실행 중이 아니다 (HTTP 503)'; cls = 'block'; }
+  else if(locked){ txt = (DRV.lockMsg || '다른 사용자가 조종 중입니다') +
+                         ' (HTTP 409 — 선점 불가)'; cls = 'block'; }
   else if(!st){ txt = '상태 조회 중…'; }
   else {
     txt = st.reason || '—';
@@ -1971,7 +2759,10 @@ function renderDrive(){
   $('drvAlert').innerHTML =
     dead ? `<div class="alert bad"><span class="sys">TELEOP</span><span>
              조종 노드가 응답하지 않는다 (503). Orin 에서
-             영속 BBIYONG 런타임의 <code>bbiyong_manual_drive_bridge</code>가 필요하다.</span></div>`
+             <code>python3 ~/calib/teleop_node.py</code> 를 띄워야 한다.</span></div>`
+    : locked ? `<div class="alert warn"><span class="sys">LOCK</span><span>
+             <b>${ctl.owner || '다른 사용자'}</b> 님이 조종 중이라 잠겼다 (409).
+             빼앗을 수 없다 — 상대가 손을 떼면 <b>2초</b> 뒤 자동으로 풀린다.</span></div>`
     : patrol ? `<div class="alert warn"><span class="sys">PATROL</span><span>
              순찰이 실행 중이라 수동 조종이 차단됐다 — 같은 <code>/cmd_vel</code> 을
              두 곳에서 쓰면 서로 덮어쓴다.</span></div>` : '';
@@ -2206,8 +2997,7 @@ function tick(){
   if(t % 4 === 1) pollState();                                  // 2초
   const navHot = (PAGE==='nav' || PAGE==='all' || PAGE==='drive');
   if(navHot || t % 8 === 0) pollNav();                          // 0.5s / 4s
-  const camHot = (PAGE==='cam' || PAGE==='all' || PAGE==='drive');
-  if(camHot ? (t % 2 === 0) : (t % 6 === 0)) pollCam();          // 1s / 3s
+  // 카메라는 camLoop() 가 독립적으로 돈다 (자기 페이싱). 여기서 부르지 않는다.
   // 제어 화면에서는 매 틱(0.5s) GET 한다 — reason 이 늦으면 왜 안 가는지 모른다
   if(PAGE==='drive' || t % 20 === 0) pollDrive();
 }
@@ -2222,7 +3012,53 @@ setInterval(() => { if(!designReady && !document.hidden) probeDesign(); }, 8000)
 for(const id of ['floorMain','floorMini','floorDrv']) $(id).innerHTML = floorHTML(null);
 show((location.hash.slice(1) && document.querySelector(`.page[data-page="${location.hash.slice(1)}"]`))
      ? location.hash.slice(1) : 'all');
-pollState(); pollNav(); pollCam(); pollDrive(); probeDesign();
+pollState(); pollNav(); pollDrive(); probeDesign();
+camLoop();                                   // 카메라 자기 페이싱 루프 시작
+
+/* 🆕 H.264 영상 — 기본으로 켠다. WebCodecs 가 없거나 파이프라인이 죽으면
+   워치독이 JPEG 로 되돌리므로 켜두는 쪽이 손해가 없다.
+   선택은 localStorage 에 남긴다 — 새로고침할 때마다 다시 누르지 않게. */
+(function initVideo(){
+  const btn = $('vidToggle');
+  if(btn){
+    btn.addEventListener('click', () => {
+      VID.on ? vidStop() : vidStart();
+      try{ localStorage.setItem('orincar.h264', VID.on ? '1' : '0'); }catch(e){}
+      btn.textContent = VID.on ? 'H.264 끄기' : 'H.264 켜기';
+    });
+    if(!VID.enabled){ btn.disabled = true; btn.title = '이 브라우저는 WebCodecs 를 지원하지 않는다'; }
+  }
+  // 🆕 보간 토글. 기본은 **꺼짐** — 지연이 한 프레임 늘기 때문이다.
+  //    조종 중에는 부드러움보다 지연이 중요하다.
+  const ib = $('vidInterp');
+  if(ib){
+    // 라벨은 **동작** 의미로 쓴다 — 옆의 `H.264 끄기` 와 같은 규칙이다.
+    // (상태 의미로 쓰면 "보간 끄기"가 꺼진 상태를 뜻해 정반대로 읽힌다)
+    const applyInterp = () => {
+      ib.textContent = VID.interp ? '보간 끄기' : '보간 켜기';
+      ib.classList.toggle('on', VID.interp);
+      renderVidBadge();
+    };
+    ib.addEventListener('click', () => {
+      VID.interp = !VID.interp;
+      try{ localStorage.setItem('orincar.interp', VID.interp ? '1' : '0'); }catch(e){}
+      applyInterp();
+    });
+    try{ VID.interp = localStorage.getItem('orincar.interp') === '1'; }catch(e){}
+    applyInterp();
+  }
+
+  let want = '1';
+  try{ want = localStorage.getItem('orincar.h264') ?? '1'; }catch(e){}
+  if(VID.enabled && want === '1'){
+    vidStart();
+    if(btn) btn.textContent = 'H.264 끄기';
+  }
+  vidWatchdog();
+  vidPresent();          // 화면 주사율 루프 시작 (보간 여부와 무관하게 이 루프가 그린다)
+  renderVidBadge();
+})();
+thermLoop();                                 // 열화상 자기 페이싱 루프 시작
 document.addEventListener('visibilitychange', () => { if(!document.hidden) tick(); });
 </script>
 </body>
