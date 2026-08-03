@@ -43,6 +43,38 @@ bool mlx_ok = false;
 unsigned long lastMlxMs = 0;
 float mlxFrame[32*24];
 
+// 🔑 [2026-08-04] 열화상 전송을 hex → base64 로 바꾼다 (S15P11E101-663).
+//    왜: 이 블록이 loop() 를 통째로 막는다. 단일 스레드라 전송이 끝날 때까지
+//        PID·엔코더·텔레메트리가 전부 멈춘다. 실측 블록 약 516ms.
+//    hex 는 1바이트를 2글자로 부풀린다(3,072글자 = 268ms @115200).
+//    base64 는 4/3 배라 2,048글자 = 179ms — **89ms 를 돌려받는다.**
+//    덤: 종전에는 픽셀마다 sprintf 와 Serial.print 를 각각 768번 불렀다.
+//        이제 인코딩 1회 + Serial.write 1회다.
+//    ⚠️ raw 바이너리(1,536B = 134ms)가 더 빠르지만 데이터에 0x0A 가 섞이면
+//       Orin 의 readline() 이 줄을 잘못 자른다. base64 알파벳에는 개행이 없다.
+//    🔴 스택이 아니라 전역이다. loop() 지역변수로 두면 3.6KB 를 스택에 얹는다.
+uint8_t  mlxRaw[32*24*2];      // int16 big-endian ×768 = 1,536B
+char     mlxB64[2052];         // ceil(1536/3)*4 = 2,048 + 여유
+
+// 최소 base64 인코더. 라이브러리를 끌어오지 않는다 — 12줄이면 되고,
+// mbedtls/Arduino String 경로는 힙 할당이 붙어 이 블록에 넣기에 부적절하다.
+static size_t b64Encode(const uint8_t *in, size_t len, char *out) {
+  static const char T[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  size_t o = 0;
+  for (size_t i = 0; i < len; i += 3) {
+    uint32_t v = (uint32_t)in[i] << 16;
+    if (i + 1 < len) v |= (uint32_t)in[i + 1] << 8;
+    if (i + 2 < len) v |= in[i + 2];
+    out[o++] = T[(v >> 18) & 0x3F];
+    out[o++] = T[(v >> 12) & 0x3F];
+    out[o++] = (i + 1 < len) ? T[(v >> 6) & 0x3F] : '=';
+    out[o++] = (i + 2 < len) ? T[v & 0x3F]        : '=';
+  }
+  out[o] = '\0';
+  return o;
+}
+
 // ---------- 핀 (docs/실측_데이터.md §A) ----------
 constexpr int L_A = 32, L_B = 33, R_A = 25, R_B = 26;
 // 🔴 [실측 2026-08-03 · S15P11E101-651] 2026-07-29 의 교차 보정을 **원복**했다.
@@ -367,15 +399,18 @@ void loop() {
 
   if (mlx_ok && mode == MODE_VELOCITY && (now - lastMlxMs >= 500)) {
     if (mlx.getFrame(mlxFrame) == 0) {
+      // °C ×10 을 int16 big-endian 으로. 🔴 부호를 유지한다 —
+      //    종전 hex 경로는 uint16 으로 찍어서 영하 온도가 6553.5°C 로 읽혔다.
+      for (int i = 0; i < 768; i++) {
+        int16_t dc = (int16_t)(mlxFrame[i] * 10.0f);
+        mlxRaw[i * 2]     = (uint8_t)((uint16_t)dc >> 8);
+        mlxRaw[i * 2 + 1] = (uint8_t)((uint16_t)dc & 0xFF);
+      }
+      size_t n = b64Encode(mlxRaw, sizeof(mlxRaw), mlxB64);
       Serial.print("IR,");
       Serial.print(now);
       Serial.print(",");
-      for(int i=0; i<768; i++) {
-        int16_t dc = (int16_t)(mlxFrame[i] * 10.0f);
-        char buf[5];
-        sprintf(buf, "%04X", (uint16_t)dc);
-        Serial.print(buf);
-      }
+      Serial.write((const uint8_t *)mlxB64, n);   // 768번이 아니라 1번
       Serial.println();
       lastMlxMs = millis();
     }

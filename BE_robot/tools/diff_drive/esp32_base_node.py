@@ -22,6 +22,8 @@
    따라서 여기서는 **양쪽 다 + = 전진**이며 right_wheel_direction 같은
    반전 파라미터를 두지 않는다. 두면 이중 반전이 된다.
 """
+import base64
+import binascii
 import hashlib
 import json
 import math
@@ -29,6 +31,7 @@ import os
 import re
 import shutil
 import socket
+import struct
 import sys
 import threading
 import time
@@ -828,11 +831,12 @@ class Esp32Base(Node):
                 try:
                     parts = raw.split(",")
                     if len(parts) >= 3:
-                        hex_str = parts[2].strip()
-                        if len(hex_str) == 3072:
-                            pixels = [int(hex_str[i:i+4], 16) for i in range(0, 3072, 4)]
+                        body = parts[2].strip()
+                        pixels = _decode_ir(body)
+                        if pixels is not None:
                             with open("/tmp/ir.json", "w") as f:
-                                json.dump({"width": 32, "height": 24, "pixels": pixels}, f)
+                                json.dump({"width": 32, "height": 24,
+                                           "pixels": pixels}, f)
                 except Exception as exc:
                     self.get_logger().error(f"IR parse error: {exc}")
                 continue
@@ -1069,6 +1073,41 @@ class Esp32Base(Node):
         except Exception:
             pass
         self._close_trace("shutdown")
+
+
+def _decode_ir(body):
+    """열화상 한 줄을 픽셀 배열(°C×10)로. 못 알아보면 None.
+
+    두 형식을 모두 받는다.
+      · **base64** (2,048글자) — 지금 형식. int16 big-endian ×768.
+        🔑 부호가 있다. 영하 온도가 제대로 음수로 나온다
+      · **hex** (3,072글자) — 옛 형식. 🔴 uint16 로 읽혀서 영하가
+        6553.5°C 로 뒤집힌다. 그 버그까지 재현하지 않고 여기서 부호를
+        복원한다 — 옛 펌웨어가 물려 있어도 화면이 거짓말하지 않게
+
+    🔴 왜 둘 다 받나: 펌웨어 플래시는 물리 작업이라 Orin 과 동시에 바꿀 수
+       없다. 한쪽만 바뀐 구간에서 열화상이 죽으면 안 된다.
+       펌웨어가 전부 base64 로 넘어간 뒤 hex 가지는 지워도 된다.
+    """
+    def _signed(v):
+        return v - 65536 if v >= 32768 else v
+
+    if len(body) == 3072:                     # 옛 hex
+        try:
+            return [_signed(int(body[i:i + 4], 16)) for i in range(0, 3072, 4)]
+        except ValueError:
+            return None
+
+    if len(body) == 2048:                     # base64
+        try:
+            data = base64.b64decode(body, validate=True)
+        except (binascii.Error, ValueError):
+            return None
+        if len(data) != 1536:
+            return None
+        return list(struct.unpack(">768h", data))
+
+    return None
 
 
 def main():
