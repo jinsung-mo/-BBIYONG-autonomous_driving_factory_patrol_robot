@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSim } from '../SimContext.ts'
 import { useLive } from '../live/LiveContext.tsx'
 import { alertToToast } from '../live/mappers.ts'
+import FireFlash from './FireFlash.tsx'
+import { acknowledgeFire, fireKey, raiseFire } from '../live/fireAlarm.ts'
 
 // 화재/과열 팝업 알림. 화면 상단에 배너로 뜨며, 떠 있는 동안 경보음이 반복 재생된다.
 //
@@ -9,6 +11,9 @@ import { alertToToast } from '../live/mappers.ts'
 //   ✕ 로 닫으면 경보 원인(화재/과열)도 함께 해제한다.
 // - live 모드: /topic/alerts 수신으로 생성. 서버 경보는 one-shot이라 "해제" 이벤트가 없으므로
 //   ✕ 는 토스트만 닫는다(가이드 §4·§6).
+//
+// 화재는 여기에 더해 화면 전체를 점멸시킨다(S15P11E101-643). 점멸은 [확인]으로만 멈춘다 —
+// ✕ 는 알림을 치우는 것이지 화재를 봤다는 뜻이 아니다. 과열은 점멸 대상이 아니다.
 
 // 현재 편성된 순찰 로봇 — 출동 대상은 이 1대뿐 (StatusPanel의 표기와 동일)
 const ROBOT_NAME = '오린카-01'
@@ -68,7 +73,7 @@ function useAlarmSound(items: any) {
   }, [])
 }
 
-function ToastList({ items, onDismiss }: any) {
+function ToastList({ items, onDismiss, onAck }: any) {
   useAlarmSound(items)
   if (items.length === 0) return null
   return (
@@ -80,6 +85,18 @@ function ToastList({ items, onDismiss }: any) {
             {a.sub && <span className="alert-toast-sub">{a.sub}</span>}
           </div>
           <span className="alert-toast-time mono">{a.time}</span>
+          {/* 화재는 여기서 바로 확인할 수 있게 한다 — ✕ 를 찾아 누르게 만들 상황이 아니다 */}
+          {a.kind === 'fire' && (
+            <button
+              type="button"
+              className="alert-toast-ack"
+              id="btnToastFireAck"
+              aria-label="화재 경보 확인 — 경보음과 화면 점멸을 멈춥니다"
+              onClick={onAck}
+            >
+              확인
+            </button>
+          )}
           <button className="alert-toast-x" aria-label="닫기" onClick={() => onDismiss(a.id)}>✕</button>
         </div>
       ))}
@@ -92,7 +109,24 @@ function LiveAlerts() {
   const { alerts, dismissAlert } = useLive()
   // 매 렌더마다 새 배열이 되면 경보음 타이머 동기화 effect가 불필요하게 재실행된다
   const items = useMemo(() => alerts.map((a: any) => ({ id: a._id, ...alertToToast(a) })), [alerts])
-  return <ToastList items={items} onDismiss={dismissAlert} />
+
+  // 화재 경보가 오면 미확인 상태로 올린다. 같은 경보를 두 번 올리지 않는 판단은
+  // fireAlarm 이 키로 한다 — 여기서는 도착한 것을 그대로 넘기면 된다.
+  useEffect(() => {
+    alerts.forEach((a: any) => { if (a?.type === 'FIRE') raiseFire(fireKey(a)) })
+  }, [alerts])
+
+  // 확인 = 점멸 정지 + 화재 토스트 정리(경보음도 함께 멎는다).
+  // 이벤트 상태는 건드리지 않는다 — 해결 처리는 이벤트 상세의 몫이다(S15P11E101-593/628).
+  const ack = useCallback(() => {
+    acknowledgeFire()
+    alerts.forEach((a: any) => { if (a?.type === 'FIRE') dismissAlert(a._id) })
+  }, [alerts, dismissAlert])
+
+  return <>
+    <ToastList items={items} onDismiss={dismissAlert} onAck={ack} />
+    <FireFlash onAck={ack} />
+  </>
 }
 
 // ---- mock: 시뮬레이션 전이로 생성 (기존 동작 유지) ----
@@ -114,7 +148,11 @@ function SimAlerts() {
   // 꺼짐→켜짐으로 바뀌는 "발생 순간"에만 알림 생성, 켜짐→꺼짐 순간 자동 종료
   // 화재는 실제로 오린카가 긴급 출동하므로(Simulation.setFire → botGoto), 출동 로봇을 함께 표시
   useEffect(() => {
-    if (status.fireOn && !prevFire.current) pushAlert('fire', '🔥 화재 발생', `🤖 ${ROBOT_NAME} 긴급 출동 중`)
+    if (status.fireOn && !prevFire.current) {
+      pushAlert('fire', '🔥 화재 발생', `🤖 ${ROBOT_NAME} 긴급 출동 중`)
+      // 시연에서도 실제와 같이 화면이 점멸해야 한다. 발생 순간마다 새 키를 준다.
+      raiseFire(`sim:${++uid}`)
+    }
     if (!status.fireOn && prevFire.current) dismissKind('fire')
     prevFire.current = status.fireOn
   }, [status.fireOn])
@@ -133,7 +171,16 @@ function SimAlerts() {
     if (target?.kind === 'heat' && status.heatOn) actions.toggleHeat()
   }
 
-  return <ToastList items={alerts} onDismiss={dismiss} />
+  // 확인은 화재를 끄지 않는다 — 봤다는 표시일 뿐이라 시뮬레이션의 fireOn 은 그대로 둔다.
+  const ack = () => {
+    acknowledgeFire()
+    setAlerts((prev) => prev.filter((a) => a.kind !== 'fire'))
+  }
+
+  return <>
+    <ToastList items={alerts} onDismiss={dismiss} onAck={ack} />
+    <FireFlash onAck={ack} />
+  </>
 }
 
 export default function EventAlert() {
