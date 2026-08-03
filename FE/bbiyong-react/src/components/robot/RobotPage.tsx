@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useSettings } from '../../settings/SettingsContext.tsx'
 import { useLive } from '../../live/LiveContext.tsx'
@@ -14,11 +14,37 @@ export default function RobotPage() {
   const { status, refs, actions } = useSim()
   const { enabled, telemetry, videoSeen } = useLive()
   const { settings } = useSettings()
+  const glassRef = useRef<HTMLElement | null>(null)
 
   // 열화상 경고·임계 기준을 설정 값으로 맞춘다(S15P11E101-475 설정 탭)
   useEffect(() => {
     actions.setTempThresholds(settings.tempWarn, settings.tempCritical)
   }, [actions, settings.tempWarn, settings.tempCritical])
+
+  // Liquid Glass의 스펙큘러 하이라이트가 포인터를 천천히 따라가도록
+  // 페이지 좌표를 CSS 변수로 전달한다. 데이터 렌더링과 분리해 재렌더는 일으키지 않는다.
+  useEffect(() => {
+    const root = glassRef.current
+    if (enabled || !root || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    let frame = 0
+    const onPointerMove = (event: PointerEvent) => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const rect = root.getBoundingClientRect()
+        const x = ((event.clientX - rect.left) / rect.width) * 100
+        const y = ((event.clientY - rect.top) / rect.height) * 100
+        root.style.setProperty('--glass-x', `${Math.max(0, Math.min(100, x))}%`)
+        root.style.setProperty('--glass-y', `${Math.max(0, Math.min(100, y))}%`)
+      })
+    }
+
+    root.addEventListener('pointermove', onPointerMove, { passive: true })
+    return () => {
+      cancelAnimationFrame(frame)
+      root.removeEventListener('pointermove', onPointerMove)
+    }
+  }, [enabled])
 
   // live 모드에서 로봇 서브시스템이 죽어 있거나 프레임이 한 번도 오지 않았으면
   // 그 패널을 흐리게 하고 안내를 덮는다. 캔버스에는 시뮬 화면이 남아 있어서,
@@ -28,7 +54,9 @@ export default function RobotPage() {
   const thermalDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.thermal)) || !videoSeen.THERMAL)
 
   return (
-    <section id="pgB" className="page on">
+    // 시뮬레이션 화면에만 새 스킨을 입힌다. 실서버 화면은 지금 디자인을 그대로 둔다 —
+    // 운영 중인 관제 화면을 시연용 개편과 한 번에 바꾸지 않는다.
+    <section ref={glassRef} id="pgB" className={`page on${enabled ? '' : ' sim-skin'}`}>
       {/* 편성 전체 집계 — 실서버 모드에서만 나온다 */}
       <SummaryBar />
       <div className="b-grid">
