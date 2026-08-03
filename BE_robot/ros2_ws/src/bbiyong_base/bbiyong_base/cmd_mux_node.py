@@ -54,11 +54,18 @@ class CommandMux(Node):
             return
         if requested != self.mode:
             self.publisher.publish(Twist())
+            # Never replay a command received under the previous owner.
+            self.manual = TimedTwist()
+            self.autonomy = TimedTwist()
             self.mode = requested
             self.get_logger().info(f"control mode: {self.mode}")
 
     def _estop_callback(self, message: Bool) -> None:
-        self.estop = bool(message.data)
+        requested = bool(message.data)
+        if requested and not self.estop:
+            self.manual = TimedTwist()
+            self.autonomy = TimedTwist()
+        self.estop = requested
         if self.estop:
             self.publisher.publish(Twist())
             self.get_logger().warn("emergency stop active")

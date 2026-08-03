@@ -128,6 +128,7 @@ class FrontierExplorer(Node):
         self._map: OccupancyGrid | None = None
         self._goal_pending = False
         self._goal_handle = None
+        self._goal_response_future = None
         self._goal_point: Point | None = None
         self._goal_started_at = 0.0
         self._goal_timeout_sec = float(self.get_parameter("goal_timeout_sec").value)
@@ -198,7 +199,9 @@ class FrontierExplorer(Node):
             Bool, "~/completed", status_qos
         )
         self._state_publisher = self.create_publisher(String, "~/state", status_qos)
-        self._estop_publisher = self.create_publisher(Bool, "/bbiyong/estop", 10)
+        self._estop_publisher = self.create_publisher(
+            Bool, "/bbiyong/estop_request", 10
+        )
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
         self._navigation_client = ActionClient(
@@ -905,11 +908,14 @@ class FrontierExplorer(Node):
             f"{self._goal_timeout_sec:.0f}s timeout"
         )
         future = self._navigation_client.send_goal_async(goal)
+        self._goal_response_future = future
         future.add_done_callback(
             lambda completed_future: self._on_goal_response(completed_future, sequence)
         )
 
     def _on_goal_response(self, future, sequence: int) -> None:
+        if future is self._goal_response_future:
+            self._goal_response_future = None
         if sequence != self._goal_sequence:
             try:
                 stale_handle = future.result()
@@ -995,6 +1001,7 @@ class FrontierExplorer(Node):
     def _clear_active_goal(self) -> None:
         self._goal_pending = False
         self._goal_handle = None
+        self._goal_response_future = None
         self._goal_point = None
         self._goal_started_at = 0.0
         self._goal_timeout_sec = float(self.get_parameter("goal_timeout_sec").value)
@@ -1002,11 +1009,31 @@ class FrontierExplorer(Node):
 
     def cancel_active_goal(self) -> None:
         """Request cancellation so stopping this node does not leave Nav2 driving."""
+        # The Nav2 runtime outlives this mission. Stop its velocity path first,
+        # then cancel even when goal acceptance is still in flight.
+        self._estop_publisher.publish(Bool(data=True))
+        response_future = self._goal_response_future
+        if self._goal_handle is None and response_future is not None:
+            self.get_logger().info(
+                "Waiting for pending frontier goal response before shutdown"
+            )
+            rclpy.spin_until_future_complete(self, response_future, timeout_sec=2.0)
         if self._goal_handle is None:
+            if self._goal_pending:
+                self._goal_sequence += 1
+                self.get_logger().warning(
+                    "Frontier goal response did not arrive before shutdown"
+                )
+            self._clear_active_goal()
             return
         self.get_logger().info("Cancelling active frontier goal before shutdown")
         future = self._goal_handle.cancel_goal_async()
         rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+        if not future.done():
+            self.get_logger().error(
+                "Frontier goal cancellation was not acknowledged before shutdown"
+            )
+        self._clear_active_goal()
 
 
 def main(args=None) -> None:

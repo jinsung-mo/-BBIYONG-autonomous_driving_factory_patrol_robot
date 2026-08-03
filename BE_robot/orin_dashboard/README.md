@@ -39,9 +39,14 @@ Outbound (robot → server, `RobotPacket`):
 
 Inbound (server → robot, `ControlCommand`):
 
-- `DRIVE {linear, angular}` and `ESTOP {active}` are written to
-  `/tmp/orincar_drive.json`; `teleop_node.py` consumes it and re-clamps limits.
-- `SET_MODE` and `NAVIGATE` are logged but not yet acted on.
+- `DRIVE {linear, angular}` is written atomically to `/tmp/orincar_drive.json`.
+  The persistent ROS runtime's `manual_drive_bridge` clamps, ramps, applies the
+  deadman and LiDAR guard, and publishes only `/cmd_vel/manual`.
+- `ESTOP {active}` updates both drive and control state. Emergency stop remains
+  active even when autonomous navigation is feature-disabled.
+- `SET_PATROL_ROUTE`, `SET_MODE`, and `NAVIGATE` are owned by the navigation
+  orchestrator. Route/state are persisted atomically and every bridge restart
+  returns the robot to `disabled` with e-stop engaged.
 - `START_MAPPING`, `STOP_MAPPING`, and `SAVE_MAP` are handled by the opt-in
   mapping orchestrator. It saves and validates PGM/YAML, uploads the original
   PGM bytes, and queues `EVENT_MAPPING_COMPLETE` only after HTTP 201. Backend
@@ -53,8 +58,23 @@ Mapping stays disabled unless `--mapping-enabled` is passed (or
 `BBIYONG_ROBOT_UPLOAD_TOKEN` in its process environment; never put that token in
 this repository or in `run_bridge.sh`.
 
-The default mapping commands assume the base sensor/SLAM stack is already
-running and launch only the existing exploration stack:
+Autonomous navigation stays disabled unless `--navigation-enabled` is passed
+(or `ORINCAR_NAVIGATION_ENABLED=1` is set). Patrol and point navigation also
+require explicit `ORINCAR_PATROL_COMMAND` and `ORINCAR_NAVIGATE_COMMAND`
+templates. Supported placeholders are `{route_file}` for patrol and
+`{x}`, `{y}`, `{yaw}` for point navigation. Leave these unset until the Nav2
+mission clients are deployed; commands then fail safely instead of moving.
+
+The Phase 3 patrol client is available as `ros2 run bbiyong_bringup
+patrol_route --ros-args -p route_file:=<route.json>` (or `bbiyong patrol
+<route.json>`). A supervised deployment may set `ORINCAR_PATROL_COMMAND` to
+that command. One-off `NAVIGATE` remains gated until its separate client is
+implemented.
+
+The default mapping commands assume both the base sensor/SLAM stack and
+`bbiyong mapping-runtime` are already running. The orchestrator verifies
+`/navigate_to_pose`, `/follow_waypoints`, and `/bbiyong_cmd_mux`, then launches
+only the short-lived exploration mission:
 
 ```text
 ros2 launch bbiyong_bringup exploration.launch.py map_output:=<temporary-base>

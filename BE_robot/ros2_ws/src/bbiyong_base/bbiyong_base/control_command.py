@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
 import sys
-from time import monotonic
+from time import monotonic, time
 
 import rclpy
 from geometry_msgs.msg import Twist
@@ -19,6 +22,29 @@ class ControlCommand(Node):
         )
         self.estop_publisher = self.create_publisher(Bool, "/bbiyong/estop", 10)
         self.cmd_vel_publisher = self.create_publisher(Twist, "/cmd_vel", 10)
+        self.declare_parameter("control_file", "/tmp/bbiyong_control.json")
+        self.control_file = Path(
+            str(self.get_parameter("control_file").value)
+        ).expanduser()
+
+    def _write_control(self, mode: str, estop: bool) -> None:
+        sequence = 1
+        try:
+            previous = json.loads(self.control_file.read_text(encoding="utf-8"))
+            sequence = int(previous.get("seq", 0)) + 1
+        except (OSError, ValueError, TypeError):
+            pass
+        payload = {
+            "schemaVersion": 1,
+            "seq": sequence,
+            "mode": mode,
+            "estop": estop,
+            "updatedAt": time(),
+        }
+        self.control_file.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.control_file.with_name(self.control_file.name + ".tmp")
+        temporary.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(temporary, self.control_file)
 
     def wait_for_arm_subscribers(self, timeout_sec: float) -> bool:
         """Require both the mux and explorer before publishing any arm state."""
@@ -40,6 +66,7 @@ class ControlCommand(Node):
             return False
         mode = String(data="autonomy")
         released = Bool(data=False)
+        self._write_control("autonomy", False)
         for _ in range(20):
             self.mode_publisher.publish(mode)
             self.estop_publisher.publish(released)
@@ -51,6 +78,7 @@ class ControlCommand(Node):
         stopped = Bool(data=True)
         disabled = String(data="disabled")
         zero = Twist()
+        self._write_control("disabled", True)
         for _ in range(20):
             self.estop_publisher.publish(stopped)
             self.mode_publisher.publish(disabled)
