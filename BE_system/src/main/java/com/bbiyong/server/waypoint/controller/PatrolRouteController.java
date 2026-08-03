@@ -65,10 +65,20 @@ public class PatrolRouteController {
         return ResponseEntity.noContent().build();
     }
 
-    /** 저장된 순찰 경로를 로봇에 하달(SET_PATROL_ROUTE). */
+    /** 저장된 순찰 경로를 로봇에 하달(SET_PATROL_ROUTE). 로봇은 저장만 하고 순찰을 시작하지 않는다. */
     @PostMapping("/apply")
     public ResponseEntity<WaypointResponses.ApplyResult> apply(
             @RequestParam(required = false) String robotId) {
         return ResponseEntity.ok(waypointService.apply(robotId));
+    }
+
+    /**
+     * 저장된 순찰 경로를 하달하고 순찰을 시작한다(SET_PATROL_ROUTE + SET_MODE autonomy). (S15P11E101-620)
+     * 로봇 계약상 순찰 시작에는 SET_MODE autonomy 가 필요하므로, 경로 적용과 시작을 한 번에 처리한다.
+     */
+    @PostMapping("/start")
+    public ResponseEntity<WaypointResponses.PatrolStartResult> start(
+            @RequestParam(required = false) String robotId) {
+        return ResponseEntity.ok(waypointService.startPatrol(robotId));
     }
 }
