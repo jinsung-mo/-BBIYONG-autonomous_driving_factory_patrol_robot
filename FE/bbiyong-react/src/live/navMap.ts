@@ -100,9 +100,22 @@ export function canvasToWorld(view: any, nav: any, headingUp: any, px: any, py: 
 }
 
 // 맵 경계 안쪽인지. 맵 밖을 찍으면 로봇이 갈 수 없는 좌표가 저장된다.
+//
+// 기준은 '지금 화면에 그려진 배경'이다(S15P11E101-629). 예전에는 SLAM 점유격자만 봤는데,
+// 도면만 있고 실시간 맵이 없는 상태에서는 어디를 찍어도 거부됐다 — 보이는 것과 판정하는 것이
+// 달랐다. originYaw 가 있으면 원점 기준으로 되돌린 뒤 재어야 한다.
 export function insideMap(m: any, x: any, y: any) {
-  if (!m) return false
-  return x >= m.ox && y >= m.oy && x <= m.ox + m.w * m.res && y <= m.oy + m.h * m.res
+  if (!m || ![m.w, m.h, m.res, m.ox, m.oy].every(Number.isFinite)) return false
+  let dx = x - m.ox
+  let dy = y - m.oy
+  const yaw = Number(m.oyaw) || 0
+  if (yaw) {
+    const c = Math.cos(-yaw), s2 = Math.sin(-yaw)
+    const rx = dx * c - dy * s2
+    const ry = dx * s2 + dy * c
+    dx = rx; dy = ry
+  }
+  return dx >= 0 && dy >= 0 && dx <= m.w * m.res && dy <= m.h * m.res
 }
 
 // 맵 + 궤적 + 스캔 + 로봇 — nav.html 그대로
@@ -134,8 +147,22 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
   if (bg) {
     // 도면은 이미 정제된 그림이라 확대 시 부드럽게, 점유격자는 셀 경계를 살려 또렷하게
     g.imageSmoothingEnabled = bg.isPlan
-    g.drawImage(bg.img, sx(bg.ox), sy(bg.oy + bg.h * bg.res),
-      bg.w * bg.res * view.s, bg.h * bg.res * view.s)
+    // ROS map 규약: origin 은 이미지 좌하단의 map 프레임 포즈이고, originYaw 만큼 돌아 있다.
+    // 이걸 무시하면 회전된 맵이 축에 나란히 그려져, 조작자가 보고 찍은 자리가 실제
+    // 월드 좌표와 어긋난다(S15P11E101-629). 좌하단을 축으로 돌려서 그린다.
+    const yaw = Number(bg.oyaw) || 0
+    const wpx = bg.w * bg.res * view.s
+    const hpx = bg.h * bg.res * view.s
+    if (yaw) {
+      const ax = sx(bg.ox), ay = sy(bg.oy)      // 좌하단 = 회전축
+      g.save()
+      g.translate(ax, ay)
+      g.rotate(-yaw)                            // 화면 y 는 아래로 자라므로 부호를 뒤집는다
+      g.drawImage(bg.img, 0, -hpx, wpx, hpx)
+      g.restore()
+    } else {
+      g.drawImage(bg.img, sx(bg.ox), sy(bg.oy + bg.h * bg.res), wpx, hpx)
+    }
   }
 
   const p = nav.pose

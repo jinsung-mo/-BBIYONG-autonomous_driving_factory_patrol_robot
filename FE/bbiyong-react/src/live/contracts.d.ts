@@ -443,6 +443,12 @@ export interface PlanLayer {
   res: number
   ox: number
   oy: number
+  /**
+   * 원점 회전각(radians, ROS map 규약). 0 이면 축에 나란하다.
+   * 이 값을 무시하면 회전된 맵이 어긋나게 그려지고, 조작자가 보고 찍은 자리가
+   * 실제 월드 좌표와 달라진다(S15P11E101-629).
+   */
+  oyaw?: number
 }
 
 /** 지도에 그릴 배경 하나(navMap.backgroundOf). */

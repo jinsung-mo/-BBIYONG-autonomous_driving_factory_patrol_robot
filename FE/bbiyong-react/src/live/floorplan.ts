@@ -73,6 +73,8 @@ export async function loadActivePlan(accessToken: string | null | undefined) {
     res: detail.resolution,
     ox: detail.originX,
     oy: detail.originY,
+    // ROS map 규약의 원점 회전각(radians). 서버가 주지 않으면 0 — 축에 나란한 맵이다.
+    oyaw: Number.isFinite(Number(detail.originYaw)) ? Number(detail.originYaw) : 0,
   }
 }
 
