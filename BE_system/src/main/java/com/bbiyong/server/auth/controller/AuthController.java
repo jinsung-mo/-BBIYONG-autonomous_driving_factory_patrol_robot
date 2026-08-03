@@ -2,6 +2,8 @@ package com.bbiyong.server.auth.controller;
 
 import com.bbiyong.server.auth.dto.LoginRequest;
 import com.bbiyong.server.auth.dto.LoginResponse;
+import com.bbiyong.server.auth.dto.RefreshRequest;
+import com.bbiyong.server.auth.dto.RefreshResponse;
 import com.bbiyong.server.auth.dto.SignupRequest;
 import com.bbiyong.server.auth.dto.SignupResponse;
 import com.bbiyong.server.auth.service.AuthService;
@@ -102,5 +104,10 @@ public class AuthController {
 	@PostMapping("/login")
 	public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
 		return ResponseEntity.ok(authService.login(request));
+	}
+
+	@PostMapping("/refresh")
+	public ResponseEntity<RefreshResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+		return ResponseEntity.ok(authService.refresh(request.refreshToken()));
 	}
 }

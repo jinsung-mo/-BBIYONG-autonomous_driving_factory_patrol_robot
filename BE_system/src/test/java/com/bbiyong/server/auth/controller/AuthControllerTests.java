@@ -56,8 +56,69 @@ class AuthControllerTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.tokenType").value("Bearer"))
 				.andExpect(jsonPath("$.accessToken").isNotEmpty())
-				.andExpect(jsonPath("$.expiresIn").value(86400))
-				.andExpect(jsonPath("$.role").value("ROLE_ADMIN"));
+				.andExpect(jsonPath("$.refreshToken").isNotEmpty())
+				.andExpect(jsonPath("$.expiresIn").value(3600))
+				.andExpect(jsonPath("$.role").value("ROLE_USER"));
+	}
+
+	@Test
+	void refreshTokenIssuesNewAccessToken() throws Exception {
+		signup("refresh@bbiyong.io", VALID_PW, "리프레시 계정");
+
+		String loginBody = mockMvc.perform(post("/api/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "email": "refresh@bbiyong.io",
+								  "password": "%s"
+								}
+								""".formatted(VALID_PW)))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		String refreshToken = com.jayway.jsonpath.JsonPath.read(loginBody, "$.refreshToken");
+
+		mockMvc.perform(post("/api/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "refreshToken": "%s"
+								}
+								""".formatted(refreshToken)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.tokenType").value("Bearer"))
+				.andExpect(jsonPath("$.accessToken").isNotEmpty())
+				.andExpect(jsonPath("$.refreshToken").isNotEmpty())
+				.andExpect(jsonPath("$.expiresIn").value(3600))
+				.andExpect(jsonPath("$.role").value("ROLE_USER"));
+	}
+
+	@Test
+	void refreshRejectsAccessTokenAsRefresh() throws Exception {
+		signup("wrongtyp@bbiyong.io", VALID_PW, "타입오류 계정");
+
+		String loginBody = mockMvc.perform(post("/api/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "email": "wrongtyp@bbiyong.io",
+								  "password": "%s"
+								}
+								""".formatted(VALID_PW)))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		String accessToken = com.jayway.jsonpath.JsonPath.read(loginBody, "$.accessToken");
+
+		// access 토큰을 refresh 로 사용하면 401
+		mockMvc.perform(post("/api/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "refreshToken": "%s"
+								}
+								""".formatted(accessToken)))
+				.andExpect(status().isUnauthorized());
 	}
 
 	@Test
