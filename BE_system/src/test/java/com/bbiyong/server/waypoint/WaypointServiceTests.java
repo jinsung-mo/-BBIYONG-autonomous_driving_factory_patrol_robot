@@ -113,4 +113,77 @@ class WaypointServiceTests {
         assertThat(out.get(0).seq()).isEqualTo(0);
         assertThat(out.get(1).seq()).isEqualTo(1);
     }
+
+    // --- 로봇 validate_route 정합성 (S15P11E101-620) ---
+
+    @Test
+    void replaceRejectsDuplicateSeq() {
+        assertThatThrownBy(() -> service.replace("orinka_01", List.of(
+                new WaypointRequest(1.0, 1.0, null, "a", 1),
+                new WaypointRequest(2.0, 2.0, null, "b", 1))))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void replaceRejectsNonFiniteCoordinate() {
+        assertThatThrownBy(() -> service.replace("orinka_01", List.of(
+                new WaypointRequest(Double.NaN, 1.0, null, "a", null))))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void replaceRejectsMoreThanMaxWaypoints() {
+        List<WaypointRequest> tooMany = new java.util.ArrayList<>();
+        for (int i = 0; i < WaypointService.MAX_WAYPOINTS + 1; i++) {
+            tooMany.add(new WaypointRequest(0.0, 0.0, null, null, i));
+        }
+        assertThatThrownBy(() -> service.replace("orinka_01", tooMany))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void replaceNormalizesNullYawToZeroAndTruncatesName() {
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        String longName = "n".repeat(WaypointService.MAX_NAME_LEN + 50);
+
+        List<WaypointResponses.Item> out = service.replace("orinka_01", List.of(
+                new WaypointRequest(1.0, 1.0, null, longName, null)));
+
+        assertThat(out.get(0).yaw()).isEqualTo(0.0);
+        assertThat(out.get(0).name()).hasSize(WaypointService.MAX_NAME_LEN);
+    }
+
+    // --- 순찰 시작(SET_PATROL_ROUTE + SET_MODE autonomy) (S15P11E101-620) ---
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void startPatrolSendsSetModeAutonomyAfterRoute() {
+        when(repository.findByRobotIdOrderBySeqAscCreatedAtAsc("orinka_01"))
+                .thenReturn(List.of(wp("a", 1.0, 1.0, 0)));
+        when(sessionManager.sendCommand(any(), any())).thenReturn(true);
+
+        WaypointResponses.PatrolStartResult result = service.startPatrol("orinka_01");
+
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(result.patrolStarted()).isTrue();
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(sessionManager, org.mockito.Mockito.times(2)).sendCommand(eq("orinka_01"), captor.capture());
+        List<Map<String, Object>> sent = captor.getAllValues();
+        assertThat(sent.get(0)).containsEntry("command", "SET_PATROL_ROUTE");
+        assertThat(sent.get(1)).containsEntry("command", "SET_MODE").containsEntry("mode", "autonomy");
+    }
+
+    @Test
+    void startPatrolSkipsSetModeWhenRouteEmpty() {
+        when(repository.findByRobotIdOrderBySeqAscCreatedAtAsc("orinka_01")).thenReturn(List.of());
+        when(sessionManager.sendCommand(any(), any())).thenReturn(true);
+
+        WaypointResponses.PatrolStartResult result = service.startPatrol("orinka_01");
+
+        assertThat(result.status()).isEqualTo("NO_ROUTE");
+        assertThat(result.patrolStarted()).isFalse();
+        // SET_PATROL_ROUTE(apply) 1회만, SET_MODE autonomy 는 보내지 않음
+        verify(sessionManager, org.mockito.Mockito.times(1)).sendCommand(any(), any());
+    }
 }

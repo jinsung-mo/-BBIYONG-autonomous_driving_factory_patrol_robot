@@ -112,8 +112,13 @@ public class PatrolSchedulerService {
             log.info("자동 순찰 실행: scheduleId={}, name={}, robotId={}",
                     schedule.getScheduleId(), schedule.getName(), schedule.getRobotId());
 
-            // 순찰 경로를 로봇에 하달
-            waypointService.apply(schedule.getRobotId());
+            // 순찰 경로 하달(SET_PATROL_ROUTE) + 순찰 시작(SET_MODE autonomy).
+            // 로봇 계약상 경로 하달만으로는 순찰이 시작되지 않으므로 startPatrol 로 시작까지 처리한다. (S15P11E101-620)
+            var result = waypointService.startPatrol(schedule.getRobotId());
+            if (!result.patrolStarted()) {
+                log.warn("자동 순찰 시작 미완료: scheduleId={}, robotId={}, status={}, routeDelivered={}",
+                        schedule.getScheduleId(), schedule.getRobotId(), result.status(), result.routeDelivered());
+            }
 
             // 마지막 실행 시각 업데이트
             schedule.setLastExecuted(Instant.now());

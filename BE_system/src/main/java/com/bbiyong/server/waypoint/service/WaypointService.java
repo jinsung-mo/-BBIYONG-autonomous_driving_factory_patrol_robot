@@ -13,15 +13,24 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
 public class WaypointService {
 
     static final String DEFAULT_ROBOT_ID = "orinka_01";
+
+    /**
+     * 로봇 patrol node(navigation_orchestrator.validate_route)와 동일한 검증 상한.
+     * 경로가 로봇에 하달되기 전에 API 단계에서 먼저 거절해 로봇 측 늦은 실패를 막는다. (S15P11E101-620)
+     */
+    public static final int MAX_WAYPOINTS = 500;
+    public static final int MAX_NAME_LEN = 120;
 
     private final WaypointRepository repository;
     private final RobotWebSocketSessionManager sessionManager;
@@ -37,13 +46,16 @@ public class WaypointService {
         String rid = resolveRobotId(robotId);
         List<Waypoint> existing = repository.findByRobotIdOrderBySeqAscCreatedAtAsc(rid);
         int seq = req.seq() != null ? req.seq() : nextSeq(existing);
+        if (seq < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "waypoint seq 는 0 이상이어야 합니다.");
+        }
 
         Waypoint w = new Waypoint();
         w.setRobotId(rid);
-        w.setName(req.name());
-        w.setX(req.x());
-        w.setY(req.y());
-        w.setYaw(req.yaw());
+        w.setName(clampName(req.name()));
+        w.setX(requireFinite(req.x(), "x"));
+        w.setY(requireFinite(req.y(), "y"));
+        w.setYaw(normalizeYaw(req.yaw()));
         w.setSeq(seq);
         w.setCreatedAt(Instant.now());
         return WaypointResponses.Item.of(repository.save(w));
@@ -69,23 +81,30 @@ public class WaypointService {
     public List<WaypointResponses.Item> replace(String robotId, List<WaypointRequest> reqs) {
         String rid = resolveRobotId(robotId);
         repository.deleteByRobotId(rid);
-        if (reqs == null) {
+        if (reqs == null || reqs.isEmpty()) {
             return List.of();
         }
+        if (reqs.size() > MAX_WAYPOINTS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "순찰 지점은 최대 " + MAX_WAYPOINTS + "개까지 허용됩니다.");
+        }
         Instant now = Instant.now();
+        Set<Integer> seenSeq = new HashSet<>();
         List<Waypoint> saved = new ArrayList<>();
         for (int i = 0; i < reqs.size(); i++) {
             WaypointRequest req = reqs.get(i);
-            if (req.x() == null || req.y() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "waypoint x, y 는 필수입니다.");
+            int seq = req.seq() != null ? req.seq() : i;
+            if (seq < 0 || !seenSeq.add(seq)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "waypoint seq 는 서로 다른 0 이상의 정수여야 합니다: " + seq);
             }
             Waypoint w = new Waypoint();
             w.setRobotId(rid);
-            w.setName(req.name());
-            w.setX(req.x());
-            w.setY(req.y());
-            w.setYaw(req.yaw());
-            w.setSeq(req.seq() != null ? req.seq() : i);
+            w.setName(clampName(req.name()));
+            w.setX(requireFinite(req.x(), "x"));
+            w.setY(requireFinite(req.y(), "y"));
+            w.setYaw(normalizeYaw(req.yaw()));
+            w.setSeq(seq);
             w.setCreatedAt(now);
             saved.add(repository.save(w));
         }
@@ -102,7 +121,13 @@ public class WaypointService {
 
     /**
      * 저장된 순찰 경로를 로봇에 하달한다. {command:SET_PATROL_ROUTE, waypoints:[...]}.
-     * 로봇 미연결 시에도 200(경고 로그) — 저장은 이미 되어 있으므로 재연결 후 재하달 가능.
+     *
+     * <p><b>주의(로봇 계약, S15P11E101-619):</b> SET_PATROL_ROUTE 는 로봇에 경로를 <b>저장만</b> 한다.
+     * 실제 순찰은 저장된 경로가 있는 상태에서 {@code SET_MODE mode=autonomy} 를 받아야 시작된다.
+     * 경로 저장과 순찰 시작을 한 번에 하려면 {@link #startPatrol(String)} 를 사용한다.
+     * yaw 는 ROS 월드프레임 <b>radians</b> 이며 별도 변환 없이 그대로 전달한다.
+     *
+     * <p>로봇 미연결 시에도 200(경고 로그) — 저장은 이미 되어 있으므로 재연결 후 재하달 가능.
      */
     @Transactional(readOnly = true)
     public WaypointResponses.ApplyResult apply(String robotId) {
@@ -128,6 +153,59 @@ public class WaypointService {
             log.warn("SET_PATROL_ROUTE not delivered (robot [{}] offline): {} points", rid, points.size());
         }
         return new WaypointResponses.ApplyResult("SUCCESS", delivered, points.size());
+    }
+
+    /**
+     * 저장된 순찰 경로를 로봇에 하달(SET_PATROL_ROUTE)한 뒤 순찰을 시작(SET_MODE mode=autonomy)한다.
+     * 로봇 계약상 SET_PATROL_ROUTE 만으로는 순찰이 시작되지 않으므로, 자동 순찰(스케줄러) 및
+     * "경로 적용 후 즉시 시작" 시나리오에서 사용한다. (S15P11E101-620)
+     *
+     * <p>경로가 비어 있으면 로봇이 autonomy 를 거절하므로 SET_MODE 를 보내지 않는다.
+     * 로봇 미연결 등으로 하달이 실패해도 예외 없이 결과에 실패 사유를 담아 반환한다.
+     */
+    @Transactional(readOnly = true)
+    public WaypointResponses.PatrolStartResult startPatrol(String robotId) {
+        WaypointResponses.ApplyResult applied = apply(robotId);
+        if (applied.count() == 0) {
+            log.warn("순찰 시작 취소: 저장된 경로가 없습니다 (robot [{}])", resolveRobotId(robotId));
+            return new WaypointResponses.PatrolStartResult(
+                    "NO_ROUTE", applied.delivered(), false, applied.count());
+        }
+        String rid = resolveRobotId(robotId);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("command", "SET_MODE");
+        payload.put("mode", "autonomy");
+        boolean started = sessionManager.sendCommand(rid, payload);
+        if (!started) {
+            log.warn("SET_MODE autonomy not delivered (robot [{}] offline)", rid);
+        }
+        return new WaypointResponses.PatrolStartResult(
+                "SUCCESS", applied.delivered(), started, applied.count());
+    }
+
+    /** x/y 등 필수 좌표는 유한수여야 한다(로봇 validate_route 와 동일: NaN/Infinity 거절). */
+    private Double requireFinite(Double v, String field) {
+        if (v == null || v.isNaN() || v.isInfinite()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "waypoint " + field + " 는 유한한 숫자여야 합니다.");
+        }
+        return v;
+    }
+
+    /** yaw 는 선택값 — 미지정 시 0.0(로봇과 동일), 지정 시 유한수여야 한다. */
+    private Double normalizeYaw(Double yaw) {
+        if (yaw == null) {
+            return 0.0;
+        }
+        return requireFinite(yaw, "yaw");
+    }
+
+    /** name 은 로봇 저장 한계(120자)에 맞춰 잘라낸다. */
+    private String clampName(String name) {
+        if (name == null) {
+            return null;
+        }
+        return name.length() > MAX_NAME_LEN ? name.substring(0, MAX_NAME_LEN) : name;
     }
 
     private String resolveRobotId(String robotId) {
