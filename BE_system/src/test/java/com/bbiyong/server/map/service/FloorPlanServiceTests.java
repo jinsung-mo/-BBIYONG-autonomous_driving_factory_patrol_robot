@@ -26,7 +26,8 @@ class FloorPlanServiceTests {
     private final MapArtifactRepository repo = mock(MapArtifactRepository.class);
     private final MapStorageService storage = mock(MapStorageService.class);
     private final MapService mapService = mock(MapService.class);
-    private final FloorPlanService service = new FloorPlanService(repo, storage, mapService);
+    private final FloorPlanService service = new FloorPlanService(
+            repo, storage, mapService, new com.bbiyong.server.map.floorplan.FloorPlanRenderer());
 
     private byte[] samplePng() throws Exception {
         BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_RGB);

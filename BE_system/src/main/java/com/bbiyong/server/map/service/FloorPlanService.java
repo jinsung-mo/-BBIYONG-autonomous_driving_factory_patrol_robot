@@ -2,6 +2,7 @@ package com.bbiyong.server.map.service;
 
 import com.bbiyong.server.map.domain.MapArtifact;
 import com.bbiyong.server.map.dto.MapResponses;
+import com.bbiyong.server.map.floorplan.FloorPlanGeometry;
 import com.bbiyong.server.map.floorplan.FloorPlanRenderer;
 import com.bbiyong.server.map.floorplan.RawMapImageDecoder;
 import com.bbiyong.server.map.repository.MapArtifactRepository;
@@ -31,15 +32,17 @@ public class FloorPlanService {
     private final MapArtifactRepository mapRepository;
     private final MapStorageService storageService;
     private final MapService mapService;
-    private final FloorPlanRenderer renderer = new FloorPlanRenderer();
+    private final FloorPlanRenderer renderer;
     private final RawMapImageDecoder rawDecoder = new RawMapImageDecoder();
 
     public FloorPlanService(MapArtifactRepository mapRepository,
                             MapStorageService storageService,
-                            MapService mapService) {
+                            MapService mapService,
+                            FloorPlanRenderer renderer) {
         this.mapRepository = mapRepository;
         this.storageService = storageService;
         this.mapService = mapService;
+        this.renderer = renderer;
     }
 
     /**
@@ -68,7 +71,8 @@ public class FloorPlanService {
                 return Optional.empty();
             }
 
-            BufferedImage plan = renderer.render(src);
+            FloorPlanRenderer.Result rendered = renderer.renderPlan(src);
+            BufferedImage plan = rendered.image();
             byte[] png;
             try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
                 ImageIO.write(plan, "png", baos);
@@ -83,11 +87,25 @@ public class FloorPlanService {
             floor.setFilePath(storedPath);
             floor.setWidthPx(plan.getWidth());
             floor.setHeightPx(plan.getHeight());
-            // 좌표 정렬 메타는 원본에서 승계(동일 픽셀 격자)
-            floor.setResolution(raw.getResolution());
-            floor.setOriginX(raw.getOriginX());
-            floor.setOriginY(raw.getOriginY());
-            floor.setOriginYaw(raw.getOriginYaw());
+            // 좌표 메타: 도면은 스케일·회전·패딩으로 픽셀 격자가 원본과 달라지므로
+            // 아핀 변환을 역산해 도면 기준 resolution/origin 을 재계산한다. (S15P11E101-640)
+            if (raw.getResolution() != null && raw.getOriginX() != null && raw.getOriginY() != null) {
+                FloorPlanGeometry.PlanMeta meta = FloorPlanGeometry.transformMeta(
+                        new FloorPlanGeometry.PlanMeta(
+                                raw.getResolution(), raw.getOriginX(), raw.getOriginY(),
+                                raw.getOriginYaw() != null ? raw.getOriginYaw() : 0.0),
+                        src.getHeight(), rendered.rawToOut(), plan.getHeight());
+                floor.setResolution(meta.resolution());
+                floor.setOriginX(meta.originX());
+                floor.setOriginY(meta.originY());
+                floor.setOriginYaw(meta.originYaw());
+            } else {
+                // 메타 불충분 시 원본 승계(기존 동작 유지)
+                floor.setResolution(raw.getResolution());
+                floor.setOriginX(raw.getOriginX());
+                floor.setOriginY(raw.getOriginY());
+                floor.setOriginYaw(raw.getOriginYaw());
+            }
             floor.setFileSizeBytes((long) png.length);
             floor.setKind("FLOORPLAN");
             floor.setSourceMapId(raw.getId());
