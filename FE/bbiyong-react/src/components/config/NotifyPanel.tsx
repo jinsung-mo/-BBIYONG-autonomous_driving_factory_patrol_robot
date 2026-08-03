@@ -15,7 +15,7 @@ type Level = import('../../live/contracts.d.ts').EventLevel
 // 아무도 모르고 지나간다 — 이 설정이 화면 밖으로 알리는 유일한 통로다.
 export default function NotifyPanel() {
   const { enabled } = useLive()
-  const { accessToken, isAdmin } = useAuth()
+  const { accessToken, isAdmin, canOperate } = useAuth()
 
   const [on, setOn] = useState(false)
   const [url, setUrl] = useState('')
@@ -84,14 +84,14 @@ export default function NotifyPanel() {
           {msg && <div className={`form-msg ${msg.kind}`} id="ntfMsg">{msg.text}</div>}
 
           <label className="ntf-toggle">
-            <input type="checkbox" checked={on} disabled={!isAdmin}
+            <input type="checkbox" checked={on} disabled={!canOperate}
               onChange={(e) => setOn(e.target.checked)} />
             Mattermost 알림 사용
           </label>
 
           <div className="form-row">
             <label htmlFor="ntf-url">웹훅 URL</label>
-            <input id="ntf-url" className="mono" value={url} disabled={!isAdmin}
+            <input id="ntf-url" className="mono" value={url} disabled={!canOperate}
               placeholder="https://meeting.ssafy.com/hooks/..."
               onChange={(e) => setUrl(e.target.value)} />
           </div>
@@ -99,7 +99,7 @@ export default function NotifyPanel() {
 
           <div className="form-row">
             <label htmlFor="ntf-sev">알림 기준</label>
-            <select id="ntf-sev" value={severity} disabled={!isAdmin}
+            <select id="ntf-sev" value={severity} disabled={!canOperate}
               onChange={(e) => setSeverity(e.target.value === 'CRITICAL' ? 'CRITICAL' : 'WARNING')}>
               <option value="WARNING">경고 이상 (과열 + 화재)</option>
               <option value="CRITICAL">긴급만 (화재)</option>

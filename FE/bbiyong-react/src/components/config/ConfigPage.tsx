@@ -16,7 +16,7 @@ import UsersPanel from './UsersPanel.tsx'
 export default function ConfigPage() {
   const { settings, update, reset, driveSynced } = useSettings()
   const { enabled } = useLive()
-  const { accessToken } = useAuth()
+  const { accessToken, locked } = useAuth()
   const [draft, setDraft] = useState('')
   const [savingSpeed, setSavingSpeed] = useState(false)
   const [speedMsg, setSpeedMsg] = useState<{ kind: string, text: string } | null>(null)
@@ -77,7 +77,11 @@ export default function ConfigPage() {
 
   return (
     <section id="pgConfig" className="page on section-page">
-      <div className="cfg-grid">
+      {/* 잠금 중에는 설정을 바꿀 수 없다(S15P11E101-653). 값은 계속 보인다 —
+          감추면 무엇이 설정돼 있는지조차 확인할 수 없다.
+          fieldset[disabled] 을 쓰는 이유: 조작 요소를 하나씩 막으면 반드시 빠진다.
+          안쪽 폼 요소를 전부, 키보드 접근까지 막아 준다. */}
+      <fieldset className="lockfs cfg-grid" disabled={locked}>
         <div className="panel">
           <h3>주행 속도 상한 <span className="k">DRIVE LIMIT</span></h3>
           <p className="cfg-help">
@@ -180,7 +184,7 @@ export default function ConfigPage() {
             기본값 — 속도 상한 {DEFAULT_SETTINGS.vMax} m/s · 주의 {DEFAULT_SETTINGS.tempWarn}℃ · 임계 {DEFAULT_SETTINGS.tempCritical}℃ · 지점 {DEFAULT_SETTINGS.points.length}개
           </div>
         </div>
-      </div>
+      </fieldset>
     </section>
   )
 }

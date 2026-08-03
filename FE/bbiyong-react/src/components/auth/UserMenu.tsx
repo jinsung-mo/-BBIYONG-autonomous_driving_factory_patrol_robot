@@ -76,7 +76,7 @@ function PasswordModal({ onClose }: any) {
 export default function UserMenu() {
   // Gate 가 로그인 상태에서만 이 트리를 렌더한다 — user 는 여기서 항상 있다
   const user = useAuth().user!
-  const { logout } = useAuth()
+  const { logout, lockNow } = useAuth()
   const [open, setOpen] = useState(false)
   const [modal, setModal] = useState<'mypage' | 'password' | null>(null) // 'mypage' | 'password' | null
   const ref = useRef<HTMLDivElement | null>(null)
@@ -102,6 +102,9 @@ export default function UserMenu() {
           </div>
           <button onClick={() => { setModal('mypage'); setOpen(false) }}>마이페이지</button>
           <button onClick={() => { setModal('password'); setOpen(false) }}>비밀번호 수정</button>
+          {/* 자리를 뜨며 직접 잠근다(S15P11E101-653). 로그아웃과 달리 화면과 감시는 유지된다 —
+              야간 순찰을 지켜보던 화면을 끄지 않고 조작만 막고 갈 수 있어야 한다. */}
+          <button id="btnLockNow" onClick={() => { setOpen(false); lockNow() }}>조작 잠그기</button>
           <button className="danger" onClick={() => { setOpen(false); logout() }}>로그아웃</button>
         </div>
       )}

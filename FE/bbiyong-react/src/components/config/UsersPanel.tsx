@@ -14,7 +14,7 @@ type AdminUser = import('../../live/contracts.d.ts').AdminUser
 // 승격시켜 줘야 하므로, 그 일을 하는 화면이 여기다.
 export default function UsersPanel() {
   const { enabled } = useLive()
-  const { accessToken, isAdmin, user, syncRole } = useAuth()
+  const { accessToken, isAdmin, canOperate, user, syncRole } = useAuth()
 
   const [rows, setRows] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(false)

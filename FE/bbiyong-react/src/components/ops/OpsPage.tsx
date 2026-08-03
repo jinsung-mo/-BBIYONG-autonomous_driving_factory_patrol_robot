@@ -17,7 +17,7 @@ import {
 // 맵 모델링 시작·진행·완료·저장(활성화) 전 과정은 S15P11E101-483.
 export default function OpsPage() {
   const { enabled, connected, control, onNavUpdate, telemetry, mappingComplete, clearMappingComplete } = useLive()
-  const { accessToken } = useAuth()
+  const { accessToken, locked } = useAuth()
 
   const [nav, setNav] = useState<import('../../live/contracts.d.ts').DecodedMap | null>(null)
   const [name, setName] = useState('')
@@ -126,6 +126,10 @@ export default function OpsPage() {
 
   return (
     <section id="pgOps" className="page on section-page">
+      {/* 잠금 중에는 운영 조작을 막는다(S15P11E101-653) — 진행 상황은 계속 보인다.
+          fieldset[disabled] 을 쓰는 이유: 조작 요소를 하나씩 막으면 반드시 빠진다.
+          안쪽 폼 요소를 전부, 키보드 접근까지 막아 준다. */}
+      <fieldset className="lockfs" disabled={locked}>
       <div className="cfg-grid">
         <div className="panel">
           <h3>2D 맵 모델링 <span className="k">SLAM MAPPING</span></h3>
@@ -249,6 +253,7 @@ export default function OpsPage() {
         <HealthPanel />
         <EventStatsPanel />
       </div>
+      </fieldset>
 
       {confirming && (
         <Modal title="맵 모델링을 시작할까요?" onClose={() => setConfirming(false)} width={420}>

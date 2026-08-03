@@ -22,7 +22,7 @@ export default function EventDetailModal({
   onClose: () => void
   onStatusChange?: (updated: any) => void
 }) {
-  const { accessToken, isAdmin } = useAuth()
+  const { accessToken, isAdmin, canOperate } = useAuth()
 
   const [detail, setDetail] = useState<Detail | null>(null)
   const [videos, setVideos] = useState<VideoSummary[]>([])
@@ -176,7 +176,7 @@ export default function EventDetailModal({
             ))}
           </ul>
 
-          {isAdmin && (
+          {canOperate && (
             <div className="form-actions">
               <button type="button" className="btn-ghost" onClick={onClose}>닫기</button>
               <button

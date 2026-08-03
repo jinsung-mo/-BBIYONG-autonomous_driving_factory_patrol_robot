@@ -19,7 +19,7 @@ export default function SchedulePanel() {
   const { enabled } = useLive()
   // 새 스케줄은 관제 화면에서 고른 로봇으로 만든다(S15P11E101-591)
   const { selected: robotId, robotName, multi } = useFleet()
-  const { accessToken, isAdmin } = useAuth()
+  const { accessToken, isAdmin, canOperate } = useAuth()
 
   const [rows, setRows] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(false)
@@ -120,7 +120,7 @@ export default function SchedulePanel() {
                 {/* 해석되면 사람 말로, 아니면 표현식을 그대로 — 틀린 설명을 보여 주지 않는다 */}
                 <div className="sch-when">{cronText(s.cronExpression) || <span className="mono">{s.cronExpression}</span>}</div>
                 <div className="sch-meta">{robotName(s.robotId)} · <span className="mono">최근 실행 {lastRunText(s.lastExecuted)}</span></div>
-                {isAdmin && (
+                {canOperate && (
                   <div className="gotor">
                     <button type="button" className="dbtn" disabled={busy === s.scheduleId}
                       onClick={() => onToggle(s)}>
@@ -136,7 +136,7 @@ export default function SchedulePanel() {
             ))}
           </ul>
 
-          {isAdmin && (
+          {canOperate && (
             <div className="sch-new">
               {multi && <div className="cfg-note">새 스케줄은 <b>{robotName(robotId)}</b> 앞으로 만듭니다.</div>}
               <div className="form-row">

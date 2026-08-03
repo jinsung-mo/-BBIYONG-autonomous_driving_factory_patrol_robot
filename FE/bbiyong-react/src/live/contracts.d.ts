@@ -572,11 +572,22 @@ export interface AuthContextValue {
   changePassword: (current: string, next: string) => void
   updateProfile: (patch: Partial<StoredUser>) => void
   isAdmin: boolean
+  /**
+   * 조작해도 되는가 — 권한이 있고 잠기지 않았을 때만 true(S15P11E101-653).
+   * `isAdmin` 은 '무엇을 보여 줄지', `canOperate` 는 '무엇을 누르게 할지'에 쓴다.
+   */
+  canOperate: boolean
   /** 사용자 조작·이벤트 기록을 활동으로 남긴다 */
   touch: () => void
-  /** 만료 임박 경고 표시 여부 */
-  warning: boolean
-  extendSession: () => void
+  /**
+   * 조작 잠금 상태(S15P11E101-653). 유휴가 지나면 로그아웃하지 않고 여기가 true 가 된다 —
+   * 세션과 화면은 그대로 살아 있고 조작만 막힌다.
+   */
+  locked: boolean
+  /** 비밀번호를 다시 확인해 잠금을 푼다. 틀리면 던지고 잠금은 유지된다. */
+  unlock: (password: string) => Promise<void>
+  /** 자리를 뜨며 직접 잠근다 */
+  lockNow: () => void
   logoutReason: LogoutReason | null
   clearLogoutReason: () => void
   /** 서버가 403 을 줬을 때 서버 판단 role 을 다시 받아 온다(S15P11E101-626) */
