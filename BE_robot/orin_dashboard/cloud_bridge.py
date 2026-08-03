@@ -37,6 +37,7 @@ import time
 
 from mapping_orchestrator import MappingOrchestrator
 from navigation_orchestrator import NavigationOrchestrator
+from event_clip_pipeline import EventClipPipeline, MultipartVideoUploader
 
 # websockets 는 pip 의존성이다. 순수 매핑 함수(테스트 대상)는 이것 없이도
 # import 되도록 지연 처리한다 — 개발 PC 에서 로직만 테스트할 수 있게.
@@ -253,6 +254,9 @@ def translate_command(cmd, now):
     if command in ("SET_PATROL_ROUTE", "SET_MODE", "NAVIGATE"):
         return "navigation", cmd
 
+    if command == "EVENT_SAVED":
+        return "event_saved", cmd
+
     return "bad", f"알 수 없는 command: {cmd.get('command')}"
 
 
@@ -277,6 +281,31 @@ class Bridge:
         self.video_seq = 0
         self.mapping = None
         self.drive_file = str(getattr(args, "manual_drive_file", DRIVE_FILE))
+        self.event_clips = None
+        if bool(getattr(args, "event_clip_enabled", True)):
+            self.event_clips = EventClipPipeline(
+                robot_id=self.robot_id,
+                state_file=getattr(
+                    args,
+                    "event_clip_state_file",
+                    "~/.local/state/bbiyong/event_clips.json",
+                ),
+                manifest_file=getattr(
+                    args,
+                    "blackbox_manifest_file",
+                    "~/.local/state/bbiyong/blackbox/manifest.json",
+                ),
+                uploader=MultipartVideoUploader(
+                    upload_url=getattr(
+                        args,
+                        "video_upload_url",
+                        "https://i15e101.p.ssafy.io/api/videos/upload",
+                    ),
+                    token=os.environ.get("BBIYONG_ROBOT_UPLOAD_TOKEN"),
+                    timeout=getattr(args, "video_upload_timeout", 60.0),
+                ),
+                clip_wait_seconds=getattr(args, "event_clip_wait_seconds", 20.0),
+            )
         legacy_navigation = bool(getattr(args, "navigation_enabled", False))
         self.backend_control_enabled = bool(
             getattr(args, "backend_control_enabled", legacy_navigation)
@@ -391,6 +420,14 @@ class Bridge:
             if emit:
                 await ws.send(json.dumps(
                     build_fire(self.robot_id, confidence, nav_live, now)))
+                if self.event_clips:
+                    try:
+                        self.event_clips.note_event("FIRE", now)
+                    except OSError as exc:
+                        print(
+                            f"[event-clip] failed to persist fire timestamp: {exc}",
+                            flush=True,
+                        )
                 print(f"[fire] EVENT_FIRE 송신 conf={confidence:.2f}", flush=True)
 
             await asyncio.sleep(self.telemetry_period)
@@ -482,6 +519,20 @@ class Bridge:
                 accepted, reason = await self.navigation.handle_command(rest[0])
                 outcome = "accepted" if accepted else "rejected"
                 print(f"[recv] navigation {outcome}: {reason}", flush=True)
+            elif action == "event_saved":
+                if not self.event_clips:
+                    print("[recv] EVENT_SAVED ignored: event clips are disabled", flush=True)
+                    continue
+                try:
+                    created = self.event_clips.enqueue(rest[0], time.time())
+                except (OSError, ValueError) as exc:
+                    print(f"[recv] EVENT_SAVED rejected: {exc}", flush=True)
+                    continue
+                outcome = "queued" if created else "duplicate"
+                print(
+                    f"[recv] EVENT_SAVED {outcome}: eventId={rest[0].get('eventId')}",
+                    flush=True,
+                )
             else:
                 print(f"[recv] {action}: {rest[0]}", flush=True)
 
@@ -497,7 +548,7 @@ class Bridge:
                 self.sender(ws), self.video_sender(ws), self.receiver(ws)
             )
 
-    async def run(self):
+    async def _connection_loop(self):
         """끊기면 백오프 후 재접속. 로봇은 계속 켜져 있고 서버가 재기동될 수 있다."""
         backoff = 1.0
         while True:
@@ -509,6 +560,12 @@ class Bridge:
                 print("[conn] 연결 종료 — 재접속", flush=True)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30.0)  # 최대 30초까지 지수 백오프
+
+    async def run(self):
+        if self.event_clips:
+            await asyncio.gather(self._connection_loop(), self.event_clips.run())
+        else:
+            await self._connection_loop()
 
 
 def _env_flag(name, default=False):
@@ -534,6 +591,43 @@ def parse_args(argv=None):
     )
     parser.add_argument("--telemetry-hz", type=float, default=2.0)
     parser.add_argument("--video-hz", type=float, default=4.0)
+    parser.add_argument(
+        "--event-clip-enabled",
+        action=argparse.BooleanOptionalAction,
+        default=_env_flag("ORINCAR_EVENT_CLIP_ENABLED", True),
+        help="durably upload blackbox clips after EVENT_SAVED",
+    )
+    parser.add_argument(
+        "--video-upload-url",
+        default=os.environ.get(
+            "ORINCAR_VIDEO_UPLOAD_URL",
+            "https://i15e101.p.ssafy.io/api/videos/upload",
+        ),
+    )
+    parser.add_argument(
+        "--video-upload-timeout",
+        type=float,
+        default=float(os.environ.get("ORINCAR_VIDEO_UPLOAD_TIMEOUT", "60")),
+    )
+    parser.add_argument(
+        "--event-clip-state-file",
+        default=os.environ.get(
+            "ORINCAR_EVENT_CLIP_STATE_FILE",
+            "~/.local/state/bbiyong/event_clips.json",
+        ),
+    )
+    parser.add_argument(
+        "--blackbox-manifest-file",
+        default=os.environ.get(
+            "ORINCAR_BLACKBOX_MANIFEST",
+            "~/.local/state/bbiyong/blackbox/manifest.json",
+        ),
+    )
+    parser.add_argument(
+        "--event-clip-wait-seconds",
+        type=float,
+        default=float(os.environ.get("ORINCAR_EVENT_CLIP_WAIT_SECONDS", "20")),
+    )
     parser.add_argument(
         "--mapping-enabled",
         action="store_true",

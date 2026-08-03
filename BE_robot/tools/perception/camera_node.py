@@ -38,6 +38,8 @@ from std_msgs.msg import Bool, Float32MultiArray, String
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from blackbox_recorder import BlackboxRecorder
+
 CAM_W, CAM_H = 640, 480
 DET_HZ = 4.0                 # 화재 탐지 주기 (불은 빨리 안 움직인다)
 FLOOR_HZ = 10.0              # 바닥 판정은 주행 안전이라 더 자주
@@ -81,7 +83,7 @@ L_WEIGHT = 0.25                         # 밝기 가중 (햇빛·그림자 둔�
 
 
 class CameraNode(Node):
-    def __init__(self, engine_path, coco_path, use_trt):
+    def __init__(self, engine_path, coco_path, use_trt, blackbox=None):
         super().__init__("camera_node")
         self.cap = cv2.VideoCapture(0)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_W)
@@ -126,6 +128,7 @@ class CameraNode(Node):
         #    그때마다 로봇이 멈춰 순찰이 성립하지 않았다.
         #    불은 연속으로 보이지만 오탐은 깜빡인다. 이 차이를 쓴다.
         self.fire_hist = []
+        self.blackbox = blackbox
         self.create_timer(1.0 / FLOOR_HZ, self.tick_floor)
         self.create_timer(1.0 / DET_HZ, self.tick_detect)
         self.create_timer(1.0 / DET_HZ, self.tick_coco)
@@ -143,6 +146,16 @@ class CameraNode(Node):
         if not self.grab():
             return
         img = self.frame
+        if self.blackbox is not None:
+            try:
+                self.blackbox.add_frame(img)
+            except Exception as exc:
+                self.get_logger().error(f"blackbox recorder disabled: {exc}")
+                try:
+                    self.blackbox.close()
+                except Exception:
+                    pass
+                self.blackbox = None
         h, w = img.shape[:2]
 
         # 🔴 영상이 쓸모없으면 **"트임"이 아니라 "모름"을 내야 한다.**
@@ -363,6 +376,11 @@ class CameraNode(Node):
             pass
 
     def close(self):
+        if self.blackbox is not None:
+            try:
+                self.blackbox.close()
+            except Exception:
+                pass
         self.cap.release()
         for m in (self.model, self.coco):
             if m is not None and hasattr(m, "close"):
@@ -387,10 +405,50 @@ def main():
     ap.add_argument("--coco",
                     default="/home/e101/models/yolo11n_coco.fp16.engine")
     ap.add_argument("--no-trt", action="store_true")
+    ap.add_argument(
+        "--no-blackbox",
+        action="store_true",
+        default=os.environ.get("ORINCAR_BLACKBOX_ENABLED", "1") == "0",
+    )
+    ap.add_argument(
+        "--blackbox-dir",
+        default=os.environ.get(
+            "ORINCAR_BLACKBOX_DIR", "~/.local/state/bbiyong/blackbox"
+        ),
+    )
+    ap.add_argument(
+        "--blackbox-manifest",
+        default=os.environ.get(
+            "ORINCAR_BLACKBOX_MANIFEST",
+            "~/.local/state/bbiyong/blackbox/manifest.json",
+        ),
+    )
+    ap.add_argument(
+        "--blackbox-segment-seconds",
+        type=float,
+        default=float(os.environ.get("ORINCAR_BLACKBOX_SEGMENT_SECONDS", "10")),
+    )
+    ap.add_argument(
+        "--blackbox-retention-seconds",
+        type=float,
+        default=float(os.environ.get("ORINCAR_BLACKBOX_RETENTION_SECONDS", "300")),
+    )
     a = ap.parse_args()
 
     rclpy.init()
-    node = CameraNode(a.engine, a.coco, not a.no_trt)
+    blackbox = None
+    if not a.no_blackbox:
+        blackbox = BlackboxRecorder(
+            cv2,
+            a.blackbox_dir,
+            a.blackbox_manifest,
+            width=CAM_W,
+            height=CAM_H,
+            fps=FLOOR_HZ,
+            segment_seconds=a.blackbox_segment_seconds,
+            retention_seconds=a.blackbox_retention_seconds,
+        )
+    node = CameraNode(a.engine, a.coco, not a.no_trt, blackbox=blackbox)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
