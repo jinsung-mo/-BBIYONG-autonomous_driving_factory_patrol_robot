@@ -3,6 +3,7 @@ package com.bbiyong.server.map.service;
 import com.bbiyong.server.map.domain.MapArtifact;
 import com.bbiyong.server.map.dto.MapResponses;
 import com.bbiyong.server.map.floorplan.FloorPlanRenderer;
+import com.bbiyong.server.map.floorplan.RawMapImageDecoder;
 import com.bbiyong.server.map.repository.MapArtifactRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
@@ -13,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +32,7 @@ public class FloorPlanService {
     private final MapStorageService storageService;
     private final MapService mapService;
     private final FloorPlanRenderer renderer = new FloorPlanRenderer();
+    private final RawMapImageDecoder rawDecoder = new RawMapImageDecoder();
 
     public FloorPlanService(MapArtifactRepository mapRepository,
                             MapStorageService storageService,
@@ -56,12 +57,14 @@ public class FloorPlanService {
 
         try {
             Resource resource = storageService.load(raw.getFilePath());
-            BufferedImage src;
-            try (InputStream in = resource.getInputStream()) {
-                src = ImageIO.read(in);
-            }
-            if (src == null) {
-                log.warn("도면 생성 스킵: 원본 맵 이미지를 읽을 수 없습니다 (id={}).", raw.getId());
+            // 원본 PGM(및 구형 PNG/JPEG)을 OpenCV로 디코딩. ImageIO 는 PGM 에서 null 을 반환함. (S15P11E101-616)
+            BufferedImage src = rawDecoder.decode(resource);
+
+            // 디코딩 치수가 업로드 메타(widthPx/heightPx)와 다르면 손상 가능성 → 도면 미생성(깨진 도면 활성 방지).
+            if (raw.getWidthPx() != null && raw.getHeightPx() != null
+                    && (src.getWidth() != raw.getWidthPx() || src.getHeight() != raw.getHeightPx())) {
+                log.warn("도면 생성 스킵: RAW 맵 치수가 메타데이터와 불일치 (id={}, decoded={}x{}, meta={}x{}).",
+                        raw.getId(), src.getWidth(), src.getHeight(), raw.getWidthPx(), raw.getHeightPx());
                 return Optional.empty();
             }
 
