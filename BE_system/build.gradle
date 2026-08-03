@@ -44,7 +44,7 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
 	// API 문서 자동화 (SpringDoc OpenAPI 3.0)
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
 
 	// 구조화된 로깅 (Logback JSON Encoder)
 	implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
@@ -64,4 +64,15 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+
+	// Jenkins CI 환경 변수를 테스트 프로세스로 전달
+	if (System.getenv('TEST_DATASOURCE_URL')) {
+		environment 'TEST_DATASOURCE_URL', System.getenv('TEST_DATASOURCE_URL')
+	}
+	if (System.getenv('TEST_DATASOURCE_USERNAME')) {
+		environment 'TEST_DATASOURCE_USERNAME', System.getenv('TEST_DATASOURCE_USERNAME')
+	}
+	if (System.getenv('TEST_DATASOURCE_PASSWORD')) {
+		environment 'TEST_DATASOURCE_PASSWORD', System.getenv('TEST_DATASOURCE_PASSWORD')
+	}
 }
