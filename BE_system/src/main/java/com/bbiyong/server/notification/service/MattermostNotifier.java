@@ -31,8 +31,7 @@ public class MattermostNotifier {
      */
     public void sendEventNotification(NotificationSetting setting, EventLog event) {
         if (setting.getMattermostWebhookUrl() == null || setting.getMattermostWebhookUrl().isBlank()) {
-            log.warn("Mattermost 웹훅 URL이 설정되지 않음: userId={}", setting.getUserId());
-            return;
+            throw new IllegalStateException("Mattermost 웹훅 URL이 설정되지 않았습니다.");
         }
 
         try {
@@ -52,11 +51,12 @@ public class MattermostNotifier {
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("Mattermost 알림 전송 성공: userId={}, eventId={}", setting.getUserId(), event.getEventId());
             } else {
-                log.error("Mattermost 알림 전송 실패: status={}, userId={}", response.getStatusCode(), setting.getUserId());
+                throw new IllegalStateException("Mattermost 응답이 성공이 아닙니다: " + response.getStatusCode());
             }
         } catch (Exception e) {
             log.error("Mattermost 알림 전송 중 오류 발생: userId={}, eventId={}, error={}",
                     setting.getUserId(), event.getEventId(), e.getMessage(), e);
+            throw new IllegalStateException("Mattermost 알림 전송 실패", e);
         }
     }
 

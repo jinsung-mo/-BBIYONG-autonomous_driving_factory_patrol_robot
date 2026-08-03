@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -32,8 +31,7 @@ public class NotificationController {
     @GetMapping("/settings")
     @Operation(summary = "알림 설정 조회", description = "현재 사용자의 알림 설정을 조회합니다. 설정이 없으면 기본값을 반환합니다.")
     public ResponseEntity<NotificationSettingResponse> getSettings(
-            @AuthenticationPrincipal UserDetails userDetails) {
-        String userId = userDetails.getUsername();
+            @AuthenticationPrincipal String userId) {
         NotificationSettingResponse response = notificationService.getSettings(userId);
         return ResponseEntity.ok(response);
     }
@@ -44,9 +42,8 @@ public class NotificationController {
     @PutMapping("/settings")
     @Operation(summary = "알림 설정 업데이트", description = "Mattermost 알림 설정을 업데이트합니다. 부분 업데이트 가능합니다.")
     public ResponseEntity<NotificationSettingResponse> updateSettings(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal String userId,
             @RequestBody NotificationSettingRequest request) {
-        String userId = userDetails.getUsername();
         NotificationSettingResponse response = notificationService.updateSettings(userId, request);
         return ResponseEntity.ok(response);
     }

@@ -27,11 +27,17 @@ public class NotificationSettingResponse {
                 .id(setting.getId())
                 .userId(setting.getUserId())
                 .mattermostEnabled(setting.getMattermostEnabled())
-                .mattermostWebhookUrl(setting.getMattermostWebhookUrl())
+                .mattermostWebhookUrl(mask(setting.getMattermostWebhookUrl()))
                 .mattermostChannel(setting.getMattermostChannel())
                 .minSeverity(setting.getMinSeverity())
                 .createdAt(setting.getCreatedAt())
                 .updatedAt(setting.getUpdatedAt())
                 .build();
+    }
+
+    private static String mask(String url) {
+        if (url == null || url.isBlank()) return null;
+        int slash = url.lastIndexOf('/');
+        return slash < 0 ? "****" : url.substring(0, slash + 1) + "****";
     }
 }
