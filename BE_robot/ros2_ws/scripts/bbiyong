@@ -75,6 +75,9 @@ Usage:
   bbiyong explore <map-output-prefix> [nav2.yaml]
   bbiyong patrol <route.json>
   bbiyong navigate-goal <x> <y> [yaw]
+  bbiyong commission-check <mapping|scouting> [--json]
+  bbiyong collect-evidence <stage> <output-dir> [--mode mapping|scouting] [--release-manifest file] [--log file]
+  bbiyong release <stage|verify|activate|rollback> ...
   bbiyong arm-autonomy
   bbiyong stop
   bbiyong status
@@ -207,6 +210,18 @@ case "$command" in
     require_lifecycle_active /bt_navigator
     exec ros2 run bbiyong_bringup navigate_goal --ros-args \
       -p x:="$1" -p y:="$2" -p yaw:="${3:-0.0}"
+    ;;
+  commission-check)
+    [[ $# -ge 1 ]] || die "commission-check requires mapping or scouting"
+    exec ros2 run bbiyong_bringup commission_check "$@"
+    ;;
+  collect-evidence)
+    [[ $# -ge 2 ]] || die "collect-evidence requires stage and output directory"
+    exec ros2 run bbiyong_bringup collect_evidence "$@"
+    ;;
+  release)
+    [[ $# -ge 1 ]] || die "release requires stage, verify, activate, or rollback"
+    exec ros2 run bbiyong_bringup release_manager "$@"
     ;;
   arm-autonomy)
     [[ $# -eq 0 ]] || die "arm-autonomy takes no arguments"

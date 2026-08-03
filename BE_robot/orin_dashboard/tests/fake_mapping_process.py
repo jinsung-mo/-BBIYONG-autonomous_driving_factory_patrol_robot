@@ -24,5 +24,7 @@ elif mode == "sleep":
     time.sleep(60)
 elif mode == "fail":
     raise SystemExit(3)
+elif mode == "success":
+    pass
 else:
     raise SystemExit(f"unknown fake mode: {mode}")

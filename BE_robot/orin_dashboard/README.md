@@ -58,13 +58,23 @@ Mapping stays disabled unless `--mapping-enabled` is passed (or
 `BBIYONG_ROBOT_UPLOAD_TOKEN` in its process environment; never put that token in
 this repository or in `run_bridge.sh`.
 
-Autonomous navigation stays disabled unless `--navigation-enabled` is passed
-(or `ORINCAR_NAVIGATION_ENABLED=1` is set). The built-in subprocess templates
+Backend motion stays disabled by default. Deployments should enable capabilities
+in guarded stages with `ORINCAR_BACKEND_CONTROL_ENABLED`,
+`ORINCAR_ONE_OFF_NAVIGATION_ENABLED`, `ORINCAR_PATROL_ENABLED`, and
+`ORINCAR_PATROL_LOOP_ENABLED`. `ORINCAR_NAVIGATION_ENABLED=1` and the
+`--navigation-enabled` CLI flag remain compatibility master switches. ESTOP is
+always handled even when every capability is disabled. The built-in subprocess templates
 run `patrol_route` and `navigate_goal`; deployments may override them with
 `ORINCAR_PATROL_COMMAND` and `ORINCAR_NAVIGATE_COMMAND`. Supported placeholders
-are `{route_file}` for patrol and `{x}`, `{y}`, `{yaw}` for point navigation.
+are `{route_file}` and `{patrol_loop}` for patrol and `{x}`, `{y}`, `{yaw}` for
+point navigation. Custom patrol templates that omit `{patrol_loop}` remain
+single-pass because the patrol node defaults to looping disabled.
 Both commands still reject motion unless a fresh saved-map scouting session is
 ready.
+
+See `ros2_ws/docs/PHASE7_COMMISSIONING.md` for the staged gate matrix,
+hash-verified release/rollback procedure, evidence capture, and attended
+hardware validation checklist.
 
 The patrol client is available as `ros2 run bbiyong_bringup
 patrol_route --ros-args -p route_file:=<route.json>` (or `bbiyong patrol

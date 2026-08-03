@@ -25,6 +25,7 @@ class NavigationMissionWiringTest(unittest.TestCase):
         self.assertIn("missed_waypoints", source)
         self.assertIn("self.loop_route", source)
         self.assertIn("signal.SIGTERM", source)
+        self.assertIn('declare_parameter("loop_route", False)', source)
         self.assertIn("scoutingSessionId", (
             ROOT.parents[2] / "orin_dashboard" / "navigation_orchestrator.py"
         ).read_text())

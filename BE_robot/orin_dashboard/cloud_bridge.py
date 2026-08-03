@@ -32,6 +32,7 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 import time
 
 from mapping_orchestrator import MappingOrchestrator
@@ -275,7 +276,19 @@ class Bridge:
         self.estop = "RELEASED"
         self.video_seq = 0
         self.mapping = None
-        self.navigation_enabled = getattr(args, "navigation_enabled", False)
+        legacy_navigation = bool(getattr(args, "navigation_enabled", False))
+        self.backend_control_enabled = bool(
+            getattr(args, "backend_control_enabled", legacy_navigation)
+        )
+        self.one_off_navigation_enabled = bool(
+            getattr(args, "one_off_navigation_enabled", legacy_navigation)
+        )
+        self.patrol_enabled = bool(
+            getattr(args, "patrol_enabled", legacy_navigation)
+        )
+        self.patrol_loop_enabled = bool(
+            getattr(args, "patrol_loop_enabled", legacy_navigation)
+        )
         if getattr(args, "mapping_enabled", False):
             self.mapping = MappingOrchestrator(
                 robot_id=self.robot_id,
@@ -311,6 +324,7 @@ class Bridge:
             ),
             patrol_command=getattr(args, "patrol_command", None),
             navigate_command=getattr(args, "navigate_command", None),
+            patrol_loop=self.patrol_loop_enabled,
             process_stop_timeout=getattr(args, "navigation_stop_timeout", 3.0),
         )
         if self.mapping:
@@ -318,6 +332,21 @@ class Bridge:
 
     def _mapping_active(self):
         return self.mapping is not None and self.mapping.state in self.mapping.ACTIVE
+
+    def _navigation_capability(self, command):
+        kind = str(command.get("command") or "").upper()
+        if kind == "NAVIGATE":
+            return self.one_off_navigation_enabled, "one-off navigation"
+        if kind == "SET_PATROL_ROUTE":
+            return self.patrol_enabled, "patrol"
+        if kind == "SET_MODE":
+            mode = str(command.get("mode") or "").strip().lower()
+            if mode == "disabled":
+                return True, "safety disable"
+            if mode == "autonomy":
+                return self.patrol_enabled, "patrol"
+            return self.backend_control_enabled, "backend control"
+        return False, "navigation"
 
     async def sender(self, ws):
         """텔레메트리 + 화재 경보 루프."""
@@ -385,6 +414,13 @@ class Bridge:
             action, *rest = translate_command(cmd, time.time())
             if action == "drive":
                 payload, estop = rest
+                command = (cmd.get("command") or "").upper()
+                if command == "DRIVE" and not self.backend_control_enabled:
+                    print(
+                        "[recv] DRIVE rejected: backend control is disabled",
+                        flush=True,
+                    )
+                    continue
                 try:
                     atomic_write(DRIVE_FILE, payload)
                     self.estop = estop
@@ -392,7 +428,7 @@ class Bridge:
                           flush=True)
                 except OSError as exc:
                     print(f"[recv] drive.json 쓰기 실패: {exc}", flush=True)
-                if (cmd.get("command") or "").upper() == "ESTOP":
+                if command == "ESTOP":
                     _, reason = await self.navigation.emergency_stop()
                     print(f"[recv] navigation ESTOP: {reason}", flush=True)
                     if self._mapping_active():
@@ -418,9 +454,10 @@ class Bridge:
                 outcome = "accepted" if accepted else "rejected"
                 print(f"[recv] mapping {outcome}: {reason}", flush=True)
             elif action == "navigation":
-                if not self.navigation_enabled:
+                enabled, capability = self._navigation_capability(rest[0])
+                if not enabled:
                     print(
-                        "[recv] navigation command rejected: navigation is disabled",
+                        f"[recv] navigation command rejected: {capability} is disabled",
                         flush=True,
                     )
                     continue
@@ -469,7 +506,14 @@ class Bridge:
             backoff = min(backoff * 2, 30.0)  # 최대 30초까지 지수 백오프
 
 
-def parse_args():
+def _env_flag(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return bool(default)
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="OrinCar → 관제 서버 WS 브리지")
     parser.add_argument(
         "--server-url",
@@ -523,11 +567,36 @@ def parse_args():
         type=float,
         default=float(os.environ.get("ORINCAR_MAPPING_UPLOAD_TIMEOUT", "20")),
     )
+    legacy_navigation = _env_flag("ORINCAR_NAVIGATION_ENABLED")
     parser.add_argument(
         "--navigation-enabled",
         action="store_true",
-        default=os.environ.get("ORINCAR_NAVIGATION_ENABLED", "0") == "1",
-        help="enable SET_PATROL_ROUTE/SET_MODE/NAVIGATE orchestration",
+        default=legacy_navigation,
+        help="legacy master switch enabling every backend navigation capability",
+    )
+    parser.add_argument(
+        "--backend-control-enabled",
+        action="store_true",
+        default=_env_flag("ORINCAR_BACKEND_CONTROL_ENABLED", legacy_navigation),
+        help="enable backend DRIVE and SET_MODE manual commands",
+    )
+    parser.add_argument(
+        "--one-off-navigation-enabled",
+        action="store_true",
+        default=_env_flag("ORINCAR_ONE_OFF_NAVIGATION_ENABLED", legacy_navigation),
+        help="enable backend NAVIGATE goals",
+    )
+    parser.add_argument(
+        "--patrol-enabled",
+        action="store_true",
+        default=_env_flag("ORINCAR_PATROL_ENABLED", legacy_navigation),
+        help="enable SET_PATROL_ROUTE and SET_MODE autonomy",
+    )
+    parser.add_argument(
+        "--patrol-loop-enabled",
+        action="store_true",
+        default=_env_flag("ORINCAR_PATROL_LOOP_ENABLED", legacy_navigation),
+        help="allow patrol clients to repeat routes while autonomy remains active",
     )
     parser.add_argument(
         "--patrol-route-file",
@@ -560,9 +629,9 @@ def parse_args():
         default=os.environ.get(
             "ORINCAR_PATROL_COMMAND",
             "ros2 run bbiyong_bringup patrol_route --ros-args "
-            "-p route_file:={route_file}",
+            "-p route_file:={route_file} -p loop_route:={patrol_loop}",
         ),
-        help="optional command template using {route_file}",
+        help="optional command template using {route_file} and {patrol_loop}",
     )
     parser.add_argument(
         "--navigate-command",
@@ -578,7 +647,20 @@ def parse_args():
         type=float,
         default=float(os.environ.get("ORINCAR_NAVIGATION_STOP_TIMEOUT", "3")),
     )
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+    # An explicit legacy CLI switch retains its historical all-capabilities
+    # behavior. Environment-specific capability values remain independently
+    # configurable when the legacy switch is not passed on the command line.
+    if argv is not None:
+        legacy_cli = "--navigation-enabled" in argv
+    else:
+        legacy_cli = "--navigation-enabled" in sys.argv[1:]
+    if legacy_cli:
+        args.backend_control_enabled = True
+        args.one_off_navigation_enabled = True
+        args.patrol_enabled = True
+        args.patrol_loop_enabled = True
+    return args
 
 
 def main():

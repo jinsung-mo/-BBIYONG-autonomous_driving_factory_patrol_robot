@@ -96,6 +96,7 @@ class NavigationOrchestrator:
         scouting_state_file=None,
         patrol_command=None,
         navigate_command=None,
+        patrol_loop=False,
         process_stop_timeout=3.0,
         termination_success_codes=(0, 130),
     ):
@@ -108,6 +109,7 @@ class NavigationOrchestrator:
         )
         self.patrol_command = patrol_command
         self.navigate_command = navigate_command
+        self.patrol_loop = bool(patrol_loop)
         self.process_stop_timeout = float(process_stop_timeout)
         self.termination_success_codes = set(termination_success_codes)
         self.state = NavigationState.DISABLED
@@ -316,7 +318,10 @@ class NavigationOrchestrator:
         try:
             await self._start_process_locked(
                 self.patrol_command,
-                {"route_file": str(self.route_file)},
+                {
+                    "route_file": str(self.route_file),
+                    "patrol_loop": "true" if self.patrol_loop else "false",
+                },
                 NavigationState.PATROLLING,
             )
         except Exception as exc:

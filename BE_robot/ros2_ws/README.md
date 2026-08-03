@@ -238,6 +238,12 @@ one `/map` publisher, one `map -> odom` authority, active lifecycle nodes, a
 valid `/amcl_pose`, and `map -> base_link` TF are present. It never kills
 `slam_toolbox`; the operator must stop that mapping session first.
 
+Before hardware rollout, follow
+[`docs/PHASE7_COMMISSIONING.md`](docs/PHASE7_COMMISSIONING.md). The `bbiyong
+commission-check`, `bbiyong collect-evidence`, and `bbiyong release` commands
+support non-moving checks, redacted evidence, immutable deployment, and atomic
+rollback. Actual movement remains an attended post-rebuild activity.
+
 With the scouting runtime healthy, `bbiyong patrol <route.json>` starts the short-lived
 `FollowWaypoints` mission. It never publishes velocity directly. It waits for
 `autonomy`, pauses/cancels on manual, disabled, e-stop, or SIGTERM, retains the

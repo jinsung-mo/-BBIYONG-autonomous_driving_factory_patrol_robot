@@ -146,6 +146,16 @@ class NavigationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(orchestrator.state, NavigationState.ESTOPPED)
         self.assertTrue(self.control()["estop"])
 
+    async def test_patrol_loop_placeholder_is_explicitly_disabled_by_default(self):
+        orchestrator = self.make(
+            patrol=fake_command("success", "{patrol_loop}")
+        )
+        await orchestrator.set_route([{"seq": 0, "x": 0, "y": 0}])
+        accepted, _ = await orchestrator.set_mode("autonomy")
+        self.assertTrue(accepted)
+        await orchestrator._monitor_task
+        self.assertEqual(orchestrator.state, NavigationState.AUTONOMY_IDLE)
+
     async def test_route_replacement_cancels_and_restarts_active_patrol(self):
         orchestrator = self.make(patrol=fake_command("sleep", "{route_file}"))
         await orchestrator.set_route([{"seq": 0, "x": 0, "y": 0}])
