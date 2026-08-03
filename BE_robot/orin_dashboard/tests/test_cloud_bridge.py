@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -18,10 +19,39 @@ from cloud_bridge import (
     parse_args,
     select_mission_status,
     translate_command,
+    websocket_auth_kwargs,
 )
 from h264_protocol import H264Packet, encode_packet
 
 NOW = 1000.0
+
+
+class WebSocketAuthTest(unittest.TestCase):
+    def test_modern_websockets_uses_additional_headers(self):
+        def connect(uri, *, additional_headers=None):
+            return None
+
+        with patch.dict(os.environ, {"ORINCAR_ROBOT_TOKEN": "robot-secret"}, clear=True):
+            kwargs = websocket_auth_kwargs(connect)
+        self.assertEqual(
+            kwargs, {"additional_headers": {"X-Robot-Token": "robot-secret"}}
+        )
+
+    def test_legacy_websockets_uses_extra_headers_and_upload_token(self):
+        def connect(uri, *, extra_headers=None):
+            return None
+
+        with patch.dict(
+            os.environ, {"BBIYONG_ROBOT_UPLOAD_TOKEN": "shared-secret"}, clear=True
+        ):
+            kwargs = websocket_auth_kwargs(connect)
+        self.assertEqual(
+            kwargs, {"extra_headers": {"X-Robot-Token": "shared-secret"}}
+        )
+
+    def test_missing_token_keeps_development_connection_compatible(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(websocket_auth_kwargs(lambda: None), {})
 
 
 class FreshnessTest(unittest.TestCase):

@@ -30,6 +30,7 @@
 
 import argparse
 import asyncio
+import inspect
 import json
 import os
 from pathlib import Path
@@ -47,6 +48,25 @@ try:
     import websockets
 except ImportError:
     websockets = None
+
+
+def websocket_auth_kwargs(connect_callable=None):
+    """Return the robot-token header for old and new websockets releases."""
+    token = (
+        os.environ.get("ORINCAR_ROBOT_TOKEN")
+        or os.environ.get("BBIYONG_ROBOT_UPLOAD_TOKEN")
+    )
+    if not token:
+        return {}
+    connect_callable = connect_callable or websockets.connect
+    try:
+        parameters = inspect.signature(connect_callable).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    header_argument = (
+        "additional_headers" if "additional_headers" in parameters else "extra_headers"
+    )
+    return {header_argument: {"X-Robot-Token": token}}
 
 # ─────────────────────────────────────────────────────────────
 # 파일 경로 — server.py / nav_bridge.py / camera_node.py 와 동일 기본값
@@ -591,7 +611,11 @@ class Bridge:
     async def run_once(self):
         # ping_interval/timeout 으로 죽은 연결을 빨리 감지하고 latency 를 얻는다.
         async with websockets.connect(
-            self.url, ping_interval=10, ping_timeout=10, max_size=None
+            self.url,
+            ping_interval=10,
+            ping_timeout=10,
+            max_size=None,
+            **websocket_auth_kwargs(),
         ) as ws:
             await ws.send(json.dumps(build_register(self.robot_id)))
             print(f"[conn] 접속·REGISTER 완료 → {self.url} (robot_id={self.robot_id})",

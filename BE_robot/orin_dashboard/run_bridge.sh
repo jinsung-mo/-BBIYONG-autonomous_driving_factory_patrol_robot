@@ -25,6 +25,11 @@ export ORINCAR_H264_VIDEO_HZ="${ORINCAR_H264_VIDEO_HZ:-15}"
 export ORINCAR_H264_BITRATE_KBPS="${ORINCAR_H264_BITRATE_KBPS:-1200}"
 export ORINCAR_H264_KEY_INTERVAL="${ORINCAR_H264_KEY_INTERVAL:-30}"
 
+if [[ -z "${ORINCAR_ROBOT_TOKEN:-${BBIYONG_ROBOT_UPLOAD_TOKEN:-}}" ]]; then
+    echo "warning: no robot token configured; a protected /ws/robot will return HTTP 401" >&2
+    echo "set BBIYONG_ROBOT_UPLOAD_TOKEN in ~/.config/bbiyong/cloud-bridge.env" >&2
+fi
+
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
     echo "error: Python executable not found: $PYTHON_BIN" >&2
     exit 1
