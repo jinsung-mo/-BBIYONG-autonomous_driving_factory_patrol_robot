@@ -81,6 +81,17 @@ DRIVE_STATUS_FILE = os.environ.get(
 H264_FRAME_FILE = os.environ.get(
     "ORINCAR_H264_FRAME_FILE", "/dev/shm/orincar_h264.bin"
 )
+# 🆕 클라우드 링크 하트비트 (S15P11E101-657) — 이 브리지가 **쓰기만** 한다.
+#    로컬 대시보드(server.py)가 "지금 클라우드 제어가 살아 있는가"를 판정할 유일한 근거다.
+#    🔑 왜 `alive` 불린이 아니라 **타임스탬프**인가: 프로세스가 죽으면 스스로
+#       `alive=false` 를 쓸 기회가 없다. 마지막 `true` 가 파일에 영원히 남고,
+#       읽는 쪽은 계속 "살아 있다"고 믿어 **로봇이 영구히 잠긴다.**
+#       타임스탬프는 아무도 갱신하지 않으면 스스로 낡으므로 읽는 쪽이 알아챈다.
+#       (server.py 의 조종 리스 DRIVE_LEASE_S, cmd_mux 의 명령 타임아웃,
+#        펌웨어 데드맨과 같은 패턴 — "살아 있음을 계속 증명해야 한다")
+CLOUD_LINK_FILE = os.environ.get(
+    "ORINCAR_CLOUD_LINK_FILE", "/tmp/orincar_cloud_link.json"
+)
 
 # 신선도 판정 — 이보다 오래된 파일은 "지금 값이 아님" 으로 보고 해당 필드를 비운다.
 # 오래된 pose 를 살아있는 값처럼 올리면 관제 지도에 로봇이 유령처럼 남는다.
@@ -292,6 +303,27 @@ def atomic_write(path, payload):
     os.replace(tmp, path)
 
 
+def write_cloud_link(alive, robot_id, latency_ms=None):
+    """클라우드 링크 상태를 파일로 남긴다 (S15P11E101-657).
+
+    읽는 쪽 계약: `ts` 가 얼마나 낡았는지로 판정한다. `alive` 는 보조 신호일 뿐
+    이며, **파일이 없거나 `ts` 가 낡았으면 링크가 죽은 것으로 본다.**
+    브리지가 크래시하면 `alive=False` 를 남길 기회조차 없기 때문이다.
+
+    기록 실패는 치명적이지 않다 — 파일이 낡으면 읽는 쪽이 알아서 로컬로 넘어간다.
+    그래서 예외를 삼키되 조용히 넘기지는 않는다(로그는 남긴다).
+    """
+    try:
+        atomic_write(CLOUD_LINK_FILE, {
+            "alive": bool(alive),
+            "ts": time.time(),
+            "robot_id": robot_id,
+            "latency_ms": round(latency_ms, 1) if latency_ms is not None else None,
+        })
+    except OSError as exc:
+        print(f"[link] 하트비트 기록 실패: {exc}", flush=True)
+
+
 # ─────────────────────────────────────────────────────────────
 # 비동기 I/O — 위의 순수 함수들을 소켓·파일·타이머에 연결한다
 # ─────────────────────────────────────────────────────────────
@@ -459,6 +491,10 @@ class Bridge:
                             flush=True,
                         )
                 print(f"[fire] EVENT_FIRE 송신 conf={confidence:.2f}", flush=True)
+
+            # 🆕 하트비트 — 텔레메트리를 **실제로 보낸 뒤에** 찍는다.
+            #    send 가 실패하면 여기 못 오고 파일이 낡는다 = 링크 단절로 읽힌다.
+            write_cloud_link(True, self.robot_id, latency_ms)
 
             await asyncio.sleep(self.telemetry_period)
 
@@ -637,6 +673,10 @@ class Bridge:
                 print(f"[conn] 끊김: {exc} — {backoff:.0f}s 후 재접속", flush=True)
             else:
                 print("[conn] 연결 종료 — 재접속", flush=True)
+            # 🆕 끊긴 것을 **알 수 있을 때는** 즉시 알린다. 타임스탬프 만료를
+            #    기다리는 것보다 빠르다. 단 이건 가속 장치일 뿐이고, 정본 판정은
+            #    여전히 `ts` 신선도다(프로세스가 죽으면 여기 못 온다).
+            write_cloud_link(False, self.robot_id)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30.0)  # 최대 30초까지 지수 백오프
 
