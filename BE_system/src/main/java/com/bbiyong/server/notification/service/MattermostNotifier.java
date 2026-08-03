@@ -74,10 +74,8 @@ public class MattermostNotifier {
     private Map<String, Object> buildPayload(NotificationSetting setting, EventLog event) {
         Map<String, Object> payload = new HashMap<>();
 
-        // 채널 설정
-        if (setting.getMattermostChannel() != null && !setting.getMattermostChannel().isBlank()) {
-            payload.put("channel", setting.getMattermostChannel());
-        }
+        // 웹훅 생성 시 지정한 기본 채널만 쓴다. 과거 사용자 설정에 남은 채널 값은
+        // 다른 채널에 권한이 없을 때 404를 만들 수 있으므로 전송 페이로드에 넣지 않는다.
 
         // 사용자명
         payload.put("username", "BBIYONG 관제 시스템");
