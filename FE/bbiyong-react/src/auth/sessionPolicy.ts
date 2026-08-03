@@ -19,8 +19,17 @@ const minutes = (v: any, fallback: any) => {
 }
 
 // 운영 중 조정될 값이라 상수 한 곳에 모으고 env 로도 덮을 수 있게 둔다.
+//
+// 유휴가 지나면 로그아웃하지 않고 조작을 잠근다(S15P11E101-653).
+// 최소 1시간은 열어 둔다 — 관제자가 자리에서 화면만 지켜보는 시간이 길고, 그때마다
+// 비밀번호를 다시 치게 만들면 잠금이 로그아웃과 다를 바 없어진다.
+// 자리를 확실히 뜰 때는 사용자 메뉴의 '조작 잠그기'로 즉시 잠글 수 있다.
 export const IDLE_MS = minutes(env.VITE_SESSION_IDLE_MIN, 60)
 export const WARN_MS = minutes(env.VITE_SESSION_WARN_MIN, 2)
+
+// 잠긴 채로 이 시간을 넘기면 그때는 실제로 로그아웃한다.
+// 근무는 교대된다 — 앞 근무자의 세션이 다음 날까지 남아 있으면 안 된다.
+export const LOCK_MAX_MS = minutes(env.VITE_SESSION_LOCK_MAX_MIN, 12 * 60)
 
 // access 만료 이 시간 전부터는 선제로 갱신한다(S15P11E101-613).
 // 만료된 뒤 401 을 받고 나서 갱신해도 되지만, 그러면 그 요청 한 번이 왕복 두 번이 된다.
@@ -51,6 +60,9 @@ const secs = (v: any, fallback: number) => {
 export const STOMP_AUTH_GRACE_MS = secs(env.VITE_STOMP_AUTH_GRACE_SEC, 20)
 
 export const ACTIVITY_KEY = 'bbiyong.activity'
+// 잠금 시작 시각. 새로고침해도 풀리면 안 되므로 저장소에 남긴다 —
+// 새로고침 한 번으로 열리는 잠금은 잠금이 아니다. 탭 사이에서도 같은 상태를 본다.
+export const LOCK_KEY = 'bbiyong.lockedAt'
 
 /**
  * 자동 로그아웃 사유. as const 로 리터럴을 고정해 오타·미정의 값을 빌드에서 막는다.
@@ -63,7 +75,8 @@ export const REASON = {
 } as const
 
 export const REASON_TEXT: Record<string, string> = {
-  [REASON.IDLE]: '장시간 활동이 없어 자동으로 로그아웃되었습니다. 다시 로그인해 주세요.',
+  // 유휴만으로는 더 이상 로그아웃하지 않는다(잠금으로 바뀜). 잠긴 채 상한을 넘겼을 때만 쓴다.
+  [REASON.IDLE]: '장시간 잠금 상태가 이어져 로그아웃되었습니다. 다시 로그인해 주세요.',
   [REASON.EXPIRED]: '세션이 만료되어 로그아웃되었습니다. 다시 로그인해 주세요.',
 }
 
@@ -80,6 +93,22 @@ export function writeActivity(at: number = Date.now()) {
 }
 
 export function clearActivity() { localStorage.removeItem(ACTIVITY_KEY) }
+
+/** 잠긴 시각(ms). 잠겨 있지 않으면 0 */
+export function readLockedAt() {
+  const raw = Number(localStorage.getItem(LOCK_KEY))
+  return Number.isFinite(raw) && raw > 0 ? raw : 0
+}
+export function writeLockedAt(at: number = Date.now()) {
+  localStorage.setItem(LOCK_KEY, String(at))
+  return at
+}
+export function clearLockedAt() { localStorage.removeItem(LOCK_KEY) }
+
+// 잠긴 채로 얼마나 더 버틸 수 있는가(ms). 잠겨 있지 않으면 Infinity.
+export function lockRemaining(now: number = Date.now(), at = readLockedAt()) {
+  return at ? at + LOCK_MAX_MS - now : Infinity
+}
 
 // 남은 시간(ms). 활동 기록이 없으면 방금 활동한 것으로 본다 — 기록 이전의 세션을
 // 곧바로 만료시키면 배포 직후 로그인해 있던 사용자가 이유 없이 튕긴다.

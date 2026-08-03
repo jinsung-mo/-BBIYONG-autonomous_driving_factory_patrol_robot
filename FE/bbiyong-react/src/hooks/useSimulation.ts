@@ -81,6 +81,8 @@ export default function useSimulation() {
     setExternalPose: (pose: any) => sim.setExternalPose(pose),
     setExternalFrame: (ch: any, img: any, maxTemp: any) => sim.setExternalFrame(ch, img, maxTemp),
     clearExternalFrames: () => sim.clearExternalFrames(),
+    // 시뮬 이벤트 로그에 한 줄 남긴다 — 조작 잠금·해제 기록에 쓴다(S15P11E101-653)
+    pushLog: (kind: any, msg: any) => sim.pushLog(kind, msg),
   }), [sim])
 
   return { status, clock, activeKeys, refs, actions, theme, toggleTheme }

@@ -31,7 +31,7 @@ export default function ControlPanel() {
     driveMode: seg, setDriveMode: setSeg,
   } = useLive()
   const { settings } = useSettings()
-  const { isAdmin } = useAuth()
+  const { canOperate } = useAuth()
   // 순찰 지점은 설정 탭에서 등록/편집한다(S15P11E101-475). 관제에서는 실행만 한다.
   const points = settings.points
   const [gotoId, setGotoId] = useState(points[0]?.id)
@@ -67,8 +67,10 @@ export default function ControlPanel() {
   // 화면만 반응하고 로봇은 그대로라 조작자가 오해한다(S15P11E101-462).
   const driveDown = enabled && isDown(capOf(telemetry, CAP_KEYS.drive))
   // 뷰어는 조작할 수 없다 — 버튼을 숨기지 않고 회색으로 남겨 '권한 없음'이 드러나게 한다.
-  const ctlOff = (enabled && !connected) || driveDown || !isAdmin
+  // 잠금(S15P11E101-653)도 같은 자리에 얹는다. canOperate = 권한 있음 && 잠기지 않음.
+  const ctlOff = (enabled && !connected) || driveDown || !canOperate
   // 안전 예외: 긴급 정지는 권한과 무관하게 로그인만 하면 누구나 즉시 누를 수 있어야 한다.
+  // 잠금에도 열어 둔다 — 무인 시간대에 화재가 났는데 비밀번호부터 치게 만들 수는 없다.
   const estopOff = (enabled && !connected) || driveDown
 
   // E-STOP 체결 여부 — live는 텔레메트리가, mock은 시뮬 상태가 정답이다.

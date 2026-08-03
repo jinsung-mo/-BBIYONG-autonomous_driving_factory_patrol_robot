@@ -53,7 +53,7 @@ export default function LogList({ variant = 'elog' }) {
   const { enabled, connected, alerts, dismissAlert } = useLive()
   // 조회 대상 로봇·설비 목록은 편성 컨텍스트가 갖고 있다(S15P11E101-591)
   const { selected, robots, multi, equipments, equipmentName, reload: reloadFleet } = useFleet()
-  const { accessToken, isAdmin } = useAuth()
+  const { accessToken, isAdmin, canOperate } = useAuth()
 
   const [filter, setFilter] = useState('ALL')
   // 심각도·해결 상태·기간 — 서버가 쿼리로 받아 거른다(관제센터 확장)
@@ -251,7 +251,7 @@ export default function LogList({ variant = 'elog' }) {
             {/* 해결됨도 표시한다 — 미해결만 보던 중에 처리하면 이 태그가 바뀌는 것으로 결과를 안다 */}
             {log.status === 'RESOLVED' && <span className="tag done">{EVENT_STATUS_LABEL.RESOLVED}</span>}
             {/* 해결 처리는 되돌릴 수 있고 삭제는 되돌릴 수 없다 — 서로 다른 모양으로 둔다 */}
-            {isAdmin && log.eventId != null && (
+            {canOperate && log.eventId != null && (
               <button type="button" className="logfix"
                 title={log.status === 'RESOLVED' ? '미해결로 되돌리기' : '이 이벤트를 해결 처리'}
                 aria-label={`${log.status === 'RESOLVED' ? '미해결로 되돌리기' : '해결 처리'} — ${log.msg}`}
@@ -261,13 +261,13 @@ export default function LogList({ variant = 'elog' }) {
               </button>
             )}
             {/* 이력 행은 서버에서 삭제, 실시간 행은 화면에서만 닫는다(서버 id 가 없다) */}
-            {isAdmin && log.eventId != null && (
+            {canOperate && log.eventId != null && (
               <button type="button" className="logdel" title="이 이벤트를 서버에서 삭제"
                 aria-label={`이벤트 삭제 — ${log.msg}`} onClick={() => { setDelErr(null); setPending(log) }}>
                 삭제
               </button>
             )}
-            {isAdmin && log.live && (
+            {canOperate && log.live && (
               <button type="button" className="logdel" title="화면에서 닫기 (서버 기록은 남습니다)"
                 aria-label={`경보 닫기 — ${log.msg}`} onClick={() => dismissAlert(log.id)}>
                 닫기

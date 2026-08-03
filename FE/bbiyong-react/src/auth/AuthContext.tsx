@@ -10,7 +10,8 @@ import {
 import { phoneDigits } from './signupRules.ts'
 import { isAdminRole, ROLE_VIEWER } from './roles.ts'
 import {
-  REASON, WARN_MS, refreshMargin, absoluteRemaining, idleRemaining, readActivity, writeActivity,
+  REASON, refreshMargin, absoluteRemaining, idleRemaining, readActivity, writeActivity,
+  readLockedAt, writeLockedAt, clearLockedAt, lockRemaining,
 } from './sessionPolicy.ts'
 
 // mock 모드: localStorage 목 저장소로 인증 흐름만 재현.
@@ -70,8 +71,10 @@ function restoreUser(): SessionState {
     clearSession()
     return { ...empty, reason: REASON.EXPIRED }
   }
-  if (idleRemaining() <= 0) {
-    clearSession()
+  // 유휴로는 더 이상 세션을 끊지 않는다(S15P11E101-653) — 조작만 잠근다.
+  // 다만 잠긴 채로 상한(12시간)을 넘겼으면 그때는 되살리지 않는다. 근무가 교대됐다는 뜻이다.
+  if (lockRemaining() <= 0) {
+    clearSession(); clearLockedAt()
     return { ...empty, reason: REASON.IDLE }
   }
 
@@ -96,7 +99,17 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
   // restoreUser() 는 만료를 발견하면 세션을 지운다 — 두 번 부르면 두 번째는 사유를 잃는다.
   // 최초 판정 결과를 그대로 쓴다.
   const [logoutReason, setLogoutReason] = useState(state.reason ?? null)
-  const [warning, setWarning] = useState(false)   // 만료 임박 경고 표시 여부
+  // 조작 잠금(S15P11E101-653). 세션은 살아 있고 화면도 그대로 흐른다 — 조작만 막힌다.
+  //
+  // 시작 상태를 저장소에서 읽어 새로고침을 견딘다. 이때 '이미 잠겼는가' 만 보면
+  // 빈틈이 생긴다 — 브라우저를 닫아 둔 사이 유휴가 지났다면, 다시 열었을 때 아직 잠금
+  // 기록이 없어 판정 주기(5초)가 돌 때까지 조작이 열린 채로 있다. 그 5초가 자리를 비운
+  // 사이 누가 만지는 것을 막자는 취지를 그대로 무너뜨린다. 첫 렌더에서 함께 판정한다.
+  const [locked, setLocked] = useState(() => {
+    if (readLockedAt() > 0) return true
+    if (readActivity() && idleRemaining() <= 0) { writeLockedAt(); return true }
+    return false
+  })
 
   const login = async (email: any, password: any) => {
     writeActivity()
@@ -104,7 +117,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
       const u = findUser(email)
       if (!u || u.password !== password) throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
       setSession(u.email)
-      setLogoutReason(null); setWarning(false)
+      setLogoutReason(null); unlockState()
       setState({ user: publicUser(u), accessToken: null, refreshToken: null, expiresAt: null, reason: null })
       return
     }
@@ -114,7 +127,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     const exp = expiryFrom(res)
     const rt = res.refreshToken ?? null
     setAuth({ accessToken: res.accessToken, user: nu, refreshToken: rt, expiresAt: exp, expiresIn: res.expiresIn ?? null })
-    setLogoutReason(null); setWarning(false)
+    setLogoutReason(null); unlockState()
     setState({ user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp, reason: null })
   }
 
@@ -131,7 +144,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     if (getDataSource() !== 'live') {
       const u = addUser({ email, password, name, phone: tel, birth, gender })
       setSession(u.email)
-      setLogoutReason(null); setWarning(false)
+      setLogoutReason(null); unlockState()
       setState({ user: publicUser(u), accessToken: null, refreshToken: null, expiresAt: null, reason: null })
       return
     }
@@ -142,34 +155,39 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     const exp = expiryFrom(res)
     const rt = res?.refreshToken ?? null
     setAuth({ accessToken: res.accessToken, user: nu, refreshToken: rt, expiresAt: exp, expiresIn: res?.expiresIn ?? null })
-    setLogoutReason(null); setWarning(false)
+    setLogoutReason(null); unlockState()
     setState({ user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp, reason: null })
   }
 
+  // 잠금 해제 — 저장소와 화면 상태를 함께 되돌린다. 활동 시각도 지금으로 밀어
+  // 풀자마자 다시 잠기지 않게 한다.
+  const unlockState = useCallback(() => {
+    clearLockedAt()
+    lastWrite.current = Date.now()
+    writeActivity(lastWrite.current)
+    setLocked(false)
+  }, [])
+
   // reason 이 MANUAL 이면 안내를 띄우지 않는다 — 스스로 누른 로그아웃이다.
   const logout = useCallback((reason: import('../live/contracts').LogoutReason = REASON.MANUAL) => {
-    clearSession(); clearToken()
-    setWarning(false)
+    clearSession(); clearToken(); clearLockedAt()
+    setLocked(false)
     setLogoutReason(reason === REASON.MANUAL ? null : reason)
     setState({ user: null, accessToken: null, refreshToken: null, expiresAt: null, reason: null })
   }, [])
 
   // 활동 기록. 사용자 조작과 이벤트 로그 신규 기록이 모두 여기로 들어온다.
   // localStorage 쓰기라 잦은 호출(마우스 이동)을 대비해 10초 간격으로 눌러 준다.
+  //
+  // 잠긴 뒤에는 활동을 기록하지 않는다. 잠긴 화면 위에서 마우스를 움직이거나 이벤트가
+  // 기록됐다고 잠금이 풀리면, 비밀번호를 묻는 의미가 없다.
   const lastWrite = useRef(0)
   const touch = useCallback(() => {
+    if (readLockedAt() > 0) return
     const now = Date.now()
     if (now - lastWrite.current < 10_000) return
     lastWrite.current = now
     writeActivity(now)
-    setWarning(false)
-  }, [])
-
-  // 경고 상태에서 '계속 사용' — 조금 전에 눌렀더라도 즉시 기록한다
-  const extendSession = useCallback(() => {
-    lastWrite.current = Date.now()
-    writeActivity(lastWrite.current)
-    setWarning(false)
   }, [])
 
   // 갱신 결과를 저장소·상태에 함께 반영한다(S15P11E101-613).
@@ -232,9 +250,18 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
         return
       }
       if (!refreshToken && untilExpiry <= 0) { logout(REASON.EXPIRED); return }
-      const left = idleRemaining()
-      if (left <= 0) { logout(REASON.IDLE); return }
-      setWarning(left <= WARN_MS)
+
+      // 유휴가 지나면 끊지 않고 잠근다(S15P11E101-653). 화면은 계속 흐르고 STOMP 도 살아 있다 —
+      // 무인 시간대에 감시가 끊기면 안 되고, 로그아웃되면 긴급 정지조차 누를 수 없다.
+      const lockedAt = readLockedAt()
+      if (!lockedAt) {
+        if (idleRemaining() <= 0) { writeLockedAt(); setLocked(true) }
+        return
+      }
+      // 다른 탭에서 잠갔으면 이 탭도 따라 잠근다
+      setLocked(true)
+      // 잠긴 채로 상한을 넘기면 그때는 실제로 로그아웃한다 — 근무는 교대된다.
+      if (lockRemaining() <= 0) logout(REASON.IDLE)
     }
     tick()
     const id = setInterval(tick, 5000)
@@ -263,6 +290,35 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     await refreshAccessToken()
   }, [accessToken])
 
+  // 잠금 해제 — 비밀번호를 다시 확인한다(S15P11E101-653).
+  //
+  // 실서버에는 '비밀번호만 확인' 엔드포인트가 없어 로그인 API 를 다시 부른다. 성공하면
+  // 새 토큰까지 함께 오므로 세션이 오히려 신선해진다. 다만 그 사이 강등됐을 수 있으니
+  // 응답의 role 을 그대로 반영한다 — 잠금을 푸는 김에 권한도 최신으로 맞춘다.
+  //
+  // 실패해도 잠금을 유지할 뿐 로그아웃하지 않는다. 야간 무인 시간대에 오타 한 번으로
+  // 관제 화면이 로그인 폼이 되면 그게 더 위험하다. 시도 횟수도 제한하지 않는다.
+  const unlock = useCallback(async (password: string) => {
+    const email = user?.email
+    if (!email) throw new Error('로그인 정보가 없습니다.')
+    if (getDataSource() !== 'live') {
+      const u = findUser(email)
+      if (!u || u.password !== password) throw new Error('비밀번호가 올바르지 않습니다.')
+      unlockState()
+      return
+    }
+    const res = await loginRequest(email, password)
+    if (!res?.accessToken) throw new Error('비밀번호가 올바르지 않습니다.')
+    const exp = expiryFrom(res)
+    const rt = res.refreshToken ?? getAuth()?.refreshToken ?? null
+    const nu = { ...user, role: rawRole(res.role) }
+    setAuth({ accessToken: res.accessToken, user: nu, refreshToken: rt, expiresAt: exp, expiresIn: res.expiresIn ?? null })
+    setState((prev) => (prev.user
+      ? { ...prev, user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp }
+      : prev))
+    unlockState()
+  }, [user, unlockState])
+
   // 아래 두 기능은 실서버 API 계약에 없다 — mock 모드에서만 동작한다.
   const changePassword = (current: any, next: any) => {
     if (accessToken) throw new Error('실서버 모드에서는 비밀번호 변경을 지원하지 않습니다.')
@@ -281,8 +337,14 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     <AuthContext.Provider value={{
       user, accessToken, login, signup, logout, changePassword, updateProfile,
       isAdmin: isAdminRole(user?.role),
+      // 조작해도 되는가 — 권한이 있고, 잠기지 않았을 때만(S15P11E101-653).
+      // isAdmin 은 '무엇을 보여 줄지'에, canOperate 는 '무엇을 누르게 할지'에 쓴다.
+      // 잠겼다고 탭이나 패널을 감추지 않는다 — 감시 화면은 계속 보여야 한다.
+      canOperate: isAdminRole(user?.role) && !locked,
       syncRole,
-      touch, warning, extendSession, logoutReason, clearLogoutReason: () => setLogoutReason(null),
+      touch, logoutReason, clearLogoutReason: () => setLogoutReason(null),
+      // 조작 잠금(S15P11E101-653). 뷰어는 애초에 조작 권한이 없으므로 잠금과 무관하다.
+      locked, unlock, lockNow: () => { writeLockedAt(); setLocked(true) },
     }}>
       {children}
     </AuthContext.Provider>
