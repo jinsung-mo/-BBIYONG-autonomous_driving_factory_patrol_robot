@@ -39,8 +39,10 @@ from std_msgs.msg import Bool, Float32MultiArray, String
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from blackbox_recorder import BlackboxRecorder
+from h264_encoder import H264Encoder
 
 CAM_W, CAM_H = 640, 480
+H264_HZ = 15.0
 DET_HZ = 4.0                 # 화재 탐지 주기 (불은 빨리 안 움직인다)
 FLOOR_HZ = 10.0              # 바닥 판정은 주행 안전이라 더 자주
 OUT_FILE = "/tmp/orincar_cam.json"
@@ -83,11 +85,13 @@ L_WEIGHT = 0.25                         # 밝기 가중 (햇빛·그림자 둔�
 
 
 class CameraNode(Node):
-    def __init__(self, engine_path, coco_path, use_trt, blackbox=None):
+    def __init__(self, engine_path, coco_path, use_trt, blackbox=None,
+                 h264=None, camera_mode="legacy"):
         super().__init__("camera_node")
         self.cap = cv2.VideoCapture(0)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_W)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_H)
+        self.cap.set(cv2.CAP_PROP_FPS, H264_HZ if camera_mode == "h264" else FLOOR_HZ)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not self.cap.isOpened():
             raise RuntimeError("카메라를 열 수 없다 (/dev/video0)")
@@ -101,8 +105,10 @@ class CameraNode(Node):
             #    직접 부른다 — "Orin 에 패키지를 추가하지 않는다"는 결정에 따른
             #    설계다(infer_trt.py 헤더 참조). 그 결정을 존중한다.
             from infer_trt import TrtModel
-            for attr, path, label in (("model", engine_path, "화재"),
-                                      ("coco", coco_path, "COCO")):
+            models = [("model", engine_path, "화재")]
+            if camera_mode == "legacy":
+                models.append(("coco", coco_path, "COCO"))
+            for attr, path, label in models:
                 try:
                     m = TrtModel(path)
                     setattr(self, attr, m)
@@ -129,9 +135,14 @@ class CameraNode(Node):
         #    불은 연속으로 보이지만 오탐은 깜빡인다. 이 차이를 쓴다.
         self.fire_hist = []
         self.blackbox = blackbox
-        self.create_timer(1.0 / FLOOR_HZ, self.tick_floor)
+        self.h264 = h264
+        self.camera_mode = camera_mode
+        if self.camera_mode == "h264":
+            self.create_timer(1.0 / H264_HZ, self.tick_h264_capture)
+        else:
+            self.create_timer(1.0 / FLOOR_HZ, self.tick_floor)
+            self.create_timer(1.0 / DET_HZ, self.tick_coco)
         self.create_timer(1.0 / DET_HZ, self.tick_detect)
-        self.create_timer(1.0 / DET_HZ, self.tick_coco)
         self.create_timer(0.5, self.dump)
 
     # ── 프레임 ──────────────────────────────────────────────────
@@ -140,6 +151,24 @@ class CameraNode(Node):
         if ok:
             self.frame = f
         return ok
+
+    def tick_h264_capture(self):
+        """15 FPS capture path: one x264 encode, no COCO or floor processing."""
+        if not self.grab():
+            return
+        if self.h264 is None:
+            return
+        try:
+            self.h264.add_frame(self.frame)
+        except Exception as exc:
+            self.get_logger().error(
+                f"H.264 encoder disabled; JPEG preview remains available: {exc}"
+            )
+            try:
+                self.h264.close()
+            except Exception:
+                pass
+            self.h264 = None
 
     # ── 낮은 장애물 (고전 CV) ───────────────────────────────────
     def tick_floor(self):
@@ -376,6 +405,11 @@ class CameraNode(Node):
             pass
 
     def close(self):
+        if self.h264 is not None:
+            try:
+                self.h264.close()
+            except Exception:
+                pass
         if self.blackbox is not None:
             try:
                 self.blackbox.close()
@@ -406,6 +440,12 @@ def main():
                     default="/home/e101/models/yolo11n_coco.fp16.engine")
     ap.add_argument("--no-trt", action="store_true")
     ap.add_argument(
+        "--camera-mode",
+        choices=("legacy", "h264"),
+        default=os.environ.get("ORINCAR_CAMERA_MODE", "legacy"),
+        help="legacy keeps floor/COCO/MP4V; h264 uses 640x480@15 without floor/COCO",
+    )
+    ap.add_argument(
         "--no-blackbox",
         action="store_true",
         default=os.environ.get("ORINCAR_BLACKBOX_ENABLED", "1") == "0",
@@ -433,11 +473,46 @@ def main():
         type=float,
         default=float(os.environ.get("ORINCAR_BLACKBOX_RETENTION_SECONDS", "300")),
     )
+    ap.add_argument(
+        "--h264-frame-file",
+        default=os.environ.get("ORINCAR_H264_FRAME_FILE", "/dev/shm/orincar_h264.bin"),
+    )
+    ap.add_argument(
+        "--h264-bitrate-kbps",
+        type=int,
+        default=int(os.environ.get("ORINCAR_H264_BITRATE_KBPS", "1200")),
+    )
+    ap.add_argument(
+        "--h264-key-interval",
+        type=int,
+        default=int(os.environ.get("ORINCAR_H264_KEY_INTERVAL", "30")),
+    )
     a = ap.parse_args()
 
     rclpy.init()
     blackbox = None
-    if not a.no_blackbox:
+    h264 = None
+    effective_mode = a.camera_mode
+    if effective_mode == "h264":
+        try:
+            h264 = H264Encoder(
+                robot_id=os.environ.get("ORINCAR_ROBOT_ID", "orinka_01"),
+                frame_file=a.h264_frame_file,
+                directory=os.path.join(os.path.expanduser(a.blackbox_dir), "h264"),
+                manifest_path=a.blackbox_manifest,
+                width=CAM_W,
+                height=CAM_H,
+                fps=int(H264_HZ),
+                bitrate_kbps=a.h264_bitrate_kbps,
+                key_interval=a.h264_key_interval,
+                segment_seconds=a.blackbox_segment_seconds,
+                retention_seconds=a.blackbox_retention_seconds,
+                record_enabled=not a.no_blackbox,
+            )
+        except Exception as exc:
+            print(f"[camera] H.264 unavailable, falling back to legacy mode: {exc}", flush=True)
+            effective_mode = "legacy"
+    if effective_mode == "legacy" and not a.no_blackbox:
         blackbox = BlackboxRecorder(
             cv2,
             a.blackbox_dir,
@@ -448,7 +523,14 @@ def main():
             segment_seconds=a.blackbox_segment_seconds,
             retention_seconds=a.blackbox_retention_seconds,
         )
-    node = CameraNode(a.engine, a.coco, not a.no_trt, blackbox=blackbox)
+    node = CameraNode(
+        a.engine,
+        a.coco,
+        not a.no_trt,
+        blackbox=blackbox,
+        h264=h264,
+        camera_mode=effective_mode,
+    )
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

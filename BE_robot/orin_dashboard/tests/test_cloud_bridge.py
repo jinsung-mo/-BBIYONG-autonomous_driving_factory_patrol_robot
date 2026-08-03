@@ -1,7 +1,9 @@
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
+import time
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -17,9 +19,39 @@ from cloud_bridge import (
     parse_args,
     select_mission_status,
     translate_command,
+    websocket_auth_kwargs,
 )
+from h264_protocol import H264Packet, encode_packet
 
 NOW = 1000.0
+
+
+class WebSocketAuthTest(unittest.TestCase):
+    def test_modern_websockets_uses_additional_headers(self):
+        def connect(uri, *, additional_headers=None):
+            return None
+
+        with patch.dict(os.environ, {"ORINCAR_ROBOT_TOKEN": "robot-secret"}, clear=True):
+            kwargs = websocket_auth_kwargs(connect)
+        self.assertEqual(
+            kwargs, {"additional_headers": {"X-Robot-Token": "robot-secret"}}
+        )
+
+    def test_legacy_websockets_uses_extra_headers_and_upload_token(self):
+        def connect(uri, *, extra_headers=None):
+            return None
+
+        with patch.dict(
+            os.environ, {"BBIYONG_ROBOT_UPLOAD_TOKEN": "shared-secret"}, clear=True
+        ):
+            kwargs = websocket_auth_kwargs(connect)
+        self.assertEqual(
+            kwargs, {"extra_headers": {"X-Robot-Token": "shared-secret"}}
+        )
+
+    def test_missing_token_keeps_development_connection_compatible(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(websocket_auth_kwargs(lambda: None), {})
 
 
 class FreshnessTest(unittest.TestCase):
@@ -98,6 +130,64 @@ class VideoTest(unittest.TestCase):
     def test_none_without_jpeg(self):
         self.assertIsNone(build_video("r1", {}, 1))
         self.assertIsNone(build_video("r1", None, 1))
+
+
+class BinaryVideoTest(unittest.IsolatedAsyncioTestCase):
+    class Ws:
+        def __init__(self):
+            self.sent = []
+
+        async def send(self, payload):
+            self.sent.append(payload)
+            raise RuntimeError("stop after first send")
+
+    def packet(self, keyframe=True):
+        return encode_packet(H264Packet(
+            robot_id="orinka_01",
+            stream_id=5,
+            sequence=1,
+            timestamp_ms=int(time.time() * 1000),
+            width=640,
+            height=480,
+            fps=15,
+            keyframe=keyframe,
+            codec_config=keyframe,
+            payload=b"\x00\x00\x00\x01\x65",
+        ))
+
+    def bridge(self, root):
+        values = dict(
+            server_url="ws://unused", robot_id="orinka_01",
+            telemetry_hz=2.0, video_hz=4.0, h264_video_hz=15.0,
+            video_transport="h264", h264_frame_file=root / "frame.bin",
+            event_clip_enabled=False, mapping_enabled=False,
+            navigation_enabled=False, manual_drive_file=root / "drive.json",
+            patrol_route_file=root / "route.json",
+            navigation_state_file=root / "navigation.json",
+            control_state_file=root / "control.json", scouting_state_file=None,
+            patrol_command=None, navigate_command=None, navigation_stop_timeout=1.0,
+        )
+        return Bridge(SimpleNamespace(**values))
+
+    async def test_binary_sender_forwards_valid_keyframe_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = self.packet(keyframe=True)
+            (root / "frame.bin").write_bytes(payload)
+            ws = self.Ws()
+            with self.assertRaisesRegex(RuntimeError, "stop after first"):
+                await self.bridge(root).h264_video_sender(ws)
+            self.assertEqual(ws.sent, [payload])
+
+    async def test_binary_sender_waits_for_keyframe_after_reconnect(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "frame.bin").write_bytes(self.packet(keyframe=False))
+            ws = self.Ws()
+            with patch("cloud_bridge.asyncio.sleep", AsyncMock(side_effect=RuntimeError("stop"))):
+                with self.assertRaisesRegex(RuntimeError, "stop"):
+                    await self.bridge(root).h264_video_sender(ws)
+            self.assertEqual(ws.sent, [])
 
 
 class FireConfirmerTest(unittest.TestCase):
