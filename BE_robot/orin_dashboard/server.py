@@ -86,6 +86,14 @@ STATE = {
 # WS/SSE 송신이 그 안에서 json.dumps 까지 한다. 10Hz 조종 POST 가 그 뒤에
 # 줄을 서면 데드맨(0.4s)이 걸릴 수 있다 — 조종 경로는 짧은 전용 락으로 분리한다.
 CTL_LOCK = threading.Lock()
+
+# 🆕 [2026-08-04] 수동주행 무장 (S15P11E101-662).
+#    control_state_bridge 가 읽는 파일이다. 이 파일의 mode·estop 이
+#    cmd_mux 의 게이트를 결정한다 — 여기가 안 열리면 /cmd_vel/manual 로
+#    무엇을 보내든 0 으로 막힌다.
+CONTROL_FILE = os.environ.get("ORINCAR_CONTROL_FILE", "/tmp/bbiyong_control.json")
+CONTROL_MODES = ("disabled", "manual", "autonomy")   # control_state_bridge 와 동일
+CONTROL_WATCH_S = 0.5      # 재잠금 감시 주기
 DRIVE_LEASE_S = 2.0        # 🔴 리스 2초. 조종은 10Hz(100ms)로 갱신되므로
                            #    2초면 20발을 연속으로 놓쳐야 만료된다 = 오탈취 없음.
                            #    동시에 브라우저를 그냥 닫아도 2초 뒤 자동 반납된다
@@ -125,6 +133,9 @@ CTL = {
     "drive_owner": None,       # 조종권을 쥔 client_id (원문)
     "owner_expires": 0.0,      # epoch 초. 이 시각이 지나면 자동 반납
     "owner_since": 0.0,        # 현재 소유자가 잡기 시작한 시각
+    # 🆕 이 대시보드가 무장시켰는가 (S15P11E101-662).
+    #    재잠금 감시자가 **우리가 건 것만** 되돌리게 하는 표식이다.
+    "armed_by_local": False,
 }
 # esp32_base_node.py 가 1Hz 로 읽어 펌웨어에 `kx<pct>` 로 밀어 넣는다.
 # 프로세스 간 결합을 파일 하나로 끝낸다 — server.py 는 ROS 를 모른다.
@@ -235,6 +246,81 @@ def _read_servo_state(now=None):
     return angle, age
 
 
+def _read_control():
+    """control 파일을 읽는다. 없거나 깨졌으면 None.
+
+    🔴 이 파일이 없는 것은 정상이다 — /tmp 는 재부팅하면 사라지고,
+       control_state_bridge 는 파일이 없으면 기본값(disabled+estop)을 유지한다.
+       그래서 없을 때는 "잠긴 상태"로 해석해야 한다.
+    """
+    try:
+        with open(CONTROL_FILE, encoding="utf-8") as f:
+            payload = json.load(f)
+        return {
+            "seq": int(payload["seq"]),
+            "mode": str(payload["mode"]).strip().lower(),
+            "estop": bool(payload["estop"]),
+            "updatedAt": float(payload["updatedAt"]),
+        }
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+
+
+def _write_control(mode, estop):
+    """control 파일을 원자적으로 교체한다. 쓴 내용을 돌려준다.
+
+    🔑 seq 는 **파일을 읽어 +1** 한다. 이 파일에는 쓰는 주체가 셋 있고
+       (control_state_bridge · control_command CLI · navigation_orchestrator)
+       각자 자기 카운터를 들고 있어서, 자기 카운터를 쓰면 역전이 난다.
+    🔑 임시파일 이름에 PID 를 넣는다. 같은 이름을 쓰면 두 프로세스가 동시에
+       쓸 때 한쪽의 os.replace 가 ENOENT 로 실패한다 — cloud_bridge 에서
+       2026-08-04 에 실제로 발생했다.
+    """
+    current = _read_control()
+    payload = {
+        "schemaVersion": 1,
+        "seq": (current["seq"] + 1) if current else 1,
+        "mode": mode,
+        "estop": bool(estop),
+        "updatedAt": time.time(),
+    }
+    tmp = f"{CONTROL_FILE}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
+    os.replace(tmp, CONTROL_FILE)
+    return payload
+
+
+def _control_relock_watchdog():
+    """조종 리스가 끊기면 무장을 되돌린다.
+
+    브라우저를 그냥 닫거나 와이파이가 끊겨도 로봇이 무장된 채 남지 않게 한다.
+    조종 명령 자체는 cmd_mux 의 0.5초 타임아웃으로 이미 멈추지만, **모드까지**
+    되돌려야 다음 명령이 실수로 통과하지 않는다.
+
+    🔴 우리가 무장한 경우에만 되돌린다(CTL["armed_by_local"]). 다른 주체가
+       설정한 상태를 이 감시자가 멋대로 덮으면 그게 더 위험하다.
+    """
+    while True:
+        time.sleep(CONTROL_WATCH_S)
+        with CTL_LOCK:
+            if not CTL.get("armed_by_local"):
+                continue
+            owner, exp = CTL["drive_owner"], CTL["owner_expires"]
+            alive = owner is not None and time.time() < exp
+            if alive:
+                continue
+            CTL["armed_by_local"] = False       # 락 안에서 먼저 내린다
+        try:
+            _write_control("disabled", True)
+            print("[control] 조종 리스 만료 — 자동 재잠금(disabled+estop)", flush=True)
+        except OSError as exc:
+            # 🔴 조용히 넘기면 안 된다. 재잠금 실패는 로봇이 무장된 채
+            #    남았을 수 있다는 뜻이다.
+            print(f"[control] 🔴 자동 재잠금 실패 — 무장 상태일 수 있다: {exc}",
+                  flush=True)
+
+
 def _lease_acquire(client_id, now=None):
     """조종 리스를 잡거나 갱신한다. **선점(preempt) 불가.**
 
@@ -272,6 +358,10 @@ def _ctl_snapshot(client_id=None, now=None):
     # 🔑 파일 읽기는 CTL_LOCK **밖**에서 한다. 이 락은 10Hz 조종 POST 가
     #    지나가는 길이라 디스크 I/O 를 넣으면 데드맨(0.4s)에 영향을 줄 수 있다.
     ack_pct, ack_age = _read_power_ack(now)
+    # 🆕 현재 무장 상태. 새 엔드포인트를 만들지 않고 여기 얹는다 —
+    #    index.html 이 이미 0.5초마다 GET /api/drive 를 폴링한다.
+    #    파일이 없으면 잠긴 것으로 본다(control_state_bridge 의 기본값과 같다).
+    control = _read_control()
     # 🆕 카메라 틸트 되읽기. 드라이브 화면이 이미 GET /api/drive 를 0.5초마다
     #    폴링하고 있어(index.html tick()), 새 엔드포인트 없이 여기 얹는 편이
     #    출력 제한 되읽기와 같은 지연 특성을 그대로 물려받는다.
@@ -295,6 +385,11 @@ def _ctl_snapshot(client_id=None, now=None):
         servo_fresh = servo_age is not None and servo_age <= SERVO_STATE_FRESH_S
         return {
             "power_pct": commanded,
+            # 🆕 무장 상태 (S15P11E101-662)
+            "control_mode": control["mode"] if control else "disabled",
+            "control_estop": control["estop"] if control else True,
+            "control_armed": bool(
+                control and control["mode"] != "disabled" and not control["estop"]),
             # 🆕 아래 3개는 **추가**다. 기존 필드는 하나도 건드리지 않았다 —
             #    index.html 이 t,v,w,reason,v_max,w_max,stop_m,patrol_running,
             #    power_pct,owner,owner_active,owner_since,lease_left,you_own 를 쓴다.
@@ -893,7 +988,7 @@ class Handler(BaseHTTPRequestHandler):
            검사를 다시 한다. 방어를 한 곳에 몰지 않는다.
         """
         path = self.path.split("?")[0]
-        if path not in ("/api/drive", "/api/power", "/api/servo"):
+        if path not in ("/api/drive", "/api/power", "/api/servo", "/api/control"):
             return self._json({"error": "not found"}, 404)
         try:
             n = int(self.headers.get("Content-Length", 0))
@@ -911,6 +1006,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/power":
             return self._power(client_id, data)
             
+        if path == "/api/control":
+            return self._control(client_id, data)
         if path == "/api/servo":
             return self._servo(client_id, data)
 
@@ -943,6 +1040,43 @@ class Handler(BaseHTTPRequestHandler):
         #    받아들인 명령을 `accepted` 안에 넣어 **상태가 아님을 형태로 표시**한다.
         return self._json({"ok": True, "accepted": cmd,
                            "note": "상태는 GET /api/drive 로 따로 조회할 것",
+                           **_ctl_snapshot(client_id)})
+
+    def _control(self, client_id, data):
+        """수동주행 무장/해제. **제어권자만.**
+
+        조종·출력과 같은 리스를 쓴다. 별도 리스를 두면 "무장은 A, 조종은 B"
+        같은 상태가 생겨, A 가 무장을 푸는 순간 B 의 주행이 끊긴다.
+        """
+        granted, deny = _lease_acquire(client_id)
+        if not granted:
+            return self._json(deny, 409)
+
+        mode = str(data.get("mode", "")).strip().lower()
+        if mode not in CONTROL_MODES:
+            return self._json(
+                {"error": f"mode 는 {list(CONTROL_MODES)} 중 하나여야 합니다"}, 400)
+        estop = data.get("estop")
+        if not isinstance(estop, bool):
+            # 🔴 문자열 "false" 를 받아주지 않는다. 안전 플래그를 느슨하게
+            #    파싱하면 오타가 무장으로 이어진다.
+            return self._json({"error": "estop 은 true/false 여야 합니다"}, 400)
+        if mode != "disabled" and estop:
+            return self._json(
+                {"error": "estop 이 걸린 채로는 disabled 외의 모드로 갈 수 없습니다"}, 400)
+
+        try:
+            written = _write_control(mode, estop)
+        except OSError as exc:
+            return self._json({"error": f"제어 파일 쓰기 실패: {exc}"}, 500)
+
+        armed = (mode != "disabled") and not estop
+        with CTL_LOCK:
+            CTL["armed_by_local"] = armed
+        print(f"[control] mode={mode} estop={estop} seq={written['seq']} "
+              f"by={_mask(client_id)}", flush=True)
+        return self._json({"ok": True, "accepted": written,
+                           "note": "실제 반영은 GET /api/drive 의 control_* 로 확인할 것",
                            **_ctl_snapshot(client_id)})
 
     def _power(self, client_id, data):
@@ -1176,7 +1310,8 @@ def main():
         print(f"출력 제한 파일 쓰기 실패(무시하고 계속): {exc}")
 
     for fn in (collect_tegrastats, collect_slow, collect_ros_topics,
-               collect_scan_hz, collect_esp32, collect_env_battery):
+               collect_scan_hz, collect_esp32, collect_env_battery,
+               _control_relock_watchdog):
         threading.Thread(target=fn, name=fn.__name__, daemon=True).start()
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)

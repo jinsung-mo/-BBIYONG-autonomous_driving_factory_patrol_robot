@@ -435,6 +435,9 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
                       background:#131418;cursor:not-allowed}
 .dpad button:disabled small{color:var(--faint)}
 .dpad .sp{visibility:hidden}
+.gate-warn{margin-top:8px;padding:8px 10px;border-radius:6px;font-size:12px;
+  line-height:1.5;background:rgba(217,86,79,.12);color:#f0a6a1;
+  border:1px solid rgba(217,86,79,.35)}
 .estop{width:100%;min-height:64px;background:rgba(217,86,79,.1);color:#f0a6a1;
        border:1px solid rgba(217,86,79,.5);border-radius:var(--r2);
        font:inherit;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:.06em;
@@ -929,6 +932,10 @@ code{font-family:var(--mono);font-size:.92em;color:var(--ink2)}
               <button type="button" class="arm-b on" data-arm="0">잠금</button>
               <button type="button" class="arm-b" data-arm="1">무장</button>
             </div>
+
+            <!-- 🆕 이 브라우저는 무장인데 로봇은 잠긴 상태를 알린다.
+                 안 보여주면 "무장했는데 안 간다"로 시간을 버린다 -->
+            <div class="gate-warn" id="drvGate" hidden></div>
 
             <!-- 🆕 출력 제한 → 펌웨어 duty_max. 놓는 순간에만 전송한다 -->
             <div class="pwr">
@@ -2334,6 +2341,7 @@ const CLIENT_ID = (() => {
 
 const DRV = {
   armed:false,
+  gateMsg:null,          // 🆕 cmd_mux 게이트 관련 오류 문구
   avail:null,                 // null=미확인 · true=조종 가능 · false=teleop 미실행(503)
   st:null,                    // GET 응답 — reason·한계·순찰 여부의 정본
   echo:null,                  // POST 응답 — 서버가 실제로 받아들인 v/w
@@ -2360,7 +2368,14 @@ function drvTakeCtl(o){
                   '기기 회신 없음'(경고)과 구분해야 한다. */
                power_pct_actual:o.power_pct_actual,
                power_ack_age:o.power_ack_age,
-               power_synced:o.power_synced};
+               power_synced:o.power_synced,
+               /* 🆕 cmd_mux 게이트의 **실제** 상태 (S15P11E101-662).
+                  DRV.armed 는 이 브라우저의 의사일 뿐이고, 로봇이 실제로
+                  명령을 받는지는 이 값이 결정한다. 둘은 갈릴 수 있다 —
+                  cloud_bridge 가 재시작하면 로봇이 혼자 다시 잠긴다. */
+               control_mode:o.control_mode,
+               control_estop:o.control_estop,
+               control_armed:o.control_armed};
   }
 }
 
@@ -2595,16 +2610,48 @@ window.addEventListener('load', () => {
   tiltSend();
 });
 
+/* 🆕 [2026-08-04] cmd_mux 게이트 열기/닫기 (S15P11E101-662).
+   서버가 /tmp/bbiyong_control.json 에 써 주면 control_state_bridge 가 10Hz 로
+   읽어 /bbiyong/control_mode·/bbiyong/estop 를 발행하고, cmd_mux 가 그제서야
+   /cmd_vel/manual 을 통과시킨다.
+   🔑 잠그기는 결과를 기다리지 않는다 — 정지가 네트워크 왕복에 묶이면 안 된다.
+      실패해도 서버의 재잠금 감시자가 리스 만료(2초) 시 되돌린다. */
+async function drvGate(open){
+  try{
+    const r = await fetch('api/control', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({client_id: CLIENT_ID,
+                            mode: open ? 'manual' : 'disabled',
+                            estop: !open})
+    });
+    const b = await r.json().catch(() => ({}));
+    if(r.status === 409){
+      DRV.lockMsg = b.detail || '다른 사용자가 조종 중입니다';
+      return false;
+    }
+    if(!r.ok){ DRV.gateMsg = b.error || ('게이트 열기 실패 (' + r.status + ')'); return false; }
+    DRV.gateMsg = null; drvTakeCtl(b);
+    return true;
+  }catch(e){
+    DRV.gateMsg = '게이트 요청 실패: ' + e.message;
+    return false;
+  }
+}
+
 function drvDisarm(){
   const was = DRV.armed || DRV.keys.size || DRV.pads.size;
   DRV.armed = false; DRV.keys.clear(); DRV.pads.clear();
   document.querySelectorAll('#dpad button').forEach(b => b.classList.remove('hold'));
+  drvGate(false).then(renderDrive);       // 기다리지 않는다
   if(was) drvSend(true); else renderDrive();
 }
-function drvArm(on){
+async function drvArm(on){
   if(on && DRV.avail === false) return;    // 조종 불가면 무장 자체를 막는다
   if(on && drvOthersOwn()) return;         // 🆕 남이 잡고 있으면 무장도 막는다
   if(!on) return drvDisarm();
+  // 🔴 게이트를 **먼저** 연다. 순서를 뒤집으면 첫 명령들이 cmd_mux 에서
+  //    조용히 버려지고, 화면은 무장으로 보이는데 로봇은 안 움직인다.
+  if(!await drvGate(true)){ renderDrive(); return; }
   DRV.armed = true;
   drvSend(true);
 }
@@ -2614,6 +2661,20 @@ function renderDrive(){
   const ctl = DRV.ctl || {}, locked = drvOthersOwn();
 
   // 🆕 제어권 표시 — 세 상태뿐이다: 내가 조종 / 남이 조종(잠김) / 대기
+  /* 🆕 게이트 경고 (S15P11E101-662) — 이 브라우저는 무장인데 로봇은 잠긴
+     상태를 잡아낸다. cloud_bridge 재시작이 대표적이다(기동할 때마다
+     NavigationOrchestrator 가 무조건 disabled+estop 을 쓴다 — 의도된 안전장치).
+     이걸 안 보여주면 "무장했는데 안 간다"로 시간을 버린다. */
+  const gateKnown = ('control_armed' in ctl);
+  let gateTxt = null;
+  if(DRV.gateMsg)                       gateTxt = '⚠️ ' + DRV.gateMsg;
+  else if(armed && gateKnown && !ctl.control_armed)
+    gateTxt = '⚠️ 로봇이 잠겨 있다 (mode=' + (ctl.control_mode || '?') +
+              ', estop=' + (ctl.control_estop ? 'ON' : 'off') +
+              ') — 명령이 cmd_mux 에서 막힌다. 잠금 후 다시 무장할 것';
+  const gbox = $('drvGate');
+  if(gbox){ gbox.textContent = gateTxt || ''; gbox.hidden = !gateTxt; }
+
   const lbox = $('drvLease');
   lbox.className = 'lease' + (ctl.you_own ? ' mine' : (locked ? ' locked' : ''));
   setTxt('drvLeaseTxt',
