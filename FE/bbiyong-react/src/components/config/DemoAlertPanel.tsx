@@ -3,6 +3,7 @@ import { useAuth } from '../../auth/AuthContext.tsx'
 import { errMessage } from '../../live/errors.ts'
 import { triggerDemoAlert, type DemoAlertType } from '../../live/eventSimulations.ts'
 import { useLive } from '../../live/LiveContext.tsx'
+import { useFleet } from '../../live/FleetContext.tsx'
 
 const COOLDOWN_MS = 5_000
 const LABEL: Record<DemoAlertType, string> = { FIRE: '화재', OVERHEAT: '과열' }
@@ -11,6 +12,7 @@ const LABEL: Record<DemoAlertType, string> = { FIRE: '화재', OVERHEAT: '과열
 // 외부 알림 전달 완료는 비동기 재시도 대상이라 이 UI가 성공으로 단정하지 않는다.
 export default function DemoAlertPanel() {
   const { enabled } = useLive()
+  const { selected: robotId } = useFleet()
   const { accessToken } = useAuth()
   const [pending, setPending] = useState<DemoAlertType | null>(null)
   const [until, setUntil] = useState<Partial<Record<DemoAlertType, number>>>({})
@@ -31,7 +33,7 @@ export default function DemoAlertPanel() {
     setPending(type)
     setMsg(null)
     try {
-      await triggerDemoAlert(type, accessToken)
+      await triggerDemoAlert(type, robotId, accessToken)
       setUntil((prev) => ({ ...prev, [type]: Date.now() + COOLDOWN_MS }))
       setMsg({ kind: 'ok', text: `${LABEL[type]} 테스트 이벤트를 발생시켰습니다.` })
     } catch (e: any) {

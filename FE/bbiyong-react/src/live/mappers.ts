@@ -80,6 +80,8 @@ export const TYPE_LABEL: Record<string, string> = { FIRE: '화재 발생', OVERH
 export function alertToLog(a: any) {
   return {
     id: a._id,
+    // 저장 완료 뒤 서버가 보낸 이력 식별자. 실시간 행도 상세·해결·삭제 API를 쓸 수 있다.
+    eventId: a?.eventId ?? null,
     time: formatTime(a?.timestamp),
     date: formatDate(a?.timestamp),
     kind: a?.type === 'FIRE' ? 'fire' : 'heat',

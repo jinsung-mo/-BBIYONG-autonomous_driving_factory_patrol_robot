@@ -135,7 +135,13 @@ export default function LogList({ variant = 'elog' }) {
     .filter((l: any) => !statusF || l.status === statusF)
     .filter((l: any) => !(multi && byRobot) || l.robotId === selected)
     .filter((l: any) => !equipment || l.equipmentId === equipment)
-  const rows = [...liveRows, ...history]
+  // 실시간 수신 직후에는 liveRows로 보이고, 같은 eventId가 이력 조회에 잡히면
+  // 이력 행으로 교체한다. 같은 이벤트가 두 줄로 보이지 않게 한다.
+  const historyEventIds = new Set(history.map((l) => l.eventId).filter((id) => id != null))
+  const rows = [
+    ...liveRows.filter((l: any) => l.eventId == null || !historyEventIds.has(l.eventId)),
+    ...history,
+  ]
 
   // 해결 처리 — 되돌릴 수 있으므로(같은 API 로 UNRESOLVED 로 되돌린다) 확인을 받지 않는다.
   // 삭제와 달리 복구되는 동작이라 확인 모달을 두면 야간 경보를 한 건씩 닫는 일이 번거로워진다.
@@ -149,9 +155,13 @@ export default function LogList({ variant = 'elog' }) {
       //
       // 조건이 '미해결'인 상태에서 해결하면 이 행은 더 이상 조건에 맞지 않지만 남겨 둔다 —
       // 즉시 사라지면 방금 무엇을 눌렀는지 확인할 수 없다. 다음 조회 때 자연히 빠진다.
-      setHistory((prev) => prev.map((l) => (
-        l.eventId === log.eventId ? { ...l, ...eventToLog(updated), _touched: true } : l
-      )))
+      setHistory((prev) => {
+        const nextLog = { ...eventToLog(updated), _touched: true }
+        const found = prev.some((l) => l.eventId === log.eventId)
+        return found
+          ? prev.map((l) => (l.eventId === log.eventId ? { ...l, ...nextLog } : l))
+          : [nextLog, ...prev]
+      })
       // 요약 띠의 미해결 건수도 같이 바뀌어야 한다. 30초 주기를 기다리면 두 수치가 어긋나 보인다.
       reloadFleet()
     } catch (e) {
@@ -163,14 +173,14 @@ export default function LogList({ variant = 'elog' }) {
     } finally { setResolving(null) }
   }
 
-  // 서버에서 지운다. 실시간 수신분은 eventId 가 없어(AlertMessage 에 필드가 없다)
-  // 여기 오지 않는다 — 그쪽은 화면에서 닫기만 한다.
+  // 서버에서 지운다. 실시간 행도 저장된 eventId를 받으므로 같은 API로 처리한다.
   const onDelete = async () => {
     if (!pending || removing) return
     setRemoving(true); setDelErr(null)
     try {
       await deleteEvent(pending.eventId, accessToken)
       setHistory((prev) => prev.filter((l) => l.eventId !== pending.eventId))
+      if (pending.live) dismissAlert(pending.id)
       setPending(null)
     } catch (e) {
       setDelErr(errMessage(e))
@@ -235,7 +245,7 @@ export default function LogList({ variant = 'elog' }) {
         {rows.map((log) => (
           <li key={log.id} className={log.kind}>
             <span className="t mono">{log.date ? `${log.date} ` : ''}{log.time}</span>
-            {/* 이력 행은 눌러서 상세를 연다. 실시간 행은 서버 id 가 없어 열 것이 없다. */}
+            {/* 저장된 eventId가 있으면 이력·실시간 행 모두 눌러 상세와 영상을 연다. */}
             {log.eventId != null
               ? (
                 <button type="button" className="logopen" title="상세와 영상 보기"
@@ -260,7 +270,7 @@ export default function LogList({ variant = 'elog' }) {
                 {resolving === log.eventId ? '…' : (log.status === 'RESOLVED' ? '되돌리기' : '해결')}
               </button>
             )}
-            {/* 이력 행은 서버에서 삭제, 실시간 행은 화면에서만 닫는다(서버 id 가 없다) */}
+            {/* 저장된 이벤트는 이력·실시간 행 모두 서버에서 삭제한다. */}
             {canOperate && log.eventId != null && (
               <button type="button" className="logdel" title="이 이벤트를 서버에서 삭제"
                 aria-label={`이벤트 삭제 — ${log.msg}`} onClick={() => { setDelErr(null); setPending(log) }}>
@@ -292,9 +302,13 @@ export default function LogList({ variant = 'elog' }) {
           onClose={() => setDetailId(null)}
           // 상세에서 상태를 바꾸면 목록의 그 행도 함께 맞춘다 — 두 곳이 어긋나 보이면 안 된다
           onStatusChange={(updated: any) => {
-            setHistory((prev) => prev.map((l) => (
-              l.eventId === updated?.eventId ? { ...l, ...eventToLog(updated) } : l
-            )))
+            setHistory((prev) => {
+              const nextLog = eventToLog(updated)
+              const found = prev.some((l) => l.eventId === updated?.eventId)
+              return found
+                ? prev.map((l) => (l.eventId === updated?.eventId ? { ...l, ...nextLog } : l))
+                : [nextLog, ...prev]
+            })
           }}
         />
       )}

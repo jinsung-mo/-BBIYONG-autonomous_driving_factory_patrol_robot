@@ -98,6 +98,8 @@ export interface RobotTelemetry {
 
 /** /topic/alerts — 로봇이 확정한 화재·과열. AlertMessage record 그대로. */
 export interface AlertMessage {
+  /** 저장 완료된 이벤트 이력 식별자. 있으면 즉시 상세·영상을 조회할 수 있다. */
+  eventId?: number
   type: 'FIRE' | 'OVERHEAT'
   level?: EventLevel
   source?: string
