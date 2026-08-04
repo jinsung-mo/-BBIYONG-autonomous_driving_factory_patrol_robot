@@ -4,6 +4,7 @@
 // - WS  /ws/control       → STOMP CONNECT 수락, SEND 프레임을 타임스탬프와 함께 기록
 import http from 'node:http'
 import crypto from 'node:crypto'
+import zlib from 'node:zlib'
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 const CORS = {
@@ -44,6 +45,78 @@ const CLIP_BYTES = Buffer.alloc(64 * 1024, 7)
 const PNG_1PX = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64')
+
+// 흑백 도면 PNG 생성기 (S15P11E101-676).
+// 서버 도면은 흰 배경(#FFFFFF) + 검은 벽(#000000) 인 순수 흑백이다. 압출 렌더러가
+// '밝기<128' 로 벽을 가리므로, 검증에도 같은 성질의 그림이 필요하다.
+// 의존성 없이 8비트 흑백 PNG 를 직접 만든다.
+function grayPng(w, h, pixels) {
+  const crcTable = (() => {
+    const t = new Int32Array(256)
+    for (let n = 0; n < 256; n++) {
+      let c = n
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
+      t[n] = c
+    }
+    return t
+  })()
+  const crc = (buf) => {
+    let c = -1
+    for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xFF] ^ (c >>> 8)
+    return (c ^ -1) >>> 0
+  }
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length)
+    const td = Buffer.concat([Buffer.from(type, 'ascii'), data])
+    const cr = Buffer.alloc(4); cr.writeUInt32BE(crc(td))
+    return Buffer.concat([len, td, cr])
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4)
+  ihdr[8] = 8; ihdr[9] = 0; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0   // 8bit grayscale
+  // 스캔라인마다 필터 바이트 0 을 앞에 붙인다
+  const raw = Buffer.alloc((w + 1) * h)
+  for (let y = 0; y < h; y++) {
+    raw[y * (w + 1)] = 0
+    pixels.copy(raw, y * (w + 1) + 1, y * w, (y + 1) * w)
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
+// 방 몇 개와 복도가 있는 도면. 벽 두께는 균일하고 직각이다 — 실제 정제 도면과 같은 성질.
+export function makeFloorplan(w = 320, h = 240) {
+  const px = Buffer.alloc(w * h, 255)          // 흰 바닥
+  const set = (x, y) => { if (x >= 0 && y >= 0 && x < w && y < h) px[y * w + x] = 0 }
+  const rect = (x0, y0, x1, y1, t = 3) => {
+    for (let d = 0; d < t; d++) {
+      for (let x = x0; x <= x1; x++) { set(x, y0 + d); set(x, y1 - d) }
+      for (let y = y0; y <= y1; y++) { set(x0 + d, y); set(x1 - d, y) }
+    }
+  }
+  const sx = w / 320, sy = h / 240
+  const R = (a, b, c, d) => rect(Math.round(a * sx), Math.round(b * sy), Math.round(c * sx), Math.round(d * sy), Math.max(3, Math.round(3 * sx)))
+  R(6, 6, 314, 234)                             // 외벽
+  R(30, 30, 130, 110)                           // 방 1
+  R(150, 30, 250, 110)                          // 방 2
+  R(30, 140, 130, 210)                          // 방 3
+  R(170, 140, 290, 210)                         // 방 4
+  return grayPng(w, h, px)
+}
+
+// 위 도면을 활성 도면으로 쓰는 메타.
+export function floorplanDetail(imageBytes, id = 'fp1') {
+  return {
+    id, name: '정제 도면', imageUrl: `/api/maps/${id}/image`,
+    widthPx: 320, heightPx: 240, resolution: 0.05,
+    originX: -2.0, originY: -1.5, originYaw: 0,
+    active: true, kind: 'FLOORPLAN', imageBytes,
+  }
+}
 
 export function startFakeBackend(port = 8099) {
   const sends = []          // { t, destination, body }

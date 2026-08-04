@@ -19,6 +19,7 @@ const SCREEN = [
   'check-usermenu.mjs',
   'check-643.mjs',
   'check-653.mjs',
+  'check-676.mjs',
 ]
 // 기본 목록에서 빼는 것들.
 //  508      — 유휴 15초짜리 별도 인스턴스를 전제로 한다(README 참고).

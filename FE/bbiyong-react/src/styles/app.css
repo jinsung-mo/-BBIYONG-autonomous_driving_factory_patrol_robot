@@ -1379,3 +1379,74 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   #pgB.sim-skin .dpad button:active,
   #pgB.sim-skin .dpad button.active{transform:none;}
 }
+
+/* ============ 압출 2.5D 지도 (S15P11E101-676) ============
+   2D 도면을 z 축으로 여러 층 쌓아 기둥처럼 보이게 한다. 데이터는 끝까지 2D 다 —
+   화면에서만 기울인 연출이다.
+
+   층은 같은 마스크 이미지를 참조하는 <div> 다. 캔버스를 층마다 만들면 층 수만큼
+   픽셀 버퍼가 생기지만, 이렇게 하면 브라우저가 이미지를 한 번만 디코드한다. */
+.iso-stage{
+  position:absolute; inset:0; overflow:hidden;
+  perspective:1400px; perspective-origin:50% 46%;
+  cursor:grab; touch-action:none;
+  background:radial-gradient(120% 90% at 50% 12%, #12182a 0%, #080b12 62%, #05070c 100%);
+}
+.iso-stage:active{cursor:grabbing;}
+.iso-stage:focus-visible{outline:2px solid var(--dk-green); outline-offset:-2px;}
+.iso-scene{
+  position:absolute; left:50%; top:50%;
+  transform-style:preserve-3d; will-change:transform;
+}
+.iso-floor,.iso-wall{
+  position:absolute; inset:0;
+  background-size:100% 100%; background-repeat:no-repeat;
+}
+.iso-floor{
+  /* 바닥은 도면 그대로. 벽 기둥이 그 위에 서는 것이 보여야 하므로 살짝 눌러 둔다. */
+  filter:brightness(.62) contrast(1.05);
+  box-shadow:0 0 0 1px rgba(150,190,255,.16);
+}
+.iso-wall{
+  -webkit-mask-size:100% 100%; mask-size:100% 100%;
+  -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+  pointer-events:none;
+}
+
+/* 로봇 — 벽 위로 띄운다. 바닥에 붙이면 기울인 화면에서 벽에 가린다. */
+.iso-robot{
+  position:absolute; left:0; top:0; width:0; height:0;
+  transform:translateZ(var(--rz,48px));
+  transform-style:preserve-3d; pointer-events:none;
+}
+.iso-robot-dot{
+  position:absolute; left:-7px; top:-7px; width:14px; height:14px; border-radius:50%;
+  background:#3ddc97; border:2px solid #06281c;
+  box-shadow:0 0 0 3px rgba(61,220,151,.28), 0 0 16px rgba(61,220,151,.75);
+}
+/* 진행 방향 — 점 위에 얹은 화살 */
+.iso-robot-arrow{
+  position:absolute; left:-5px; top:-19px; width:10px; height:12px;
+  background:#3ddc97; clip-path:polygon(50% 0, 100% 100%, 0 100%);
+  transform-origin:50% 19px; transform:rotate(var(--yaw,0rad));
+  opacity:.9;
+}
+/* 로봇 자리에서 바닥까지 내리는 기둥 — 기울인 화면에서 '어디 위에 있나' 를 알려 준다.
+   rotateX(90deg) 라야 -y 가 -z 로 간다. 부호를 뒤집으면 기둥이 하늘로 솟는다. */
+.iso-robot::before{
+  content:''; position:absolute; left:-1px; top:calc(var(--rz,48px) * -1); width:2px;
+  height:var(--rz,48px);
+  background:linear-gradient(0deg,rgba(61,220,151,.55),rgba(61,220,151,0));
+  transform:rotateX(90deg); transform-origin:50% 100%;
+}
+
+.iso-reset{left:auto; right:10px; top:8px; bottom:auto;}
+/* 방향 전환·도면 종류 버튼과 겹치지 않게 — 그 둘은 좌하단·우하단이다 */
+.iso-stage .mapview{z-index:2;}
+/* 지도 종류(도면/원본) 버튼은 우하단이므로, 평면/입체 전환은 좌상단에 둔다 */
+.mapdim{left:10px; top:8px; bottom:auto;}
+.maplegend .iso-hint{color:var(--dk-sub); border:0; background:none; padding:0;}
+
+@media (prefers-reduced-motion:reduce){
+  .iso-scene{transition:none;}
+}
