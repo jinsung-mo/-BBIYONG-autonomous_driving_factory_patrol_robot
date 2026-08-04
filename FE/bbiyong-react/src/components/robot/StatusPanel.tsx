@@ -24,9 +24,6 @@ export default function StatusPanel() {
 
   // 상태를 색만으로 구분하지 않는다 — 색각 이상에서도 읽히도록 기호와 문구를 함께 준다.
   // 시뮬레이션 지표 카드용 — 화재·과열로 기록된 줄만 센다(정상 복귀 로그는 경보가 아니다)
-  const alarmCount = enabled ? 0
-    : (status.logs || []).filter((l: any) => l.kind === 'fire' || l.kind === 'heat').length
-
   const estopReleased = estop === 'RELEASED'
   const estopUnknown = estop === '—'
   const commOk = !live || connected
@@ -65,17 +62,6 @@ export default function StatusPanel() {
           </b></div>
         )}
       </div>
-      {!enabled && (
-        <div className="env">
-          <div><b className="mono">{status.envT}</b><span>주변 온도</span></div>
-          <div><b className="mono">{status.envH}</b><span>습도</span></div>
-          {/* 경보 건수는 로그를 세어 만든다. 0 이 아닐 때만 붉게 — 평소에 붉은 숫자가
-              상주하면 정작 경보가 났을 때 눈에 들어오지 않는다. */}
-          <div className={alarmCount > 0 ? 'hot' : ''}>
-            <b className="mono">{alarmCount}</b><span>경보 이벤트</span>
-          </div>
-        </div>
-      )}
       {/* 편성이 2대 이상이면 나머지 로봇도 여기서 본다(S15P11E101-591) */}
       <FleetList />
       <h3 className="event-title">이벤트 로그</h3>

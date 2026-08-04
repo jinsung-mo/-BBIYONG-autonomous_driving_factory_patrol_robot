@@ -100,24 +100,108 @@ console.log('  → 지도 화면 :', ok(await ev(`!!document.querySelector('#pgM
 console.log('  → 좌측에 로봇 상태 :', ok(await ev(`!!document.querySelector('#pgMap .nav-side #pStatus')`)))
 console.log('  → 좌측에 이벤트 로그 :', ok(await ev(`!!document.querySelector('#pgMap .nav-side .elog')`)))
 console.log('  → 우측에 지도 :', ok(await ev(`!!document.querySelector('#pgMap .nav-canvas #pMap')`)))
-const side = await box('#pgMap .nav-side'); const canv = await box('#pgMap .nav-canvas')
+const side = await box('#pgMap .nav-side'); const statusPanel = await box('#pgMap #pStatus')
+const canv = await box('#pgMap .nav-canvas')
+const mapKpis = await box('#pgMap .kpis')
+const mapFrame = await box('#pgMap #pMap .vwrap'); const mapLegend = await box('#pgMap #pMap .maplegend')
 console.log('  좌측', side?.w, 'px · 지도', canv?.w, 'px')
 console.log('  → 지도가 훨씬 넓다 :', ok(!!canv && !!side && canv.w > side.w * 2))
+console.log('  → 지도 KPI 시작점이 지도와 동일 :', ok(!!mapKpis && !!canv && Math.abs(mapKpis.left - canv.left) <= 1))
+console.log('  → 지도 범례가 지도 위에 플로팅 :', ok(!!mapFrame && !!mapLegend
+  && mapLegend.left > mapFrame.left && mapLegend.top > mapFrame.top
+  && mapLegend.left + mapLegend.w < mapFrame.left + mapFrame.w
+  && mapLegend.top + mapLegend.h < mapFrame.top + mapFrame.h))
+console.log('  → 지도 범례 5종 표기 :', ok(await ev(`(()=>{
+  const e=document.querySelector('#pgMap #pMap .maplegend');
+  return !!e && ['오린카','순찰 경로','분전반','화재 지점','장애물'].every(x=>e.textContent.includes(x))
+})()`)))
+console.log('  → 분전반·장애물 아이콘 크기 동일 :', ok(await ev(`(()=>{
+  const a=document.querySelector('#pgMap .legend-mark.switchboard')?.getBoundingClientRect();
+  const b=document.querySelector('#pgMap .legend-mark.obstacle')?.getBoundingClientRect();
+  return !!a && !!b && Math.round(a.width)===11 && Math.round(a.height)===11
+    && Math.round(a.width)===Math.round(b.width) && Math.round(a.height)===Math.round(b.height)
+})()`)))
+console.log('  → 2D 맵핑 지도 제목·영문 배지 없음 :', ok(await ev(`!document.querySelector('#pgMap #pMap > h3')`)))
 console.log('  → 조작 패널은 지도 화면에 없다 :', ok(!(await ev(`!!document.querySelector('#pgMap #pControl')`))))
 
 await goTab('카메라')
 console.log('  → 카메라 화면 :', ok(await ev(`!!document.querySelector('#pgCam')`)))
 const cam = await box('#pgCam #pCam'); const th = await box('#pgCam #pThermal')
 const ctl = await box('#pgCam #pControl'); const elog = await box('#pgCam #pEvents')
+const camSide = await box('#pgCam .cam-side-panel')
+const camKpis = await box('#pgCam .kpis')
+const dpad = await box('#pgCam #pControl .dpad'); const tiltCtl = await box('#pgCam #pControl .camtilt')
+const dpadKey = await box('#pgCam #pControl .dpad button'); const tiltUp = await box('#pgCam #btnTiltUp')
+const tiltDown = await box('#pgCam #btnTiltDown')
+const tiltLabel = await box('#pgCam .camtilt .spdlab > span:first-child')
 console.log('  전면', cam?.w, 'x', cam?.h, '· 열화상', th?.w, 'x', th?.h,
-  '· 조작', ctl?.w, 'x', ctl?.h, '· 로그', elog?.w, 'x', elog?.h)
+  '· 좌측 통합', camSide?.w, 'x', camSide?.h, '· 조작', ctl?.w, 'x', ctl?.h,
+  '· 로그', elog?.w, 'x', elog?.h)
 // 좌측은 조작(위) + 로그(아래), 우측은 전면 영상 하나. 열화상은 전면 위에 겹쳐 띄운다.
 console.log('  → 전면이 우측을 크게 차지 :', ok(!!cam && !!ctl && cam.h > 400 && cam.w > ctl.w * 1.8))
+console.log('  → 좌측 통합 패널 폭이 지도 상태 패널과 동일 :', ok(!!camSide && !!side && Math.abs(camSide.w - side.w) <= 1))
+console.log('  → 지도 상태·카메라 좌측 패널 높이 동일 :', ok(!!camSide && !!statusPanel && Math.abs(camSide.h - statusPanel.h) <= 1))
+console.log('  → 카메라 KPI 시작점이 전면 영상과 동일 :', ok(!!camKpis && !!cam && Math.abs(camKpis.left - cam.left) <= 1))
+console.log('  → 탭 전환 후 KPI 시작점 고정 :', ok(!!mapKpis && !!camKpis && Math.abs(mapKpis.left - camKpis.left) <= 1))
+console.log('  → 조작·로그가 한 패널 안에 있음 :', ok(await ev(`(()=>{const p=document.querySelector('#pgCam .cam-side-panel'); return !!p && p.contains(document.querySelector('#pControl')) && p.contains(document.querySelector('#pEvents'))})()`)))
+console.log('  → 조작 패널 제목이 잘리지 않음 :', ok(await ev(`(()=>{const e=document.querySelector('#pgCam .control-title'); return !!e && e.scrollWidth <= e.clientWidth + 1 && e.scrollHeight <= e.clientHeight + 1})()`)))
+console.log('  → 지도 상태·카메라 조작 제목 타이포 동일 :', ok(await ev(`(()=>{
+  const a=getComputedStyle(document.querySelector('#pgMap #pStatus > h3'))
+  const b=getComputedStyle(document.querySelector('#pgCam #pControl > h3'))
+  return a.fontFamily===b.fontFamily && a.fontSize===b.fontSize && a.fontWeight===b.fontWeight && a.letterSpacing===b.letterSpacing
+})()`)))
+console.log('  → 지도·카메라 이벤트 로그 타이포 동일 :', ok(await ev(`(()=>{
+  const a=getComputedStyle(document.querySelector('#pgMap .event-title'))
+  const b=getComputedStyle(document.querySelector('#pgCam #pEvents > h3'))
+  const ar=getComputedStyle(document.querySelector('#pgMap .elog li'))
+  const br=getComputedStyle(document.querySelector('#pgCam #pEvents .elog li'))
+  return a.fontFamily===b.fontFamily && a.fontSize===b.fontSize && a.fontWeight===b.fontWeight
+    && a.letterSpacing===b.letterSpacing && ar.fontSize===br.fontSize
+})()`)))
+console.log('  → 이벤트 로그 위 구분선 없음 :', ok(await ev(`getComputedStyle(document.querySelector('#pgCam #pEvents')).borderTopWidth==='0px'`)))
+console.log('  → 영문 보조 문구 3개 숨김 :', ok(await ev(`(()=>[
+  '#pgCam #pControl > .control-titlebar > .control-title + .k',
+  '#pgCam #pEvents > h3 > .k',
+  '#pgMap #pStatus > h3:first-child > .k'
+].every(sel=>{const e=document.querySelector(sel); return !e || getComputedStyle(e).display==='none'}))()`)))
+console.log('  → 전면·열화상 제목과 영문 배지 없음 :', ok(await ev(`
+  !document.querySelector('#pgCam #pCam > h3, #pgCam #pThermal > h3')`)))
+console.log('  → 이벤트 로그 옆 경보 배지 없음 :', ok(await ev(`!document.querySelector('.nav-page .event-title .event-total')`)))
+console.log('  → 양쪽 외곽 패널 재질 동일 :', ok(await ev(`(()=>{const take=sel=>{const s=getComputedStyle(document.querySelector(sel)); return [s.backgroundColor,s.backgroundImage,s.borderWidth,s.borderRadius,s.boxShadow,s.backdropFilter].join('|')}; return take('#pgMap #pStatus')===take('#pgCam .cam-side-panel')})()`)))
+console.log('  → 양쪽 내부 카드 재질 동일 :', ok(await ev(`(()=>{const take=sel=>{const s=getComputedStyle(document.querySelector(sel)); return [s.backgroundColor,s.backgroundImage,s.borderWidth,s.borderRadius,s.boxShadow,s.backdropFilter].join('|')}; return take('#pgMap #pStatus .stat-card')===take('#pgCam #pControl .control-card')})()`)))
 console.log('  → 조작이 좌측 위 :', ok(!!ctl && !!cam && ctl.left + 4 < cam.left))
+console.log('  → 카메라 각도 조절기가 WASD 우측 :', ok(!!dpad && !!tiltCtl
+  && tiltCtl.left > dpad.left + dpad.w
+  && tiltCtl.top < dpad.top + dpad.h && tiltCtl.top + tiltCtl.h > dpad.top))
+console.log('  → 각도 버튼이 WASD 키와 같은 크기 :', ok(!!dpadKey && !!tiltUp
+  && dpadKey.w===tiltUp.w && dpadKey.h===tiltUp.h))
+console.log('  → 두 방향키의 표면·테두리·그림자 동일 :', ok(await ev(`(()=>{
+  const take=sel=>{const s=getComputedStyle(document.querySelector(sel));
+    return [s.backgroundImage,s.borderTopColor,s.borderRadius,s.boxShadow].join('|')};
+  return take('#pgCam .dpad button')===take('#pgCam #btnTiltUp')
+})()`)))
+console.log('  → 각도 컨트롤이 ▲·▼ 2버튼 구성 :', ok(!!tiltUp && !!tiltDown
+  && tiltUp.top < tiltDown.top && tiltUp.left===tiltDown.left))
+console.log('  → 카메라 명칭이 버튼 아래 :', ok(!!tiltLabel && !!tiltDown
+  && tiltLabel.top > tiltDown.top + tiltDown.h
+  && await ev(`(()=>{const e=document.querySelector('#pgCam .camtilt .spdlab > span:first-child');
+    return [...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim()==='카메라'
+  })()`)))
+console.log('  → 게이지·각도 범위·각도 수치·시뮬 표기 없음 :', ok(await ev(`(()=>[
+  '#pgCam .camtilt .spdbar','#pgCam .camtilt-range','#pgCam .camtilt-val'
+].every(sel=>{const e=document.querySelector(sel); return !!e && getComputedStyle(e).display==='none'}))()`)))
 console.log('  → 로그가 조작 아래 :', ok(!!elog && !!ctl && elog.top > ctl.top + ctl.h - 4))
 console.log('  → 열화상이 전면 위에 겹친다 :', ok(!!th && !!cam && th.h > 120
   && th.left >= cam.left && th.left + th.w <= cam.left + cam.w + 2
   && th.top + th.h <= cam.top + cam.h + 2))
+console.log('  → 열화상 크기 확대·우하단 동일 여백 :', ok(!!th && !!cam
+  && th.w >= cam.w * .31
+  && Math.abs((cam.left + cam.w - th.left - th.w) - (cam.top + cam.h - th.top - th.h)) <= 1
+  && cam.left + cam.w - th.left - th.w >= 12))
+console.log('  → 열화상 테두리가 중성 블루그레이 :', ok(await ev(`(()=>{
+  const s=getComputedStyle(document.querySelector('#pgCam #pThermal'));
+  return s.borderTopWidth==='1px' && s.borderTopColor!=='rgb(53, 200, 234)'
+})()`)))
 console.log('  → 두 영상 모두 캔버스 살아 있음 :', ok(await ev(`(()=>{const c=[...document.querySelectorAll('#pgCam canvas')]
   return c.length===2 && c.every(x=>x.width>0)})()`)))
 
@@ -132,7 +216,7 @@ for (const [name, sel] of [['지도', '#pgMap'], ['카메라', '#pgCam']]) {
 console.log('\n[3] 명료성 — 두 테마 모두 4.5:1 이상')
 const MAP_T = [['페이지 제목', '.nav-title h2'], ['KPI 숫자', '.kpi-num'], ['KPI 라벨', '.kpi-label'],
   ['패널 제목', '#pgMap .panel h3'], ['상태 라벨', '#pgMap .kv span'], ['상태 값', '#pgMap .kv b'],
-  ['지표 값', '#pgMap .env b'], ['지표 라벨', '#pgMap .env span'], ['로그 본문', '#pgMap .elog li b'],
+  ['로그 본문', '#pgMap .elog li b'],
   ['게이지 값', '#pgMap .rgauge-mid b'], ['상태 알약', '#pgMap .pillm'],
   ['탭(선택)', '#nav.sim-nav .navtabs button.on'], ['탭(비선택)', '#nav.sim-nav .navtabs button:not(.on)']]
 // 긴급 정지·순찰 복귀 버튼은 패널에서 걷어냈다 — 잴 대상이 없다.
@@ -141,6 +225,13 @@ const CAM_T = [['패널 제목', '#pgCam .panel h3'],
 let bad = 0
 for (const want of ['light', 'dark']) {
   console.log(`  --- ${await setTheme(want)} ---`)
+  const layers = await ev(`(()=>{const bg=sel=>getComputedStyle(document.querySelector(sel)).backgroundColor
+    const mapOuter=bg('#pgMap #pStatus'), mapInner=bg('#pgMap #pStatus .stat-card')
+    const camOuter=bg('#pgCam .cam-side-panel'), camInner=bg('#pgCam #pControl .control-card')
+    return mapOuter!==mapInner && camOuter!==camInner && mapOuter===camOuter && mapInner===camInner
+  })()`)
+  console.log('    패널·내부 카드 표면 구분', ok(layers))
+  if (!layers) bad++
   await goTab('지도')
   const got = []
   for (const [n, sel] of MAP_T) {
@@ -178,6 +269,79 @@ console.log('  → Shift 로 긴급 정지 :', ok(await ev(`(()=>{
   const log=[...document.querySelectorAll('.elog li')].map(e=>e.textContent).join(' ')
   return /정지/.test(pill) || /정지|ESTOP/i.test(log)})()`)))
 console.log('  → 방향 패드 4개 :', ok((await ev(`document.querySelectorAll('#pgCam .dpad button').length`)) === 4))
+
+const press = (type, key, code, vk) => send('Input.dispatchKeyEvent', {
+  type, key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk,
+})
+const keySurface = (sel) => ev(`(()=>{const s=getComputedStyle(document.querySelector('${sel}')); return {
+  background:s.backgroundImage,color:s.color,border:s.borderTopColor,
+  transform:s.transform,shadow:s.boxShadow,filter:s.filter,opacity:s.opacity,
+  transition:s.transitionDuration
+}})()`)
+const patrolTilt = await ev(`document.querySelector('#pgCam .camtilt-val b')?.textContent`)
+await press('keyDown', 'ArrowUp', 'ArrowUp', 38); await sleep(120)
+const patrolCamera = await ev(`(()=>({
+  tilt:document.querySelector('#pgCam .camtilt-val b')?.textContent,
+  active:!!document.querySelector('#pgCam .camtilt .dbtn.active')
+}))()`)
+await press('keyUp', 'ArrowUp', 'ArrowUp', 38)
+await press('keyDown', 'w', 'KeyW', 87); await sleep(120)
+const patrolDrive = await ev(`!!document.querySelector('#pgCam .dpad button.active')`)
+await press('keyUp', 'w', 'KeyW', 87)
+const patrolDisabled = await ev(`(()=>[
+  ...document.querySelectorAll('#pgCam .dpad button,#pgCam .camtilt .dbtn')
+].every(b=>b.disabled))()`)
+console.log('  → 순찰 모드 방향키 완전 잠금 :', ok(patrolDisabled
+  && patrolCamera?.tilt === patrolTilt && !patrolCamera?.active && !patrolDrive))
+
+await ev(`[...document.querySelectorAll('#pgCam .seg button')].find(b=>b.textContent.includes('수동 모드'))?.click()`)
+await sleep(200)
+for (const want of ['light', 'dark']) {
+  await setTheme(want)
+  const cameraRest = await keySurface('#pgCam #btnTiltUp')
+  await press('keyDown', 'ArrowUp', 'ArrowUp', 38); await sleep(120)
+  const cameraDown = await keySurface('#pgCam #btnTiltUp')
+  await press('keyUp', 'ArrowUp', 'ArrowUp', 38)
+  const driveRest = await keySurface('#pgCam .dpad button:nth-of-type(1)')
+  await press('keyDown', 'w', 'KeyW', 87); await sleep(120)
+  const driveDown = await keySurface('#pgCam .dpad button:nth-of-type(1)')
+  await press('keyUp', 'w', 'KeyW', 87)
+  const physical = (rest, down) => rest?.background === down?.background
+    && rest?.color === down?.color && rest?.border === down?.border
+    && rest?.transform !== down?.transform && rest?.shadow !== down?.shadow
+  console.log(`  → ${want} 색상 고정·물리 눌림 :`, ok(physical(cameraRest, cameraDown) && physical(driveRest, driveDown)))
+  console.log(`  → ${want} 카메라·WASD 반응 동일 :`, ok(JSON.stringify(cameraDown) === JSON.stringify(driveDown)))
+}
+await setTheme('dark')
+const tiltBefore = await ev(`document.querySelector('#pgCam .camtilt-val b')?.textContent`)
+await press('keyDown', 'ArrowUp', 'ArrowUp', 38); await sleep(120)
+const arrowRoute = await ev(`(()=>({
+  tilt: document.querySelector('#pgCam .camtilt-val b')?.textContent,
+  drive: !!document.querySelector('#pgCam .dpad button.active'),
+  camera: document.querySelector('#pgCam #btnTiltUp')?.classList.contains('active')
+}))()`)
+await press('keyUp', 'ArrowUp', 'ArrowUp', 38)
+console.log('  → ↑는 카메라만 조절·버튼 반응 :', ok(arrowRoute?.tilt !== tiltBefore && !arrowRoute?.drive && arrowRoute?.camera))
+
+await press('keyDown', 'ArrowDown', 'ArrowDown', 40); await sleep(120)
+const downRoute = await ev(`(()=>({
+  tilt: document.querySelector('#pgCam .camtilt-val b')?.textContent,
+  drive: !!document.querySelector('#pgCam .dpad button.active'),
+  camera: document.querySelector('#pgCam #btnTiltDown')?.classList.contains('active')
+}))()`)
+await press('keyUp', 'ArrowDown', 'ArrowDown', 40)
+console.log('  → ↓도 카메라만 조절·버튼 반응 :', ok(downRoute?.tilt === tiltBefore && !downRoute?.drive && downRoute?.camera))
+
+const tiltAfterArrow = downRoute?.tilt
+await press('keyDown', 'w', 'KeyW', 87); await sleep(120)
+const wasdRoute = await ev(`(()=>({
+  tilt: document.querySelector('#pgCam .camtilt-val b')?.textContent,
+  drive: [...document.querySelectorAll('#pgCam .dpad button')]
+    .some(b=>b.textContent.trim()==='W' && b.classList.contains('active')),
+  camera: !!document.querySelector('#pgCam .camtilt .dbtn.active')
+}))()`)
+await press('keyUp', 'w', 'KeyW', 87)
+console.log('  → W는 로봇만 조작 :', ok(wasdRoute?.drive && !wasdRoute?.camera && wasdRoute?.tilt === tiltAfterArrow))
 
 console.log('\n[5] 실서버 화면은 건드리지 않았는가')
 await enter('live')

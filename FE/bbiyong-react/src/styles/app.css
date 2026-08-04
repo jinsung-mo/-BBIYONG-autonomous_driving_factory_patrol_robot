@@ -1482,6 +1482,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   --nx-elev:#ffffff;
   --nx-surface:#f9fbfc;
   --nx-panel:rgba(249,251,252,.88);
+  --nx-side-panel:#f5f8f8;
+  --nx-side-card:#ffffff;
+  --nx-side-card-shadow:0 1px 3px rgba(15,23,23,.025),0 6px 18px rgba(15,23,23,.055);
   --nx-divider:#d8dbdb;
   --nx-text:#232828;
   --nx-muted:#5d6162;
@@ -1500,8 +1503,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   --nx-sh-md:0 8px 24px rgba(15,23,23,.08);
   --nx-sh-lg:0 20px 48px rgba(15,23,23,.14);
   --nx-side-w:340px;
-  /* 카메라 화면의 좌측은 조작 두 열(각 최소 168px)이 들어가야 해 지도 화면보다 넓다 */
-  --nx-cam-side-w:380px;
 }
 /* 다크 — 명도만 뒤집는다. 색상·채도 관계는 그대로라 같은 규칙이 성립한다.
    그림자는 어두운 화면에서 층을 못 만드므로 아주 옅은 테두리로 대신한다 —
@@ -1512,6 +1513,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   --nx-elev:#181f23;
   --nx-surface:#1b2328;
   --nx-panel:rgba(27,35,40,.92);
+  --nx-side-panel:#1b2328;
+  --nx-side-card:#141a1d;
+  --nx-side-card-shadow:0 1px 3px rgba(0,0,0,.16),0 6px 18px rgba(0,0,0,.24),inset 0 0 0 1px rgba(255,255,255,.035);
   --nx-divider:#2b353a;
   --nx-text:#eef3f3;
   --nx-muted:#9aa5a7;
@@ -1531,14 +1535,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    그러면 flex 가 적용되지 않아 아래 그리드가 남는 높이를 못 받고 콘텐츠 높이로 눌린다. */
 .page.nav-page{
   background:var(--nx-bg); color:var(--nx-text);
-  padding:28px 32px 32px; gap:0;
-  height:calc(100dvh - 56px); overflow:hidden;
+  padding:16px 32px 32px; gap:0;
+  height:calc(100dvh - 76px); overflow:hidden;
   display:flex; flex-direction:column;
 }
 
 /* ── 제목 + 큰 숫자 ─────────────────────────────────────────── */
-.nav-hero{display:flex; align-items:flex-start; gap:48px; flex-wrap:wrap; margin-bottom:24px;}
-.nav-title{flex:0 0 auto; min-width:190px;}
+.nav-hero{
+  display:grid; grid-template-columns:var(--nx-side-w) minmax(0,1fr);
+  align-items:start; gap:24px; margin-bottom:24px;
+}
+.nav-title{min-width:0;}
 .nav-title h2{
   font-size:40px; font-weight:400; letter-spacing:-.01em; line-height:1.1;
   color:var(--nx-text); margin:0;
@@ -1547,7 +1554,10 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   display:block; margin-top:6px;
   font-size:13px; letter-spacing:.04em; color:var(--nx-faint);
 }
-.kpis{display:flex; gap:48px; flex:1 1 auto; flex-wrap:wrap; padding-bottom:8px;}
+.kpis{
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:32px; min-width:0; padding-bottom:8px;
+}
 .kpi{display:flex; align-items:flex-start; gap:16px;}
 /* 굵기가 아니라 크기로 위계를 만든다 — 400 이 맞다 */
 .kpi-num{
@@ -1585,24 +1595,153 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-side{min-height:0; display:flex; flex-direction:column;}
 .nav-canvas{min-height:0; display:flex; flex-direction:column;}
 .nav-canvas > .panel{flex:1 1 auto; min-height:0;}
+/* 상태 패널도 카메라 좌측 통합 패널과 같은 전체 높이를 사용한다. */
+#pgMap .nav-side{padding-bottom:0;}
+#pgMap .nav-side > #pStatus{flex:1 1 0; width:100%; min-height:0;}
 
-/* ── 카메라 화면 : 좌측(조작·로그) + 우측 전면 영상, 열화상은 겹쳐서 ──
-   조작은 늘 같은 자리에 고정한다. 영상이 커졌다 작아졌다 해도 손이 가는 자리가
-   움직이면 급할 때 헛손질이 난다. 조작은 행 높이를 콘텐츠에 맡기고(auto),
-   남는 높이는 전부 로그가 먹는다 — 로그는 길수록 쓸모가 있다. */
+/* ── 카메라 화면 : 좌측 통합 패널(조작·로그) + 우측 전면 영상 ─────────
+   좌측 폭은 지도 화면의 상태 패널과 같은 토큰을 공유한다. 조작과 로그는 별도 카드가
+   아니라 하나의 운영 맥락이므로 한 판 안에 두고, 로그는 여백과 구분선 뒤에서 시작한다. */
 .cam-stage{
   flex:1 1 0; min-height:0;
   display:grid;
-  grid-template-columns:var(--nx-cam-side-w) minmax(0,1fr);
-  grid-template-rows:auto minmax(0,1fr);
-  grid-template-areas:"control cam" "events cam";
+  grid-template-columns:var(--nx-side-w) minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr);
+  grid-template-areas:"side cam";
   gap:24px;
 }
-#pgCam #pControl{grid-area:control; min-width:0;}
-#pgCam #pEvents{grid-area:events; min-height:0; display:flex; flex-direction:column;}
+#pgCam .cam-side-panel{
+  grid-area:side; min-width:0; min-height:0;
+  display:flex; flex-direction:column;
+  background:var(--nx-panel); box-shadow:var(--nx-sh-lg);
+}
+/* 내부 컴포넌트의 기존 panel 껍질은 벗긴다. 바깥 cam-side-panel 하나만 실제 카드다. */
+#pgCam .cam-side-panel > .panel{
+  background:transparent; border:0; border-radius:0; box-shadow:none;
+  padding:0; backdrop-filter:none; -webkit-backdrop-filter:none;
+}
+#pgCam .cam-side-panel > .panel::before,
+#pgCam .cam-side-panel > .panel::after{display:none;}
+#pgCam #pControl{min-width:0; flex:0 0 auto;}
+#pgCam #pEvents{
+  min-height:0; flex:1 1 0;
+  display:flex; flex-direction:column;
+  margin-top:clamp(6px,.8vh,9px); padding-top:0;
+  border-top:0;
+}
 #pgCam #pEvents .elog{flex:1 1 0; min-height:0;}
-/* 좌측 칸은 340px 로는 조작 두 열이 안 들어간다. 열 최소폭을 풀어 칸에 맞춘다. */
-#pgCam #pControl .ctl{grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:center;}
+/* 지도 상태 패널의 실제 계산값(14px · 800 · .35px)을 그대로 사용한다. */
+#pgCam #pControl > .control-titlebar{
+  display:grid; grid-template-columns:max-content; align-items:center; gap:0;
+  font-size:14px; font-weight:800; letter-spacing:.35px; color:var(--dk-ink);
+  line-height:normal; margin-bottom:16px;
+}
+#pgCam #pControl .control-title{white-space:nowrap;}
+#pgCam #pControl > .control-titlebar .k{
+  margin:0; white-space:nowrap;
+}
+/* 지도 상태의 stat-card와 같은 안쪽 표면 위에 조작 요소를 모은다. */
+#pgCam #pControl .control-card{
+  padding:14px 15px 10px; margin-bottom:12px; border-radius:15px;
+  background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
+}
+:root[data-theme="dark"] #pgCam #pControl .control-card{
+  background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
+}
+/* 340px 전용 조작 구성: 모드 아래에서 WASD와 세로형 카메라 각도를 나란히 둔다. */
+#pgCam #pControl .ctl{
+  display:grid; grid-template-columns:minmax(0,1fr) 62px;
+  grid-template-rows:auto auto; align-items:start;
+  column-gap:14px; row-gap:16px; overflow:visible; padding:0;
+}
+#pgCam #pControl .ctl-right{display:contents;}
+#pgCam #pControl .seg{grid-column:1 / -1; grid-row:1; min-height:42px;}
+#pgCam #pControl .ctl-pad{grid-column:1; grid-row:2; align-self:start;}
+#pgCam #pControl .camtilt{
+  grid-column:2; grid-row:2; align-self:start;
+  display:grid; grid-template-columns:46px; grid-template-rows:repeat(2,46px) auto;
+  justify-content:center; align-items:center; gap:7px; margin:0;
+}
+#pgCam #pControl .dpad{
+  grid-template-columns:repeat(3,46px); grid-template-rows:repeat(2,46px);
+  gap:7px;
+}
+#pgCam #pControl .dpad button{
+  width:46px; height:46px; padding:0;
+  border-bottom-width:1px; border-radius:12px;
+  font-size:18px; font-weight:700; box-shadow:var(--nx-sh-sm);
+}
+#pgCam #pControl .dpad button:disabled{opacity:.58;}
+#pgCam #pControl .seg button{font-size:12px; font-weight:600; line-height:1.25;}
+#pgCam #pControl .seg button .kbd{font-size:9px;}
+#pgCam #pControl .camtilt .spdlab{
+  display:contents;
+}
+#pgCam #pControl .camtilt .spdlab > span:first-child{
+  grid-column:1; grid-row:3; display:block;
+  font-size:11px; font-weight:600; line-height:1.2; text-align:center; white-space:nowrap;
+}
+#pgCam #pControl .camtilt-range{display:none;}
+#pgCam #pControl .camtilt-val{display:none;}
+#pgCam #pControl .camtilt .spdr{display:contents;}
+#pgCam #pControl .camtilt .spdr .dbtn{
+  width:46px; height:46px; padding:0; border:1px solid var(--nx-divider);
+  border-radius:12px; color:var(--nx-text);
+  font-size:17px; font-weight:700;
+}
+#pgCam #pControl .camtilt #btnTiltUp{grid-column:1; grid-row:1;}
+#pgCam #pControl .camtilt #btnTiltDown{grid-column:1; grid-row:2;}
+#pgCam #pControl .camtilt .spdbar{display:none;}
+/* WASD의 부드러운 입체감과 카메라 버튼의 외곽선을 하나의 공통 방향키 재질로 섞는다. */
+#pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){
+  background:linear-gradient(145deg,#fff,#f3f6f7);
+  border:1px solid rgba(86,102,112,.14); border-bottom-width:1px;
+  color:var(--nx-text);
+  filter:none;
+  box-shadow:0 3px 10px rgba(15,23,23,.055),inset 0 1px 0 rgba(255,255,255,.92);
+  transform:translateY(0) scale(1);
+  transition:transform 70ms cubic-bezier(.2,.75,.25,1),box-shadow 70ms ease;
+}
+:root[data-theme="dark"] #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){
+  background:linear-gradient(145deg,#1d252a,#151b1f);
+  border-color:rgba(255,255,255,.08);
+  box-shadow:0 3px 10px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.035);
+}
+/* 화면 클릭과 키보드 입력 모두 같은 물리적 눌림 피드백을 사용한다. */
+#pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){
+  transform:translateY(3px) scale(.985);
+  background:linear-gradient(145deg,#fff,#f3f6f7);
+  border-color:rgba(86,102,112,.14);
+  color:var(--nx-text);
+  filter:none;
+  box-shadow:
+    inset 0 4px 8px rgba(15,23,23,.16),
+    inset 0 -1px 0 rgba(255,255,255,.55),
+    0 1px 2px rgba(15,23,23,.04);
+}
+:root[data-theme="dark"] #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){
+  background:linear-gradient(145deg,#1d252a,#151b1f);
+  border-color:rgba(255,255,255,.08);
+  color:var(--nx-text);
+  box-shadow:
+    inset 0 5px 9px rgba(0,0,0,.52),
+    inset 0 -1px 0 rgba(255,255,255,.025),
+    0 1px 2px rgba(0,0,0,.12);
+}
+@media (prefers-reduced-motion:reduce){
+  #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){transition:none;}
+}
+#pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):disabled{opacity:.58;}
+/* 지도 상태 패널 안의 이벤트 로그 제목과 동일한 실제 타이포 값. */
+#pgCam #pEvents > h3{
+  font-size:14px; font-weight:800; letter-spacing:.35px; color:var(--dk-ink);
+}
+#pgCam #pEvents > h3.event-title{margin-top:0;}
+/* 시뮬레이션 두 화면에서는 한글 제목만 남긴다. 공용 컴포넌트의 실서버 표기는 유지한다. */
+#pgCam #pControl > .control-titlebar > .control-title + .k,
+#pgMap #pStatus > h3:first-child > .k{display:none;}
+/* 공용 ControlPanel의 새 래퍼가 실서버 단일 화면 배치를 바꾸지 않도록 기존 흐름을 유지한다. */
+#pgB #pControl .control-card{display:contents;}
 
 #pgCam .cam-main{
   grid-area:cam; position:relative; min-height:0;
@@ -1637,11 +1776,16 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    테두리는 청록으로 둔다. 열화상은 붉은·주황이 데이터라, 같은 계열로 테두리를
    두르면 경계인지 뜨거운 자리인지 구분이 안 된다. */
 #pgCam #pThermal.pip{
-  position:absolute; right:0; bottom:0; z-index:5;
-  width:clamp(240px,28%,420px); padding:0;
+  --pip-inset:clamp(12px,1.2vw,20px);
+  position:absolute; right:var(--pip-inset); bottom:var(--pip-inset); z-index:5;
+  width:clamp(280px,33%,460px); padding:0;
   background:#0b1016; border-radius:var(--nx-r-sm); overflow:hidden;
-  border:2px solid #35c8ea;
-  box-shadow:0 18px 44px rgba(0,0,0,.5);
+  border:1px solid rgba(152,170,184,.78);
+  box-shadow:0 18px 44px rgba(0,0,0,.44),0 0 0 1px rgba(7,11,16,.64);
+}
+:root[data-theme="dark"] #pgCam #pThermal.pip{
+  border-color:rgba(168,184,196,.55);
+  box-shadow:0 18px 44px rgba(0,0,0,.58),0 0 0 1px rgba(255,255,255,.035);
 }
 /* 제목이 절대 배치라 흐름에 높이를 주는 것이 vwrap 뿐이다. 비율을 못 박지 않으면
    높이 4px 짜리 띠가 된다 — 화면 비율은 열화상 센서(4:3)에 맞춘다. */
@@ -1665,6 +1809,32 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-page .panel::before,.nav-page .panel::after{display:none;}
 /* 좌측 패널은 지도 위에 떠 있는 인상이라 한 단 더 띄운다 */
 .nav-side > .panel{background:var(--nx-panel); box-shadow:var(--nx-sh-lg);}
+/* 지도·카메라 좌측 패널은 반드시 같은 재질을 쓴다. 예전 Liquid Glass 테마 선택자의
+   우선순위가 서로 달라 실제 계산색과 그림자가 갈라지던 부분을 ID 묶음으로 덮는다. */
+.nav-page :is(#pStatus,.cam-side-panel){
+  background:var(--nx-side-panel); background-image:none;
+  border:0; border-radius:var(--nx-r-lg);
+  box-shadow:var(--nx-sh-lg);
+  backdrop-filter:none; -webkit-backdrop-filter:none;
+}
+:root[data-theme="dark"] .nav-page :is(#pStatus,.cam-side-panel){
+  box-shadow:var(--nx-sh-lg),inset 0 0 0 1px rgba(255,255,255,.045);
+}
+/* 상태 카드와 조작 카드도 한 단계 내려간 동일 표면으로 맞춘다. */
+.nav-page :is(#pStatus .stat-card,#pControl .control-card){
+  background:var(--nx-side-card); background-image:none;
+  border:0; border-radius:15px; box-shadow:var(--nx-side-card-shadow);
+  backdrop-filter:none; -webkit-backdrop-filter:none;
+}
+:root[data-theme="dark"] .nav-page :is(#pStatus .stat-card,#pControl .control-card){
+  background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
+}
+/* 이벤트 행도 로봇 운영 리포트의 개별 로봇 카드처럼 외곽보다 한 단계 밝은 면이다. */
+.nav-page :is(#pStatus,.cam-side-panel) .elog li{
+  background:var(--nx-side-card); background-image:none;
+  border:0; box-shadow:var(--nx-side-card-shadow);
+  backdrop-filter:none; -webkit-backdrop-filter:none;
+}
 .nav-page .panel h3{
   font-size:20px; font-weight:500; letter-spacing:-.01em; text-transform:none;
   color:var(--nx-text); margin-bottom:16px; padding-bottom:0; border:0;
@@ -1762,10 +1932,63 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root[data-theme="light"] .nav-page .elog li.fire b{color:#a52216;}
 .nav-page .elog li .t{color:var(--nx-faint);}
 .nav-page .panel > h3.event-title{margin-top:16px;}
+.nav-page .event-title .event-total{
+  display:inline-flex; align-items:center; gap:5px;
+  margin-left:6px; padding:5px 9px;
+  border-radius:var(--nx-r-sm); background:var(--nx-sunken); color:var(--nx-muted);
+  font-size:10px; font-weight:500; letter-spacing:0; text-transform:none;
+}
+.nav-page .event-title .event-total b{color:inherit; font-size:11px; font-weight:600;}
+.nav-page .event-title .event-total.hot{background:var(--nx-danger); color:#3d0703;}
+:root[data-theme="dark"] .nav-page .event-title .event-total.hot{
+  background:#7f3d3a; color:#fff0ee;
+}
 /* 지도 판은 캔버스가 주인공이라 안쪽 여백을 줄인다 */
 .nav-canvas .vwrap{background:var(--nx-elev); border:0; border-radius:var(--nx-r-md);}
 .nav-page .maplegend{color:var(--nx-muted); margin-top:12px;}
 .nav-page .maplegend span{background:transparent; border:0; padding:0;}
+/* 지도 범례는 도면과 떨어진 설명 행이 아니라, 첨부 레퍼런스처럼 지도 위에 뜬다. */
+#pgMap .vwrap > .maplegend{
+  position:absolute; top:16px; left:16px; z-index:4;
+  display:flex; align-items:center; gap:18px; flex-wrap:nowrap;
+  width:max-content; max-width:calc(100% - 32px); margin:0; padding:12px 18px;
+  color:var(--nx-muted); background:rgba(255,255,255,.92);
+  border:1px solid rgba(35,40,40,.08); border-radius:24px;
+  box-shadow:0 8px 24px rgba(15,23,23,.10);
+  backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2);
+  pointer-events:none; white-space:nowrap;
+}
+:root[data-theme="dark"] #pgMap .vwrap > .maplegend{
+  color:var(--nx-text); background:rgba(24,31,35,.92);
+  border-color:rgba(255,255,255,.07); box-shadow:0 10px 28px rgba(0,0,0,.34);
+}
+#pgMap .vwrap > .maplegend span{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:0; border:0; background:transparent;
+  font-size:12px; font-weight:500; line-height:18px;
+}
+#pgMap .maplegend .legend-mark{
+  display:inline-block; flex:0 0 11px; margin:0; padding:0; vertical-align:0;
+  box-sizing:border-box; width:11px; min-width:11px; max-width:11px;
+  height:11px; min-height:11px; max-height:11px;
+  border:0; border-radius:2px;
+}
+#pgMap .maplegend .legend-mark.robot{
+  background:#55ca85; border-radius:50%; box-shadow:0 0 0 4px rgba(85,202,133,.18);
+}
+#pgMap .maplegend .legend-mark.route{flex-basis:24px; width:24px; min-width:24px; max-width:24px; height:3px; min-height:3px; max-height:3px; border-radius:999px; background:#4b83da;}
+#pgMap .maplegend .legend-mark.switchboard{
+  display:inline-block; flex:0 0 11px; width:11px; min-width:11px; max-width:11px;
+  height:11px; min-height:11px; max-height:11px; padding:0; background:#e7ad3f;
+}
+#pgMap .maplegend .legend-mark.fire{
+  width:0; height:0; background:transparent; border-radius:0;
+  border-left:6px solid transparent; border-right:6px solid transparent;
+  border-bottom:11px solid #e45b4f;
+}
+#pgMap .maplegend .legend-mark.obstacle{background:#59637a;}
+/* 입체/평면 전환 버튼은 범례 아래로 내려 두 오버레이가 겹치지 않는다. */
+#pgMap .vwrap .mapdim{top:72px;}
 /* 카메라 화면의 판들도 남는 높이 안에서 줄어들어야 한다 */
 #pgCam .panel{min-height:0;}
 #pgCam .vwrap{flex:1 1 0; min-height:0;}
@@ -1851,11 +2074,27 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 지도는 배경과 같은 톤이라 살짝 밝혀 바닥과 구분한다 */
 #pgMap .nav-canvas .vwrap{background:var(--nx-elev);}
 
-#pgCam #pControl .ctl{padding-top:2px;}
+#pgCam #pControl .ctl{padding-top:0;}
 
 /* ── 상단 바도 띠를 없앤다 ──────────────────────────────────
    참조에서 헤더는 별도의 흰 띠가 아니라 페이지 배경 위에 그냥 얹혀 있다. */
-#nav.sim-nav{background:transparent; box-shadow:none; border-bottom:0;}
+#nav.sim-nav{
+  /* 참고 화면처럼 헤더를 별도 카드로 만들지 않고 본문 캔버스와 한 면으로 잇는다. */
+  height:76px; min-height:76px; padding:14px 32px; gap:16px;
+  background:var(--nx-bg); border:0; outline:0; box-shadow:none;
+}
+#nav.sim-nav::before,#nav.sim-nav::after{display:none;}
+#nav.sim-nav .logo{
+  display:flex; flex-direction:column; align-items:flex-start; justify-content:center;
+  min-width:230px; color:var(--nx-text);
+  font-size:17px; font-weight:700; letter-spacing:-.02em; line-height:1.05;
+}
+#nav.sim-nav .logo::before{display:none; content:none;}
+#nav.sim-nav .nav-subtitle{
+  display:block; margin-top:5px;
+  font-size:12px; font-weight:400; line-height:1; letter-spacing:.01em;
+  color:var(--nx-faint);
+}
 /* 탭은 선택된 것만 채운다. 나머지는 배경에 잠겨 글자만 남는다 —
    여섯 개가 모두 회색 상자면 무엇이 선택됐는지 먼저 안 보인다. */
 /* 탭을 감싸던 흰 알약 띠를 걷는다. 참조에서 탭은 각자 알약일 뿐 공통 틀이 없다 —
@@ -1863,28 +2102,91 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    :root[data-theme=...] 로 잡힌 옛 유리 규칙이 있어 같은 자리에서 덮어야 이긴다. */
 :root[data-theme="light"] #nav.sim-nav .navtabs,
 :root[data-theme="dark"] #nav.sim-nav .navtabs{
-  background:transparent; box-shadow:none; border:0; padding:0;
+  position:absolute; left:50%; transform:translateX(-50%);
+  gap:10px; margin:0; background:transparent; box-shadow:none; border:0; padding:0;
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
 /* 탭은 각자 알약이다. 고르지 않은 것은 배경에 잠긴 회색, 고른 것만 흰 판으로 올라온다 */
 :root[data-theme="light"] #nav.sim-nav .navtabs button,
 :root[data-theme="dark"] #nav.sim-nav .navtabs button{
+  height:44px; min-width:84px; padding:0 22px;
+  border-radius:var(--nx-r-md); border:0;
   background:var(--nx-sunken); box-shadow:none; color:var(--nx-muted);
+  font-size:14px; font-weight:500;
 }
 :root[data-theme="light"] #nav.sim-nav .navtabs button:hover,
 :root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{
   background:var(--nx-divider); color:var(--nx-text);
 }
 :root[data-theme="light"] #nav.sim-nav .navtabs button.on{
-  background:var(--nx-elev); color:var(--nx-text); box-shadow:var(--nx-sh-sm);
+  background:var(--nx-elev); color:var(--nx-text); box-shadow:var(--nx-sh-md);
 }
 :root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
   background:var(--nx-elev); color:var(--nx-text);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);
+  box-shadow:var(--nx-sh-md),inset 0 0 0 1px rgba(255,255,255,.08);
 }
 :root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn,
 #nav.sim-nav .theme-btn,#nav.sim-nav .usermenu-btn,#nav.sim-nav .navrole{
-  background:transparent; box-shadow:none;
+  background:var(--nx-elev); box-shadow:var(--nx-sh-md);
 }
-#nav.sim-nav .theme-btn:hover,#nav.sim-nav .usermenu-btn:hover{background:var(--nx-sunken);}
+#nav.sim-nav .navrole{display:none;}
+#nav.sim-nav .theme-btn,
+#nav.sim-nav .usermenu-btn{
+  width:44px; height:44px; min-width:44px; padding:0; margin:0;
+  display:flex; align-items:center; justify-content:center;
+  border:0; border-radius:var(--nx-r-md); color:var(--nx-muted);
+}
+#nav.sim-nav .theme-btn{font-size:0;}
+#nav.sim-nav .theme-btn::before{content:'☾'; font-size:20px; line-height:1;}
+:root[data-theme="dark"] #nav.sim-nav .theme-btn::before{content:'☀'; font-size:19px;}
+#nav.sim-nav .clock{
+  height:44px; min-width:72px; padding:0 13px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:var(--nx-r-md); background:var(--nx-elev); color:var(--nx-muted);
+  box-shadow:var(--nx-sh-md); font-size:12px;
+}
+#nav.sim-nav .usermenu-btn{gap:0;}
+#nav.sim-nav .usermenu-nm,#nav.sim-nav .usermenu-caret{display:none;}
+#nav.sim-nav .usermenu-av{
+  position:relative; width:28px; height:28px; border-radius:0;
+  background:transparent; color:var(--nx-muted); font-size:0;
+}
+#nav.sim-nav .usermenu-av::before{
+  content:''; position:absolute; top:3px; left:9px;
+  width:7px; height:7px; border:2px solid currentColor; border-radius:50%;
+}
+#nav.sim-nav .usermenu-av::after{
+  content:''; position:absolute; left:5px; bottom:3px;
+  width:15px; height:9px; border:2px solid currentColor; border-bottom:0;
+  border-radius:10px 10px 0 0;
+}
+#nav.sim-nav .theme-btn:hover,#nav.sim-nav .usermenu-btn:hover{
+  background:var(--nx-surface); color:var(--nx-text);
+}
+:root[data-theme="dark"] #nav.sim-nav .theme-btn,
+:root[data-theme="dark"] #nav.sim-nav .clock,
+:root[data-theme="dark"] #nav.sim-nav .usermenu-btn{
+  box-shadow:var(--nx-sh-md),inset 0 0 0 1px rgba(255,255,255,.055);
+}
+/* 이전 테마별 글래스 배경의 우선순위를 이겨 헤더와 본문을 완전히 같은 면으로 만든다. */
+:root[data-theme="light"] #nav.sim-nav,
+:root[data-theme="dark"] #nav.sim-nav{
+  background:var(--nx-bg); border:0; border-bottom:0; outline:0; box-shadow:none;
+  backdrop-filter:none; -webkit-backdrop-filter:none;
+}
+
+/* 중앙 탭이 우측 계정 도구와 겹칠 수 있는 폭에서는 문서 흐름으로 돌린다. */
+@media (max-width:1100px){
+  :root[data-theme="light"] #nav.sim-nav .navtabs,
+  :root[data-theme="dark"] #nav.sim-nav .navtabs{
+    position:static; transform:none; margin-left:18px;
+  }
+  #nav.sim-nav .navtabs button{min-width:0; padding:0 16px;}
+  #nav.sim-nav .logo{min-width:0;}
+}
+@media (max-width:820px){
+  #nav.sim-nav{padding-inline:18px;}
+  #nav.sim-nav .logo{font-size:15px;}
+  #nav.sim-nav .nav-subtitle,#nav.sim-nav .clock{display:none;}
+}

@@ -10,7 +10,6 @@ export default function useSimulation() {
 
   const [status, setStatus] = useState(() => sim.snapshot())
   const [clock, setClock] = useState('--:--:--')
-  const [activeKeys, setActiveKeys] = useState<Record<string, boolean>>({ w: false, a: false, s: false, d: false })
   const [theme, setTheme] = useState('dark') // 'dark' | 'light'
 
   // 구독 + 루프 시작/정리
@@ -29,28 +28,22 @@ export default function useSimulation() {
   }, [theme])
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
 
-  // 키보드 WASD + 방향키 — 로봇 이동
+  // 키보드 WASD — 로봇 이동 (위/아래 방향키는 카메라 틸트 전용)
   useEffect(() => {
-    const arrowMap: Record<string, string> = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
     const resolve = (e: any) => {
-      let key = e.key.toLowerCase()
-      if (arrowMap[key]) { key = arrowMap[key]; e.preventDefault() } // 방향키 → WASD, 페이지 스크롤 방지
-      return 'wasd'.includes(key) ? key : null
+      const key = e.key.toLowerCase()
+      return /^[wasd]$/.test(key) ? key : null
     }
+    const isTyping = (el: any) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
     const onDown = (e: any) => {
+      if (isTyping(e.target)) return
       const key = resolve(e)
       if (!key) return
-      setActiveKeys((prev) => (prev[key] ? prev : { ...prev, [key]: true }))
+      if (sim.snapshot().seg !== 'manual') return
       sim.dpadMove(key)
     }
-    const onUp = (e: any) => {
-      const key = resolve(e)
-      if (!key) return
-      setActiveKeys((prev) => ({ ...prev, [key]: false }))
-    }
     window.addEventListener('keydown', onDown)
-    window.addEventListener('keyup', onUp)
-    return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
+    return () => window.removeEventListener('keydown', onDown)
   }, [sim])
 
   // 캔버스 콜백 ref (마운트 시 sim에 등록)
@@ -85,5 +78,5 @@ export default function useSimulation() {
     pushLog: (kind: any, msg: any) => sim.pushLog(kind, msg),
   }), [sim])
 
-  return { status, clock, activeKeys, refs, actions, theme, toggleTheme }
+  return { status, clock, refs, actions, theme, toggleTheme }
 }
