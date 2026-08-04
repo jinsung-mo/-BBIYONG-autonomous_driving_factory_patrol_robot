@@ -3,6 +3,7 @@ package com.bbiyong.server.wss;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.dto.H264BinaryFrame;
 import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
+import com.bbiyong.server.wss.event.RobotConnectedEvent;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
@@ -57,7 +58,10 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
 
             String robotId = packet.getRobotId();
             if (robotId != null && !robotId.trim().isEmpty()) {
-                sessionManager.register(robotId, session);
+                // 새 등록(연결·재연결)일 때만 ONLINE 이벤트 발행 — 관제 시스템 탭 연결 로그용. (S15P11E101-683)
+                if (sessionManager.register(robotId, session)) {
+                    eventPublisher.publishEvent(new RobotConnectedEvent(this, robotId));
+                }
             }
 
             if (packet.getType() == null) {

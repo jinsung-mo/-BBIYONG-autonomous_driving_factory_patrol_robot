@@ -1,5 +1,6 @@
 package com.bbiyong.server.stomp;
 
+import com.bbiyong.server.wss.event.RobotConnectedEvent;
 import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,21 @@ class RobotEventListenerTests {
         listener.handleMappingCompleteEvent(new RobotMappingCompleteEvent(this, "orinka_01", rawPayload));
 
         verify(messagingTemplate).convertAndSend("/topic/mapping", rawPayload);
+    }
+
+    @Test
+    void connectBroadcastsOnlineStateUpdate() throws Exception {
+        // 실제 직렬화 결과를 검증하기 위해 여기서는 진짜 ObjectMapper 를 쓴다.
+        ObjectMapper realMapper = new ObjectMapper();
+        RobotEventListener realListener = new RobotEventListener(messagingTemplate, realMapper);
+
+        realListener.handleConnect(new RobotConnectedEvent(this, "orinka_01"));
+
+        verify(messagingTemplate).convertAndSend(eq("/topic/robots"), argThat((String json) ->
+                json.contains("\"type\":\"STATE_UPDATE\"")
+                        && json.contains("\"robot_id\":\"orinka_01\"")
+                        && json.contains("\"status\":\"ONLINE\"")
+                        && json.contains("\"online\":true")));
     }
 
     @Test
