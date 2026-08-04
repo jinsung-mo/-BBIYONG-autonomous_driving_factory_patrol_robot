@@ -81,8 +81,13 @@ class H264Encoder:
         self.retention_seconds = int(retention_seconds)
         self.record_enabled = bool(record_enabled)
         self.clock = clock
-        if (self.width, self.height, self.fps) != (640, 480, 15):
-            raise ValueError("H.264 mode currently requires 640x480 at 15 FPS")
+        # 🔑 [2026-08-04] 30 FPS 추가. 카메라(Brio 100)의 물리 상한이 640x480 30fps 다.
+        #    파이프라인은 self.fps 로 완전히 파라미터화돼 있어(caps framerate,
+        #    frame_duration, 패킷 fps) 15 를 하드코딩한 곳은 이 가드뿐이었다.
+        #    화이트리스트 형태는 **유지한다** — 임의 값을 허용하면 검증 안 된 조합이
+        #    조용히 들어온다. 새 조합은 실측 후 여기 추가할 것.
+        if (self.width, self.height) != (640, 480) or self.fps not in (15, 30):
+            raise ValueError("H.264 mode currently requires 640x480 at 15 or 30 FPS")
         if not 100 <= self.bitrate_kbps <= 10_000:
             raise ValueError("H.264 bitrate must be between 100 and 10000 Kbps")
         if not 1 <= self.key_interval <= 300:

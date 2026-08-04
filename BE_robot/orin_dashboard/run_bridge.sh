@@ -22,7 +22,11 @@ export ORINCAR_CAMERA_MODE="${ORINCAR_CAMERA_MODE:-h264}"
 export ORINCAR_VIDEO_TRANSPORT="${ORINCAR_VIDEO_TRANSPORT:-h264}"
 export ORINCAR_DASHBOARD_DIR="${ORINCAR_DASHBOARD_DIR:-$DASH_DIR}"
 export ORINCAR_H264_FRAME_FILE="${ORINCAR_H264_FRAME_FILE:-/dev/shm/orincar_h264.bin}"
-export ORINCAR_H264_VIDEO_HZ="${ORINCAR_H264_VIDEO_HZ:-15}"
+# 🔑 [2026-08-04] 15 → 30. 카메라(Brio 100)의 물리 상한이 640x480 30fps 라
+#    이게 최대치다. camera_node.py 도 이 변수를 읽는다 — 값이 갈리지 않게.
+#    ⚠️ Orin Nano 는 NVENC 이 없어 x264 소프트 인코딩이다. 30fps 로 올리면
+#       CPU 부담이 대략 2배가 된다. 올린 뒤 tegrastats 로 확인할 것.
+export ORINCAR_H264_VIDEO_HZ="${ORINCAR_H264_VIDEO_HZ:-30}"
 export ORINCAR_H264_BITRATE_KBPS="${ORINCAR_H264_BITRATE_KBPS:-1200}"
 export ORINCAR_H264_KEY_INTERVAL="${ORINCAR_H264_KEY_INTERVAL:-30}"
 
