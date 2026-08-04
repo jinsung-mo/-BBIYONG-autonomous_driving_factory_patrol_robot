@@ -106,9 +106,14 @@ function ToastList({ items, onDismiss, onAck }: any) {
 
 // ---- live: /topic/alerts 수신분을 그대로 렌더 ----
 function LiveAlerts() {
-  const { alerts, dismissAlert } = useLive()
+  const { alerts } = useLive()
+  // 팝업을 닫은 사실과 이벤트 이력은 다른 상태다. alerts 를 지우면 LogList 의
+  // 실시간 행도 함께 사라지므로, 이 컴포넌트 안에서만 닫힌 팝업 ID 를 보관한다.
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(() => new Set())
   // 매 렌더마다 새 배열이 되면 경보음 타이머 동기화 effect가 불필요하게 재실행된다
-  const items = useMemo(() => alerts.map((a: any) => ({ id: a._id, ...alertToToast(a) })), [alerts])
+  const items = useMemo(() => alerts
+    .filter((a: any) => !dismissedAlertIds.has(a._id))
+    .map((a: any) => ({ id: a._id, ...alertToToast(a) })), [alerts, dismissedAlertIds])
 
   // 화재 경보가 오면 미확인 상태로 올린다. 같은 경보를 두 번 올리지 않는 판단은
   // fireAlarm 이 키로 한다 — 여기서는 도착한 것을 그대로 넘기면 된다.
@@ -116,15 +121,23 @@ function LiveAlerts() {
     alerts.forEach((a: any) => { if (a?.type === 'FIRE') raiseFire(fireKey(a)) })
   }, [alerts])
 
+  const dismissToast = useCallback((id: number) => {
+    setDismissedAlertIds((prev) => new Set(prev).add(id))
+  }, [])
+
   // 확인 = 점멸 정지 + 화재 토스트 정리(경보음도 함께 멎는다).
-  // 이벤트 상태는 건드리지 않는다 — 해결 처리는 이벤트 상세의 몫이다(S15P11E101-593/628).
+  // 이벤트 이력용 alerts 는 유지한다 — 해결 처리는 이벤트 상세의 몫이다(S15P11E101-593/628).
   const ack = useCallback(() => {
     acknowledgeFire()
-    alerts.forEach((a: any) => { if (a?.type === 'FIRE') dismissAlert(a._id) })
-  }, [alerts, dismissAlert])
+    setDismissedAlertIds((prev) => {
+      const next = new Set(prev)
+      alerts.forEach((a: any) => { if (a?.type === 'FIRE') next.add(a._id) })
+      return next
+    })
+  }, [alerts])
 
   return <>
-    <ToastList items={items} onDismiss={dismissAlert} onAck={ack} />
+    <ToastList items={items} onDismiss={dismissToast} onAck={ack} />
     <FireFlash onAck={ack} />
   </>
 }
