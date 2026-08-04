@@ -1,0 +1,194 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLive } from '../../live/LiveContext.tsx'
+import { isFloorplan } from '../../live/floorplan.ts'
+import {
+  buildExtrudeSource, releaseExtrudeSource, worldToPlanPx, WALL_H,
+  type ExtrudeSource,
+} from '../../live/isoExtrude.ts'
+import { errMessage } from '../../live/errors.ts'
+
+// 2D 도면을 압출해 2.5D 로 보여주는 뷰 (S15P11E101-676).
+//
+// 데이터는 끝까지 2D 도면이다. 벽 픽셀만 켜진 마스크를 z 축으로 WALL_H 층 쌓고,
+// 씬 전체를 rotateX/rotateZ 로 기울여 기둥처럼 보이게 한다. 진짜 3D 재구성이 아니다.
+//
+// 층은 <div> 로 쌓고 같은 마스크 이미지를 참조한다. 캔버스를 층마다 만들면 층 수만큼
+// 픽셀 버퍼가 생기지만, 이렇게 하면 브라우저가 이미지를 한 번만 디코드한다.
+
+const TILT_MIN = 20
+const TILT_MAX = 82
+const ZOOM_MIN = 0.4
+const ZOOM_MAX = 3
+
+/** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다. */
+const LAYER_STEP = 1.15
+
+export default function IsoMapView() {
+  const { plan, connected, onNavUpdate } = useLive()
+  const [src, setSrc] = useState<ExtrudeSource | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  // 보는 각도. 기울기(rotateX)와 방위(rotateZ), 확대.
+  const [tilt, setTilt] = useState(58)
+  const [spin, setSpin] = useState(-24)
+  const [zoom, setZoom] = useState(1)
+  const dragRef = useRef<{ x: number, y: number, tilt: number, spin: number } | null>(null)
+
+  // 로봇 위치는 자주 바뀐다. 상태로 두면 프레임마다 다시 렌더되므로 DOM 을 직접 옮긴다.
+  const markerRef = useRef<HTMLDivElement | null>(null)
+  const planRef = useRef(plan)
+  planRef.current = plan
+  const srcRef = useRef(src)
+  srcRef.current = src
+
+  // 압출 재료 만들기. 도면이 바뀌면(FLOORPLAN_READY 로 새 도면이 오면) 다시 만든다.
+  useEffect(() => {
+    // RAW 점유격자는 압출하지 않는다. 미탐색 영역이 회색이라 '밝기<128' 판정이
+    // 벽과 미탐색을 구분하지 못한다 — 도면 전체가 기둥이 되어 버린다.
+    if (!plan?.img || !isFloorplan(plan)) { setSrc(null); setError(null); return undefined }
+    let alive = true
+    let made: ExtrudeSource | null = null
+    setBusy(true); setError(null)
+    buildExtrudeSource(plan.img)
+      .then((s) => {
+        made = s
+        if (!alive) { releaseExtrudeSource(s); return }
+        setSrc((prev) => { releaseExtrudeSource(prev); return s })
+      })
+      .catch((e) => { if (alive) setError(errMessage(e)) })
+      .finally(() => { if (alive) setBusy(false) })
+    return () => { alive = false; if (!made) return }
+  }, [plan])
+
+  // 떠날 때 objectURL 을 푼다
+  useEffect(() => () => releaseExtrudeSource(srcRef.current), [])
+
+  // 로봇 위치 — 압출 씬의 픽셀 좌표로 옮긴다
+  useEffect(() => onNavUpdate((nav: any) => {
+    const el = markerRef.current
+    const p = planRef.current
+    const s = srcRef.current
+    if (!el || !p || !s) return
+    const pose = nav?.pose
+    if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) {
+      el.style.display = 'none'
+      return
+    }
+    const { x, y } = worldToPlanPx(p as any, pose.x, pose.y, s.scale)
+    el.style.display = ''
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
+    // 로봇은 벽 위로 띄운다 — 바닥에 붙이면 기울인 화면에서 벽에 가린다
+    el.style.setProperty('--rz', `${WALL_H * LAYER_STEP + 10}px`)
+    // 화면을 돌려도 마커는 정면을 보게 한다(빌보드) + 로봇 진행 방향은 화살로
+    const yaw = Number(pose.yaw)
+    el.style.setProperty('--yaw', Number.isFinite(yaw) ? `${-yaw}rad` : '0rad')
+  }), [onNavUpdate])
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    dragRef.current = { x: e.clientX, y: e.clientY, tilt, spin }
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    if (!d) return
+    setSpin(d.spin + (e.clientX - d.x) * 0.4)
+    setTilt(Math.min(TILT_MAX, Math.max(TILT_MIN, d.tilt + (e.clientY - d.y) * 0.3)))
+  }
+  const endDrag = (e: React.PointerEvent) => {
+    dragRef.current = null
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* 이미 놓임 */ }
+  }
+  const onWheel = (e: React.WheelEvent) => {
+    // 지도 위에서 굴린 휠은 지도를 확대한다. 페이지가 함께 스크롤되면 조작이 어긋난다.
+    e.preventDefault()
+    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY > 0 ? 0.9 : 1.1))))
+  }
+  // 마우스에만 길을 두지 않는다 — 방향키로 돌리고 +/- 로 확대한다
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? 15 : 5
+    if (e.key === 'ArrowLeft') { setSpin((v) => v - step); e.preventDefault() }
+    else if (e.key === 'ArrowRight') { setSpin((v) => v + step); e.preventDefault() }
+    else if (e.key === 'ArrowUp') { setTilt((v) => Math.max(TILT_MIN, v - step)); e.preventDefault() }
+    else if (e.key === 'ArrowDown') { setTilt((v) => Math.min(TILT_MAX, v + step)); e.preventDefault() }
+    else if (e.key === '+' || e.key === '=') { setZoom((z) => Math.min(ZOOM_MAX, z * 1.15)); e.preventDefault() }
+    else if (e.key === '-') { setZoom((z) => Math.max(ZOOM_MIN, z / 1.15)); e.preventDefault() }
+  }
+  const reset = useCallback(() => { setTilt(58); setSpin(-24); setZoom(1) }, [])
+
+  // 층. 위로 갈수록 밝게 — 빛이 위에서 온다.
+  const layers = useMemo(() => Array.from({ length: WALL_H }, (_, k) => {
+    const t = k / (WALL_H - 1)
+    return {
+      z: k * LAYER_STEP,
+      // 바닥은 어둡고 꼭대기는 밝다. 꼭대기 한 층만 확실히 밝혀 윗면처럼 읽히게 한다.
+      color: k === WALL_H - 1
+        ? 'hsl(215 26% 74%)'
+        : `hsl(215 22% ${18 + t * 34}%)`,
+    }
+  }), [])
+
+  if (!plan) {
+    return <span className="nodata">{connected ? '활성 도면이 없습니다' : '연결 대기'}</span>
+  }
+  if (!isFloorplan(plan)) {
+    return <span className="nodata">정제 도면이 아니라 입체로 보여줄 수 없습니다 — 2D 로 보세요</span>
+  }
+  if (error) return <span className="nodata">{error}</span>
+  if (busy && !src) return <span className="nodata">도면을 세우는 중…</span>
+  if (!src) return <span className="nodata">도면을 세우지 못했습니다</span>
+  if (src.wallRatio <= 0) return <span className="nodata">도면에서 벽을 찾지 못했습니다</span>
+
+  return (
+    <div
+      className="iso-stage"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onWheel={onWheel}
+      onKeyDown={onKeyDown}
+      tabIndex={0}
+      role="img"
+      aria-label="순찰 구역 입체 지도 — 드래그하거나 방향키로 돌리고 휠 또는 +/− 로 확대"
+    >
+      <div
+        className="iso-scene"
+        style={{
+          transform: `rotateX(${tilt}deg) rotateZ(${spin}deg) scale(${zoom})`,
+          width: src.w,
+          height: src.h,
+          marginLeft: -src.w / 2,
+          marginTop: -src.h / 2,
+        }}
+      >
+        {/* 바닥 — 도면 그림 그대로 */}
+        <div className="iso-floor" style={{ backgroundImage: `url(${src.floorUrl})` }} />
+        {/* 벽 — 같은 마스크를 층층이 쌓는다 */}
+        {layers.map((l) => (
+          <div
+            key={l.z}
+            className="iso-wall"
+            style={{
+              transform: `translateZ(${l.z}px)`,
+              background: l.color,
+              WebkitMaskImage: `url(${src.maskUrl})`,
+              maskImage: `url(${src.maskUrl})`,
+            }}
+          />
+        ))}
+        {/* 로봇 — 벽 위로 띄우고, 화면을 돌려도 정면을 보게 한다 */}
+        <div ref={markerRef} className="iso-robot" style={{ display: 'none' }}>
+          <i className="iso-robot-dot" />
+          <i className="iso-robot-arrow" />
+        </div>
+      </div>
+
+      <button type="button" className="mapview iso-reset" onClick={reset} title="보는 각도 초기화">
+        정면으로
+      </button>
+    </div>
+  )
+}
