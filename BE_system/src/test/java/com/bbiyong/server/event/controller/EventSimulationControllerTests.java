@@ -17,39 +17,51 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 class EventSimulationControllerTests {
+    private static final String ROBOT_ID = "orinka_01";
     private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
     private final MutableClock clock = new MutableClock(Instant.parse("2026-08-03T00:00:00Z"));
     private final EventSimulationController controller = new EventSimulationController(publisher, true, clock);
 
     @Test
     void publishesFireSimulationForCallingAdminOnly() {
-        controller.simulate("admin@bbiyong.io", "FIRE");
+        controller.simulate("admin@bbiyong.io", "FIRE", ROBOT_ID);
         org.mockito.ArgumentCaptor<ApplicationEvent> captor = org.mockito.ArgumentCaptor.forClass(ApplicationEvent.class);
         verify(publisher).publishEvent(captor.capture());
         SimulatedRobotFireEvent event = (SimulatedRobotFireEvent) captor.getValue();
         assertThat(event.getRecipientUserId()).isEqualTo("admin@bbiyong.io");
         assertThat(event.getPacket().getSource()).isEqualTo("SIMULATION");
+        assertThat(event.getPacket().getRobotId()).isEqualTo(ROBOT_ID);
     }
 
     @Test
     void publishesOverheatSimulation() {
-        controller.simulate("admin@bbiyong.io", "OVERHEAT");
+        controller.simulate("admin@bbiyong.io", "OVERHEAT", ROBOT_ID);
         org.mockito.ArgumentCaptor<ApplicationEvent> captor = org.mockito.ArgumentCaptor.forClass(ApplicationEvent.class);
         verify(publisher).publishEvent(captor.capture());
         assertThat(captor.getValue()).isInstanceOf(SimulatedRobotOverheatEvent.class);
+        SimulatedRobotOverheatEvent event = (SimulatedRobotOverheatEvent) captor.getValue();
+        assertThat(event.getPacket().getRobotId()).isEqualTo(ROBOT_ID);
+        assertThat(event.getPacket().getEquipmentId()).isNull();
     }
 
     @Test
     void rejectsUnknownSimulationType() {
-        assertThatThrownBy(() -> controller.simulate("admin@bbiyong.io", "SYSTEM"))
+        assertThatThrownBy(() -> controller.simulate("admin@bbiyong.io", "SYSTEM", ROBOT_ID))
                 .isInstanceOf(ResponseStatusException.class);
     }
 
     @Test
-    void rejectsSameAdminAndEventTypeDuringCooldown() {
-        controller.simulate("admin@bbiyong.io", "FIRE");
+    void rejectsBlankRobotId() {
+        assertThatThrownBy(() -> controller.simulate("admin@bbiyong.io", "FIRE", " "))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST));
+    }
 
-        assertThatThrownBy(() -> controller.simulate("admin@bbiyong.io", "FIRE"))
+    @Test
+    void rejectsSameAdminAndEventTypeDuringCooldown() {
+        controller.simulate("admin@bbiyong.io", "FIRE", ROBOT_ID);
+
+        assertThatThrownBy(() -> controller.simulate("admin@bbiyong.io", "FIRE", ROBOT_ID))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS));
         verify(publisher).publishEvent(org.mockito.ArgumentMatchers.any(SimulatedRobotFireEvent.class));
@@ -57,10 +69,10 @@ class EventSimulationControllerTests {
 
     @Test
     void acceptsSameEventAfterCooldown() {
-        controller.simulate("admin@bbiyong.io", "FIRE");
+        controller.simulate("admin@bbiyong.io", "FIRE", ROBOT_ID);
         clock.advanceSeconds(5);
 
-        controller.simulate("admin@bbiyong.io", "FIRE");
+        controller.simulate("admin@bbiyong.io", "FIRE", ROBOT_ID);
 
         verify(publisher, org.mockito.Mockito.times(2))
                 .publishEvent(org.mockito.ArgumentMatchers.any(SimulatedRobotFireEvent.class));

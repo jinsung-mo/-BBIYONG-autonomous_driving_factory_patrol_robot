@@ -44,21 +44,26 @@ public class EventSimulationController {
     }
 
     @PostMapping("/{type}") @ResponseStatus(HttpStatus.ACCEPTED)
-    public void simulate(@AuthenticationPrincipal String userId, @PathVariable String type) {
+    public void simulate(@AuthenticationPrincipal String userId, @PathVariable String type,
+            @RequestParam("robotId") String robotId) {
         if (!enabled) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        if (robotId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "robotId는 필수입니다.");
+        }
+        String normalizedRobotId = robotId.trim();
         String normalizedType = type.toUpperCase(Locale.ROOT);
         if (!"FIRE".equals(normalizedType) && !"OVERHEAT".equals(normalizedType)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "FIRE 또는 OVERHEAT만 지원합니다.");
         }
-        enforceCooldown(userId, normalizedType);
+        enforceCooldown(userId, normalizedType, normalizedRobotId);
 
-        RobotPacket p = packet(normalizedType);
+        RobotPacket p = packet(normalizedType, normalizedRobotId);
         if ("FIRE".equals(normalizedType)) publisher.publishEvent(new SimulatedRobotFireEvent(this, p, userId));
         else publisher.publishEvent(new SimulatedRobotOverheatEvent(this, p, userId));
     }
 
-    private void enforceCooldown(String userId, String type) {
-        String key = userId + ':' + type;
+    private void enforceCooldown(String userId, String type, String robotId) {
+        String key = userId + ':' + type + ':' + robotId;
         Instant now = clock.instant();
         AtomicBoolean accepted = new AtomicBoolean(false);
         // compute 안에서 판정과 저장을 같이 해 동시에 두 요청이 통과하지 않게 한다.
@@ -75,11 +80,11 @@ public class EventSimulationController {
         }
     }
 
-    private RobotPacket packet(String type) {
-        RobotPacket p = new RobotPacket(); p.setSource("SIMULATION"); p.setRobotId("demo_robot"); p.setType("EVENT_" + type.toUpperCase());
+    private RobotPacket packet(String type, String robotId) {
+        RobotPacket p = new RobotPacket(); p.setSource("SIMULATION"); p.setRobotId(robotId); p.setType("EVENT_" + type.toUpperCase());
         RobotPacket.Location l = new RobotPacket.Location(); l.setX(10.0); l.setY(20.0); p.setLocation(l);
         if ("FIRE".equalsIgnoreCase(type)) { p.setConfidence(0.95); p.setTemperature(65.0); }
-        else { p.setEquipmentId("demo_panel"); p.setTemperature(85.0); p.setThreshold(55.0); }
+        else { p.setTemperature(85.0); p.setThreshold(55.0); }
         return p;
     }
 }

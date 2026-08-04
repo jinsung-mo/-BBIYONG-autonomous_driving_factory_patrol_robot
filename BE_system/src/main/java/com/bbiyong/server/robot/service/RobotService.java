@@ -58,7 +58,7 @@ public class RobotService {
 
             responses.add(new RobotResponse(
                     robotId,
-                    state != null ? state.getName() : "순찰로봇 " + robotId,
+                    robotId,
                     status,
                     state != null ? state.getBattery() : null,
                     state != null ? state.getSpeed() : null,
@@ -90,8 +90,8 @@ public class RobotService {
         if (state == null) {
             state = new RobotState();
             state.setRobotId(robotId);
-            state.setName("순찰로봇 " + robotId);
         }
+        state.setName(robotId);
 
         state.setStatus(packet.getStatus());
         state.setBattery(packet.getBattery());

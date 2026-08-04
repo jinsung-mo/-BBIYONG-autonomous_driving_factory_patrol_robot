@@ -1,6 +1,7 @@
 package com.bbiyong.server.event;
 
 import com.bbiyong.server.event.domain.EventLog;
+import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.service.EventLogService;
 import com.bbiyong.server.event.service.AlertBroadcastService;
@@ -71,6 +72,10 @@ class EventSavedNotifyTests {
                 .containsEntry("command", "EVENT_SAVED")
                 .containsEntry("eventId", 1234L)
                 .containsEntry("type", "FIRE");
+
+        ArgumentCaptor<AlertMessage> alertCaptor = ArgumentCaptor.forClass(AlertMessage.class);
+        verify(alertBroadcastService).broadcast(alertCaptor.capture());
+        assertThat(alertCaptor.getValue().eventId()).isEqualTo(1234L);
     }
 
     @Test
