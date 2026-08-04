@@ -23,7 +23,6 @@ public class RobotPacket {
     private Double temperature;
 
     // 확장 텔레메트리 필드 (S15P11E101-352 / 명세 S15P11E101-345)
-    private Double speed;            // m/s
     private String estop;            // RELEASED | ENGAGED
     private Integer commLatencyMs;   // 통신 왕복 지연(ms)
     private Double inferenceFps;     // YOLO 추론 FPS

@@ -61,7 +61,6 @@ public class RobotService {
                     robotId,
                     status,
                     state != null ? state.getBattery() : null,
-                    state != null ? state.getSpeed() : null,
                     state != null ? state.getEstop() : null,
                     state != null ? state.getCommLatencyMs() : null,
                     state != null ? state.getInferenceFps() : null,
@@ -95,7 +94,6 @@ public class RobotService {
 
         state.setStatus(packet.getStatus());
         state.setBattery(packet.getBattery());
-        state.setSpeed(packet.getSpeed());
         state.setEstop(packet.getEstop());
         state.setCommLatencyMs(packet.getCommLatencyMs());
         state.setInferenceFps(packet.getInferenceFps());
