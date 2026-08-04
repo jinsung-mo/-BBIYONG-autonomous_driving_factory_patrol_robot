@@ -73,12 +73,11 @@ export default function LiveSimBridge(): null {
   useEffect(() => {
     if (!enabled || !connected) return undefined
 
-    const arrowMap: Record<string, string> = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' }
     const resolve = (e: any) => {
-      let k = e.key.toLowerCase()
-      if (arrowMap[k]) k = arrowMap[k]
-      return 'wasd'.includes(k) ? k : null
+      const k = e.key.toLowerCase()
+      return /^[wasd]$/.test(k) ? k : null
     }
+    const isTyping = (el: any) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
 
     // 여러 키를 동시에 눌러도 방향은 하나 — 가장 최근에 누른 키를 따른다(Set은 삽입 순서 유지).
     const currentVector = () => {
@@ -105,6 +104,7 @@ export default function LiveSimBridge(): null {
     }
 
     const onDown = (e: any) => {
+      if (isTyping(e.target)) return
       const k = resolve(e)
       if (!k || held.current.has(k)) return
       // 순찰 모드에서는 주행 명령이 무효다 — 모드 전환은 스페이스바만 한다(S15P11E101-513).

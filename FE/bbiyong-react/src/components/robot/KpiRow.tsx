@@ -32,22 +32,23 @@ function Kpi({ value, unit, label, tone = 'none', note }: {
 
 export default function KpiRow() {
   const { status } = useSim()
-  const { enabled, connected, telemetry } = useLive()
+  const { enabled, telemetry, alerts } = useLive()
 
   const live = enabled ? telemetryToStatus(telemetry) : null
   const batt = live ? live.batt : status.batt
   const spd = live ? live.spd : status.spd
-  const estop = live ? live.estop : status.estop
 
   // 속도 문자열에서 숫자만 뽑는다. '0.6 m/s' 처럼 단위가 붙어 온다.
   const spdNum = String(spd ?? '').match(/-?\d+(\.\d+)?/)?.[0]
 
   const battTone: Tone = batt == null ? 'none' : batt <= 15 ? 'bad' : batt <= 35 ? 'warn' : 'ok'
-  const estopReleased = estop === 'RELEASED'
-  const estopTone: Tone = estop === '—' ? 'none' : estopReleased ? 'ok' : 'bad'
 
-  // 열화상 최고 온도 — 'MAX 38.4°C ⚠ 임계 초과' 같은 표시 문자열에서 숫자만 뽑는다
-  const hot = Number(String(status.thermalMax || '').match(/-?\d+(\.\d+)?/)?.[0])
+  // 최고 온도 — 'MAX 38.4°C ⚠ 임계 초과' 같은 표시 문자열에서 숫자만 뽑는다.
+  // 실서버에 해당 텔레메트리가 없으면 임의 값을 만들지 않고 '—' 로 둔다.
+  const hot = enabled ? Number.NaN
+    : Number(String(status.thermalMax || '').match(/-?\d+(\.\d+)?/)?.[0])
+  const alarmCount = enabled ? alerts.length
+    : (status.logs || []).filter((log: any) => log.kind === 'fire' || log.kind === 'heat').length
 
   return (
     <div className="kpis">
@@ -60,18 +61,13 @@ export default function KpiRow() {
         label="속도" tone={spdNum && Number(spdNum) > 0 ? 'ok' : 'none'}
       />
       <Kpi
-        value={estop === '—' ? '—' : (estopReleased ? '해제' : '체결')}
-        label="긴급 정지" tone={estopTone}
+        value={Number.isFinite(hot) ? hot.toFixed(1) : '—'} unit={Number.isFinite(hot) ? '°C' : undefined}
+        label="최고 온도" tone={!Number.isFinite(hot) ? 'none' : hot >= 60 ? 'bad' : hot >= 45 ? 'warn' : 'ok'}
       />
-      {!enabled && (
-        <Kpi
-          value={Number.isFinite(hot) ? hot.toFixed(1) : '—'} unit={Number.isFinite(hot) ? '°C' : undefined}
-          label="열화상 최고" tone={!Number.isFinite(hot) ? 'none' : hot >= 60 ? 'bad' : hot >= 45 ? 'warn' : 'ok'}
-        />
-      )}
-      {enabled && (
-        <Kpi value={connected ? '연결' : '대기'} label="서버" tone={connected ? 'ok' : 'warn'} />
-      )}
+      <Kpi
+        value={String(alarmCount)} unit="건"
+        label="경보 이벤트" tone={alarmCount > 0 ? 'bad' : 'none'}
+      />
     </div>
   )
 }

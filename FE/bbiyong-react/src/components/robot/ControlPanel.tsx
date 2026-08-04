@@ -23,7 +23,7 @@ import CameraTilt from './CameraTilt.tsx'
 const RESUME_WAIT_MS = 4000
 
 export default function ControlPanel() {
-  const { status, activeKeys, actions } = useSim()
+  const { status, actions } = useSim()
   const {
     enabled, connected, control, telemetry, robotOnline,
     driveMode: seg, setDriveMode: setSeg,
@@ -71,8 +71,40 @@ export default function ControlPanel() {
   // 수동으로 넘어갔는데, 순찰 중 화면을 잠깐 건드린 것만으로 순찰이 멈추는 셈이었다.
   // 모드 전환은 스페이스바와 모드 버튼만 한다.
   const manual = seg === 'manual'
+  const [pressedKeys, setPressedKeys] = useState<Record<string, boolean>>({ w: false, a: false, s: false, d: false })
 
-  // 버튼은 키보드 키 이름으로 표기 (조작은 WASD/방향키 동일)
+  // 화면의 눌림 표시도 실제 명령과 같은 수동 모드 게이트를 통과해야 한다.
+  // 순찰 모드에서 전역 keydown만 받아 버튼이 눌린 것처럼 보이면 명령이 전송됐다고 오해할 수 있다.
+  useEffect(() => {
+    const clear = () => setPressedKeys((current) => Object.values(current).some(Boolean)
+      ? { w: false, a: false, s: false, d: false }
+      : current)
+    if (!manual || ctlOff) { clear(); return undefined }
+    const isTyping = (el: any) => !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)
+    const resolve = (e: any) => /^[wasd]$/.test(e.key.toLowerCase()) ? e.key.toLowerCase() : null
+    const onDown = (e: any) => {
+      if (isTyping(e.target)) return
+      const key = resolve(e)
+      if (!key) return
+      setPressedKeys((current) => current[key] ? current : { ...current, [key]: true })
+    }
+    const onUp = (e: any) => {
+      const key = resolve(e)
+      if (!key) return
+      setPressedKeys((current) => current[key] ? { ...current, [key]: false } : current)
+    }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', clear)
+      clear()
+    }
+  }, [manual, ctlOff])
+
+  // 버튼은 로봇 주행 전용 키보드 키(WASD)로 표기한다.
   const glyph: Record<string, string> = { w: 'W', a: 'A', s: 'S', d: 'D' }
   const dirLabel: Record<string, string> = { w: '전진', a: '좌회전', s: '후진', d: '우회전' }
   const key = (k: any) => {
@@ -84,7 +116,7 @@ export default function ControlPanel() {
     }
     return (
       <button
-        className={activeKeys[k] ? 'active' : ''}
+        className={pressedKeys[k] ? 'active' : ''}
         aria-label={`${dirLabel[k]} (${glyph[k]})`}
         // 순찰 중에는 주행 명령이 무효다 — 눌러도 아무 일이 없는 버튼으로 두지 않고 잠근다
         disabled={ctlOff || !manual}
@@ -165,8 +197,9 @@ export default function ControlPanel() {
       // 체크박스·라디오·버튼형 input 은 글자를 받지 않는다
       return !/^(checkbox|radio|button|submit|reset|range|color)$/i.test(el.type || 'text')
     }
-    // 주행 키 — 방향키도 WASD 와 같은 조작이다(useSimulation · LiveSimBridge 의 매핑과 동일)
-    const DRIVE_KEYS = /^([wasd]|arrow(up|down|left|right))$/
+    // WASD는 주행, 위/아래 방향키는 카메라 틸트 전용이다.
+    const DRIVE_KEYS = /^[wasd]$/
+    const CAMERA_KEYS = /^arrow(up|down)$/
 
     const onDown = (e: any) => {
       if (e.key === 'Shift') {
@@ -177,7 +210,7 @@ export default function ControlPanel() {
       shiftAlone = false
       // 주행 키는 모드를 건드리지 않는다(S15P11E101-513). 실제 주행 발행은
       // live 는 LiveSimBridge, mock 은 useSimulation 의 키 리스너가 맡는다.
-      if (DRIVE_KEYS.test(e.key.toLowerCase())) return
+      if (DRIVE_KEYS.test(e.key.toLowerCase()) || CAMERA_KEYS.test(e.key.toLowerCase())) return
       if (e.code !== 'Space') return
       if (isTyping(e.target)) return
       // 모드 전환은 조작 권한이 필요하다 — 긴급 정지와 달리 안전 예외가 아니다
@@ -213,8 +246,9 @@ export default function ControlPanel() {
 
   return (
     <div className="panel" id="pControl">
-      <h3>
-        순찰 로봇 수동 조작 패널 <span className="k">MANUAL CONTROL</span>
+      <h3 className="control-titlebar">
+        <span className="control-title">순찰 로봇 수동 조작 패널</span>
+        <span className="k">MANUAL CONTROL</span>
         {/* 서버 연결과 로봇 가동은 다른 이야기다 — 로봇이 꺼져 있어도 STOMP 는 붙어 있다.
             서버가 판정한 online(S15P11E101-510)이 false 면 그 사실을 따로 말한다. */}
         {enabled && <span className="k" style={{ marginLeft: 8, color: linkColor }}>
@@ -222,46 +256,48 @@ export default function ControlPanel() {
         </span>}
         <CapBadge capKey={CAP_KEYS.drive} />
       </h3>
-      <div className="ctl">
-        {/* 좌: 방향키 — 손이 가장 자주 가는 것이라 한 덩어리로 크게 둔다 */}
-        <div className="ctl-pad">
-          {/* 실제 키보드 방향키(inverted-T): △ 위 / ◁ ▽ ▷ 아래 한 줄 */}
-          <div className="dpad">
-            <span />{key('w')}<span />
-            {key('a')}{key('s')}{key('d')}
-          </div>
-        </div>
-
-        {/* 우: 모드 전환, 그 아래 카메라 각도. 방향키 덩어리와 높이를 맞춘다 */}
-        <div className="ctl-right">
-          <div className="seg">
-            <button
-              className={seg === 'patrol' ? 'on' : ''}
-              onClick={() => onSetSeg(false)}
-              disabled={ctlOff}
-              aria-keyshortcuts={seg === 'manual' ? 'Space' : undefined}
-            >
-              순찰 모드
-              {/* Space 뱃지는 지금 그 키가 전환할 대상 버튼에만 붙인다 (Shift 뱃지와 같은 규칙) */}
-              {seg === 'manual' && <kbd className="kbd">Space</kbd>}
-            </button>
-            <button
-              className={seg === 'manual' ? 'on' : ''}
-              onClick={() => onSetSeg(true)}
-              disabled={ctlOff}
-              aria-keyshortcuts={seg === 'patrol' ? 'Space' : undefined}
-            >
-              수동 모드
-              {seg === 'patrol' && <kbd className="kbd">Space</kbd>}
-            </button>
+      <div className="control-card">
+        <div className="ctl">
+          {/* 좌: 방향키 — 손이 가장 자주 가는 것이라 한 덩어리로 크게 둔다 */}
+          <div className="ctl-pad">
+            {/* 실제 키보드 방향키(inverted-T): W 위 / A S D 아래 한 줄 */}
+            <div className="dpad">
+              <span />{key('w')}<span />
+              {key('a')}{key('s')}{key('d')}
+            </div>
           </div>
 
-          {/* 카메라 상하 각도 — 모드 바로 아래(S15P11E101-521) */}
-          <CameraTilt />
+          {/* 좁은 좌측 패널에서는 모드 → 방향키 → 카메라 각도 순으로 세로 정렬된다. */}
+          <div className="ctl-right">
+            <div className="seg">
+              <button
+                className={seg === 'patrol' ? 'on' : ''}
+                onClick={() => onSetSeg(false)}
+                disabled={ctlOff}
+                aria-keyshortcuts={seg === 'manual' ? 'Space' : undefined}
+              >
+                순찰 모드
+                {/* Space 뱃지는 지금 그 키가 전환할 대상 버튼에만 붙인다 (Shift 뱃지와 같은 규칙) */}
+                {seg === 'manual' && <kbd className="kbd">Space</kbd>}
+              </button>
+              <button
+                className={seg === 'manual' ? 'on' : ''}
+                onClick={() => onSetSeg(true)}
+                disabled={ctlOff}
+                aria-keyshortcuts={seg === 'patrol' ? 'Space' : undefined}
+              >
+                수동 모드
+                {seg === 'patrol' && <kbd className="kbd">Space</kbd>}
+              </button>
+            </div>
+
+            {/* 카메라 상하 각도 — 모드 바로 아래(S15P11E101-521) */}
+            <CameraTilt manual={manual} />
+          </div>
         </div>
+        {/* 명령이 조용히 버려진 경우를 알린다 — 패널 아래 한 줄로만 쓴다(S15P11E101-595) */}
+        {ctlMsg && <div className={`ctlmsg ${ctlMsg.kind}`} id="ctlMsg" role="status">{ctlMsg.text}</div>}
       </div>
-      {/* 명령이 조용히 버려진 경우를 알린다 — 패널 아래 한 줄로만 쓴다(S15P11E101-595) */}
-      {ctlMsg && <div className={`ctlmsg ${ctlMsg.kind}`} id="ctlMsg" role="status">{ctlMsg.text}</div>}
     </div>
   )
 }

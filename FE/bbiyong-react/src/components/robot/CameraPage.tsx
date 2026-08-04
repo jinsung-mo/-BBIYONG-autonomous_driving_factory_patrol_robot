@@ -3,7 +3,7 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import ControlPanel from './ControlPanel.tsx'
 import EventLog from './EventLog.tsx'
-import CapBadge from './CapBadge.tsx'
+import KpiRow from './KpiRow.tsx'
 
 // 카메라 화면 (시뮬레이션 전용).
 //
@@ -20,26 +20,24 @@ export default function CameraPage() {
 
   const camDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.camera)) || !videoSeen.FRONT)
   const thermalDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.thermal)) || !videoSeen.THERMAL)
-
   return (
     <section id="pgCam" className="page on sim-skin nav-page">
       <div className="nav-hero">
         <div className="nav-title">
-          <h2>순찰 로봇 카메라</h2>
+          <h2>순찰 카메라 뷰</h2>
           <span className="nav-sub">FRONT · THERMAL</span>
         </div>
+        <KpiRow />
       </div>
 
       <div className="cam-stage">
-        <ControlPanel />
-        <EventLog />
+        <aside className="panel cam-side-panel" aria-label="순찰 로봇 수동 조작 및 이벤트 로그">
+          <ControlPanel />
+          <EventLog />
+        </aside>
 
         <div className="cam-main">
           <div className="panel" id="pCam">
-            <h3>
-              전면 카메라 <span className="k">FRONT · YOLOv11n</span>
-              <CapBadge capKey={CAP_KEYS.camera} />
-            </h3>
             <div className={`vwrap${camDown ? ' down' : ''}`}>
               <canvas ref={refs.rcam} />
               <span className="hud">{status.rcamHud}</span>
@@ -49,10 +47,6 @@ export default function CameraPage() {
           </div>
 
           <div className="panel pip" id="pThermal">
-            <h3>
-              열화상 <span className="k">THERMAL</span>
-              <CapBadge capKey={CAP_KEYS.thermal} />
-            </h3>
             <div className={`vwrap${thermalDown ? ' down' : ''}`}>
               <canvas ref={refs.tcam} />
               {!thermalDown && (
