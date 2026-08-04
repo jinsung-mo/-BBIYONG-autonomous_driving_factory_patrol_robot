@@ -38,15 +38,15 @@ export function alertToToast(a: any) {
   if (a?.type === 'FIRE') {
     return {
       kind: 'fire',
-      title: '🔥 화재 발생',
-      sub: `🤖 ${a.robotId || '순찰 로봇'} 확정 · 신뢰도 ${a.confidence != null ? `${Math.round(a.confidence * 100)}%` : '—'}`,
+      title: '화재 발생',
+      sub: a.robotId || '',
       time,
     }
   }
   if (a?.type === 'OVERHEAT') {
     return {
       kind: 'heat',
-      title: '⚠ 분전반 과열 의심',
+      title: '과열 감지',
       sub: `${a.equipmentId || '설비'} · ${num(a.temperature)}℃${a.threshold != null ? ` (임계 ${num(a.threshold)}℃)` : ''}`,
       time,
     }
@@ -58,9 +58,6 @@ export function alertToToast(a: any) {
 // 실시간 경보(AlertMessage)와 필드 이름이 달라(eventId/timestamp/temperature) 여기서 흡수한다.
 export function eventToLog(e: any) {
   const kind = e?.type === 'FIRE' ? 'fire' : (e?.type === 'OVERHEAT' ? 'heat' : 'ok')
-  const detail = e?.type === 'FIRE'
-    ? `신뢰도 ${e.confidence != null ? `${Math.round(e.confidence * 100)}%` : '—'}`
-    : (e?.temperature != null ? `${num(e.temperature)}℃` : '')
   return {
     id: `ev-${e?.eventId}`,
     eventId: e?.eventId,   // 서버 삭제(DELETE /api/events/{id}) 대상 — S15P11E101-516
@@ -73,11 +70,11 @@ export function eventToLog(e: any) {
     status: e?.status || null,
     robotId: e?.robotId || null,
     equipmentId: e?.equipmentId || null,
-    msg: [TYPE_LABEL[e?.type] || e?.type || '이벤트', e?.robotId, detail].filter(Boolean).join(' · '),
+    msg: [e?.message || TYPE_LABEL[e?.type] || e?.type || '이벤트', e?.robotId].filter(Boolean).join(' · '),
   }
 }
 
-export const TYPE_LABEL: Record<string, string> = { FIRE: '화재', OVERHEAT: '과열', SYSTEM: '시스템' }
+export const TYPE_LABEL: Record<string, string> = { FIRE: '화재 발생', OVERHEAT: '과열 감지', SYSTEM: '시스템' }
 
 // AlertMessage → 이벤트 로그 한 줄 (LogList 공용 형태)
 export function alertToLog(a: any) {
