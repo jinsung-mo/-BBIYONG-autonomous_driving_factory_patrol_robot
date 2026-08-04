@@ -25,7 +25,14 @@ canvas{display:block; width:100%; height:100%;}
 :focus-visible{outline:2px solid var(--blue); outline-offset:2px;}
 
 /* ============ 상단 공통 바 ============ */
-#nav{display:flex; align-items:center; gap:14px; padding:10px 18px; background:#101319; color:#e6e9ef;}
+/* z-index 를 명시한다. 유저 메뉴 드롭다운은 nav 아래로 펼쳐지는데, nav 가 쌓임 맥락을
+   만들면(시뮬 화면의 backdrop-filter 가 그렇다) 드롭다운의 z-index 가 그 안에 갇힌다.
+   그러면 nav 는 z-index:auto 로 0 레벨이고, DOM 에서 뒤에 오는 본문(#pgB)이 같은 0 레벨에서
+   이겨 메뉴가 대시보드 뒤로 숨는다 — 버튼이 안 눌리는 것처럼 보였다.
+   50 인 이유: 본문(0)보다는 위, 모달(100)·경보(190~201)보다는 아래여야 한다.
+   그것들은 nav 를 덮어야 하는 것들이다. */
+#nav{display:flex; align-items:center; gap:14px; padding:10px 18px; background:#101319; color:#e6e9ef;
+  position:relative; z-index:50;}
 #nav .logo{font-size:16px; font-weight:800; letter-spacing:1px; color:#fff;}
 #nav .logo b{color:#ff6a5f;}
 #nav .theme-btn{padding:6px 12px; border-radius:8px; border:1px solid #3a445a; background:#1a2030; color:#dfe4ec; font-size:12px; margin-right:4px;}
