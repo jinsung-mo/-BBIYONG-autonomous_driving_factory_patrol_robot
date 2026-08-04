@@ -38,15 +38,15 @@ export function alertToToast(a: any) {
   if (a?.type === 'FIRE') {
     return {
       kind: 'fire',
-      title: '🔥 화재 발생',
-      sub: a.robotId ? `🤖 ${a.robotId}` : '',
+      title: '화재 발생',
+      sub: a.robotId || '',
       time,
     }
   }
   if (a?.type === 'OVERHEAT') {
     return {
       kind: 'heat',
-      title: '⚠️ 과열 감지',
+      title: '과열 감지',
       sub: `${a.equipmentId || '설비'} · ${num(a.temperature)}℃${a.threshold != null ? ` (임계 ${num(a.threshold)}℃)` : ''}`,
       time,
     }
