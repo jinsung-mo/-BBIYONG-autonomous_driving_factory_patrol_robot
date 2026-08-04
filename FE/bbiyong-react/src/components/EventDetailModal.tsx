@@ -116,6 +116,8 @@ export default function EventDetailModal({
   const resolved = detail?.status === 'RESOLVED'
   const num = (v: any, unit: string, digits = 1) =>
     (typeof v === 'number' && Number.isFinite(v) ? `${v.toFixed(digits)}${unit}` : null)
+  const hasMeaningfulLocation = detail?.x != null && detail?.y != null
+    && (detail.x !== 0 || detail.y !== 0)
 
   return (
     <Modal title="이벤트 상세" onClose={onClose} width={620}>
@@ -142,8 +144,7 @@ export default function EventDetailModal({
                 detail.equipmentId,
                 num(detail.temperature, '℃'),
                 detail.threshold != null ? `임계 ${num(detail.threshold, '℃')}` : null,
-                detail.confidence != null ? `신뢰도 ${Math.round(detail.confidence * 100)}%` : null,
-                detail.x != null && detail.y != null ? `(${detail.x?.toFixed(2)}, ${detail.y?.toFixed(2)}) m` : null,
+                hasMeaningfulLocation ? `(${detail.x?.toFixed(2)}, ${detail.y?.toFixed(2)}) m` : null,
               ].filter(Boolean).join(' · ') || '추가 정보 없음'}
             </div>
           </div>
