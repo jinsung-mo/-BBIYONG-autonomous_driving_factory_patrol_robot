@@ -17,7 +17,7 @@ export default function FireFlash({ onAck }: { onAck: () => void }) {
     <>
       <div className="fireflash" aria-hidden="true" />
       <div className="fireflash-bar" role="alert" aria-live="assertive">
-        <span className="fireflash-txt">🔥 화재 경보 — 확인되지 않음</span>
+        <span className="fireflash-txt">화재 경보 — 확인되지 않음</span>
         <button
           type="button"
           className="fireflash-ack"

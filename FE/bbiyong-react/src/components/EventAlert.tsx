@@ -16,7 +16,7 @@ import { acknowledgeFire, fireKey, raiseFire } from '../live/fireAlarm.ts'
 // ✕ 는 알림을 치우는 것이지 화재를 봤다는 뜻이 아니다. 과열은 점멸 대상이 아니다.
 
 // 현재 편성된 순찰 로봇 — 출동 대상은 이 1대뿐 (StatusPanel의 표기와 동일)
-const ROBOT_NAME = '오린카-01'
+const ROBOT_NAME = 'orinka_01'
 
 const SOUND_REPEAT_MS = 3000 // 알림이 떠 있는 동안 경보음 반복 간격
 let uid = 0
@@ -162,7 +162,7 @@ function SimAlerts() {
   // 화재는 실제로 오린카가 긴급 출동하므로(Simulation.setFire → botGoto), 출동 로봇을 함께 표시
   useEffect(() => {
     if (status.fireOn && !prevFire.current) {
-      pushAlert('fire', '🔥 화재 발생', `🤖 ${ROBOT_NAME} 긴급 출동 중`)
+      pushAlert('fire', '화재 발생', `${ROBOT_NAME} 긴급 출동 중`)
       // 시연에서도 실제와 같이 화면이 점멸해야 한다. 발생 순간마다 새 키를 준다.
       raiseFire(`sim:${++uid}`)
     }
@@ -171,7 +171,7 @@ function SimAlerts() {
   }, [status.fireOn])
 
   useEffect(() => {
-    if (status.heatOn && !prevHeat.current) pushAlert('heat', '⚠ 분전반 과열 의심')
+    if (status.heatOn && !prevHeat.current) pushAlert('heat', '과열 감지')
     if (!status.heatOn && prevHeat.current) dismissKind('heat')
     prevHeat.current = status.heatOn
   }, [status.heatOn])

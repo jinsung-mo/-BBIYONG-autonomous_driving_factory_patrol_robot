@@ -5,8 +5,8 @@
 //   GET    /api/events/stats/{hourly|daily|by-robot|by-equipment|by-type}
 //   DELETE /api/events/{eventId}          → 204 (없으면 404)
 //
-// 삭제는 테스트/더미 이벤트 정리용이다. 실시간 경보(/topic/alerts)는
-// AlertMessage 에 eventId 가 없어 이 API 의 대상이 될 수 없다 — 이력 행만 지울 수 있다.
+// 삭제는 테스트/더미 이벤트 정리용이다. 실시간 경보도 저장 완료 eventId를 받으면
+// 이 API의 대상이 된다.
 
 import { authedGet, authedSend } from './authApi.ts'
 
