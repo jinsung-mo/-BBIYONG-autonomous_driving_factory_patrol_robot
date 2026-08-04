@@ -13,6 +13,7 @@ from cloud_bridge import (
     build_fire,
     build_register,
     build_telemetry,
+    build_thermal,
     build_video,
     fresh,
     infer_status,
@@ -20,8 +21,13 @@ from cloud_bridge import (
     select_mission_status,
     translate_command,
     websocket_auth_kwargs,
+    _rotate_cw90,
+    _rotate_cw180,
 )
 from h264_protocol import H264Packet, encode_packet
+import base64
+import struct
+import zlib
 
 NOW = 1000.0
 
@@ -118,6 +124,25 @@ class TelemetryTest(unittest.TestCase):
         self.assertEqual(packet["commLatencyMs"], 42)
         self.assertEqual(packet["estop"], "ENGAGED")
 
+    def test_battery_included_when_env_fresh_and_connected(self):
+        env = {"ts": NOW, "battery": {"connected": True, "volts": 22.1, "percent": 63.0}}
+        packet = build_telemetry("r1", None, None, None, NOW, env=env)
+        self.assertEqual(packet["battery"], 63.0)
+
+    def test_battery_omitted_when_env_stale(self):
+        env = {"ts": NOW - 60, "battery": {"connected": True, "percent": 63.0}}
+        packet = build_telemetry("r1", None, None, None, NOW, env=env)
+        self.assertNotIn("battery", packet)
+
+    def test_battery_omitted_when_ina226_not_connected(self):
+        env = {"ts": NOW, "battery": {"connected": False, "volts": None, "percent": None}}
+        packet = build_telemetry("r1", None, None, None, NOW, env=env)
+        self.assertNotIn("battery", packet)
+
+    def test_battery_omitted_when_env_missing(self):
+        packet = build_telemetry("r1", None, None, None, NOW, env=None)
+        self.assertNotIn("battery", packet)
+
 
 class VideoTest(unittest.TestCase):
     def test_front_frame(self):
@@ -130,6 +155,131 @@ class VideoTest(unittest.TestCase):
     def test_none_without_jpeg(self):
         self.assertIsNone(build_video("r1", {}, 1))
         self.assertIsNone(build_video("r1", None, 1))
+
+
+def _decode_png_dims(png_b64):
+    """테스트 전용 최소 PNG 파서 — IHDR 의 width/height 만 읽는다."""
+    raw = base64.b64decode(png_b64)
+    assert raw[:8] == b"\x89PNG\r\n\x1a\n"
+    length = struct.unpack(">I", raw[8:12])[0]
+    assert raw[12:16] == b"IHDR"
+    width, height = struct.unpack(">II", raw[16:24])
+    assert length == 13
+    return raw, width, height
+
+
+class ThermalTest(unittest.TestCase):
+    """S15P11E101 열화상 관제 미표시 수정 — build_thermal() 이 build_video() 의
+    FRONT 채널과 나란히 THERMAL 채널을 만든다. 로봇이 이제 MLX90640 을 생산한다
+    (server.py /api/thermal 로 실측 확인됨, cloud_bridge.py 의 오래된 docstring이
+    "로봇이 아직 생산하지 않는다"고 적어둔 건 그 시점 이후로 낡은 것이었다)."""
+
+    def _pixels(self, temp_c, width=32, height=24):
+        # 펌웨어 계약: 온도(°C)*10 의 int
+        return [int(round(temp_c * 10))] * (width * height)
+
+    def test_thermal_frame_shape(self):
+        thermal = {"width": 32, "height": 24, "pixels": self._pixels(23.4)}
+        frame = build_thermal("r1", thermal, 3)
+        self.assertEqual(frame["type"], "VIDEO_FRAME")
+        self.assertEqual(frame["channel"], "THERMAL")
+        self.assertEqual(frame["format"], "png")
+        self.assertEqual(frame["seq"], 3)
+        self.assertEqual(frame["maxTemp"], 23.4)
+        self.assertIn("data", frame)
+
+    def test_thermal_frame_is_valid_png_with_correct_dims(self):
+        # 180도 회전은 치수를 바꾸지 않는다(90도 회전 두 번 = 원래 비율로 복귀).
+        thermal = {"width": 32, "height": 24, "pixels": self._pixels(30.0)}
+        frame = build_thermal("r1", thermal, 1)
+        raw, width, height = _decode_png_dims(frame["data"])
+        self.assertEqual((width, height), (32, 24))
+        # IDAT 이 실제로 zlib 로 풀리고, 필터바이트 포함 스트라이드와 맞아야 한다
+        idat_start = raw.index(b"IDAT") + 4
+        idat_len = struct.unpack(">I", raw[idat_start - 8:idat_start - 4])[0]
+        idat = raw[idat_start:idat_start + idat_len]
+        decompressed = zlib.decompress(idat)
+        self.assertEqual(len(decompressed), (32 * 3 + 1) * 24)
+
+    def test_max_temp_reflects_hottest_pixel(self):
+        pixels = self._pixels(20.0)
+        pixels[100] = 481  # 48.1°C — 하나만 뜨겁게
+        frame = build_thermal("r1", {"width": 32, "height": 24, "pixels": pixels}, 1)
+        self.assertEqual(frame["maxTemp"], 48.1)
+
+    def test_none_without_pixels(self):
+        self.assertIsNone(build_thermal("r1", {"width": 32, "height": 24, "pixels": []}, 1))
+        self.assertIsNone(build_thermal("r1", {}, 1))
+        self.assertIsNone(build_thermal("r1", None, 1))
+
+    def test_none_on_dimension_mismatch(self):
+        # width*height 와 pixels 길이가 안 맞으면(깨진 프레임) 그리지 않는다
+        thermal = {"width": 32, "height": 24, "pixels": [200] * 10}
+        self.assertIsNone(build_thermal("r1", thermal, 1))
+
+
+class ThermalRotationTest(unittest.TestCase):
+    """2026-08-04 방향 수정 — 사용자가 화면에서 육안으로 재확인하며 3차례
+    조정했다: ①좌우반전(폐기) → ②시계방향 90도(폐기) → ③시계방향 180도(현재).
+    매번 직전 시도를 **대체**했다(누적 합성 아님). 실측이 아니라 사용자 육안
+    판단 기준이므로, "지금 코드가 실제로 시계방향 180도를 돌린다"는 것 자체를
+    테스트로 고정해 다음 조정의 회귀 기준으로 삼는다. _rotate_cw90 자체의
+    동작(90도 하나만)도 _rotate_cw180 이 그 위에 합성되므로 별도로 계속 검증한다."""
+
+    def test_rotate_cw90_swaps_dims_and_orientation(self):
+        # 2행 3열(width=3,height=2) → 3행 2열(width=2,height=3).
+        # 원본:
+        #   1 2 3
+        #   4 5 6
+        # 시계방향 90도:
+        #   4 1
+        #   5 2
+        #   6 3
+        grid = [1, 2, 3,
+                4, 5, 6]
+        rotated, new_w, new_h = _rotate_cw90(grid, width=3, height=2)
+        self.assertEqual((new_w, new_h), (2, 3))
+        self.assertEqual(rotated, [4, 1, 5, 2, 6, 3])
+
+    def test_rotate_cw180_preserves_dims_and_reverses_order(self):
+        # 180도 회전은 전체 배열을 뒤집는 것과 수학적으로 동치다(90도 두 번 적용한
+        # 결과가 실제로 그렇게 나오는지는 손으로 검증해 확인했다 — 코드가 그
+        # 성질을 실제로 만족하는지 여기서 잠근다).
+        # 원본:            180도:
+        #   1 2 3            6 5 4
+        #   4 5 6            3 2 1
+        grid = [1, 2, 3,
+                4, 5, 6]
+        rotated, new_w, new_h = _rotate_cw180(grid, width=3, height=2)
+        self.assertEqual((new_w, new_h), (3, 2))  # 치수는 유지된다
+        self.assertEqual(rotated, [6, 5, 4, 3, 2, 1])
+
+    def test_build_thermal_output_is_rotated_180_end_to_end(self):
+        # 원본 (row0, col0) 만 뜨겁게 만든다. 180도 회전은 치수를 바꾸지 않고
+        # (8x4 그대로) 전체 반전과 동치이므로, 뜨거운 값은 결과의
+        # **마지막 행·마지막 열**에 와야 한다.
+        width, height = 8, 4
+        pixels = [200] * (width * height)  # 20.0°C 배경
+        pixels[0] = 500                      # (row0, col0) 만 50.0°C
+        frame = build_thermal("r1", {"width": width, "height": height, "pixels": pixels}, 1)
+        raw = base64.b64decode(frame["data"])
+        assert raw[:8] == b"\x89PNG\r\n\x1a\n"
+        new_w, new_h = struct.unpack(">II", raw[16:24])
+        self.assertEqual((new_w, new_h), (width, height))  # 180도는 치수를 안 바꾼다
+        idat_start = raw.index(b"IDAT") + 4
+        idat_len = struct.unpack(">I", raw[idat_start - 8:idat_start - 4])[0]
+        decompressed = zlib.decompress(raw[idat_start:idat_start + idat_len])
+        stride = new_w * 3 + 1  # 필터 바이트 1 + RGB
+        # 결과의 첫 픽셀(첫 행 첫 열)은 배경(20°C)이어야 한다.
+        self.assertEqual(decompressed[0], 0)  # 필터 타입 None
+        self.assertEqual(decompressed[1], 30, "결과 첫 픽셀은 배경이어야 한다")
+        # 원본 (row0,col0) 의 뜨거운 값은 마지막 행의 마지막 열에 와야 한다.
+        last_row_start = (height - 1) * stride
+        last_row = decompressed[last_row_start:last_row_start + stride]
+        self.assertEqual(last_row[0], 0)  # 필터 타입 None
+        last_pixel_r = last_row[1 + (width - 1) * 3]
+        self.assertEqual(last_pixel_r, 255,
+                          "180도 회전 후 원본 (row0,col0) 은 마지막 행의 마지막 열에 와야 한다")
 
 
 class BinaryVideoTest(unittest.IsolatedAsyncioTestCase):

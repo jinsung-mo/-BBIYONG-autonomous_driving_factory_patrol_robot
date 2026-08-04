@@ -30,12 +30,15 @@
 
 import argparse
 import asyncio
+import base64
 import inspect
 import json
 import os
 from pathlib import Path
+import struct                                  # 🆕 열화상 PNG 인코딩 (build_thermal)
 import sys
 import time
+import zlib                                     # 🆕 열화상 PNG IDAT 압축 — 표준 라이브러리, PIL 등 새 의존성 없음
 
 from mapping_orchestrator import MappingOrchestrator
 from navigation_orchestrator import NavigationOrchestrator
@@ -82,6 +85,20 @@ DRIVE_STATUS_FILE = os.environ.get(
 H264_FRAME_FILE = os.environ.get(
     "ORINCAR_H264_FRAME_FILE", "/dev/shm/orincar_h264.bin"
 )
+# esp32_base_node.py 가 INA226 배터리 잔량을 떨구는 파일. server.py 의
+# collect_env_battery() 와 같은 소스다 — 그쪽은 대시보드 로컬 표시용, 여기는
+# 관제 서버(RobotPacket.battery)로 올리는 경로다.
+ENV_FILE = os.environ.get("ORINCAR_ENV_FILE", "/tmp/orincar_env.json")
+# 🆕 열화상(MLX90640) — server.py 의 THERMAL_FILE 과 같은 파일·같은 기본값.
+# esp32_base_node.py 가 `IR,` 시리얼 라인을 파싱해 {"width":32,"height":24,
+# "pixels":[768개 int, 온도(°C)*10]} 로 원자적 교체한다. "t" 필드가 없으므로
+# (server.py 의 _thermal() 과 동일하게) 신선도는 **파일 mtime** 으로 판정한다 —
+# 아래 fresh() 는 payload["t"] 를 기대하므로 이 파일에는 못 쓴다.
+THERMAL_FILE = os.environ.get("ORINCAR_THERMAL_FILE", "/tmp/ir.json")
+# server.py 의 THERMAL_STALE_S 와 같은 값 — 생산 주기(≈1Hz, S15P11E101-663/664/667
+# 로 이미 조사된 하드웨어 제약) 의 3배. 더 짧으면 정상 지터에도 깜빡이고,
+# 더 길면 mlx.getFrame() 이 죽은 뒤에도 옛 프레임을 계속 "연결됨"으로 보낸다.
+THERMAL_STALE_S = 3.0
 # 🆕 클라우드 링크 하트비트 (S15P11E101-657) — 이 브리지가 **쓰기만** 한다.
 #    로컬 대시보드(server.py)가 "지금 클라우드 제어가 살아 있는가"를 판정할 유일한 근거다.
 #    🔑 왜 `alive` 불린이 아니라 **타임스탬프**인가: 프로세스가 죽으면 스스로
@@ -158,7 +175,8 @@ def build_register(robot_id):
 
 
 def build_telemetry(robot_id, nav_live, drive_status, cam, now,
-                    latency_ms=None, estop="RELEASED", status_override=None):
+                    latency_ms=None, estop="RELEASED", status_override=None,
+                    env=None):
     """RobotPacket TELEMETRY 를 조립한다. 없는 값은 아예 넣지 않는다.
 
     필드를 null 로 채우기보다 생략한다 — 서버 DTO 는 unknown 무시라서
@@ -183,6 +201,13 @@ def build_telemetry(robot_id, nav_live, drive_status, cam, now,
 
     if fresh(cam, now) and cam.get("det_fps") is not None:
         packet["inferenceFps"] = cam.get("det_fps")
+
+    # env.json 은 nav_live/drive_status/cam 과 달리 "t" 가 아니라 "ts" 를 쓴다
+    # (esp32_base_node.py._handle_env_telemetry) — fresh() 를 그대로 못 쓴다.
+    if env and env.get("ts") is not None and (now - float(env["ts"])) <= STALE_SEC:
+        battery = env.get("battery") or {}
+        if battery.get("connected") and battery.get("percent") is not None:
+            packet["battery"] = battery.get("percent")
 
     if latency_ms is not None:
         packet["commLatencyMs"] = int(latency_ms)
@@ -238,7 +263,9 @@ def build_nav_live(robot_id, nav_live):
 def build_video(robot_id, cam, seq):
     """cam.json 의 FRONT(RGB) jpeg 를 VIDEO_FRAME 으로. 없으면 None.
 
-    THERMAL 채널·maxTemp 는 로봇이 아직 생산하지 않는다 — 생기면 여기 채널을 늘린다.
+    THERMAL 채널은 build_thermal() 이 맡는다 (S15P11E101 열화상 관제 미표시 수정,
+    2026-08-04) — 로봇은 이제 MLX90640 을 생산한다(server.py /api/thermal 로 실측
+    확인됨). 아래는 그 채널의 구현이다.
     """
     if not cam or not cam.get("jpeg"):
         return None
@@ -250,6 +277,146 @@ def build_video(robot_id, cam, seq):
         "format": "jpeg",
         "data": cam["jpeg"],
         "seq": seq,
+    }
+
+
+# 🆕 열화상 색 그라데이션 — tools/orin-dashboard/static/index.html 의 irColor() 와
+# 정확히 같은 세 구간 기준이다(같은 저장소 안의 로컬 대시보드 색 규칙과 다르게
+# 보이면 "관제에서 다른 색으로 뜬다"는 새로운 혼란이 생긴다). 실측 근거 없는
+# 잠정값이라는 것도 그대로 승계 — 값을 여기서 새로 지어내지 않는다.
+IR_COOL_C, IR_WARM_C, IR_HOT_C = 20.0, 35.0, 45.0
+
+
+def _ir_color(temp_c):
+    """온도(°C) → (r,g,b) 0~255. index.html irColor() 포팅 — 실온은 무채색,
+    뜨거울 때만 색이 들어온다."""
+    if temp_c <= IR_WARM_C:
+        k = max(0.0, min(1.0, (temp_c - IR_COOL_C) / (IR_WARM_C - IR_COOL_C)))
+        g = 30 + k * 200
+        return int(g), int(g), int(g)
+    if temp_c <= IR_HOT_C:
+        k = (temp_c - IR_WARM_C) / (IR_HOT_C - IR_WARM_C)
+        return (int(230 + k * (255 - 230)), int(230 + k * (140 - 230)),
+                int(230 + k * (0 - 230)))
+    k = max(0.0, min(1.0, (temp_c - IR_HOT_C) / 15.0))
+    return 255, int(40 + k * (255 - 40)), int(0 + k * (255 - 0))
+
+
+def _png_chunk(tag, data):
+    return (struct.pack(">I", len(data)) + tag + data
+            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+
+
+def _encode_thermal_png(pixels_c, width, height):
+    """온도(°C) 그리드를 8-bit RGB PNG 로 그려 base64 문자열로 돌려준다.
+
+    표준 라이브러리만 쓴다(zlib·struct·base64) — 모듈 docstring 의 "표준 lib
+    원칙" 예외는 websockets 하나뿐이라, PIL 등 이미지 라이브러리를 새로 넣지
+    않는다. 해상도는 원본 그대로(기본 32×24) 둔다 — 로컬 대시보드도 서버에서
+    업스케일하지 않고 캔버스에서 pixelated 로 키운다(index.html), 그 관례를
+    따른다.
+    """
+    row_stride = width * 3
+    raw = bytearray((row_stride + 1) * height)
+    pos = 0
+    for y in range(height):
+        raw[pos] = 0                              # PNG 필터 타입: None
+        pos += 1
+        base = y * width
+        for x in range(width):
+            r, g, b = _ir_color(pixels_c[base + x])
+            raw[pos] = r
+            raw[pos + 1] = g
+            raw[pos + 2] = b
+            pos += 3
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    idat = zlib.compress(bytes(raw), 6)
+    png = (b"\x89PNG\r\n\x1a\n" + _png_chunk(b"IHDR", ihdr)
+           + _png_chunk(b"IDAT", idat) + _png_chunk(b"IEND", b""))
+    return base64.b64encode(png).decode("ascii")
+
+
+def _rotate_cw90(pixels_c, width, height):
+    """그리드를 시계방향 90도 회전한다. (width, height) → (height, width) 로 바뀐다.
+
+    🔴 [2026-08-04] 1차 시도(좌우반전, _mirror_horizontal — 이제 삭제)를 배포했으나
+    사용자가 화면에서 재확인한 결과 여전히 방향이 안 맞았다. 사용자가 육안으로
+    직접 비교해 **시계방향 90도 회전**으로 지시했다 — 반전은 틀린 것으로 판명났으므로
+    빼고 회전만 적용한다(둘을 합성하지 않는다).
+    공식: 원본 (row=y, col=x), 0<=y<height, 0<=x<width 가
+          결과 (row=x, col=height-1-y) 로 옮겨간다 — 결과 격자는 width_new=height,
+          height_new=width. (numpy 였다면 np.rot90(grid, k=-1) 과 동일)
+    ⚠️ 여전히 안 맞으면: 반시계(k=1, new[width-1-x][y])나 180도를 시도할 것 —
+    이번에도 실측(예: 알려진 방향에 손 대고 확인) 없이 사용자 육안 판단만으로 정한
+    값이다.
+    """
+    new_width, new_height = height, width
+    out = [0.0] * (new_width * new_height)
+    for y in range(height):
+        row_base = y * width
+        for x in range(width):
+            new_row = x
+            new_col = height - 1 - y
+            out[new_row * new_width + new_col] = pixels_c[row_base + x]
+    return out, new_width, new_height
+
+
+def _rotate_cw180(pixels_c, width, height):
+    """그리드를 시계방향 180도 회전한다. 치수는 그대로(width, height) 유지된다.
+
+    🔴 [2026-08-04 · 3차 수정] 90도 회전(_rotate_cw90)을 배포했으나 사용자가
+    화면에서 재확인한 결과 여전히 안 맞았고, 이번엔 **180도**로 지시했다 —
+    직전 수정(90도)을 **대체**한다(90도에 90도를 더 얹는 게 아니라, 원본
+    기준 180도가 정답이라는 뜻). 구현은 _rotate_cw90 을 두 번 적용한 것과
+    같다(검증하기 가장 쉬운 형태 — 90도 함수 자체는 이미 별도로 테스트돼 있다).
+    (numpy 였다면 np.rot90(grid, k=-2) 과 동일 — 단순 pixels_c[::-1] 전체반전과도
+    수학적으로 동치다: 180도 회전은 좌우반전 + 상하반전의 합성이다.)
+    ⚠️ 이번에도 실측이 아니라 사용자 육안 판단 기준이다. 또 안 맞으면 다음은
+    반시계 90도(k=1)를 시도할 차례 — 시계 90/180 을 순서대로 배제했으니 남은
+    후보는 그것과 무회전뿐이다.
+    """
+    rotated, w2, h2 = _rotate_cw90(pixels_c, width, height)
+    rotated, w2, h2 = _rotate_cw90(rotated, w2, h2)
+    return rotated, w2, h2
+
+
+def build_thermal(robot_id, thermal, seq):
+    """THERMAL_FILE(/tmp/ir.json)의 MLX90640 그리드를 VIDEO_FRAME(channel=THERMAL)
+    으로. server.py 의 /api/thermal(_thermal()) 과 같은 계약을 따른다 — pixels 는
+    온도(°C)*10 의 int, width/height 기본 32/24.
+
+    신선도(파일이 오래됐는지)는 이 함수의 책임이 아니다 — 호출부(Bridge.thermal_sender)
+    가 mtime 을 보고 판단해서 넘긴다. THERMAL_FILE 에는 cam.json 과 달리 "t" 필드가
+    없어서(server.py 의 _thermal() 도 os.path.getmtime 을 쓴다) 이 모듈의 fresh()
+    로는 판정할 수 없다 — 그래서 여기서는 순수 변환만 한다(테스트하기도 더 쉽다).
+
+    FE 계약(FE/bbiyong-react LiveSimBridge.tsx) — 채널이 Uint8Array 가 아니면
+    {channel, format, data, maxTemp} 형태의 이미지 프레임을 기대하고
+    `data:image/${format};base64,${data}` 로 그린다. maxTemp 는 캔버스 HUD
+    ("MAX xx.x°C")에 그대로 쓰인다(Simulation.ts).
+    """
+    if not thermal:
+        return None
+    pixels_raw = thermal.get("pixels") or []
+    width = thermal.get("width", 32)
+    height = thermal.get("height", 24)
+    if not pixels_raw or len(pixels_raw) != width * height:
+        return None
+    try:
+        pixels_c = [float(v) / 10.0 for v in pixels_raw]
+        pixels_c, width, height = _rotate_cw180(pixels_c, width, height)
+        data = _encode_thermal_png(pixels_c, width, height)
+    except (TypeError, ValueError, struct.error):
+        return None
+    return {
+        "source": "robot",
+        "type": "VIDEO_FRAME",
+        "robot_id": robot_id,
+        "channel": "THERMAL",
+        "format": "png",
+        "data": data,
+        "seq": seq,
+        "maxTemp": round(max(pixels_c), 1),
     }
 
 
@@ -505,6 +672,7 @@ class Bridge:
             nav_live = read_json(NAV_LIVE_FILE)
             drive_status = read_json(DRIVE_STATUS_FILE)
             cam = read_json(CAM_FILE)
+            env = read_json(ENV_FILE)
 
             latency_ms = None
             if ws.latency:  # websockets 가 ping/pong 으로 관측한 왕복(초)
@@ -523,6 +691,7 @@ class Bridge:
                 status_override=select_mission_status(
                     mapping_status, navigation_status
                 ),
+                env=env,
             )
             await ws.send(json.dumps(packet))
 
@@ -766,6 +935,8 @@ class Bridge:
                 tasks.append(self.h264_video_sender(ws))
             elif self.video_transport == "jpeg":
                 tasks.append(self.video_sender(ws))
+            if self.thermal_enabled:
+                tasks.append(self.thermal_sender(ws))
             await asyncio.gather(*tasks)
 
     async def _connection_loop(self):
