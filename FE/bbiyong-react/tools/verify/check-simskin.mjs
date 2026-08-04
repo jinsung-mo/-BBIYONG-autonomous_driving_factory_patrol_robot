@@ -98,9 +98,20 @@ const setTheme = async (want) => {
 await send('Page.enable'); await send('Runtime.enable')
 await enter('mock')
 
+// 긴급 정지·순찰 복귀 버튼은 조작 패널에서 걷어냈다(S15P11E101-688).
+// 명령은 Shift 단축키로 남아 있다 — 한 번 누르면 정지, 다시 누르면 순찰 복귀 토글이다.
+const shiftTap = async () => {
+  for (const type of ['keyDown', 'keyUp']) {
+    await send('Input.dispatchKeyEvent', { type, key: 'Shift', code: 'ShiftLeft',
+      windowsVirtualKeyCode: 16, nativeVirtualKeyCode: 16 })
+  }
+}
+
 console.log('\n[1] 스킨이 시뮬레이션 화면에만 붙는가')
 console.log('  #pgB class :', await ev(`document.querySelector('#pgB')?.className`))
-console.log('  → 시뮬에 sim-skin :', ok(await ev(`document.querySelector('#pgB')?.classList.contains('sim-skin')`)))
+// 시뮬 관제는 지도·카메라 두 화면으로 나뉘었다. #pgB 는 실서버 전용이 됐다.
+console.log('  → 시뮬에 sim-skin :', ok(await ev(`[...document.querySelectorAll('#pgMap,#pgCam')].length>0
+  && [...document.querySelectorAll('#pgMap,#pgCam')].every(e=>e.classList.contains('sim-skin'))`)))
 
 console.log('\n[2] 대표 지표 게이지')
 console.log('  게이지 :', await ev(`document.querySelector('.rgauge')?.getAttribute('class')`))
@@ -128,11 +139,11 @@ writeFileSync(OUT + 'S-sim-dark.png', Buffer.from(s1, 'base64'))
 
 console.log('\n[4] 조작이 그대로 되는가')
 const before = await ev(`document.querySelector('#pStatus .kv b.st')?.textContent?.trim()`)
-await ev(`[...document.querySelectorAll('.dbtn.stop')][0]?.click()`); await sleep(900)
+await shiftTap(); await sleep(900)
 const after = await ev(`document.querySelector('#pStatus .kv b.st')?.textContent?.trim()`)
 console.log('  E-STOP :', before, '→', after)
 console.log('  → 긴급 정지 동작 :', ok(/체결/.test(String(after))))
-await ev(`[...document.querySelectorAll('.dbtn.go')][0]?.click()`); await sleep(900)
+await shiftTap(); await sleep(900)
 console.log('  → 순찰 복귀 동작 :', ok(/해제/.test(String(await ev(`document.querySelector('#pStatus .kv b.st')?.textContent`)))))
 await ev(`[...document.querySelectorAll('.seg button')][1]?.click()`); await sleep(600)
 console.log('  → 수동 모드 전환 :', ok(await ev(`[...document.querySelectorAll('.seg button')][1]?.classList.contains('on')`)))
@@ -144,8 +155,6 @@ console.log('\n[5] 두 테마 모두에서 글자가 읽히는가')
 // 그라데이션은 정지점마다 재고 가장 나쁜 값을 취한다(CONTRAST 참고).
 const TARGETS = [
   ['순찰 모드', '.seg button.on'],
-  ['긴급 정지', '.dbtn.stop'],
-  ['순찰 복귀', '.dbtn.go'],
   ['게이지 값', '.rgauge-mid b'],
   ['상태 라벨', '#pStatus .kv span'],
   ['지표 값', '#pStatus .env b'],

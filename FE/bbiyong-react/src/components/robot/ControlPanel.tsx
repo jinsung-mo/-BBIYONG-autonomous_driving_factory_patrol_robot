@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
-import { DRIVE_VECTORS, speedParams, clampDriveSpeed } from '../../live/mappers.ts'
-import { worldToCell } from '../../live/config.ts'
-import { useSettings } from '../../settings/SettingsContext.tsx'
+import { DRIVE_VECTORS } from '../../live/mappers.ts'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import CapBadge from './CapBadge.tsx'
 import CameraTilt from './CameraTilt.tsx'
 
-// 순찰 로봇 수동 조작 패널 (WASD 이동 · 모드 · 지점이동)
+// 순찰 로봇 수동 조작 패널 (WASD 이동 · 모드 · 카메라 각도)
 //
 // live 모드에서는 각 버튼이 /app/control/* 로 STOMP 발행한다(가이드 §4).
 // - 방향키는 누르는 동안 DRIVE, 떼면 정지(0,0)를 보낸다.
@@ -27,23 +25,13 @@ const RESUME_WAIT_MS = 4000
 export default function ControlPanel() {
   const { status, activeKeys, actions } = useSim()
   const {
-    enabled, connected, control, telemetry, speed, setSpeed, robotOnline,
+    enabled, connected, control, telemetry, robotOnline,
     driveMode: seg, setDriveMode: setSeg,
   } = useLive()
-  const { settings } = useSettings()
   const { canOperate } = useAuth()
-  // 순찰 지점은 설정 탭에서 등록/편집한다(S15P11E101-475). 관제에서는 실행만 한다.
-  const points = settings.points
-  const [gotoId, setGotoId] = useState(points[0]?.id)
   // 조작 결과 안내 — 명령이 조용히 버려지는 경우를 알린다(S15P11E101-595)
   const [ctlMsg, setCtlMsg] = useState<{ kind: string, text: string } | null>(null)
-  // Shift 를 누르고 있는 동안 그 키가 실행할 버튼을 눌린 모양으로 보여 준다.
-  // 방향 버튼이 WASD 에 반응하는 것과 같은 규칙이다 — 키가 먹었는지 화면으로 알 수 있어야
-  // '단축키가 안 듣는다'는 오해가 생기지 않는다.
-  const [shiftHeld, setShiftHeld] = useState(false)
   const resumeTimer = useRef<any>(null)
-  const goal = points.find((p: any) => p.id === gotoId) || points[0]
-  const spd = speedParams(settings.vMax)
 
   // 모드 토글은 '사용자가 고른 제어 모드'다 — 버튼을 누를 때만 바뀐다.
   //
@@ -144,24 +132,6 @@ export default function ControlPanel() {
     if (liveReady) { control.setMode(man ? 'manual' : 'autonomy'); warnIfOffline() }
     else actions.setSeg(man)
   }
-  // 속도는 live(발행 배율)와 mock(표시 속도) 양쪽에 함께 반영한다 — 어느 모드에서도 죽은 버튼이 되지 않게
-  const onSetSpeed = (v: any) => {
-    const next = clampDriveSpeed(v, settings.vMax)
-    setSpeed(next)
-    actions.setManualSpeed(next)
-  }
-  const speedPct = ((speed - spd.min) / (spd.max - spd.min)) * 100
-
-  const onGoto = () => {
-    if (!goal) return
-    // 저장값은 미터(map 프레임)다. 실서버는 그대로 보내고, 시뮬은 격자로 환산해 넘긴다.
-    if (liveReady) { control.navigate(goal.x, goal.y, 0); warnIfOffline() }
-    else {
-      const { c, r } = worldToCell(goal.x, goal.y)
-      actions.goto(`${c},${r}`, goal.label)
-    }
-  }
-
   // ---- 단축키 ----
   // 리스너는 enabled/connected 가 바뀔 때만 다시 걸고, 그때그때의 상태·핸들러는 ref로 읽는다
   // (핸들러가 매 렌더 새로 만들어지므로 의존성에 넣으면 리스너를 계속 재등록하게 된다).
@@ -200,11 +170,10 @@ export default function ControlPanel() {
 
     const onDown = (e: any) => {
       if (e.key === 'Shift') {
-        if (!e.repeat && !isTyping(e.target)) { shiftAlone = true; setShiftHeld(true) }
+        if (!e.repeat && !isTyping(e.target)) { shiftAlone = true }
         return
       }
-      // Shift 와 다른 키를 함께 누르면 단축키가 아니다 — 눌린 표시도 함께 거둔다
-      if (shiftAlone) setShiftHeld(false)
+      // Shift 와 다른 키를 함께 누르면 단축키가 아니다
       shiftAlone = false
       // 주행 키는 모드를 건드리지 않는다(S15P11E101-513). 실제 주행 발행은
       // live 는 LiveSimBridge, mock 은 useSimulation 의 키 리스너가 맡는다.
@@ -221,7 +190,6 @@ export default function ControlPanel() {
     }
     const onUp = (e: any) => {
       if (e.key !== 'Shift') return
-      setShiftHeld(false)
       if (!shiftAlone) return
       shiftAlone = false
       if (isTyping(e.target)) return
@@ -231,7 +199,7 @@ export default function ControlPanel() {
       else s.onEmergencyStop()
     }
     // 창을 벗어나면 keyup 을 못 받는다 — 눌린 채로 굳지 않게 함께 푼다
-    const onBlur = () => { shiftAlone = false; setShiftHeld(false) }
+    const onBlur = () => { shiftAlone = false }
 
     window.addEventListener('keydown', onDown)
     window.addEventListener('keyup', onUp)
@@ -255,80 +223,17 @@ export default function ControlPanel() {
         <CapBadge capKey={CAP_KEYS.drive} />
       </h3>
       <div className="ctl">
-        {/* 비상·복구 조작은 이동 조작(방향 버튼·모드·지점 이동)과 떼어 놓는다 — 조작 중 오클릭 방지 */}
-        <div className="col">
-          {/* Shift 뱃지는 지금 그 키가 실행할 버튼에만 붙인다 — 어느 쪽으로 토글되는지 화면으로 알 수 있게 */}
-          <button
-            className={`dbtn stop keyed${shiftHeld && !estopEngaged ? ' active' : ''}`}
-            onClick={onEmergencyStop}
-            disabled={estopOff}
-            aria-keyshortcuts={estopEngaged ? undefined : 'Shift'}
-          >
-            <span>■ 긴급 정지</span>
-            {!estopEngaged && <kbd className="kbd">Shift</kbd>}
-          </button>
-          {/* 순찰 복귀는 조작 권한이 필요하다 — 눌러도 나가지 않을 버튼을 눌린 것처럼 보이면 안 된다 */}
-          <button
-            className={`dbtn go keyed${shiftHeld && estopEngaged && !ctlOff ? ' active' : ''}`}
-            onClick={onReturnPatrol}
-            disabled={ctlOff}
-            aria-keyshortcuts={estopEngaged ? 'Shift' : undefined}
-          >
-            <span>⇤ 순찰 복귀</span>
-            {estopEngaged && <kbd className="kbd">Shift</kbd>}
-          </button>
-
-          {/* 주행 속도와 카메라 각도는 배치가 같아(− 게이지 +) 가로로 나란히 둔다.
-              세로로 쌓으면 낮은 창에서 카메라 각도가 먼저 밀려났다(S15P11E101-595). */}
-          <div className="gauges">
-          {/* 주행 속도 — 방향 단위벡터에 이 값을 곱해 발행한다 */}
-          <div className="spd">
-            <div className="spdlab">
-              <span>주행 속도</span><b className="mono">{speed.toFixed(2)} m/s</b>
-            </div>
-            <div className="spdr">
-              <button
-                className="dbtn"
-                onClick={() => onSetSpeed(speed - spd.step)}
-                disabled={ctlOff || speed <= spd.min}
-                aria-label="주행 속도 낮추기"
-              >
-                −
-              </button>
-              <div
-                className="spdbar"
-                role="slider"
-                aria-label="주행 속도"
-                aria-valuemin={spd.min}
-                aria-valuemax={spd.max}
-                aria-valuenow={speed}
-                aria-valuetext={`${speed.toFixed(2)} m/s`}
-              >
-                <i style={{ width: `${speedPct}%` }} />
-              </div>
-              <button
-                className="dbtn"
-                onClick={() => onSetSpeed(speed + spd.step)}
-                disabled={ctlOff || speed >= spd.max}
-                aria-label="주행 속도 높이기"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          {/* 카메라 상하 각도 — 주행 속도와 같은 '− 게이지 +' 배치(S15P11E101-521) */}
-          <CameraTilt />
-          </div>
-        </div>
-
-        {/* 우측 열 — 방향 패드·모드·지점 이동. 좌측 열과 아래 끝을 맞춘다(S15P11E101-595) */}
-        <div className="ctl-right">
+        {/* 좌: 방향키 — 손이 가장 자주 가는 것이라 한 덩어리로 크게 둔다 */}
+        <div className="ctl-pad">
           {/* 실제 키보드 방향키(inverted-T): △ 위 / ◁ ▽ ▷ 아래 한 줄 */}
           <div className="dpad">
             <span />{key('w')}<span />
             {key('a')}{key('s')}{key('d')}
           </div>
+        </div>
+
+        {/* 우: 모드 전환, 그 아래 카메라 각도. 방향키 덩어리와 높이를 맞춘다 */}
+        <div className="ctl-right">
           <div className="seg">
             <button
               className={seg === 'patrol' ? 'on' : ''}
@@ -351,12 +256,8 @@ export default function ControlPanel() {
             </button>
           </div>
 
-          <div className="gotor">
-            <select value={gotoId} onChange={(e) => setGotoId(e.target.value)} disabled={ctlOff}>
-              {points.map((p: any) => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
-            <button className="dbtn go" onClick={onGoto} disabled={ctlOff}>지점 이동</button>
-          </div>
+          {/* 카메라 상하 각도 — 모드 바로 아래(S15P11E101-521) */}
+          <CameraTilt />
         </div>
       </div>
       {/* 명령이 조용히 버려진 경우를 알린다 — 패널 아래 한 줄로만 쓴다(S15P11E101-595) */}

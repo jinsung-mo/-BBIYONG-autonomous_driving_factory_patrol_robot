@@ -52,6 +52,15 @@ await ev(`localStorage.setItem('bbiyong.dataSource','live'); sessionStorage.remo
 await send('Page.reload'); await sleep(2600)
 await login()
 
+// 긴급 정지·순찰 복귀 버튼은 조작 패널에서 걷어냈다(S15P11E101-688).
+// 명령은 Shift 단축키로 남아 있다 — 한 번 누르면 정지, 다시 누르면 순찰 복귀 토글이다.
+const shiftTap = async () => {
+  for (const type of ['keyDown', 'keyUp']) {
+    await send('Input.dispatchKeyEvent', { type, key: 'Shift', code: 'ShiftLeft',
+      windowsVirtualKeyCode: 16, nativeVirtualKeyCode: 16 })
+  }
+}
+
 console.log('\n[1] 화재 경보가 오면 화면이 점멸하는가')
 console.log('  평소 :', ok(!(await flashing())), '(경보 전에는 점멸하지 않는다)')
 console.log('  구독자 :', fire('2026-08-03T21:04:00Z'), '명에게 FIRE 전달')
@@ -78,13 +87,14 @@ console.log('  → ✕ 로 닫아도 점멸 유지 :', ok(await flashing()), '(�
 console.log('  → 확인 띠는 남아 있다 :', ok(await ackBar()), '(닫아버려 확인할 곳이 없어지면 안 된다)')
 
 console.log('\n[4] 점멸이 조작을 막지 않는가')
-const hit = await ev(`(()=>{const b=[...document.querySelectorAll('.dbtn.stop')][0]; if(!b) return 'no-button'
+// 긴급 정지 버튼이 없어졌으니 다른 조작으로 잰다. 여기(live)는 화면이 하나라 그대로 잡힌다.
+const hit = await ev(`(()=>{const b=[...document.querySelectorAll('.seg button')][0]; if(!b) return 'no-button'
   const r=b.getBoundingClientRect(); const el=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2)
   return el===b||b.contains(el) ? 'button' : (el?.className||el?.tagName||'?')})()`)
-console.log('  긴급 정지 자리에서 잡히는 요소 :', hit)
+console.log('  모드 버튼 자리에서 잡히는 요소 :', hit)
 console.log('  → 클릭이 통과한다 :', ok(hit === 'button'), '(pointer-events:none)')
 const st0 = be.sends.length
-await ev(`[...document.querySelectorAll('.dbtn.stop')][0]?.click()`); await sleep(900)
+await shiftTap(); await sleep(900)
 const stop = be.sends.slice(st0).find((s) => JSON.stringify(s).includes('EMERGENCY') || JSON.stringify(s).includes('STOP'))
 console.log('  → 긴급 정지 발행 :', ok(!!stop), stop ? '' : '(경보 중에 정지가 안 나가면 치명적이다)')
 await ev(`(()=>{const li=[...document.querySelectorAll('#pStatus .elog li')].find(x=>x.querySelector('.logopen'))

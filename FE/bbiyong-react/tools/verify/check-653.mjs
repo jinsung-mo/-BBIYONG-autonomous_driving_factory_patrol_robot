@@ -59,6 +59,15 @@ const setLockedAt = (msAgo) => ev(`localStorage.setItem('bbiyong.lockedAt', Stri
 await send('Page.enable'); await send('Runtime.enable')
 await enter('live')
 
+// 긴급 정지·순찰 복귀 버튼은 조작 패널에서 걷어냈다(S15P11E101-688).
+// 명령은 Shift 단축키로 남아 있다 — 한 번 누르면 정지, 다시 누르면 순찰 복귀 토글이다.
+const shiftTap = async () => {
+  for (const type of ['keyDown', 'keyUp']) {
+    await send('Input.dispatchKeyEvent', { type, key: 'Shift', code: 'ShiftLeft',
+      windowsVirtualKeyCode: 16, nativeVirtualKeyCode: 16 })
+  }
+}
+
 console.log('\n[1] 유휴가 지나면 로그아웃 대신 잠기는가')
 console.log('  평소 잠금 :', ok(!(await lockedUI())))
 const locked1 = await goIdle(70)
@@ -87,19 +96,17 @@ const { data: s1 } = await send('Page.captureScreenshot', { format: 'png' })
 writeFileSync(OUT + 'L653-locked.png', Buffer.from(s1, 'base64'))
 
 console.log('\n[3] 긴급 정지는 잠금과 무관하게 눌리는가')
-console.log('  버튼 비활성? :', await ev(`document.querySelector('.dbtn.stop')?.disabled`))
-console.log('  → 눌 수 있다 :', ok((await ev(`document.querySelector('.dbtn.stop')?.disabled`)) === false))
 const st0 = be.sends.length
-await ev(`document.querySelector('.dbtn.stop')?.click()`); await sleep(1200)
+await shiftTap(); await sleep(1200)
 const stop = be.sends.slice(st0).find((s) => JSON.stringify(s).includes('ESTOP') || JSON.stringify(s).includes('EMERGENCY'))
 console.log('  발행 :', stop ? JSON.stringify(stop.body).slice(0, 70) : '(없음)')
 console.log('  → 실제로 발행됨 :', ok(!!stop), '(무인 시간대에 비밀번호부터 치게 할 수 없다)')
 
 console.log('\n[4] 조작은 막히는가')
-console.log('  → 순찰 복귀 잠김 :', ok(await ev(`document.querySelector('.dbtn.go')?.disabled === true`)))
+console.log('  → 모드 버튼 잠김 :', ok(await ev(`[...document.querySelectorAll('.seg button')].every(b=>b.disabled)`)))
 console.log('  → 방향 패드 잠김 :', ok(await ev(`[...document.querySelectorAll('.dpad button')].every(b=>b.disabled)`)))
 console.log('  → 모드 전환 잠김 :', ok(await ev(`[...document.querySelectorAll('.seg button')].every(b=>b.disabled)`)))
-console.log('  → 지점 이동 잠김 :', ok(await ev(`[...document.querySelectorAll('.gotor .dbtn, .gotor select')].some(b=>b.disabled)`)))
+console.log('  → 카메라 각도 잠김 :', ok(await ev(`[...document.querySelectorAll('#camTilt .dbtn')].every(b=>b.disabled)`)))
 const delBtns = await ev(`document.querySelectorAll('#pStatus .elog .logdel, #pStatus .elog .logopen ~ button').length`)
 console.log('  → 이벤트 삭제/해결 버튼 사라짐 :', ok(delBtns === 0), `(${delBtns}개)`)
 
@@ -141,7 +148,7 @@ await ev(`(()=>{const s=(el,v)=>{const d=Object.getOwnPropertyDescriptor(window.
   const i=document.querySelector('#lockPw'); s(i,'password'); document.querySelector('#btnUnlock').click()})()`)
 await sleep(2600)
 console.log('  → 올바른 비밀번호로 해제 :', ok(!(await lockedUI())))
-console.log('  → 조작 복구 :', ok(await ev(`document.querySelector('.dbtn.go')?.disabled === false`)))
+console.log('  → 조작 복구 :', ok(await ev(`[...document.querySelectorAll('.seg button')].every(b=>!b.disabled)`)))
 console.log('  → 저장소 정리 :', ok(!(await ev(`localStorage.getItem('bbiyong.lockedAt')`))))
 be.setCheckPassword(false)
 
@@ -177,8 +184,10 @@ console.log('\n[12] 시뮬레이션 모드에서도 같은가')
 await enter('mock')
 console.log('  평소 :', ok(!(await lockedUI())))
 console.log('  → 잠김 :', ok(await goIdle(70)))
-console.log('  → 긴급 정지 열림 :', ok(await ev(`document.querySelector('.dbtn.stop')?.disabled === false`)))
-console.log('  → 조작 잠김 :', ok(await ev(`document.querySelector('.dbtn.go')?.disabled === true`)))
+// 잠금 중에도 정지는 나가야 한다 — 시뮬에서는 상태 패널의 E-STOP 표기로 확인한다
+await shiftTap(); await sleep(1000)
+console.log('  → 긴급 정지 열림 :', ok(/체결/.test(String(await ev(`document.querySelector('#pStatus .kv b.st')?.textContent`)))))
+console.log('  → 조작 잠김 :', ok(await ev(`[...document.querySelectorAll('.seg button')].every(b=>b.disabled)`)))
 const lockLog = await ev(`[...document.querySelectorAll('#pStatus .elog li')].map(l=>l.textContent).find(t=>/조작 잠금/.test(t))`)
 console.log('  기록 :', (lockLog || '(없음)').replace(/\s+/g, ' ').trim())
 console.log('  → 이벤트 로그에 남음 :', ok(!!lockLog))

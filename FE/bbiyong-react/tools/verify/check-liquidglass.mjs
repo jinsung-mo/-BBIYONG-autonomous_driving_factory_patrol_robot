@@ -95,7 +95,7 @@ const sat = await ev(`(()=>{const s=getComputedStyle(document.querySelector('#pS
   const f=s.backdropFilter||s.webkitBackdropFilter||''
   const m=/saturate\\(([\\d.]+)\\)/.exec(f); return m?Number(m[1]):null})()`)
 console.log('  채도 배율 :', sat)
-console.log('  → 1 보다 크다 :', ok(sat > 1), '(뒤 색을 표면으로 끌어올린다)')
+console.log('  → 유리 잔재 없음 :', ok(sat === null), '(navexa 는 그림자로만 층을 만든다)')
 // 서로 다른 색장 위에 놓인 두 판이 실제로 다른 색을 띠는지 픽셀로 확인한다
 const boxes = await ev(`(()=>{const g=(s)=>{const r=document.querySelector(s).getBoundingClientRect()
     return {x:Math.round(r.left+24), y:Math.round(r.top+24)}}
@@ -116,11 +116,12 @@ const radii = await ev(`(()=>{const g=(s)=>{const el=document.querySelector(s); 
   return {panel:g('#pStatus'), card:g('#pStatus .stat-card'), env:g('#pStatus .env div'), log:g('#pStatus .elog li')}})()`)
 console.log('  판 :', JSON.stringify(radii?.panel))
 console.log('  안쪽 : stat-card', radii?.card?.r, '· env', radii?.env?.r, '· log', radii?.log?.r)
-const expect = (radii?.panel?.r ?? 0) - (radii?.panel?.pl ?? 0)
-console.log('  기대값 = 바깥', radii?.panel?.r, '− 여백', radii?.panel?.pl, '=', expect)
-console.log('  → 동심원 규칙 준수 :',
-  ok([radii?.card?.r, radii?.env?.r, radii?.log?.r].every((v) => Math.abs(v - expect) <= 1.5)),
-  '(어긋나면 두 곡선이 평행하지 않아 눈에 거슬린다)')
+const outer = radii?.panel?.r ?? 0
+const TOKENS = [8, 16, 24]
+console.log('  바깥', outer, '· 반경 토큰', TOKENS.join('/'))
+console.log('  → 토큰 안에서 바깥보다 작다 :',
+  ok([radii?.card?.r, radii?.env?.r, radii?.log?.r].every((v) => TOKENS.includes(v) && v < outer)),
+  '(안쪽이 바깥과 같거나 크면 두 곡선이 부딪힌다)')
 
 console.log('\n[5] 콘텐츠는 유리로 덮지 않는다')
 const vwrap = await ev(`(()=>{const s=getComputedStyle(document.querySelector('#pCam .vwrap'))
@@ -157,7 +158,8 @@ const CONTRAST = `(sel)=>{
 }`
 const T = [['패널 제목', '#pStatus h3'], ['상태 라벨', '#pStatus .kv span'], ['상태 값', '#pStatus .kv b'],
   ['지표 값', '#pStatus .env b'], ['로그 본문', '#pStatus .elog li b'], ['게이지 값', '.rgauge-mid b'],
-  ['긴급 정지', '.dbtn.stop'], ['순찰 복귀', '.dbtn.go'], ['순찰 모드', '.seg button.on']]
+  // 긴급 정지·순찰 복귀 버튼은 패널에서 걷어냈다(S15P11E101-688)
+  ['순찰 모드', '.seg button.on']]
 for (const want of ['dark', 'light']) {
   console.log(`  --- ${await setTheme(want)} ---`)
   const got = []
