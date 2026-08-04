@@ -3,6 +3,7 @@ package com.bbiyong.server.event;
 import com.bbiyong.server.event.domain.EventLog;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.service.EventLogService;
+import com.bbiyong.server.event.service.AlertBroadcastService;
 import com.bbiyong.server.notification.service.NotificationDispatchService;
 import com.bbiyong.server.video.repository.VideoClipRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
@@ -19,6 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,9 +33,10 @@ class EventSavedNotifyTests {
     private final NotificationDispatchService notificationDispatchService = mock(NotificationDispatchService.class);
     private final VideoClipRepository videoClipRepository = mock(VideoClipRepository.class);
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
+    private final AlertBroadcastService alertBroadcastService = mock(AlertBroadcastService.class);
 
     private final EventLogService service = new EventLogService(
-            eventLogRepository, notificationDispatchService, videoClipRepository, sessionManager);
+            eventLogRepository, notificationDispatchService, videoClipRepository, sessionManager, alertBroadcastService);
 
     private RobotPacket firePacket(String robotId) {
         RobotPacket p = new RobotPacket();
@@ -81,5 +84,22 @@ class EventSavedNotifyTests {
         service.handleFireEvent(new RobotFireEvent(this, firePacket(null)));
 
         verify(sessionManager, never()).sendCommand(any(), any());
+    }
+
+    @Test
+    void suppressesDuplicateRobotFireWithinOneMinuteForAllAlertDestinations() {
+        when(eventLogRepository.save(any(EventLog.class))).thenAnswer(inv -> {
+            EventLog e = inv.getArgument(0);
+            e.setEventId(1234L);
+            return e;
+        });
+
+        service.handleFireEvent(new RobotFireEvent(this, firePacket("orinka_01")));
+        service.handleFireEvent(new RobotFireEvent(this, firePacket("orinka_01")));
+
+        verify(eventLogRepository, times(1)).save(any(EventLog.class));
+        verify(sessionManager, times(1)).sendCommand(eq("orinka_01"), any());
+        verify(alertBroadcastService, times(1)).broadcast(any());
+        verify(notificationDispatchService, times(1)).enqueue(any(EventLog.class), eq(null));
     }
 }

@@ -11,6 +11,8 @@ import org.springframework.web.client.RestTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -40,14 +42,21 @@ class MattermostNotifierTests {
         event.setEventId(1L);
         event.setType("FIRE");
         event.setLevel("CRITICAL");
-        event.setMessage("[테스트] 화재 감지");
-        event.setTimestamp(Instant.now());
+        event.setMessage("화재 발생");
+        event.setConfidence(0.95);
+        event.setX(0.0);
+        event.setY(0.0);
+        event.setTimestamp(Instant.parse("2026-08-04T01:26:17Z"));
 
         server.expect(requestTo(setting.getMattermostWebhookUrl()))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(content().string(containsString("payload=")))
                 .andExpect(content().string(not(containsString("channel"))))
+                .andExpect(content().string(containsString(URLEncoder.encode("화재 발생", StandardCharsets.UTF_8))))
+                .andExpect(content().string(containsString("2026-08-04+10%3A26%3A17")))
+                .andExpect(content().string(not(containsString(URLEncoder.encode("신뢰도", StandardCharsets.UTF_8)))))
+                .andExpect(content().string(not(containsString(URLEncoder.encode("위치", StandardCharsets.UTF_8)))))
                 .andRespond(withSuccess());
 
         notifier.sendEventNotification(setting, event);

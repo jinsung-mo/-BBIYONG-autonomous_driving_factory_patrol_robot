@@ -13,6 +13,8 @@ import org.springframework.util.MultiValueMap;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Mattermost 웹훅 알림 발송 서비스
@@ -20,6 +22,10 @@ import java.util.Map;
 @Slf4j
 @Service
 public class MattermostNotifier {
+
+    private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter DISPLAY_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(KOREA_ZONE);
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -110,15 +116,7 @@ public class MattermostNotifier {
     private String buildMessageText(EventLog event) {
         StringBuilder sb = new StringBuilder();
 
-        // 헤더
-        sb.append("### ");
-        if ("CRITICAL".equals(event.getLevel())) {
-            sb.append("🚨 긴급 알림");
-        } else if ("WARNING".equals(event.getLevel())) {
-            sb.append("⚠️ 경고 알림");
-        } else {
-            sb.append("ℹ️ 정보 알림");
-        }
+        sb.append("### ").append(getAlertTitle(event));
         sb.append("\n\n");
 
         // 이벤트 정보
@@ -133,7 +131,7 @@ public class MattermostNotifier {
             sb.append("**설비 ID**: ").append(event.getEquipmentId()).append("\n");
         }
 
-        if (event.getX() != null && event.getY() != null) {
+        if (hasMeaningfulLocation(event)) {
             sb.append("**위치**: (").append(String.format("%.2f", event.getX()))
               .append(", ").append(String.format("%.2f", event.getY())).append(")\n");
         }
@@ -146,15 +144,12 @@ public class MattermostNotifier {
             sb.append("\n");
         }
 
-        if (event.getConfidence() != null) {
-            sb.append("**신뢰도**: ").append(String.format("%.1f", event.getConfidence() * 100)).append("%\n");
+        if (event.getMessage() != null && !event.getMessage().isBlank()
+                && !event.getMessage().equals(getEventTypeKorean(event.getType()))) {
+            sb.append("\n**메시지**: ").append(event.getMessage()).append("\n");
         }
 
-        // 메시지
-        sb.append("\n**메시지**: ").append(event.getMessage()).append("\n");
-
-        // 타임스탬프
-        sb.append("\n**발생 시각**: ").append(event.getTimestamp().toString());
+        sb.append("\n**발생 시각**: ").append(DISPLAY_TIME_FORMAT.format(event.getTimestamp()));
 
         return sb.toString();
     }
@@ -173,5 +168,18 @@ public class MattermostNotifier {
             default:
                 return type;
         }
+    }
+
+    private String getAlertTitle(EventLog event) {
+        return switch (event.getType()) {
+            case "FIRE" -> "🚨 화재 발생";
+            case "OVERHEAT" -> "⚠️ 과열 감지";
+            default -> "ℹ️ " + getEventTypeKorean(event.getType());
+        };
+    }
+
+    private boolean hasMeaningfulLocation(EventLog event) {
+        return event.getX() != null && event.getY() != null
+                && (Double.compare(event.getX(), 0.0) != 0 || Double.compare(event.getY(), 0.0) != 0);
     }
 }
