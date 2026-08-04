@@ -123,6 +123,44 @@ console.log('  → 분전반·장애물 아이콘 크기 동일 :', ok(await ev(
 })()`)))
 console.log('  → 2D 맵핑 지도 제목·영문 배지 없음 :', ok(await ev(`!document.querySelector('#pgMap #pMap > h3')`)))
 console.log('  → 조작 패널은 지도 화면에 없다 :', ok(!(await ev(`!!document.querySelector('#pgMap #pControl')`))))
+const zoomIn = await box('#pgMap .map-control.zoom-in')
+const zoomOut = await box('#pgMap .map-control.zoom-out')
+const mapFullscreen = await box('#pgMap .map-control.fullscreen')
+console.log('  → 확대·축소·전체화면 3버튼 :', ok(!!zoomIn && !!zoomOut && !!mapFullscreen
+  && zoomIn.left === zoomOut.left && zoomOut.left === mapFullscreen.left
+  && zoomIn.w === zoomOut.w && zoomOut.w === mapFullscreen.w
+  && zoomIn.top < zoomOut.top && zoomOut.top < mapFullscreen.top))
+const zoomBefore = await ev(`getComputedStyle(document.querySelector('#pgMap .map-zoom-canvas')).transform`)
+await ev(`document.querySelector('#pgMap .map-control.zoom-in').click()`); await sleep(240)
+const zoomAfter = await ev(`getComputedStyle(document.querySelector('#pgMap .map-zoom-canvas')).transform`)
+await ev(`document.querySelector('#pgMap .map-control.zoom-out').click()`); await sleep(240)
+const zoomRestored = await ev(`getComputedStyle(document.querySelector('#pgMap .map-zoom-canvas')).transform`)
+console.log('  → + 확대·− 축소 실제 동작 :', ok(zoomBefore !== zoomAfter && zoomBefore === zoomRestored))
+if (mapFullscreen) {
+  const x = mapFullscreen.left + mapFullscreen.w / 2
+  const y = mapFullscreen.top + mapFullscreen.h / 2
+  await send('Input.dispatchMouseEvent', { type:'mousePressed', x, y, button:'left', clickCount:1 })
+  await send('Input.dispatchMouseEvent', { type:'mouseReleased', x, y, button:'left', clickCount:1 })
+  await sleep(500)
+}
+const enteredFullscreen = await ev(`document.fullscreenElement===document.documentElement`)
+console.log('  → 네모 버튼 전체화면 진입 :', ok(enteredFullscreen))
+console.log('  → 전체화면에도 상단바 유지 :', ok(await ev(`(()=>{
+  const nav=document.querySelector('#nav.sim-nav')?.getBoundingClientRect()
+  const map=document.querySelector('#pgMap .vwrap')?.getBoundingClientRect()
+  const hero=getComputedStyle(document.querySelector('#pgMap .nav-hero')).display
+  const side=getComputedStyle(document.querySelector('#pgMap .nav-side')).display
+  return !!nav&&!!map&&nav.height>50&&map.top>=nav.bottom&&map.width>innerWidth*.9
+    &&hero==='none'&&side==='none'
+})()`)))
+if (enteredFullscreen) {
+  const shot = await send('Page.captureScreenshot', { format:'png' })
+  writeFileSync(OUT + 'X-map-fullscreen.png', Buffer.from(shot.data, 'base64'))
+  await send('Input.dispatchKeyEvent', { type:'keyDown', key:'Escape', code:'Escape', windowsVirtualKeyCode:27, nativeVirtualKeyCode:27 })
+  await send('Input.dispatchKeyEvent', { type:'keyUp', key:'Escape', code:'Escape', windowsVirtualKeyCode:27, nativeVirtualKeyCode:27 })
+  await sleep(400)
+}
+console.log('  → Esc 전체화면 종료 :', ok(!(await ev(`!!document.fullscreenElement`))))
 
 await goTab('카메라')
 console.log('  → 카메라 화면 :', ok(await ev(`!!document.querySelector('#pgCam')`)))
@@ -204,6 +242,45 @@ console.log('  → 열화상 테두리가 중성 블루그레이 :', ok(await ev
 })()`)))
 console.log('  → 두 영상 모두 캔버스 살아 있음 :', ok(await ev(`(()=>{const c=[...document.querySelectorAll('#pgCam canvas')]
   return c.length===2 && c.every(x=>x.width>0)})()`)))
+
+const camZoomIn = await box('#pgCam .camera-controls .zoom-in')
+const camZoomOut = await box('#pgCam .camera-controls .zoom-out')
+const camFullscreen = await box('#pgCam .camera-controls .fullscreen')
+console.log('  → 카메라 확대·축소·전체화면 3버튼 :', ok(!!camZoomIn && !!camZoomOut && !!camFullscreen
+  && camZoomIn.left === camZoomOut.left && camZoomOut.left === camFullscreen.left
+  && camZoomIn.w === camZoomOut.w && camZoomOut.w === camFullscreen.w
+  && camZoomIn.top < camZoomOut.top && camZoomOut.top < camFullscreen.top))
+const camZoomBefore = await ev(`getComputedStyle(document.querySelector('#pgCam .camera-zoom-canvas')).transform`)
+await ev(`document.querySelector('#pgCam .camera-controls .zoom-in').click()`); await sleep(240)
+const camZoomAfter = await ev(`getComputedStyle(document.querySelector('#pgCam .camera-zoom-canvas')).transform`)
+await ev(`document.querySelector('#pgCam .camera-controls .zoom-out').click()`); await sleep(240)
+const camZoomRestored = await ev(`getComputedStyle(document.querySelector('#pgCam .camera-zoom-canvas')).transform`)
+console.log('  → 카메라 + 확대·− 축소 실제 동작 :', ok(camZoomBefore !== camZoomAfter && camZoomBefore === camZoomRestored))
+if (camFullscreen) {
+  const x = camFullscreen.left + camFullscreen.w / 2
+  const y = camFullscreen.top + camFullscreen.h / 2
+  await send('Input.dispatchMouseEvent', { type:'mousePressed', x, y, button:'left', clickCount:1 })
+  await send('Input.dispatchMouseEvent', { type:'mouseReleased', x, y, button:'left', clickCount:1 })
+  await sleep(500)
+}
+const enteredCamFullscreen = await ev(`document.fullscreenElement===document.documentElement`)
+console.log('  → 카메라 버튼 전체화면 진입 :', ok(enteredCamFullscreen))
+console.log('  → 카메라 전체화면에서도 상단바 유지 :', ok(await ev(`(()=>{
+  const nav=document.querySelector('#nav.sim-nav')?.getBoundingClientRect()
+  const camera=document.querySelector('#pgCam #pCam .vwrap')?.getBoundingClientRect()
+  const hero=getComputedStyle(document.querySelector('#pgCam .nav-hero')).display
+  const side=getComputedStyle(document.querySelector('#pgCam .cam-side-panel')).display
+  return !!nav&&!!camera&&nav.height>50&&camera.top>=nav.bottom&&camera.width>innerWidth*.9
+    &&hero==='none'&&side==='none'
+})()`)))
+if (enteredCamFullscreen) {
+  const shot = await send('Page.captureScreenshot', { format:'png' })
+  writeFileSync(OUT + 'X-camera-fullscreen.png', Buffer.from(shot.data, 'base64'))
+  await send('Input.dispatchKeyEvent', { type:'keyDown', key:'Escape', code:'Escape', windowsVirtualKeyCode:27, nativeVirtualKeyCode:27 })
+  await send('Input.dispatchKeyEvent', { type:'keyUp', key:'Escape', code:'Escape', windowsVirtualKeyCode:27, nativeVirtualKeyCode:27 })
+  await sleep(400)
+}
+console.log('  → 카메라 Esc 전체화면 종료 :', ok(!(await ev(`!!document.fullscreenElement`))))
 
 console.log('\n[2] 화면을 넘치지 않는가 (한눈에 봐야 한다)')
 for (const [name, sel] of [['지도', '#pgMap'], ['카메라', '#pgCam']]) {

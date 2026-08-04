@@ -23,7 +23,7 @@ const ZOOM_MAX = 3
 /** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다. */
 const LAYER_STEP = 1.15
 
-export default function IsoMapView() {
+export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) {
   const { plan, connected, onNavUpdate } = useLive()
   const [src, setSrc] = useState<ExtrudeSource | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -157,7 +157,7 @@ export default function IsoMapView() {
       <div
         className="iso-scene"
         style={{
-          transform: `rotateX(${tilt}deg) rotateZ(${spin}deg) scale(${zoom})`,
+          transform: `rotateX(${tilt}deg) rotateZ(${spin}deg) scale(${zoom * zoomFactor})`,
           width: src.w,
           height: src.h,
           marginLeft: -src.w / 2,

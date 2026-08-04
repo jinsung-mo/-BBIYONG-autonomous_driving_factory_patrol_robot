@@ -128,12 +128,17 @@ const expect = 2 * Math.PI * 52 * 0.75 * (batt / 100)
 console.log(`  호 길이 :${filled?.toFixed(1)} · 값 ${batt}% 기대 ${expect.toFixed(1)}`)
 console.log('  → 값과 눈금이 일치 :', ok(Math.abs(filled - expect) < 1))
 
-console.log('\n[3] 지표 카드 — 온도 · 습도 · 경보')
-const env = await ev(`[...document.querySelectorAll('#pStatus .env div')].map(d=>d.querySelector('span').textContent+'='+d.querySelector('b').textContent)`)
-console.log('  카드 :', (env || []).join(' · '))
-console.log('  → 3칸 :', ok((env || []).length === 3))
-console.log('  → 경보 카드 포함 :', ok((env || []).some((e) => e.startsWith('경보 이벤트'))))
-console.log('  → 평소엔 강조 없음 :', ok(!(await ev(`!!document.querySelector('#pStatus .env div.hot')`))))
+// 지표는 상태 패널 안의 3칸에서 화면 맨 위 KPI 행으로 올라갔다(S15P11E101-691).
+// 멀리서 읽어야 하는 값이라 패널 안에 묻어 두지 않는다.
+console.log('\n[3] 지표 - 화면 위 KPI 행')
+const env = await ev(`[...document.querySelectorAll('#pgMap .kpis .kpi')].map(d=>
+  d.querySelector('.kpi-label').textContent+'='+d.querySelector('.kpi-num').textContent)`)
+console.log('  KPI :', (env || []).join(' / '))
+console.log('  → 네 칸 :', ok((env || []).length === 4))
+console.log('  → 경보 이벤트 포함 :', ok((env || []).some((e) => e.startsWith('경보 이벤트'))))
+console.log('  → 최고 온도 포함 :', ok((env || []).some((e) => e.startsWith('최고 온도'))))
+// 평소에 붉은 배지가 상주하면 정작 경보가 났을 때 눈에 들어오지 않는다
+console.log('  → 평소엔 강조 없음 :', ok(!(await ev(`!!document.querySelector('#pgMap .kpis .kpi-badge.bad')`))))
 const { data: s1 } = await send('Page.captureScreenshot', { format: 'png' })
 writeFileSync(OUT + 'S-sim-dark.png', Buffer.from(s1, 'base64'))
 
@@ -157,7 +162,7 @@ const TARGETS = [
   ['순찰 모드', '.seg button.on'],
   ['게이지 값', '.rgauge-mid b'],
   ['상태 라벨', '#pStatus .kv span'],
-  ['지표 값', '#pStatus .env b'],
+  ['지표 값', '#pgMap .kpi-num'], ['지표 라벨', '#pgMap .kpi-label'],
   ['로그 본문', '#pStatus .elog li b'],
 ]
 for (const want of ['dark', 'light']) {
@@ -190,10 +195,13 @@ console.log('  → 판마다 원을 그리지 않음 :', ok(anyRadial === false)
 console.log('\n[6] 좁은 창에서 지표 카드가 잘리지 않는가')
 await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false })
 await sleep(700)
-const overflow = await ev(`[...document.querySelectorAll('#pStatus .env div b')].some(b=>b.scrollWidth>b.clientWidth+1)`)
-const cols = await ev(`getComputedStyle(document.querySelector('#pStatus .env')).gridTemplateColumns.split(' ').length`)
-console.log('  1280px 열 수 :', cols, '· 숫자 잘림 :', overflow)
-console.log('  → 두 줄로 접힘 :', ok(cols === 2))
+const overflow = await ev(`[...document.querySelectorAll('#pgMap .kpis .kpi-num,#pgMap .kpis .kpi-label')].some(b=>b.scrollWidth>b.clientWidth+1)`)
+// KPI 행이 화면 밖으로 밀려나면 값이 있어도 못 본다 — 줄바꿈이든 축소든 안에 들어와야 한다
+const fits = await ev(`(()=>{const k=document.querySelector('#pgMap .kpis'); if(!k) return null
+  const hero=k.parentElement.getBoundingClientRect(); const r=k.getBoundingClientRect()
+  return r.right <= hero.right + 1 && k.scrollWidth <= k.clientWidth + 1})()`)
+console.log('  1280px · 숫자 잘림 :', overflow, '· 행이 안에 들어옴 :', fits)
+console.log('  → 화면 안에 들어온다 :', ok(fits === true))
 console.log('  → 값이 잘리지 않음 :', ok(!overflow))
 await send('Emulation.clearDeviceMetricsOverride'); await sleep(500)
 

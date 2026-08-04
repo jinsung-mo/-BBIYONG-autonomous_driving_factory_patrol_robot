@@ -109,19 +109,19 @@ const grab = async (b) => {
 console.log('  좌측 판 표본 :', JSON.stringify(boxes?.left), '· 우측 판 표본 :', JSON.stringify(boxes?.right))
 console.log('  (표면색 차이는 G-glass-dark.png 으로 확인 — 좌측은 청색, 우측은 보라 계열)')
 
-console.log('\n[4] 동심원 모서리 — 안쪽 곡선이 바깥과 평행한가')
+console.log('\n[4] 모서리 — 안쪽 곡선이 바깥보다 작은가')
 const radii = await ev(`(()=>{const g=(s)=>{const el=document.querySelector(s); if(!el) return null
     const c=getComputedStyle(el)
     return {r:Math.round(parseFloat(c.borderTopLeftRadius)), pl:Math.round(parseFloat(c.paddingLeft))}}
-  return {panel:g('#pStatus'), card:g('#pStatus .stat-card'), env:g('#pStatus .env div'), log:g('#pStatus .elog li')}})()`)
+  return {panel:g('#pStatus'), card:g('#pStatus .stat-card'), log:g('#pStatus .elog li')}})()`)
 console.log('  판 :', JSON.stringify(radii?.panel))
-console.log('  안쪽 : stat-card', radii?.card?.r, '· env', radii?.env?.r, '· log', radii?.log?.r)
 const outer = radii?.panel?.r ?? 0
-const TOKENS = [8, 16, 24]
-console.log('  바깥', outer, '· 반경 토큰', TOKENS.join('/'))
-console.log('  → 토큰 안에서 바깥보다 작다 :',
-  ok([radii?.card?.r, radii?.env?.r, radii?.log?.r].every((v) => TOKENS.includes(v) && v < outer)),
-  '(안쪽이 바깥과 같거나 크면 두 곡선이 부딪힌다)')
+console.log('  바깥', outer, '· 안쪽 : stat-card', radii?.card?.r, '· log', radii?.log?.r)
+// S15P11E101-691 부터 판마다 제 반경을 갖는다. 고정 토큰을 요구하지 않고,
+// 안쪽이 바깥보다 작다는 것만 지킨다 — 그래야 두 곡선이 부딪히지 않는다.
+console.log('  → 안쪽이 바깥보다 작다 :',
+  ok([radii?.card?.r, radii?.log?.r].every((v) => v > 0 && v < outer)),
+  '(같거나 크면 두 곡선이 부딪혀 눈에 거슬린다)')
 
 console.log('\n[5] 콘텐츠는 유리로 덮지 않는다')
 const vwrap = await ev(`(()=>{const s=getComputedStyle(document.querySelector('#pCam .vwrap'))
@@ -157,7 +157,7 @@ const CONTRAST = `(sel)=>{
   return Math.round(Math.min(...build(stack.length-1, bodyBg).map(bg=>ratio(fg,bg)))*100)/100
 }`
 const T = [['패널 제목', '#pStatus h3'], ['상태 라벨', '#pStatus .kv span'], ['상태 값', '#pStatus .kv b'],
-  ['지표 값', '#pStatus .env b'], ['로그 본문', '#pStatus .elog li b'], ['게이지 값', '.rgauge-mid b'],
+  ['지표 값', '#pgMap .kpi-num'], ['로그 본문', '#pStatus .elog li b'], ['게이지 값', '.rgauge-mid b'],
   // 긴급 정지·순찰 복귀 버튼은 패널에서 걷어냈다(S15P11E101-688)
   ['순찰 모드', '.seg button.on']]
 for (const want of ['dark', 'light']) {

@@ -1484,7 +1484,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   --nx-panel:rgba(249,251,252,.88);
   --nx-side-panel:#f5f8f8;
   --nx-side-card:#ffffff;
-  --nx-side-card-shadow:0 1px 3px rgba(15,23,23,.025),0 6px 18px rgba(15,23,23,.055);
+  --nx-side-card-shadow:
+    0 0 0 1px rgba(15,23,23,.022),
+    -7px 0 18px rgba(15,23,23,.055),7px 0 18px rgba(15,23,23,.055),
+    0 -7px 18px rgba(15,23,23,.042),0 7px 18px rgba(15,23,23,.042);
+  --nx-event-row-shadow:0 0 0 1px rgba(15,23,23,.018),0 2px 5px rgba(15,23,23,.035),0 7px 18px rgba(15,23,23,.055);
   --nx-divider:#d8dbdb;
   --nx-text:#232828;
   --nx-muted:#5d6162;
@@ -1515,7 +1519,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   --nx-panel:rgba(27,35,40,.92);
   --nx-side-panel:#1b2328;
   --nx-side-card:#141a1d;
-  --nx-side-card-shadow:0 1px 3px rgba(0,0,0,.16),0 6px 18px rgba(0,0,0,.24),inset 0 0 0 1px rgba(255,255,255,.035);
+  --nx-side-card-shadow:
+    0 0 0 1px rgba(255,255,255,.035),
+    -7px 0 18px rgba(0,0,0,.26),7px 0 18px rgba(0,0,0,.26),
+    0 -7px 18px rgba(0,0,0,.20),0 7px 18px rgba(0,0,0,.20);
+  --nx-event-row-shadow:0 0 0 1px rgba(255,255,255,.03),0 2px 5px rgba(0,0,0,.16),0 7px 18px rgba(0,0,0,.22);
   --nx-divider:#2b353a;
   --nx-text:#eef3f3;
   --nx-muted:#9aa5a7;
@@ -1622,7 +1630,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 #pgCam .cam-side-panel > .panel::before,
 #pgCam .cam-side-panel > .panel::after{display:none;}
-#pgCam #pControl{min-width:0; flex:0 0 auto;}
+#pgCam #pControl{min-width:0; flex:0 0 auto; overflow:visible;}
 #pgCam #pEvents{
   min-height:0; flex:1 1 0;
   display:flex; flex-direction:column;
@@ -1630,6 +1638,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-top:0;
 }
 #pgCam #pEvents .elog{flex:1 1 0; min-height:0;}
+/* 스크롤 영역 가장자리에서 좌우 그림자가 잘리지 않도록 카드 주변에 렌더링 여백을 둔다. */
+.nav-page :is(#pStatus,.cam-side-panel) .elog{padding:8px;}
 /* 지도 상태 패널의 실제 계산값(14px · 800 · .35px)을 그대로 사용한다. */
 #pgCam #pControl > .control-titlebar{
   display:grid; grid-template-columns:max-content; align-items:center; gap:0;
@@ -1718,6 +1728,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
     inset 0 4px 8px rgba(15,23,23,.16),
     inset 0 -1px 0 rgba(255,255,255,.55),
     0 1px 2px rgba(15,23,23,.04);
+}
+/* 움직임을 줄여 달라는 설정에서는 눌려 들어가는 이동만 끈다. 눌림 그림자는 남긴다 —
+   이 버튼들은 색을 바꾸지 않고 형태로만 알리므로, 그림자까지 사라지면 어느 방향이
+   먹고 있는지 화면으로 알 길이 없어진다. */
+@media (prefers-reduced-motion:reduce){
+  #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){transition:none;}
+  #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){transform:none;}
 }
 :root[data-theme="dark"] #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){
   background:linear-gradient(145deg,#1d252a,#151b1f);
@@ -1832,7 +1849,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 이벤트 행도 로봇 운영 리포트의 개별 로봇 카드처럼 외곽보다 한 단계 밝은 면이다. */
 .nav-page :is(#pStatus,.cam-side-panel) .elog li{
   background:var(--nx-side-card); background-image:none;
-  border:0; box-shadow:var(--nx-side-card-shadow);
+  border:0; border-radius:10px;
+  box-shadow:var(--nx-event-row-shadow);
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
 .nav-page .panel h3{
@@ -1953,14 +1971,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   display:flex; align-items:center; gap:18px; flex-wrap:nowrap;
   width:max-content; max-width:calc(100% - 32px); margin:0; padding:12px 18px;
   color:var(--nx-muted); background:rgba(255,255,255,.92);
-  border:1px solid rgba(35,40,40,.08); border-radius:24px;
-  box-shadow:0 8px 24px rgba(15,23,23,.10);
+  border:1px solid rgba(35,40,40,.08); border-radius:12px;
+  box-shadow:0 2px 5px rgba(15,23,23,.055),0 12px 28px rgba(15,23,23,.085);
   backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2);
   pointer-events:none; white-space:nowrap;
 }
 :root[data-theme="dark"] #pgMap .vwrap > .maplegend{
   color:var(--nx-text); background:rgba(24,31,35,.92);
-  border-color:rgba(255,255,255,.07); box-shadow:0 10px 28px rgba(0,0,0,.34);
+  border-color:rgba(255,255,255,.07);
+  box-shadow:0 2px 6px rgba(0,0,0,.28),0 14px 32px rgba(0,0,0,.30);
 }
 #pgMap .vwrap > .maplegend span{
   display:inline-flex; align-items:center; gap:8px;
@@ -1987,6 +2006,76 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-bottom:11px solid #e45b4f;
 }
 #pgMap .maplegend .legend-mark.obstacle{background:#59637a;}
+.map-zoom-canvas,.camera-zoom-canvas{
+  transform-origin:50% 50%;
+  transition:transform 160ms cubic-bezier(.2,.75,.25,1);
+  will-change:transform;
+}
+/* 지도 도구는 도면과 겹쳐도 위치가 흔들리지 않는 고정 크기 조작 레이어다. */
+:is(#pgMap,#pgCam) .map-controls{
+  position:absolute; right:18px; top:50%; z-index:7;
+  display:flex; flex-direction:column; gap:10px;
+  transform:translateY(-50%);
+}
+/* 우하단 열화상 PiP와 겹치지 않도록 카메라 도구는 중심보다 조금 위에 둔다. */
+#pgCam .camera-controls{top:40%;}
+:is(#pgMap,#pgCam) .map-control{
+  display:grid; place-items:center; width:46px; height:46px; padding:0;
+  border:0; border-radius:14px; color:var(--nx-text);
+  background:var(--nx-surface); box-shadow:var(--nx-sh-md);
+  font-family:inherit; font-size:25px; font-weight:500; line-height:1; cursor:pointer;
+  transition:transform 80ms ease,box-shadow 80ms ease,opacity 80ms ease;
+}
+:root[data-theme="dark"] :is(#pgMap,#pgCam) .map-control{
+  background:var(--nx-sunken); box-shadow:0 8px 22px rgba(0,0,0,.34);
+}
+:is(#pgMap,#pgCam) .map-control:hover:not(:disabled){transform:translateY(-1px); box-shadow:var(--nx-sh-lg);}
+:is(#pgMap,#pgCam) .map-control:active:not(:disabled){
+  transform:translateY(2px); box-shadow:inset 0 3px 7px rgba(15,23,23,.16),0 1px 2px rgba(15,23,23,.06);
+}
+:root[data-theme="dark"] :is(#pgMap,#pgCam) .map-control:active:not(:disabled){
+  box-shadow:inset 0 4px 8px rgba(0,0,0,.48),0 1px 2px rgba(0,0,0,.16);
+}
+:is(#pgMap,#pgCam) .map-control:focus-visible{outline:2px solid var(--nx-accent); outline-offset:3px;}
+:is(#pgMap,#pgCam) .map-control:disabled{cursor:not-allowed; opacity:.42; box-shadow:none;}
+:is(#pgMap,#pgCam) .map-control svg{width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round;}
+/* 전체 문서를 전체화면으로 올려 상단 내비게이션을 남긴다. 지도 화면에서는
+   KPI·상태 패널만 접고, 지도 프레임이 상단바 아래의 나머지 공간을 모두 사용한다. */
+:root.view-fullscreen,:root.view-fullscreen body,:root.view-fullscreen #root{
+  width:100%; height:100%; overflow:hidden; background:var(--nx-bg);
+}
+:root.view-fullscreen #nav.sim-nav{position:relative; z-index:20; flex:0 0 76px; height:76px;}
+:root.view-fullscreen #pgMap.page.nav-page{
+  height:calc(100dvh - 76px); padding:16px 24px 24px;
+}
+:root.view-fullscreen #pgMap .nav-hero,
+:root.view-fullscreen #pgMap .nav-side{display:none;}
+:root.view-fullscreen #pgMap .nav-stage{display:block; flex:1 1 0; min-height:0;}
+:root.view-fullscreen #pgMap .nav-canvas,
+:root.view-fullscreen #pgMap .nav-canvas > #pMap,
+:root.view-fullscreen #pgMap .nav-canvas .vwrap{width:100%; height:100%; min-height:0;}
+:root.view-fullscreen #pgMap .nav-canvas .vwrap{
+  border-radius:var(--nx-r-md); background:var(--nx-elev)!important;
+}
+:root.view-fullscreen #pgMap .map-controls{right:26px;}
+
+/* 카메라 전체화면도 상단 관제 바는 유지하고 영상만 남은 영역을 채운다. */
+:root.view-fullscreen #pgCam.page.nav-page{
+  height:calc(100dvh - 76px); padding:16px 24px 24px;
+}
+:root.view-fullscreen #pgCam .nav-hero,
+:root.view-fullscreen #pgCam .cam-side-panel{display:none;}
+:root.view-fullscreen #pgCam .cam-stage{display:block; flex:1 1 0; min-height:0;}
+:root.view-fullscreen #pgCam .cam-main,
+:root.view-fullscreen #pgCam .cam-main > #pCam,
+:root.view-fullscreen #pgCam .cam-main > #pCam .vwrap{width:100%; height:100%; min-height:0;}
+:root.view-fullscreen #pgCam .cam-main > #pCam .vwrap{
+  border-radius:var(--nx-r-md); background:var(--nx-elev)!important;
+}
+:root.view-fullscreen #pgCam .camera-controls{right:26px;}
+@media (prefers-reduced-motion:reduce){
+  .map-zoom-canvas,.camera-zoom-canvas,:is(#pgMap,#pgCam) .map-control{transition:none;}
+}
 /* 입체/평면 전환 버튼은 범례 아래로 내려 두 오버레이가 겹치지 않는다. */
 #pgMap .vwrap .mapdim{top:72px;}
 /* 카메라 화면의 판들도 남는 높이 안에서 줄어들어야 한다 */
