@@ -31,7 +31,6 @@ public class RobotHealthHistoryResponse {
     public static class HealthDataPoint {
         private Instant timestamp;
         private Double battery;
-        private Double speed;
         private Integer commLatencyMs;
         private Double inferenceFps;
         private String status;
@@ -42,7 +41,6 @@ public class RobotHealthHistoryResponse {
             return HealthDataPoint.builder()
                     .timestamp(history.getTimestamp())
                     .battery(history.getBattery())
-                    .speed(history.getSpeed())
                     .commLatencyMs(history.getCommLatencyMs())
                     .inferenceFps(history.getInferenceFps())
                     .status(history.getStatus())

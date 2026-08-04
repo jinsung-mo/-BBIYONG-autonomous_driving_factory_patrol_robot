@@ -40,7 +40,7 @@ public class RobotController {
                     - battery: 배터리 잔량 (%)
                     - online: 연결 상태 (true/false)
                     - location: 현재 위치 (x, y, yaw)
-                    - speed, estop, commLatencyMs, inferenceFps 등 확장 필드 포함
+                    - estop, commLatencyMs, inferenceFps 등 확장 필드 포함
 
                     **참고**: 실시간 갱신은 WebSocket STOMP `/topic/robots` 구독으로 가능합니다.
                     """,

@@ -88,7 +88,6 @@ public class RobotHealthHistoryService {
                 history.setRobotId(robot.getRobotId());
                 history.setTimestamp(Instant.now());
                 history.setBattery(robot.getBattery());
-                history.setSpeed(robot.getSpeed());
                 history.setCommLatencyMs(robot.getCommLatencyMs());
                 history.setInferenceFps(robot.getInferenceFps());
                 history.setStatus(robot.getStatus());

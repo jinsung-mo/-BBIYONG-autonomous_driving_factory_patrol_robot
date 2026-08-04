@@ -48,7 +48,6 @@ public class RobotCacheTests {
         packet.setType("TELEMETRY");
         packet.setStatus("AUTO_PATROL");
         packet.setBattery(85.5);
-        packet.setSpeed(0.6);
         packet.setEstop("RELEASED");
         packet.setCommLatencyMs(43);
         packet.setInferenceFps(8.0);
@@ -84,8 +83,7 @@ public class RobotCacheTests {
         assertThat(targetRobot.getLastConnected()).isNotNull();
         assertThat(targetRobot.getLocation().getX()).isEqualTo(10.5);
         assertThat(targetRobot.getLocation().getY()).isEqualTo(20.5);
-        // 확장 텔레메트리 필드 노출 검증 (S15P11E101-352)
-        assertThat(targetRobot.getSpeed()).isEqualTo(0.6);
+        // 확장 텔레메트리 필드 노출 검증 (S15P11E101-352, speed 는 681 에서 제거)
         assertThat(targetRobot.getEstop()).isEqualTo("RELEASED");
         assertThat(targetRobot.getCommLatencyMs()).isEqualTo(43);
         assertThat(targetRobot.getInferenceFps()).isEqualTo(8.0);

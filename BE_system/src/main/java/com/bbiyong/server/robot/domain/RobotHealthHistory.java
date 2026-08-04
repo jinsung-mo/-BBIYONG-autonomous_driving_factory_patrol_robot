@@ -29,7 +29,6 @@ public class RobotHealthHistory {
     private Instant timestamp;
 
     private Double battery; // 배터리 잔량 (%)
-    private Double speed; // 이동 속도 (m/s)
     private Integer commLatencyMs; // 통신 지연 시간 (ms)
     private Double inferenceFps; // AI 추론 FPS
     private String status; // 로봇 상태 (AUTO_PATROL, MANUAL_CONTROL, CHARGING, IDLE, ERROR)

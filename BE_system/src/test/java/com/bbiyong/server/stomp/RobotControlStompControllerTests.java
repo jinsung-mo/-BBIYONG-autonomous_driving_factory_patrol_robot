@@ -86,24 +86,11 @@ class RobotControlStompControllerTests {
     }
 
     @Test
-    void estopRelaysWhenActiveTrue() {
-        when(sessionManager.sendCommand(any(), any())).thenReturn(true);
+    void estopNoLongerSupported() {
+        // 긴급 정지 기능 제거(S15P11E101-681) — ESTOP 은 유효한 mode 가 아니므로 drop 된다.
         ControlCommand cmd = new ControlCommand();
         cmd.setRobotId("orinka_01");
         cmd.setCommand("ESTOP");
-        cmd.setActive(true);
-
-        controller.mode(cmd);
-
-        Map<String, Object> p = capturePayload("orinka_01");
-        assertThat(p).containsEntry("command", "ESTOP").containsEntry("active", true);
-    }
-
-    @Test
-    void estopDroppedWhenActiveFalse() {
-        ControlCommand cmd = new ControlCommand();
-        cmd.setCommand("ESTOP");
-        cmd.setActive(false);
 
         controller.mode(cmd);
 

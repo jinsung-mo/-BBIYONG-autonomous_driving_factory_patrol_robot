@@ -17,7 +17,7 @@ import java.util.Set;
  * <p>로봇 명령 계약(ground truth: remote_control_protocol)을 그대로 따른다.
  * <ul>
  *   <li>/app/control/drive → DRIVE(linear, angular) — manual 모드에서 유효</li>
- *   <li>/app/control/mode → SET_MODE(autonomy|manual|disabled) 또는 ESTOP(active=true)</li>
+ *   <li>/app/control/mode → SET_MODE(autonomy|manual|disabled)</li>
  *   <li>/app/control/operation → START_MAPPING / STOP_MAPPING / NAVIGATE(x, y, yaw) / SAVE_MAP(name)</li>
  *   <li>/app/control/camera → CAMERA_TILT(tilt) — 전면 카메라 상하 절대각(degrees), 가동범위로 클램프</li>
  * </ul>
@@ -58,19 +58,6 @@ public class RobotControlStompController {
 
     @MessageMapping("/control/mode")
     public void mode(ControlCommand cmd) {
-        if ("ESTOP".equalsIgnoreCase(cmd.getCommand())) {
-            // fail-safe: 활성화(active=true)만 허용
-            if (!Boolean.TRUE.equals(cmd.getActive())) {
-                drop(cmd, "ESTOP active 는 true 만 허용됩니다.");
-                return;
-            }
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("command", "ESTOP");
-            payload.put("active", true);
-            relay(cmd, payload);
-            return;
-        }
-
         String mode = cmd.getMode();
         if (mode == null || !VALID_MODES.contains(mode)) {
             drop(cmd, "유효하지 않은 mode: " + mode);
