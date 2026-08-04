@@ -24,18 +24,58 @@
 //    그래서 전 상수를 `k` 명령으로 런타임 조정 가능하게 했다 —
 //    S1(부하 duty–속도 곡선)을 나중에 재도 **재플래시 없이** 반영된다.
 // ============================================================================
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  #define PU_UP puType::up
+  #define INIT_PWM(pin, ch, hz, bits) ledcAttach(pin, hz, bits)
+  #define SET_PWM(pin, ch, val) ledcWrite(pin, val)
+#else
+  #define PU_UP UP
+  #define INIT_PWM(pin, ch, hz, bits) do { ledcSetup(ch, hz, bits); ledcAttachPin(pin, ch); } while(0)
+  #define SET_PWM(pin, ch, val) ledcWrite(ch, val)
+#endif
 #include <ESP32Encoder.h>
+#include <Wire.h>
+#include <Adafruit_MLX90640.h>
+#include <DHT.h>
+
+Adafruit_MLX90640 mlx;
+bool mlx_ok = false;
+unsigned long lastMlxMs = 0;
+float mlxFrame[32*24];
+
+// 🔑 [2026-08-04] 열화상 전송을 hex → base64 로 바꾼다 (S15P11E101-663).
+//    왜: 이 블록이 loop() 를 통째로 막는다. 단일 스레드라 전송이 끝날 때까지
+//        PID·엔코더·텔레메트리가 전부 멈춘다. 실측 블록 약 516ms.
+//    hex 는 1바이트를 2글자로 부풀린다(3,072글자 = 268ms @115200).
+//    base64 는 4/3 배라 2,048글자 = 179ms — **89ms 를 돌려받는다.**
+//    덤: 종전에는 픽셀마다 sprintf 와 Serial.print 를 각각 768번 불렀다.
+//        이제 인코딩 1회 + Serial.write 1회다.
+//    ⚠️ raw 바이너리(1,536B = 134ms)가 더 빠르지만 데이터에 0x0A 가 섞이면
+//       Orin 의 readline() 이 줄을 잘못 자른다. base64 알파벳에는 개행이 없다.
+//    🔴 스택이 아니라 전역이다. loop() 지역변수로 두면 3.6KB 를 스택에 얹는다.
+//    🔴 인코더 **함수**는 여기 두면 안 된다 — struct Wheel 뒤로 내렸다.
+//       Arduino .ino→.cpp 변환기가 자동생성 프로토타입을 "파일 내 첫 함수 정의"
+//       지점에 통째로 삽입한다. 여기에 함수를 두면 그게 첫 함수가 되어
+//       controlWheel(Wheel&, ...) 프로토타입이 struct Wheel 보다 먼저 삽입돼
+//       컴파일이 깨진다. (DHT/INA 블록이 같은 이유로 아래에 있다)
+//       버퍼는 함수가 아니라서 여기 남겨도 된다.
+uint8_t  mlxRaw[32*24*2];      // int16 big-endian ×768 = 1,536B
+char     mlxB64[2052];         // ceil(1536/3)*4 = 2,048 + 여유
 
 // ---------- 핀 (docs/실측_데이터.md §A) ----------
 constexpr int L_A = 32, L_B = 33, R_A = 25, R_B = 26;
-// 🔴 2026-07-29 재조립 배선 교차 보정.
-//    오픈루프 실측: ch1(구 GPIO18/19) 에 duty 를 주면 물리적 **우측** 바퀴가 돌았다
-//    (좌 duty30 → 우 카운트 -8442 / 좌 카운트 0. duty60 에서 정확히 2배).
-//    엔코더는 정상이다 — 손으로 좌측 바퀴를 돌리면 L 카운트에 잡힌다.
-//    즉 교차는 **모터 출력 쪽**이다. 논리 채널을 물리 바퀴에 다시 맞춘다.
-//    ⚠️ 배선(MDD10A 출력 또는 제어 5핀)을 바로잡으면 이 교차를 원복할 것.
-constexpr int PWM1 = 23, DIR1 = 13;      // 좌  ← 구 PWM2/DIR2
-constexpr int PWM2 = 18, DIR2 = 19;      // 우  ← 구 PWM1/DIR1
+// 🔴 [실측 2026-08-03 · S15P11E101-651] 2026-07-29 의 교차 보정을 **원복**했다.
+//    그때 주석이 예고한 그대로다 — "배선을 바로잡으면 이 교차를 원복할 것".
+//    그 사이 배선이 물리적으로 고쳐졌는데 보정이 남아 있어, 이번엔 **펌웨어가**
+//    교차의 원인이 돼 있었다(제어기가 A 모터에 명령하고 B 바퀴를 측정 → PI 발산).
+//
+//    실측 절차: 오픈루프로 한 채널씩 걸고 사용자가 어느 바퀴가 도는지 육안 확인
+//    (tools/diff_drive/wheel_identify.py). 결과:
+//      · GPIO18/19 → 물리 **좌** 바퀴 · DIR LOW 에서 **전진** · encL 이 **+**
+//      · GPIO23/13 → 물리 **우** 바퀴 · DIR LOW 에서 **전진** · encR 이 **−**
+//    ⚠️ 배선을 다시 만지면 이 표를 반드시 다시 재라. 보정을 쌓지 말고 이 표를 고쳐라.
+constexpr int PWM1 = 18, DIR1 = 19;      // 좌 = 물리 좌측 모터
+constexpr int PWM2 = 23, DIR2 = 13;      // 우 = 물리 우측 모터
 
 // ---------- 확정 상수 ----------
 constexpr float MM_PER_COUNT = 0.16348f; // [실측] §J-2
@@ -43,6 +83,10 @@ constexpr int   PWM_HZ = 20000, PWM_BITS = 10;   // MDD10A 상한
 constexpr int   PWM_MAX = (1 << PWM_BITS) - 1;
 constexpr uint32_t CTRL_HZ = 50;                 // 0.3m/s에서 20ms당 37카운트
 constexpr uint32_t CTRL_MS = 1000 / CTRL_HZ;
+
+// ---------- 서보모터 ----------
+constexpr int SERVO_PIN = 4;
+constexpr int SERVO_CH = 2;
 
 // ---------- 런타임 조정 상수 (`k` 명령) ----------
 struct Tunables {
@@ -67,28 +111,98 @@ struct Wheel {
   float   duty = 0.0f;       // 정규화 duty % (+ = 전진)
 } wl, wr;
 
+// 최소 base64 인코더 (S15P11E101-663). 라이브러리를 끌어오지 않는다 —
+// 12줄이면 되고, mbedtls/Arduino String 경로는 힙 할당이 붙어 제어 루프를
+// 막는 이 블록에 넣기에 부적절하다.
+// 🔴 반드시 struct Wheel **뒤**에 있어야 한다. 위 주석 참조 — 실제로 여기를
+//    위로 올렸다가 컴파일이 깨졌다 (2026-08-04).
+static size_t b64Encode(const uint8_t *in, size_t len, char *out) {
+  static const char T[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  size_t o = 0;
+  for (size_t i = 0; i < len; i += 3) {
+    uint32_t v = (uint32_t)in[i] << 16;
+    if (i + 1 < len) v |= (uint32_t)in[i + 1] << 8;
+    if (i + 2 < len) v |= in[i + 2];
+    out[o++] = T[(v >> 18) & 0x3F];
+    out[o++] = T[(v >> 12) & 0x3F];
+    out[o++] = (i + 1 < len) ? T[(v >> 6) & 0x3F] : '=';
+    out[o++] = (i + 2 < len) ? T[v & 0x3F]        : '=';
+  }
+  out[o] = '\0';
+  return o;
+}
+
 enum Mode { MODE_IDLE, MODE_OPENLOOP, MODE_VELOCITY };
 Mode mode = MODE_IDLE;
 
 unsigned long lastCmdMs = 0, lastCtrlMs = 0, lastTeleMs = 0;
 uint32_t deadman_ms = 1000;      // 속도모드 기본 1초 (ROS가 20Hz로 보낸다)
-uint32_t tele_ms = 100;          // 텔레메트리 10Hz
+uint32_t tele_ms = 50;           // 텔레메트리 20Hz (2026-07-30: teleop 소비주기(20Hz)에 맞춤 — 종전 10Hz)
 bool tele_csv = true;            // true=기계 파싱용 CSV, false=사람용
+
+// ---------- DHT11(온습도) + INA226(배터리 전압) — 2026-08-03 초안 ----------
+// 🔴 둘 다 저빈도(1Hz) 전용이다. PID 루프(CTRL_HZ=50)는 절대 이 센서들을 기다리지 않는다 —
+//    loop() 맨 끝, 명령 파싱/제어/텔레메트리보다 낮은 우선순위에서만 읽는다.
+//    (MLX90640을 ESP32에서 빼고 Orin 직결로 간 것과 같은 이유 — 블로킹 최소화. §B-4)
+//    INA226은 MLX90640(Wire, GPIO21/22)과 별도 I2C 버스(GPIO14/27)라 버스 경합도 없다.
+// 🔴 이 블록은 struct Wheel 정의(위) *다음*에 와야 한다 — Arduino .ino→.cpp 변환기가
+//    자동생성 함수 프로토타입을 "파일 내 첫 함수 정의" 지점에 통째로 삽입하는데,
+//    이 블록이 더 위(제일 앞 #include 직후)에 있으면 inaReadBusVoltage()가 그 "첫 함수"가
+//    되어 controlWheel(Wheel&, ...) 프로토타입이 struct Wheel보다 먼저 삽입돼 컴파일 에러가 난다.
+//    (agy gemini-3.1-pro-high 검토 완료, 2026-08-03 — Option A 채택)
+constexpr int DHT_PIN = 15;
+DHT dht(DHT_PIN, DHT11);
+bool  dht_ok = false;              // 마지막 읽기 성공 여부. 실패해도 이전 값은 유지(래치)
+float dhtTempC = 0.0f, dhtHumidity = 0.0f;
+unsigned long lastEnvMs = 0;
+constexpr uint32_t ENV_MS = 1000;  // DHT11 하드웨어 하한(≥1s) 준수 — INA226도 여기 묶어서 1Hz
+
+constexpr uint8_t INA226_ADDR           = 0x40;
+constexpr uint8_t INA226_REG_BUSVOLTAGE = 0x02;
+TwoWire WireIna(1);                // 전용 2번째 I2C 버스 (SDA=GPIO14, SCL=GPIO27) — Wire(21/22)와 분리
+bool  ina_present = false;         // setup()에서 1회 프로브 (디바이스 자체가 없는 경우)
+bool  ina_ok = false;              // 마지막 읽기 성공 여부(통신 실패). "0V 근처" 정상값과는 별개 개념
+float inaVoltage = 0.0f;           // V. 실패 시 이전 값 유지(래치)
+
+bool inaReadBusVoltage(float &volts) {
+  WireIna.beginTransmission(INA226_ADDR);
+  WireIna.write(INA226_REG_BUSVOLTAGE);
+  if (WireIna.endTransmission(false) != 0) return false;   // NACK = 응답 없음(배선불량/미장착)
+  if (WireIna.requestFrom((int)INA226_ADDR, 2) != 2) return false;
+  // 🔴 (a<<8)|b 형태로 한 줄에 read()를 두 번 쓰면 평가 순서가 C++ 표준상 미정의라
+  //    MSB/LSB가 뒤바뀔 수 있다(agy 검토 지적, 2026-08-03) — 명시적으로 순서를 고정한다.
+  uint8_t msb = WireIna.read();
+  uint8_t lsb = WireIna.read();
+  uint16_t raw = ((uint16_t)msb << 8) | lsb;
+  volts = raw * 0.00125f;          // LSB 1.25mV — docs/sensor_wiring_guide.md §B-3
+  return true;
+}
 
 // ============================================================================
 // 하드웨어 계층 — 여기서만 거울대칭을 안다
 // ============================================================================
 
+void setMotor(int dirPin, int pwmPin, int ch, float pct) {
+  if (pct > 0) {
+    digitalWrite(dirPin, HIGH);
+  } else {
+    digitalWrite(dirPin, LOW);
+    pct = -pct;
+  }
+  if (pct > 100.0f) pct = 100.0f;
+  SET_PWM(pwmPin, ch, (uint32_t)(pct * PWM_MAX / 100));
+}
+
 // 정규화 duty(+=전진)를 실제 핀에 건다.
-// 우측은 물리적으로 반대로 돌아야 전진이므로 여기서 뒤집는다 (§D-1).
 void applyWheel(bool left, float duty_norm) {
-  float d = left ? duty_norm : -duty_norm;         // ← 거울대칭 흡수 지점
-  int pct = (int)(fabsf(d) + 0.5f);
-  if (pct > 100) pct = 100;
-  int pwmPin = left ? PWM1 : PWM2;
-  int dirPin = left ? DIR1 : DIR2;
-  digitalWrite(dirPin, d >= 0);
-  ledcWrite(pwmPin, (uint32_t)pct * PWM_MAX / 100);
+  // 🔴 [실측 2026-08-03] 좌우 **모두** DIR LOW 가 전진이다(위 핀 표 참조).
+  //    모터 리드가 한쪽만 뒤집혀 배선돼 있어 **거울대칭이 이미 배선에서 흡수**됐다.
+  //    그래서 종전의 `left ? d : -d`(우측만 뒤집기)는 이중 반전이 되어
+  //    좌측이 거꾸로 돌았다 — 전진 명령에 차체가 제자리 선회하던 원인이다.
+  //    setMotor 는 pct<0 에서 DIR LOW 를 걸므로 양쪽을 같이 뒤집는다.
+  float d = -duty_norm;
+  setMotor(left ? DIR1 : DIR2, left ? PWM1 : PWM2, left ? 0 : 1, d);
 }
 
 // 정규화 엔코더 카운트(+=전진). 우측은 물리적으로 감소하므로 부호를 뒤집는다 (§D-2).
@@ -115,6 +229,11 @@ float feedforward(float target) {
   return d + (target > 0 ? tun.ff_dead : -tun.ff_dead);
 }
 
+// 🔴 [2026-08-03 · S15P11E101-647] eff_target 파라미터를 없애고 w.target 직접 사용으로
+//    되돌렸다. 커밋 b12e34d 가 "하향평준화"라는 이름으로 넣은 크로스 커플링 항이
+//    실은 **양성 피드백**이었다(과속 구간에서 반대쪽 목표를 낮추는 게 아니라 올렸다).
+//    적분 리셋 판정이 eff_target 을 보고 있던 것도 같이 해소된다 — 크로스항이 만든
+//    0 아닌 eff_target 때문에 목표 0 에서도 적분이 계속 쌓이고 있었다.
 void controlWheel(Wheel &w, bool left, float dt) {
   int64_t c = countNorm(left);
   float raw = (float)(c - w.prev_count) * MM_PER_COUNT / 1000.0f / dt;
@@ -188,6 +307,26 @@ void handleCommand() {
     case 's': stopAll(); break;
     case 'r': encL.clearCount(); encR.clearCount();
               wl.prev_count = wr.prev_count = 0; break;
+    case 'c': {                            // c <angle> — 서보 틸트 각도 (0~180, 소수점 허용)
+      // 🔴 종전에는 parseInt 라 1도 단위였다. 노즈설계 §5 의 링크 레버비
+      //    (서보 18.2° → 암 12°, 즉 0.66)를 곱해도 카메라에서 **0.66° 스텝**이다.
+      //    IPM 거리추정은 pitch 오차가 그대로 증폭돼(docs/단안깊이_조사_2026-08-02.md §3-2)
+      //    1 m 에서 pitch 1° = 11.9% 다 → 0.66° 스텝만으로 **7.9% = 79 mm** 를 먹는다.
+      //
+      //    그런데 PWM 은 이미 서보 1도당 (8192-1638)/180 = **36.4 카운트**를 갖고 있다.
+      //    분해능 제약은 하드웨어가 아니라 **파서였다.** parseFloat 로 바꾸면
+      //    0.1° 지령 → 카메라 0.066° → 1 m 에서 0.8% 가 된다.
+      //
+      //    ⚠️ 하위호환: `c 90` 같은 정수 명령은 그대로 동작하고, 계산 결과도
+      //    종전 map() 과 **비트 단위로 같다**(90 → 4915). 기존 호출부를 안 고쳐도 안 깨진다.
+      //    🔴 단 위층 두 곳(server.py `_servo` · esp32_base_node `servo_tick`)이
+      //    int() 로 먼저 자르고 있으므로, **여기만 고치면 아무 효과가 없다.** 셋을 같이 고친다.
+      float deg = Serial.parseFloat();
+      deg = constrain(deg, 0.0f, 180.0f);
+      SET_PWM(SERVO_PIN, SERVO_CH,
+              (uint32_t)lroundf(1638.0f + deg * (8192.0f - 1638.0f) / 180.0f));
+      break;
+    }
     case 'k': {                            // 상수 조정: k p 30  /  k ?  로 조회
       char w = Serial.read();
       if (w == '?') { printTunables(); break; }
@@ -216,11 +355,40 @@ void setup() {
   Serial.begin(115200);
   delay(300);
 
-  pinMode(DIR1, OUTPUT); pinMode(DIR2, OUTPUT);
-  ledcAttach(PWM1, PWM_HZ, PWM_BITS);
-  ledcAttach(PWM2, PWM_HZ, PWM_BITS);
+  Wire.begin(21, 22);
+  Wire.setClock(400000);
+  Wire.setTimeOut(50);   // 🔴 2026-08-03 실차 사고 이후 추가 — I2C가 멈추면(SDA/SCL 접촉불량,
+                          // 클럭 스트레칭 등) endTransmission/requestFrom이 타임아웃 없이 영원히
+                          // 블로킹돼 loop() 전체가 멈춘다 — 그러면 데드맨 체크도 같이 멈춰서
+                          // PWM이 마지막 값에 얼어붙는다(실제로 발생, 배터리 분리로만 정지됨).
+                          // 50ms면 실패로 간주하고 loop()가 계속 돌게 강제한다.
+  if (mlx.begin(MLX90640_I2CADDR_DEFAULT, &Wire)) {
+    mlx_ok = true;
+    mlx.setMode(MLX90640_CHESS);
+    mlx.setResolution(MLX90640_ADC_18BIT);
+    mlx.setRefreshRate(MLX90640_4_HZ); // 4Hz
+    Serial.println("# MLX90640 init success");
+  } else {
+    Serial.println("# MLX90640 NOT found");
+  }
 
-  ESP32Encoder::useInternalWeakPullResistors = puType::up;
+  WireIna.begin(14, 27, 400000);          // INA226 전용 버스 — MLX90640과 분리
+  WireIna.setTimeOut(50);                 // 🔴 위 Wire.setTimeOut 과 같은 이유 — 절대 무한블로킹 금지
+  WireIna.beginTransmission(INA226_ADDR);
+  ina_present = (WireIna.endTransmission() == 0);
+  Serial.println(ina_present ? "# INA226 init success" : "# INA226 NOT found");
+
+  dht.begin();
+  Serial.println("# DHT11 configured (GPIO15) — 성공 여부는 첫 읽기(최대 1s 후) 이후 확인됨");
+
+  pinMode(DIR1, OUTPUT); pinMode(DIR2, OUTPUT);
+  INIT_PWM(PWM1, 0, PWM_HZ, PWM_BITS);
+  INIT_PWM(PWM2, 1, PWM_HZ, PWM_BITS);
+  
+  INIT_PWM(SERVO_PIN, SERVO_CH, 50, 16);
+  SET_PWM(SERVO_PIN, SERVO_CH, map(90, 0, 180, 1638, 8192)); // 서보 초기위치 90도 중앙
+
+  ESP32Encoder::useInternalWeakPullResistors = PU_UP;
   encL.attachFullQuad(L_A, L_B);
   encR.attachFullQuad(R_A, R_B);
   encL.setFilter(1023);                    // 12.7µs 미만 펄스 무시 (하드웨어 글리치 필터)
@@ -228,7 +396,7 @@ void setup() {
   encL.clearCount(); encR.clearCount();
 
   stopAll();
-  Serial.println("=== speed_pid v1 === v <L m/s> <R m/s> | f/b/l/m/d/s/r | k ? | t");
+  Serial.println("=== speed_pid v1 === v <L m/s> <R m/s> | f/b/l/m/d/s/r | c <deg> | k ? | t");
   Serial.println("# 부호: 양쪽 다 + = 전진 (거울대칭은 펌웨어가 흡수)");
   printTunables();
 }
@@ -238,17 +406,48 @@ void loop() {
 
   unsigned long now = millis();
 
+  if (mlx_ok && mode == MODE_VELOCITY && (now - lastMlxMs >= 500)) {
+    if (mlx.getFrame(mlxFrame) == 0) {
+      // °C ×10 을 int16 big-endian 으로. 🔴 부호를 유지한다 —
+      //    종전 hex 경로는 uint16 으로 찍어서 영하 온도가 6553.5°C 로 읽혔다.
+      for (int i = 0; i < 768; i++) {
+        int16_t dc = (int16_t)(mlxFrame[i] * 10.0f);
+        mlxRaw[i * 2]     = (uint8_t)((uint16_t)dc >> 8);
+        mlxRaw[i * 2 + 1] = (uint8_t)((uint16_t)dc & 0xFF);
+      }
+      size_t n = b64Encode(mlxRaw, sizeof(mlxRaw), mlxB64);
+      Serial.print("IR,");
+      Serial.print(now);
+      Serial.print(",");
+      Serial.write((const uint8_t *)mlxB64, n);   // 768번이 아니라 1번
+      Serial.println();
+      lastMlxMs = millis();
+    }
+  }
+
   if (now - lastCtrlMs >= CTRL_MS) {
     float dt = (now - lastCtrlMs) / 1000.0f;
     lastCtrlMs = now;
+    
+    // 🔴 [2026-08-03 · S15P11E101-647] 크로스 커플링("하향평준화") 항을 삭제했다.
+    //    err<0(과속) 구간에서 `eff_tgt -= (음수)` 가 되어 반대쪽 목표를 **올렸다** —
+    //    이름과 반대로 상향평준화였고, 두 바퀴가 서로를 밀어올리는 양성 피드백이었다.
+    //    좌 바퀴를 손으로 0.2 m/s 돌리면 우 바퀴에 FF 12.4% duty 가 즉시 걸렸다.
+    //    직진성 보정은 펌웨어가 아니라 상위 ROS 스택(오도메트리 피드백)의 몫이다.
     controlWheel(wl, true,  dt);
     controlWheel(wr, false, dt);
 
     // 데드맨 — 명령이 끊기면 정지. 오픈루프는 벤치 작업용이라 5초로 관대하게.
+    // 🔴 [2026-08-03 · S15P11E101-648] 속도모드에서도 stopAll() 을 부른다.
+    //    종전에는 목표만 0 으로 놓고 mode 를 MODE_VELOCITY 로 유지했다 —
+    //    그러면 PID 가 **영원히 무장 상태**로 남아 측정속도만으로 계속 출력을 냈고,
+    //    상위 ROS 프로세스를 kill 해도 안 멈춰 배터리 분리 외엔 정지 수단이 없었다.
+    //    MODE_IDLE 이면 controlWheel 이 위에서 조기 return 하므로 applyWheel 자체가
+    //    호출되지 않는다 — 이것이 진짜 무장해제다.
     uint32_t limit = (mode == MODE_VELOCITY) ? deadman_ms : 5000;
     if (mode != MODE_IDLE && now - lastCmdMs > limit) {
       stopAll();
-      Serial.println("# auto-stop (deadman)");
+      Serial.println("# auto-stop (deadman stopAll)");
     }
   }
 
@@ -264,5 +463,31 @@ void loop() {
       Serial.printf("L tgt%6.3f cur%6.3f duty%6.1f | R tgt%6.3f cur%6.3f duty%6.1f\n",
                     wl.target, wl.v, wl.duty, wr.target, wr.v, wr.duty);
     }
+  }
+
+  // ---------- 환경/배터리 센서 (1Hz, 최저 우선순위) ----------
+  // 위 명령 파싱 → 제어 틱 → 텔레메트리 출력이 이미 다 끝난 뒤에만 실행된다.
+  // DHT11 읽기(수 ms 비트뱅킹)·INA226 읽기(<1ms I2C)가 이 틱과 같은 millis()에 겹쳐도
+  // 다음 제어 틱은 실측 dt(now - lastCtrlMs)로 스스로 보정하므로 적분 오차가 누적되지 않는다.
+  if (now - lastEnvMs >= ENV_MS) {
+    lastEnvMs = now;
+
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+    dht_ok = !(isnan(h) || isnan(t));
+    if (dht_ok) { dhtHumidity = h; dhtTempC = t; }   // 실패 시 이전 값 래치 (NaN을 내보내지 않음)
+
+    if (ina_present) {
+      float v;
+      ina_ok = inaReadBusVoltage(v);
+      if (ina_ok) inaVoltage = v;                    // 실패 시 이전 값 래치
+    }
+
+    // E,millis,dht_ok,tempC,humidity%,ina_ok,batt_V
+    // 기존 T,/IR, 파서와 무관한 별도 라인 — esp32_base_node.py의 serial_loop()는
+    // "T,"로 시작하지 않는 줄을 이미 무시하므로(마지막 continue) 이 줄을 몰라도 안 깨진다.
+    Serial.printf("E,%lu,%d,%.1f,%.1f,%d,%.3f\n",
+                  now, dht_ok ? 1 : 0, dhtTempC, dhtHumidity,
+                  ina_ok ? 1 : 0, inaVoltage);
   }
 }
