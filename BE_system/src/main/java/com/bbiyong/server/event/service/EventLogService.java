@@ -233,7 +233,8 @@ public class EventLogService {
         // 이벤트 클립 연결을 위해 로봇에 생성된 eventId 를 회신한다(블랙박스 파이프라인). (S15P11E101-588)
         notifyRobotEventSaved(savedEvent);
 
-        alertBroadcastService.broadcast(alert);
+        // 저장이 끝난 동일 이벤트의 식별자를 STOMP에 실어 즉시 상세 조회할 수 있게 한다.
+        alertBroadcastService.broadcast(alert.withEventId(savedEvent.getEventId()));
         notificationDispatchService.enqueue(savedEvent, simulationRecipientUserId);
     }
 

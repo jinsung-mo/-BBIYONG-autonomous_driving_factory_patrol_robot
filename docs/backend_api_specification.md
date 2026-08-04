@@ -213,6 +213,7 @@
 * **Payload**:
 ```json
 {
+  "eventId": 1234,
   "type": "FIRE",
   "level": "CRITICAL",
   "source": "ROBOT",
@@ -228,6 +229,7 @@
   "timestamp": "2026-07-18T19:40:03Z"
 }
 ```
+* `eventId`는 저장 완료된 이벤트 이력의 식별자이며, 수신 즉시 `GET /api/events/{eventId}`로 상세·영상을 조회할 때 사용한다.
 * `temperature`, `equipmentId`, `threshold`, `thermalImage`은 이벤트 유형·로봇 기능에 따라 선택값이다. 현재 이벤트 좌표는 위치 기능 확정 전까지 `0.0, 0.0`으로 고정한다.
 * `source` 값: 실제 로봇은 `ROBOT`, 시연 API는 `SIMULATION`.
 

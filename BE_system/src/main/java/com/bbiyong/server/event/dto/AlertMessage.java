@@ -21,14 +21,16 @@ public record AlertMessage(
         Double x,
         Double y,
         String message,
-        String timestamp
+        String timestamp,
+        Long eventId       // DB 저장 후 부여. 실시간 행의 상세 조회 대상
 ) {
     public static AlertMessage fromFire(RobotPacket p) {
         return new AlertMessage(
                 "FIRE", "CRITICAL", sourceOf(p), p.getRobotId(),
                 p.getConfidence(), p.getTemperature(), null, null, null, 0.0, 0.0,
                 prefix(p) + "화재 발생",
-                timestampOf(p).toString());
+                timestampOf(p).toString(),
+                null);
     }
 
     public static AlertMessage fromOverheat(RobotPacket p) {
@@ -36,7 +38,16 @@ public record AlertMessage(
                 "OVERHEAT", "WARNING", sourceOf(p), p.getRobotId(),
                 null, p.getTemperature(), p.getEquipmentId(), p.getThreshold(), p.getThermalImage(), 0.0, 0.0,
                 prefix(p) + "과열 발생",
-                timestampOf(p).toString());
+                timestampOf(p).toString(),
+                null);
+    }
+
+    /** 이력이 저장된 뒤에만 웹 경보에 DB 식별자를 붙인다. */
+    public AlertMessage withEventId(Long savedEventId) {
+        return new AlertMessage(
+                type, level, source, robotId,
+                confidence, temperature, equipmentId, threshold, thermalImage, x, y,
+                message, timestamp, savedEventId);
     }
 
     private static String sourceOf(RobotPacket p) {
