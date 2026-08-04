@@ -25,7 +25,7 @@ public class MattermostNotifier {
 
     private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DISPLAY_TIME_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(KOREA_ZONE);
+            DateTimeFormatter.ofPattern("HH시 mm분 ss초").withZone(KOREA_ZONE);
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;

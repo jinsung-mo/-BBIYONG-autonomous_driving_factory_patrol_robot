@@ -54,7 +54,7 @@ class MattermostNotifierTests {
                 .andExpect(content().string(containsString("payload=")))
                 .andExpect(content().string(not(containsString("channel"))))
                 .andExpect(content().string(containsString(URLEncoder.encode("화재 발생", StandardCharsets.UTF_8))))
-                .andExpect(content().string(containsString("2026-08-04+10%3A26%3A17")))
+                .andExpect(content().string(containsString(URLEncoder.encode("10시 26분 17초", StandardCharsets.UTF_8))))
                 .andExpect(content().string(not(containsString(URLEncoder.encode("신뢰도", StandardCharsets.UTF_8)))))
                 .andExpect(content().string(not(containsString(URLEncoder.encode("위치", StandardCharsets.UTF_8)))))
                 .andRespond(withSuccess());
