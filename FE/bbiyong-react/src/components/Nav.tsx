@@ -1,5 +1,6 @@
 import { useSim } from '../SimContext.ts'
 import { useLive } from '../live/LiveContext.tsx'
+import type { Section } from '../live/contracts.d.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { roleText } from '../auth/roles.ts'
 import UserMenu from './auth/UserMenu.tsx'
@@ -15,16 +16,18 @@ import UserMenu from './auth/UserMenu.tsx'
  * @param {{ section: 'live' | 'ops' | 'config',
  *           onSection: (s: 'live' | 'ops' | 'config') => void }} props
  */
-export default function Nav({ section, onSection }: { section: 'live' | 'ops' | 'config',
-            onSection: (s: 'live' | 'ops' | 'config') => void }) {
+export default function Nav({ section, onSection }: { section: Section,
+            onSection: (s: Section) => void }) {
   const { clock, theme, toggleTheme } = useSim()
   const { enabled } = useLive()
   const { user, isAdmin } = useAuth()
 
+  // 시뮬레이션에서는 관제가 지도와 카메라 두 화면으로 나뉜다. 실서버는 하나 그대로다.
   // key 를 리터럴로 고정한다 — 그냥 두면 string 으로 넓어져 onSection 이 받지 못한다.
-  /** @type {Array<{ key: 'live' | 'ops' | 'config', label: string }>} */
-  const tabs: Array<{ key: 'live' | 'ops' | 'config', label: string }> = [
-    { key: 'live', label: '관제' },
+  const tabs: Array<{ key: Section, label: string }> = [
+    ...(enabled
+      ? [{ key: 'live' as const, label: '관제' }]
+      : [{ key: 'live' as const, label: '지도' }, { key: 'cam' as const, label: '카메라' }]),
     ...(isAdmin
       ? [
         { key: 'ops' as const, label: '운영' }, { key: 'config' as const, label: '설정' },
@@ -33,7 +36,7 @@ export default function Nav({ section, onSection }: { section: 'live' | 'ops' | 
   ]
 
   return (
-    <nav id="nav" className={section === 'live' && !enabled ? 'sim-nav' : undefined}>
+    <nav id="nav" className={!enabled && (section === 'live' || section === 'cam') ? 'sim-nav' : undefined}>
       <div className="logo">
         삐용(BBIYONG)
         <span className="nav-subtitle"> 순찰 로봇 관제</span>

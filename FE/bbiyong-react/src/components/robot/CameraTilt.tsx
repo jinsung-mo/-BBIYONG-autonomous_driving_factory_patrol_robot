@@ -15,7 +15,9 @@ import {
 // drive 가 아니라 camera capability 를 본다.
 export default function CameraTilt() {
   const { enabled, connected, control, telemetry } = useLive()
-  const { isAdmin } = useAuth()
+  // 조작 잠금(S15P11E101-653)도 함께 본다. isAdmin 만 보면 잠긴 동안에도 각도가 움직여
+  // 다른 조작은 다 막혀 있는데 카메라만 돌아가는 상태가 된다.
+  const { canOperate } = useAuth()
 
   const [requested, setRequested] = useState(0)
   const reported = reportedTilt(telemetry)
@@ -26,7 +28,7 @@ export default function CameraTilt() {
   const camDown = enabled && isDown(capOf(telemetry, CAP_KEYS.camera))
   // 시뮬 모드에서도 조작할 수 있어야 한다 — 긴급정지·순찰복귀·속도·지점이동이 모두 시뮬에서
   // 동작하는데 카메라 각도만 죽어 있으면 고장으로 읽힌다. 값만 바뀌고 발행은 하지 않는다.
-  const off = enabled ? (!connected || camDown || !isAdmin) : !isAdmin
+  const off = enabled ? (!connected || camDown || !canOperate) : !canOperate
 
   const nudge = useCallback((dir: any) => {
     const next = clampTilt(tilt + dir * TILT_STEP)

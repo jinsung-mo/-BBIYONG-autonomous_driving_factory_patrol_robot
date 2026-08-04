@@ -226,6 +226,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .ctl .col{display:flex; flex-direction:column; gap:clamp(6px,1vh,10px); min-width:0; justify-content:flex-start;}
 /* 화면이 낮아지면 버튼 높이를 먼저 줄인다. 아래 한계는 손가락으로 누를 수 있는 크기다. */
 .ctl .col .dbtn{padding:clamp(7px,1.5vh,14px) 13px; font-size:13px;}
+/* 좌측 열은 방향키 한 덩어리다. 열 가운데에 놓아야 우측(모드+카메라 각도) 묶음과
+   무게가 맞는다 — 위로 붙이면 아래가 휑하게 빈다. */
+.ctl-pad{display:flex; align-items:center; justify-content:center; min-width:0;}
 .ctl-right{display:flex; flex-direction:column; gap:clamp(8px,1.2vh,12px); justify-content:flex-start; min-width:0;}
 /* 여기서는 간격을 flex gap 이 맡는다 — 다른 화면의 .gotor 여백 규칙은 건드리지 않는다 */
 .ctl-right .gotor{margin-top:0;}
@@ -1362,8 +1365,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    두 테마에 같은 파랑을 쓴다. 눌림은 '어느 방향이 먹고 있나' 를 알리는 신호라
    테마마다 달라질 이유가 없고, 대비도 한 번만 검증하면 된다.
    순찰 모드 알약과 같은 색이며 흰 글자 대비 4.66 ~ 5.52 로 확인된 값이다. */
+/* 화면이 둘로 나뉘면서 조작 패널이 #pgCam 으로 옮겼다. #pgB 로만 잡으면 그쪽에서
+   눌림 표시가 통째로 빠진다 — 어느 방향이 먹고 있는지 알 수 없게 된다. */
 #pgB.sim-skin .dpad button:active,
-#pgB.sim-skin .dpad button.active{
+#pgB.sim-skin .dpad button.active,
+#pgCam .dpad button:active,
+#pgCam .dpad button.active{
   transform:scale(.94);
   background:linear-gradient(160deg,#3373d0,#2c66c4);
   border-color:transparent;
@@ -1377,7 +1384,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    그것까지 사라지면 어느 방향이 먹고 있는지 알 수 없다. */
 @media (prefers-reduced-motion:reduce){
   #pgB.sim-skin .dpad button:active,
-  #pgB.sim-skin .dpad button.active{transform:none;}
+  #pgB.sim-skin .dpad button.active,
+  #pgCam .dpad button:active,
+  #pgCam .dpad button.active{transform:none;}
 }
 
 /* ============ 압출 2.5D 지도 (S15P11E101-676) ============
@@ -1450,3 +1459,432 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @media (prefers-reduced-motion:reduce){
   .iso-scene{transition:none;}
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   navexa 디자인 레이어 — 시뮬레이션 화면 전용
+   ----------------------------------------------------------------------------
+   밝고 공기감 있는 화면. 거의 흰 배경 위에 큰 반경·부드러운 그림자의 카드가 떠 있다.
+
+   이 시스템의 규칙 넷 (navexa-system/TOKENS.md)
+     1. 테두리를 쓰지 않는다. 카드 면과 배경의 명도차가 거의 없어 층은 그림자가 만든다.
+     2. 채도 2단. 초록·빨강이 각각 두 값이다 — 비비드는 점·선·아이콘, 파스텔은 배지 채움.
+     3. 유채색은 상태 전달에만. 제목·본문·라벨은 전부 무채색이다.
+     4. 위계는 색이 아니라 크기로. 큰 숫자도 굵게 쓰지 않는다(400).
+
+   다크는 참조 시스템에 없다. 명도만 뒤집고 색상·채도 관계는 그대로 유지해
+   같은 규칙이 어두운 화면에서도 성립하게 했다 — 공장은 20시~08시 무인이라
+   밝은 화면만으로는 야간 근무를 감당하기 어렵다.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root{
+  --nx-bg:#f0f5f5;
+  --nx-sunken:#e8eaec;
+  --nx-elev:#ffffff;
+  --nx-surface:#f9fbfc;
+  --nx-panel:rgba(249,251,252,.88);
+  --nx-divider:#d8dbdb;
+  --nx-text:#232828;
+  --nx-muted:#5d6162;
+  --nx-faint:#a6abab;
+
+  /* 채도 2단 — 비비드는 점·선, 파스텔은 배지 채움 */
+  --nx-accent:#11b22c;
+  --nx-success:#62c47a;
+  --nx-danger-vivid:#ff4a3e;
+  --nx-danger:#f27876;
+  --nx-warning:#f2b76a;
+  --nx-neutral:#cfd5d6;
+
+  --nx-r-sm:8px; --nx-r-md:16px; --nx-r-lg:24px;
+  --nx-sh-sm:0 1px 2px rgba(15,23,23,.04);
+  --nx-sh-md:0 8px 24px rgba(15,23,23,.08);
+  --nx-sh-lg:0 20px 48px rgba(15,23,23,.14);
+  --nx-side-w:340px;
+  /* 카메라 화면의 좌측은 조작 두 열(각 최소 168px)이 들어가야 해 지도 화면보다 넓다 */
+  --nx-cam-side-w:380px;
+}
+/* 다크 — 명도만 뒤집는다. 색상·채도 관계는 그대로라 같은 규칙이 성립한다.
+   그림자는 어두운 화면에서 층을 못 만드므로 아주 옅은 테두리로 대신한다 —
+   '테두리를 쓰지 않는다' 는 밝은 배경에서 성립하는 규칙이다. */
+:root[data-theme="dark"]{
+  --nx-bg:#0e1214;
+  --nx-sunken:#141a1d;
+  --nx-elev:#181f23;
+  --nx-surface:#1b2328;
+  --nx-panel:rgba(27,35,40,.92);
+  --nx-divider:#2b353a;
+  --nx-text:#eef3f3;
+  --nx-muted:#9aa5a7;
+  --nx-faint:#6b7679;
+  --nx-accent:#2ddc4d;
+  --nx-success:#3f9a56;
+  --nx-danger-vivid:#ff6a5e;
+  --nx-danger:#a84d4a;
+  --nx-warning:#b3813f;
+  --nx-neutral:#39454a;
+  --nx-sh-sm:0 1px 2px rgba(0,0,0,.30);
+  --nx-sh-md:0 8px 24px rgba(0,0,0,.42);
+  --nx-sh-lg:0 20px 48px rgba(0,0,0,.55);
+}
+
+/* `.page.on{display:block}` 이 클래스 두 개라 `.nav-page` 하나로는 이기지 못한다.
+   그러면 flex 가 적용되지 않아 아래 그리드가 남는 높이를 못 받고 콘텐츠 높이로 눌린다. */
+.page.nav-page{
+  background:var(--nx-bg); color:var(--nx-text);
+  padding:28px 32px 32px; gap:0;
+  height:calc(100dvh - 56px); overflow:hidden;
+  display:flex; flex-direction:column;
+}
+
+/* ── 제목 + 큰 숫자 ─────────────────────────────────────────── */
+.nav-hero{display:flex; align-items:flex-start; gap:48px; flex-wrap:wrap; margin-bottom:24px;}
+.nav-title{flex:0 0 auto; min-width:190px;}
+.nav-title h2{
+  font-size:40px; font-weight:400; letter-spacing:-.01em; line-height:1.1;
+  color:var(--nx-text); margin:0;
+}
+.nav-title .nav-sub{
+  display:block; margin-top:6px;
+  font-size:13px; letter-spacing:.04em; color:var(--nx-faint);
+}
+.kpis{display:flex; gap:48px; flex:1 1 auto; flex-wrap:wrap; padding-bottom:8px;}
+.kpi{display:flex; align-items:flex-start; gap:16px;}
+/* 굵기가 아니라 크기로 위계를 만든다 — 400 이 맞다 */
+.kpi-num{
+  font-size:40px; font-weight:400; line-height:1.1; letter-spacing:-.01em;
+  white-space:nowrap; color:var(--nx-text);
+  font-variant-numeric:tabular-nums;
+}
+.kpi-num .unit{font-size:20px; color:var(--nx-muted); margin-left:2px;}
+.kpi-label{margin-top:8px; font-size:14px; color:var(--nx-muted);}
+/* 색만으로 알리지 않는다 — 기호를 함께 넣는다 */
+.kpi-badge{
+  width:20px; height:20px; border-radius:var(--nx-r-sm); margin-top:10px; flex:0 0 auto;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; color:#fff; line-height:1;
+}
+.kpi-badge.ok{background:var(--nx-accent);}
+.kpi-badge.warn{background:var(--nx-warning);}
+.kpi-badge.bad{background:var(--nx-danger-vivid);}
+.kpi-badge.none{background:var(--nx-neutral); color:var(--nx-muted);}
+.sr-only{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+
+/* ── 지도 화면 : 좌측 패널 + 넓은 캔버스 ────────────────────── */
+.nav-stage{
+  /* basis 를 0 으로 둔다. auto 면 콘텐츠 높이가 기준이 되어 그리드 fr 이
+     남는 높이가 아니라 콘텐츠에 맞춰 커지고, 화면을 넘긴다. */
+  flex:1 1 0; min-height:0;
+  /* 행을 minmax(0,1fr) 로 묶지 않으면 grid 행이 auto 가 되어 콘텐츠 높이를 그대로 받고,
+     그러면 화면이 넘쳐 페이지가 스크롤된다 — 한눈에 못 보게 된다. */
+  display:grid; grid-template-columns:var(--nx-side-w) minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr); gap:24px;
+}
+.nav-side{min-height:0; display:flex; flex-direction:column;}
+.nav-canvas{min-height:0; display:flex; flex-direction:column;}
+.nav-canvas > .panel{flex:1 1 auto; min-height:0;}
+
+/* ── 카메라 화면 : 좌측(조작·로그) + 우측 전면 영상, 열화상은 겹쳐서 ──
+   조작은 늘 같은 자리에 고정한다. 영상이 커졌다 작아졌다 해도 손이 가는 자리가
+   움직이면 급할 때 헛손질이 난다. 조작은 행 높이를 콘텐츠에 맡기고(auto),
+   남는 높이는 전부 로그가 먹는다 — 로그는 길수록 쓸모가 있다. */
+.cam-stage{
+  flex:1 1 0; min-height:0;
+  display:grid;
+  grid-template-columns:var(--nx-cam-side-w) minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);
+  grid-template-areas:"control cam" "events cam";
+  gap:24px;
+}
+#pgCam #pControl{grid-area:control; min-width:0;}
+#pgCam #pEvents{grid-area:events; min-height:0; display:flex; flex-direction:column;}
+#pgCam #pEvents .elog{flex:1 1 0; min-height:0;}
+/* 좌측 칸은 340px 로는 조작 두 열이 안 들어간다. 열 최소폭을 풀어 칸에 맞춘다. */
+#pgCam #pControl .ctl{grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:center;}
+
+#pgCam .cam-main{
+  grid-area:cam; position:relative; min-height:0;
+  display:flex; flex-direction:column;
+}
+#pgCam .cam-main #pCam{
+  flex:1 1 0; min-height:0; position:relative;
+  display:flex; flex-direction:column;
+}
+#pgCam .cam-main #pCam .vwrap{flex:1 1 0; min-height:0;}
+
+/* 제목은 영상 위에 얹는다. 영상 위에 머리글 띠를 따로 두면 그만큼 화면이 줄고,
+   무엇보다 '어느 카메라인지' 는 영상 안에 붙어 있어야 캡처를 떼어 봐도 알 수 있다. */
+#pgCam .cam-main .panel > h3{
+  position:absolute; top:0; left:0; z-index:4;
+  margin:0; padding:7px 14px; border:0;
+  display:flex; align-items:center; gap:8px;
+  font-size:13.5px; font-weight:500; letter-spacing:-.01em;
+  color:#fff; background:rgba(12,16,20,.72);
+  border-radius:0 0 var(--nx-r-sm) 0;
+  backdrop-filter:blur(6px);
+  pointer-events:none;
+}
+#pgCam .cam-main .panel > h3 .k{
+  background:rgba(255,255,255,.14); color:rgba(255,255,255,.78);
+  font-size:9.5px; padding:2px 6px;
+}
+#pgCam .cam-main .panel > h3 > *{pointer-events:auto;}
+
+/* 겹쳐 띄우는 열화상. 영상 위의 영상이라 테두리와 그림자를 남긴다 —
+   경계가 없으면 두 장면이 한 장면으로 읽혀 어느 쪽 열인지 헷갈린다.
+   테두리는 청록으로 둔다. 열화상은 붉은·주황이 데이터라, 같은 계열로 테두리를
+   두르면 경계인지 뜨거운 자리인지 구분이 안 된다. */
+#pgCam #pThermal.pip{
+  position:absolute; right:0; bottom:0; z-index:5;
+  width:clamp(240px,28%,420px); padding:0;
+  background:#0b1016; border-radius:var(--nx-r-sm); overflow:hidden;
+  border:2px solid #35c8ea;
+  box-shadow:0 18px 44px rgba(0,0,0,.5);
+}
+/* 제목이 절대 배치라 흐름에 높이를 주는 것이 vwrap 뿐이다. 비율을 못 박지 않으면
+   높이 4px 짜리 띠가 된다 — 화면 비율은 열화상 센서(4:3)에 맞춘다. */
+#pgCam #pThermal.pip .vwrap{border-radius:0; box-shadow:none; border:0; flex:none; aspect-ratio:4/3;}
+#pgCam #pThermal.pip .hud2{font-size:13px;}
+/* 제목 칩이 좌상단을 쓰므로 HUD 는 그 아래로 내린다 — 겹치면 둘 다 못 읽는다 */
+#pgCam .cam-main #pCam .vwrap .hud{top:42px;}
+/* --dk-sub 는 어두운 판을 전제한 회색이라 흰 카드 위에서 4.44 로 기준(4.5)에 못 미쳤다.
+   navexa 보조 글자색으로 맞춘다 — 두 테마 모두 토큰이 알아서 뒤집힌다. */
+.nav-page .spdlab span{color:var(--nx-muted);}
+
+/* ── 카드 : 테두리 없이 그림자로만 층을 만든다 ──────────────── */
+.nav-page .panel{
+  background:var(--nx-elev); border:0; border-radius:var(--nx-r-lg);
+  box-shadow:var(--nx-sh-md); padding:20px 22px; backdrop-filter:none;
+}
+:root[data-theme="dark"] .nav-page .panel{
+  /* 어두운 화면에서는 그림자가 층을 못 만든다 — 아주 옅은 테두리로 대신한다 */
+  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.045);
+}
+.nav-page .panel::before,.nav-page .panel::after{display:none;}
+/* 좌측 패널은 지도 위에 떠 있는 인상이라 한 단 더 띄운다 */
+.nav-side > .panel{background:var(--nx-panel); box-shadow:var(--nx-sh-lg);}
+.nav-page .panel h3{
+  font-size:20px; font-weight:500; letter-spacing:-.01em; text-transform:none;
+  color:var(--nx-text); margin-bottom:16px; padding-bottom:0; border:0;
+}
+.nav-page .panel h3 .k{
+  font-size:11px; letter-spacing:.04em; color:var(--nx-faint);
+  border:0; background:var(--nx-sunken); border-radius:var(--nx-r-sm); padding:3px 8px;
+  opacity:1;
+}
+
+/* ── 상단 바 : 같은 규칙으로 다시 ───────────────────────────
+   테두리 없이 그림자로만 층을 만들고, 탭은 라운드 스퀘어다.
+   선택된 탭만 채우고 나머지는 배경에 잠긴 회색으로 둔다. */
+#nav.sim-nav{
+  background:var(--nx-elev); border-bottom:0;
+  box-shadow:var(--nx-sh-sm);
+  backdrop-filter:none; color:var(--nx-text);
+}
+#nav.sim-nav::before{display:none;}
+#nav.sim-nav .logo{color:var(--nx-text);}
+#nav.sim-nav .nav-subtitle{color:var(--nx-faint); font-weight:400;}
+#nav.sim-nav .navtabs{
+  background:transparent; border:0; box-shadow:none; padding:0; gap:6px;
+  backdrop-filter:none;
+}
+#nav.sim-nav .navtabs button{
+  border:0; border-radius:var(--nx-r-md); padding:8px 18px;
+  background:var(--nx-sunken); color:var(--nx-muted);
+  font-size:14px; font-weight:500; box-shadow:none;
+}
+#nav.sim-nav .navtabs button:hover{background:var(--nx-divider); color:var(--nx-text);}
+#nav.sim-nav .navtabs button.on{
+  background:var(--nx-elev); color:var(--nx-text);
+  box-shadow:var(--nx-sh-md);
+}
+#nav.sim-nav .theme-btn,#nav.sim-nav .navrole,#nav.sim-nav .usermenu-btn{
+  border:0; border-radius:var(--nx-r-md);
+  background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none;
+  backdrop-filter:none;
+}
+#nav.sim-nav .theme-btn:hover,#nav.sim-nav .usermenu-btn:hover{background:var(--nx-divider);}
+#nav.sim-nav .clock{color:var(--nx-faint);}
+#nav.sim-nav .usermenu-nm{color:var(--nx-text);}
+#nav.sim-nav .usermenu-drop{
+  background:var(--nx-elev); border:0; box-shadow:var(--nx-sh-lg); border-radius:var(--nx-r-md);
+}
+#nav.sim-nav .usermenu-drop button{color:var(--nx-text);}
+#nav.sim-nav .usermenu-drop button:hover{background:var(--nx-sunken);}
+#nav.sim-nav .usermenu-drop button.danger{color:var(--nx-danger-vivid);}
+#nav.sim-nav .usermenu-info b{color:var(--nx-text);}
+#nav.sim-nav .usermenu-info span,#nav.sim-nav .usermenu-caret{color:var(--nx-faint);}
+#nav.sim-nav .usermenu-info{border-bottom-color:var(--nx-divider);}
+:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
+  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+/* ── 화면이 넘치지 않게 ─────────────────────────────────────
+   지도는 남는 높이를 채우고, 넘치면 지도 안에서 줄인다.
+   페이지가 스크롤되면 조작자가 한눈에 못 본다. */
+.nav-page .vwrap{flex:1 1 auto; min-height:0;}
+.nav-side > .panel{overflow:hidden;}
+.nav-side .elog{flex:1 1 auto; min-height:0;}
+
+/* ── 밝은 화면에 맞춘 안쪽 요소 ─────────────────────────────
+   유리 시절의 발광·반투명을 걷어낸다. 이 시스템은 그림자와 명도로만 층을 만든다. */
+.nav-page .stat-card,.nav-page .env div,.nav-page .elog li{
+  background:var(--nx-surface); border:0; border-radius:var(--nx-r-md);
+  box-shadow:var(--nx-sh-sm); backdrop-filter:none;
+}
+:root[data-theme="dark"] .nav-page .stat-card,
+:root[data-theme="dark"] .nav-page .env div,
+:root[data-theme="dark"] .nav-page .elog li{
+  background:var(--nx-sunken); box-shadow:none;
+}
+.nav-page .kv{color:var(--nx-muted); border-top-color:var(--nx-divider);}
+.nav-page .kv b{color:var(--nx-text);}
+.nav-page .env b{color:var(--nx-text);}
+.nav-page .env span{color:var(--nx-muted);}
+.nav-page .rid{color:var(--nx-text);}
+/* 게이지 — 발광을 끄고 선만 남긴다 */
+.nav-page .rgauge-fill{filter:none;}
+.nav-page .rgauge-track{stroke:var(--nx-sunken); opacity:1;}
+.nav-page .rgauge-mid b{color:var(--nx-text);}
+.nav-page .rgauge-mid span,.nav-page .rgauge-cap{color:var(--nx-muted);}
+/* 상태 알약 — 파스텔 채움에 짙은 글자 */
+.nav-page .pillm{
+  background:var(--nx-success); color:#fff; border:0; font-weight:600;
+}
+.nav-page .pillm.emg{background:var(--nx-danger-vivid);}
+.nav-page .pillm.man{background:var(--nx-warning);}
+/* 이벤트 로그 — 왼쪽 색띠는 유지한다. 색만으로 알리지 않기 위한 장치다 */
+.nav-page .elog li::before{width:3px;}
+:root[data-theme="light"] .nav-page .elog li.ok b{color:#0d5c3e;}
+:root[data-theme="light"] .nav-page .elog li.heat b{color:#8a5200;}
+:root[data-theme="light"] .nav-page .elog li.fire b{color:#a52216;}
+.nav-page .elog li .t{color:var(--nx-faint);}
+.nav-page .panel > h3.event-title{margin-top:16px;}
+/* 지도 판은 캔버스가 주인공이라 안쪽 여백을 줄인다 */
+.nav-canvas .vwrap{background:var(--nx-elev); border:0; border-radius:var(--nx-r-md);}
+.nav-page .maplegend{color:var(--nx-muted); margin-top:12px;}
+.nav-page .maplegend span{background:transparent; border:0; padding:0;}
+/* 카메라 화면의 판들도 남는 높이 안에서 줄어들어야 한다 */
+#pgCam .panel{min-height:0;}
+#pgCam .vwrap{flex:1 1 0; min-height:0;}
+#pgCam .ctl{min-height:0;}
+/* 조작 패널은 좌측 위에서 제 콘텐츠 높이만 쓴다. basis 0 으로 두면 행이 auto 라
+   높이가 0 으로 접혀 버튼이 통째로 사라진다 — 남는 높이는 아래 로그가 먹는다. */
+#pgCam #pControl{display:flex; flex-direction:column;}
+#pgCam #pControl .ctl{flex:0 0 auto;}
+
+/* ── 옛 유리 시절 nav 규칙을 확실히 덮는다 ─────────────────
+   그 규칙들이 `:root[data-theme=...] #nav.sim-nav …` 로 잡혀 있어 클래스만으로는
+   이기지 못한다. 같은 자리에서 덮어야 탭 색이 navexa 로 바뀐다.
+   (덮지 못한 동안 라이트 선택 탭이 파란 알약으로 남아 대비 2.88 이었다) */
+:root[data-theme="light"] #nav.sim-nav .navtabs button,
+:root[data-theme="dark"] #nav.sim-nav .navtabs button{
+  background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none; border:0;
+}
+:root[data-theme="light"] #nav.sim-nav .navtabs button:hover,
+:root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{
+  background:var(--nx-divider); color:var(--nx-text);
+}
+:root[data-theme="light"] #nav.sim-nav .navtabs button.on,
+:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
+  background:var(--nx-elev); color:var(--nx-text); border:0;
+  box-shadow:var(--nx-sh-md);
+}
+:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
+  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.07);
+}
+:root[data-theme="light"] #nav.sim-nav .logo{color:var(--nx-text);}
+:root[data-theme="light"] #nav.sim-nav .nav-subtitle,
+:root[data-theme="light"] #nav.sim-nav .clock,
+:root[data-theme="light"] #nav.sim-nav .navrole{color:var(--nx-faint);}
+:root[data-theme="light"] #nav.sim-nav .theme-btn,
+:root[data-theme="light"] #nav.sim-nav .usermenu-btn{
+  background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none; border:0;
+}
+:root[data-theme="light"] #nav.sim-nav .usermenu-drop{
+  background:var(--nx-elev); border:0; box-shadow:var(--nx-sh-lg); backdrop-filter:none;
+}
+
+/* ── 상태 알약 : 파스텔 채움에 흰 글자는 읽히지 않는다 ─────
+   파스텔 그린 위 흰 글자가 2.17 이었다. 참조 시스템도 같은 조합을 쓰지만
+   우리 기준(4.5:1)은 못 넘는다. 채움은 파스텔로 두되 글자를 짙게 내린다 —
+   배지의 인상은 그대로이고 글자만 읽힌다. */
+.nav-page .pillm{background:var(--nx-success); color:#06301a;}
+.nav-page .pillm.emg{background:var(--nx-danger-vivid); color:#3d0703;}
+.nav-page .pillm.man{background:var(--nx-warning); color:#3d2600;}
+/* 다크에서는 파스텔 채움도 밝아 흰 글자가 3.37 이었다. 채움을 한 단 내린다. */
+:root[data-theme="dark"] .nav-page .pillm{background:#2f7541; color:#eafff2;}
+:root[data-theme="dark"] .nav-page .pillm.emg{background:var(--nx-danger); color:#fff0ee;}
+:root[data-theme="dark"] .nav-page .pillm.man{background:var(--nx-warning); color:#fff6e6;}
+
+/* ── 틀을 없앤다 ────────────────────────────────────────────
+   참조 디자인에서 지도는 카드 안에 들어 있지 않다. 배경 위에 그대로 놓여 있고,
+   제목과 범례만 그 위아래에 떠 있다. 카드로 감싸면 지도가 '창 안의 그림' 이 되고
+   구역 전체를 본다는 느낌이 사라진다. 영상도 같다.
+
+   좌측 패널만 카드로 남긴다 — 그것은 지도 위에 떠 있는 것이 맞다.
+   카메라 화면의 좌측(조작·로그)도 같은 이유로 카드다. */
+#pgMap .nav-canvas > .panel,
+#pgCam #pCam{
+  background:transparent; box-shadow:none; border:0; padding:0; border-radius:0;
+}
+#pgMap .nav-canvas > .panel::before,#pgMap .nav-canvas > .panel::after,
+#pgCam .panel::before,#pgCam .panel::after{display:none;}
+:root[data-theme="dark"] #pgMap .nav-canvas > .panel,
+:root[data-theme="dark"] #pgCam #pCam{box-shadow:none;}
+
+/* 제목은 배경 위에 그대로 얹는다 */
+#pgMap .nav-canvas > .panel > h3,#pgCam #pCam > h3{
+  margin:0 0 12px 2px; padding:0;
+}
+
+/* 영상·지도는 자기 모서리만 갖는다. 테두리 대신 아주 옅은 그림자로 바닥에서 띄운다 —
+   콘텐츠 자체가 어두워 배경과 이미 구분되므로 선을 두를 이유가 없다. */
+#pgMap .nav-canvas .vwrap,#pgCam .cam-main .vwrap{
+  border:0; border-radius:var(--nx-r-lg); overflow:hidden;
+  box-shadow:0 10px 30px rgba(15,23,23,.10);
+}
+:root[data-theme="dark"] #pgMap .nav-canvas .vwrap,
+:root[data-theme="dark"] #pgCam .cam-main .vwrap{box-shadow:0 10px 30px rgba(0,0,0,.42);}
+/* 지도는 배경과 같은 톤이라 살짝 밝혀 바닥과 구분한다 */
+#pgMap .nav-canvas .vwrap{background:var(--nx-elev);}
+
+#pgCam #pControl .ctl{padding-top:2px;}
+
+/* ── 상단 바도 띠를 없앤다 ──────────────────────────────────
+   참조에서 헤더는 별도의 흰 띠가 아니라 페이지 배경 위에 그냥 얹혀 있다. */
+#nav.sim-nav{background:transparent; box-shadow:none; border-bottom:0;}
+/* 탭은 선택된 것만 채운다. 나머지는 배경에 잠겨 글자만 남는다 —
+   여섯 개가 모두 회색 상자면 무엇이 선택됐는지 먼저 안 보인다. */
+/* 탭을 감싸던 흰 알약 띠를 걷는다. 참조에서 탭은 각자 알약일 뿐 공통 틀이 없다 —
+   틀이 있으면 상단에 가로로 긴 직사각형이 하나 더 생겨 화면이 층으로 나뉜다.
+   :root[data-theme=...] 로 잡힌 옛 유리 규칙이 있어 같은 자리에서 덮어야 이긴다. */
+:root[data-theme="light"] #nav.sim-nav .navtabs,
+:root[data-theme="dark"] #nav.sim-nav .navtabs{
+  background:transparent; box-shadow:none; border:0; padding:0;
+  backdrop-filter:none; -webkit-backdrop-filter:none;
+}
+/* 탭은 각자 알약이다. 고르지 않은 것은 배경에 잠긴 회색, 고른 것만 흰 판으로 올라온다 */
+:root[data-theme="light"] #nav.sim-nav .navtabs button,
+:root[data-theme="dark"] #nav.sim-nav .navtabs button{
+  background:var(--nx-sunken); box-shadow:none; color:var(--nx-muted);
+}
+:root[data-theme="light"] #nav.sim-nav .navtabs button:hover,
+:root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{
+  background:var(--nx-divider); color:var(--nx-text);
+}
+:root[data-theme="light"] #nav.sim-nav .navtabs button.on{
+  background:var(--nx-elev); color:var(--nx-text); box-shadow:var(--nx-sh-sm);
+}
+:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
+  background:var(--nx-elev); color:var(--nx-text);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);
+}
+:root[data-theme="light"] #nav.sim-nav .theme-btn,
+:root[data-theme="light"] #nav.sim-nav .usermenu-btn,
+#nav.sim-nav .theme-btn,#nav.sim-nav .usermenu-btn,#nav.sim-nav .navrole{
+  background:transparent; box-shadow:none;
+}
+#nav.sim-nav .theme-btn:hover,#nav.sim-nav .usermenu-btn:hover{background:var(--nx-sunken);}

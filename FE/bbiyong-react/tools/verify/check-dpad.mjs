@@ -83,7 +83,12 @@ const setTheme = async (want) => {
   return theme()
 }
 // 주행은 수동 모드에서만 먹는다 — 순찰 중이면 방향 버튼이 잠겨 있다
+const goCam = async () => {
+  await ev(`[...document.querySelectorAll('#nav .navtabs button')].find(b=>b.textContent.trim()==='카메라')?.click()`)
+  await sleep(500)
+}
 const goManual = async () => {
+  await goCam()
   await ev(`(()=>{const b=[...document.querySelectorAll('.seg button')]; if(b[1] && !b[1].classList.contains('on')) b[1].click()})()`)
   await sleep(700)
 }
@@ -99,7 +104,6 @@ for (const want of ['light', 'dark']) {
   console.log('  평소 :', idle?.disabled ? '(잠김 — 수동 모드 아님)' : '')
   console.log('    배경', idle?.bgImg?.slice(0, 54), '· 글자', idle?.color, '· 변형', idle?.transform)
   console.log('  → 조작 가능 :', ok(idle?.disabled === false), '(잠겨 있으면 눌림을 잴 수 없다)')
-
   await key('keyDown', 'w'); await sleep(400)
   const down = await ev(STATE)
   const pressedContrast = await ev(`(${CONTRAST})('.dpad button.active')`)
