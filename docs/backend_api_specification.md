@@ -209,23 +209,27 @@
 * 확장 필드: `speed`(m/s), `estop`(`RELEASED`/`ENGAGED`), `commLatencyMs`, `inferenceFps` (온습도 센서 미사용으로 주변 온도·습도 제외)
 
 #### 2) 실시간 경보 푸시 구독 (`SUB /topic/alerts`)
-* **설명**: 순찰 로봇이 화재 후보를 근접 교차검증(YOLO 객체탐지 + 열화상)하여 **화재로 확정한 시점**에 발행되는 경보입니다. 브라우저에 실시간 경보 모달을 띄우기 위해 사용합니다. (접근/검증 진행 단계는 경보가 아닌 `/topic/robots` 상태로만 반영됩니다.)
+* **설명**: 로봇이 전송한 `EVENT_FIRE` 또는 `EVENT_OVERHEAT`를 이력 저장 완료 후 발행하는 경보입니다. 동일 `robotId + type`의 실제 로봇 경보는 서버 수신 기준 1분 동안 한 번만 저장·전달합니다.
 * **Payload**:
 ```json
 {
-  "alertId": 1,
   "type": "FIRE",
   "level": "CRITICAL",
   "source": "ROBOT",
   "robotId": "orinka_01",
   "confidence": 0.94,
   "temperature": 58.4,
-  "location": { "x": 15.45, "y": 8.12 },
-  "message": "순찰 로봇(orinka_01)이 근접 교차검증으로 화재를 확정했습니다.",
+  "equipmentId": null,
+  "threshold": null,
+  "thermalImage": null,
+  "x": 0.0,
+  "y": 0.0,
+  "message": "화재 발생",
   "timestamp": "2026-07-18T19:40:03Z"
 }
 ```
-* `source` 값: `ROBOT` (과열 경보 등 향후 확장 시 값 추가)
+* `temperature`, `equipmentId`, `threshold`, `thermalImage`은 이벤트 유형·로봇 기능에 따라 선택값이다. 현재 이벤트 좌표는 위치 기능 확정 전까지 `0.0, 0.0`으로 고정한다.
+* `source` 값: 실제 로봇은 `ROBOT`, 시연 API는 `SIMULATION`.
 
 #### 3) 듀얼 카메라 영상 프레임 구독 (`SUB /topic/video/{robotId}`)
 * **설명**: 로봇이 WSS로 전송한 RGB(FRONT)·열화상(THERMAL) JPEG 프레임을 백엔드가 실시간 중계합니다. 대시보드는 `channel`로 두 스트림을 구분하여 나란히 렌더링합니다.
@@ -295,15 +299,16 @@ AWS 인프라 보안 및 방화벽 규정을 준수하기 위해 Nginx 리버스
 {"source": "robot", "type": "VIDEO_FRAME", "robot_id": "orinka_01", "channel": "FRONT", "format": "jpeg", "data": "<base64 JPEG>", "seq": 1024}
 ```
 
-#### 2) 교차검증 화재 이벤트 패킷 (개행 필수)
-* **설명**: 순찰 중 YOLO 화재 후보 감지 → 자율 접근(`APPROACH`) → 근접 교차검증(`VERIFY`, YOLO + 열화상)을 거쳐 **화재로 확정된 경우에만** 전송됩니다. 접근/검증 진행 단계는 `TELEMETRY`의 `status`로만 반영됩니다.
+#### 2) 화재 이벤트 패킷 (개행 필수)
+* **설명**: 로봇 측 추론이 화재 이벤트를 판단했을 때 전송한다. `timestamp`는 Jetson의 Unix epoch seconds이며, 누락하면 서버 수신 시각을 사용한다. `temperature`는 열화상 카메라 연동 전에는 생략할 수 있다.
 ```json
-{"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "location": {"x": 15.0, "y": 8.2}}
+{"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "timestamp": 1781778200}
 ```
 
 #### 3) 장비 과열 이벤트 패킷 (개행 필수)
+* **설명**: 로봇 측 열화상 판단으로 설비 과열을 감지했을 때 전송한다. `equipment_id`, `temperature`, `threshold`, `thermalImage`은 모두 선택값이며, 현재 위치는 보내지 않아도 된다.
 ```json
-{"source": "robot", "type": "EVENT_OVERHEAT", "robot_id": "orinka_01", "equipment_id": "panel_01", "temperature": 53.2, "location": {"x": 8.5, "y": 3.1}}
+{"source": "robot", "type": "EVENT_OVERHEAT", "robot_id": "orinka_01", "equipment_id": "panel_01", "temperature": 53.2, "threshold": 50.0, "timestamp": 1781778201}
 ```
 
 #### [후속/Deferred] 4) 2D 도면 매핑 점유 격자 패킷 (`MAPPING` 모드, 개행 필수)

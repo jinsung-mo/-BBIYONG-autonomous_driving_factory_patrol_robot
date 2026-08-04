@@ -1,12 +1,9 @@
 package com.bbiyong.server.stomp;
 
-import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
-import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
-import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import com.bbiyong.server.wss.event.RobotVideoEvent;
 import tools.jackson.databind.ObjectMapper;
@@ -107,24 +104,4 @@ public class RobotEventListener {
         }
     }
 
-    @EventListener
-    public void handleFireEvent(RobotFireEvent event) {
-        broadcastAlert(AlertMessage.fromFire(event.getPacket()));
-    }
-
-    @EventListener
-    public void handleOverheatEvent(RobotOverheatEvent event) {
-        broadcastAlert(AlertMessage.fromOverheat(event.getPacket()));
-    }
-
-    /** 화재/과열 확정 경보를 단일 /topic/alerts 로 표준 페이로드 브로드캐스트. */
-    private void broadcastAlert(AlertMessage alert) {
-        try {
-            String jsonStr = objectMapper.writeValueAsString(alert);
-            log.info("Broadcasting {} ALERT via STOMP to /topic/alerts: {}", alert.type(), jsonStr);
-            messagingTemplate.convertAndSend("/topic/alerts", jsonStr);
-        } catch (Exception e) {
-            log.error("Failed to serialize/broadcast alert", e);
-        }
-    }
 }

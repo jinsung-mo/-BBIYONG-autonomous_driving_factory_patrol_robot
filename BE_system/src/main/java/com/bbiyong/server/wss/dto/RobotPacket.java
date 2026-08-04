@@ -17,6 +17,8 @@ public class RobotPacket {
     private Double battery;
     // 로봇이 보고하는 상위 FSM 상태 (명령 mode(autonomy/manual/disabled)와는 별개 축)
     private String status; // AUTO_PATROL, APPROACH, VERIFY, MANUAL_CONTROL, MAPPING
+    /** 로봇(Jetson)이 발생시킨 시각의 Unix epoch seconds. */
+    private Long timestamp;
     private Double confidence;
     private Double temperature;
 

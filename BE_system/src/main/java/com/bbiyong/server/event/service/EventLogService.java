@@ -27,7 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,21 +41,26 @@ import java.util.Set;
 public class EventLogService {
 
     private static final Set<String> ALLOWED_STATUS = Set.of("UNRESOLVED", "RESOLVED");
+    private static final Duration ALERT_DEDUP_WINDOW = Duration.ofMinutes(1);
 
     private final EventLogRepository eventLogRepository;
     private final NotificationDispatchService notificationDispatchService;
     private final VideoClipRepository videoClipRepository;
     private final RobotWebSocketSessionManager sessionManager;
+    private final AlertBroadcastService alertBroadcastService;
+    private final ConcurrentHashMap<String, Instant> recentRobotAlerts = new ConcurrentHashMap<>();
 
     public EventLogService(
             EventLogRepository eventLogRepository,
             NotificationDispatchService notificationDispatchService,
             VideoClipRepository videoClipRepository,
-            RobotWebSocketSessionManager sessionManager) {
+            RobotWebSocketSessionManager sessionManager,
+            AlertBroadcastService alertBroadcastService) {
         this.eventLogRepository = eventLogRepository;
         this.notificationDispatchService = notificationDispatchService;
         this.videoClipRepository = videoClipRepository;
         this.sessionManager = sessionManager;
+        this.alertBroadcastService = alertBroadcastService;
     }
 
     /**
@@ -191,6 +199,13 @@ public class EventLogService {
     }
 
     private void persist(AlertMessage alert, String simulationRecipientUserId) {
+        DeduplicationAttempt deduplication = acquireDeduplication(alert);
+        if (deduplication.duplicate()) {
+            log.info("Suppressing duplicate {} alert for robot {} within {} seconds",
+                    alert.type(), alert.robotId(), ALERT_DEDUP_WINDOW.toSeconds());
+            return;
+        }
+
         EventLog logEntry = new EventLog();
         logEntry.setType(alert.type());
         logEntry.setLevel(alert.level());
@@ -202,17 +217,55 @@ public class EventLogService {
         logEntry.setThreshold(alert.threshold());
         logEntry.setX(alert.x());
         logEntry.setY(alert.y());
-        logEntry.setTimestamp(Instant.now());
+        logEntry.setTimestamp(Instant.parse(alert.timestamp()));
         logEntry.setStatus("UNRESOLVED");
         logEntry.setSimulated("SIMULATION".equals(alert.source()));
 
-        EventLog savedEvent = eventLogRepository.save(logEntry);
+        EventLog savedEvent;
+        try {
+            savedEvent = eventLogRepository.save(logEntry);
+        } catch (RuntimeException e) {
+            rollbackDeduplication(deduplication);
+            throw e;
+        }
         log.info("Persisted {} event log for robot: {}", alert.type(), alert.robotId());
 
         // 이벤트 클립 연결을 위해 로봇에 생성된 eventId 를 회신한다(블랙박스 파이프라인). (S15P11E101-588)
         notifyRobotEventSaved(savedEvent);
 
+        alertBroadcastService.broadcast(alert);
         notificationDispatchService.enqueue(savedEvent, simulationRecipientUserId);
+    }
+
+    private DeduplicationAttempt acquireDeduplication(AlertMessage alert) {
+        if (!"ROBOT".equals(alert.source()) || alert.robotId() == null || alert.robotId().isBlank()) {
+            return DeduplicationAttempt.notApplied();
+        }
+
+        String key = alert.robotId().trim() + ":" + alert.type();
+        Instant receivedAt = Instant.now();
+        AtomicBoolean duplicate = new AtomicBoolean(false);
+        recentRobotAlerts.compute(key, (ignored, previousReceivedAt) -> {
+            if (previousReceivedAt != null
+                    && previousReceivedAt.plus(ALERT_DEDUP_WINDOW).isAfter(receivedAt)) {
+                duplicate.set(true);
+                return previousReceivedAt;
+            }
+            return receivedAt;
+        });
+        return new DeduplicationAttempt(key, receivedAt, duplicate.get());
+    }
+
+    private void rollbackDeduplication(DeduplicationAttempt attempt) {
+        if (!attempt.duplicate() && attempt.key() != null) {
+            recentRobotAlerts.remove(attempt.key(), attempt.receivedAt());
+        }
+    }
+
+    private record DeduplicationAttempt(String key, Instant receivedAt, boolean duplicate) {
+        private static DeduplicationAttempt notApplied() {
+            return new DeduplicationAttempt(null, null, false);
+        }
     }
 
     /**
