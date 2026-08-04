@@ -42,7 +42,7 @@ export default function SummaryBar() {
         <b className="num">{count(s?.chargingRobots)}<i>대</i></b>
       </div>
       <div className="sumcard">
-        <span>평균 배터리</span>
+        <span>배터리</span>
         <b className="num">{pct(s?.avgBattery)}</b>
       </div>
       <div className="sumcard">
