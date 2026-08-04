@@ -733,21 +733,16 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   backdrop-filter:blur(22px) saturate(1.25);
   box-shadow:0 24px 48px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.10);
 }
-/* 유리판 위쪽 모서리에 얇게 빛이 걸린다 — 이것이 없으면 그냥 반투명 사각형이다 */
+/* 판 위쪽에 1px 흰 선을 그어 '빛이 걸린' 느낌을 주려 했으나, 좌우로 들여쓴 그 선이
+   화면에서는 제목 위에 놓인 흰 가로 막대로 보였다. 유리의 가장자리는 테두리선 하나로
+   충분하다. (S15P11E101 시뮬 Liquid Glass) */
 :root[data-theme="dark"] .sim-skin .panel{position:relative;}
-:root[data-theme="dark"] .sim-skin .panel::before{
-  content:''; position:absolute; left:16px; right:16px; top:0; height:1px; border-radius:1px;
-  background:linear-gradient(90deg, transparent, rgba(255,255,255,.30), transparent); pointer-events:none;}
 :root[data-theme="light"] .sim-skin .panel{
   position:relative;
   background:linear-gradient(150deg,rgba(255,255,255,.84),rgba(255,255,255,.58));
   border-color:rgba(255,255,255,.88);
   backdrop-filter:blur(22px) saturate(1.18);
   box-shadow:0 18px 42px rgba(49,72,108,.11), inset 0 1px 0 #fff;
-}
-:root[data-theme="light"] .sim-skin .panel::before{
-  content:''; position:absolute; left:16px; right:16px; top:0; height:1px; border-radius:1px;
-  background:linear-gradient(90deg,transparent,#fff,transparent); pointer-events:none;
 }
 /* 유리판 안의 작은 상자들도 같은 규칙을 따른다 — 하나만 불투명하면 붕 떠 보인다 */
 :root[data-theme="dark"] .sim-skin .stat-card,
@@ -772,7 +767,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .sim-skin .panel h3{
   flex:none; font-size:10.5px; letter-spacing:1.4px;
   margin-bottom:clamp(8px,1.15vh,13px); color:var(--dk-sub);
-  padding-bottom:clamp(7px,1vh,11px); border-bottom:1px solid var(--dk-line);
+  padding-bottom:0;
 }
 .sim-skin .panel h3 .k{
   font-size:11.5px; letter-spacing:1px; color:var(--dk-sub); opacity:.78;
@@ -926,34 +921,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    콘텐츠(영상·지도)와 조작 계층을 분리하고, 주변 색과 포인터 위치를 표면에 반사한다.
    ========================================================================== */
 #pgB.sim-skin{
-  --glass-x:50%; --glass-y:8%;
   position:relative; isolation:isolate;
 }
-#pgB.sim-skin::before,#pgB.sim-skin::after{
-  content:''; position:absolute; z-index:0; pointer-events:none; border-radius:50%;
-  filter:blur(18px); opacity:.78;
-}
-#pgB.sim-skin::before{
-  width:min(46vw,760px); height:min(46vw,760px); left:-18%; top:-42%;
-  background:radial-gradient(circle,rgba(52,151,255,.34),rgba(79,93,255,.10) 46%,transparent 70%);
-}
-#pgB.sim-skin::after{
-  width:min(38vw,620px); height:min(38vw,620px); right:-15%; bottom:-28%;
-  background:radial-gradient(circle,rgba(255,150,91,.24),rgba(255,91,140,.08) 46%,transparent 70%);
-}
 #pgB.sim-skin > *{position:relative; z-index:1;}
-:root[data-theme="dark"] #pgB.sim-skin{
-  background:
-    radial-gradient(900px 600px at 10% 8%,rgba(34,125,255,.18),transparent 66%),
-    radial-gradient(760px 620px at 94% 88%,rgba(255,120,74,.12),transparent 66%),
-    linear-gradient(145deg,#07101f 0%,#0a1020 43%,#10101b 100%);
-}
-:root[data-theme="light"] #pgB.sim-skin{
-  background:
-    radial-gradient(960px 620px at 8% 4%,rgba(43,139,255,.18),transparent 65%),
-    radial-gradient(820px 660px at 96% 92%,rgba(255,135,80,.13),transparent 66%),
-    linear-gradient(145deg,#eaf4ff 0%,#f4f6fb 48%,#fff2ec 100%);
-}
 
 /* 메뉴 바는 화면을 막는 띠가 아니라 배경 위에 놓인 투명한 시스템 레이어다. */
 #nav.sim-nav{
@@ -1024,22 +994,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 rgba(74,111,157,.10),0 18px 42px rgba(47,83,130,.13);
   backdrop-filter:blur(36px) saturate(1.42) brightness(1.04);
 }
-:root[data-theme="dark"] .sim-skin .panel::before,
-:root[data-theme="light"] .sim-skin .panel::before{
-  content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-  background:
-    radial-gradient(520px circle at var(--glass-x) var(--glass-y),rgba(255,255,255,.22),transparent 34%),
-    linear-gradient(115deg,rgba(255,255,255,.16),transparent 20%,transparent 78%,rgba(159,195,255,.08));
-  opacity:.72; transition:opacity .2s ease;
-}
-.sim-skin .panel::after{
-  content:''; position:absolute; inset:1px; border-radius:calc(24px - 1px); pointer-events:none;
-  border:1px solid rgba(255,255,255,.08);
-  box-shadow:inset 0 0 22px rgba(255,255,255,.025);
-}
-:root[data-theme="light"] .sim-skin .panel::after{
-  border-color:rgba(255,255,255,.44); box-shadow:inset 0 0 22px rgba(255,255,255,.24);
-}
 .sim-skin .panel:hover{border-color:rgba(197,228,255,.30);}
 :root[data-theme="light"] .sim-skin .panel:hover{border-color:#fff;}
 
@@ -1070,9 +1024,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-color:rgba(255,255,255,.86);
   box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 rgba(68,106,154,.08),0 5px 14px rgba(43,82,132,.06);
 }
-.sim-skin .stat-card{border-radius:18px;}
-.sim-skin .env div{border-radius:16px;}
-.sim-skin .elog li{border-radius:14px;}
 
 /* 영상과 지도는 가장 선명한 콘텐츠이므로 유리 프레임만 두르고 내부는 흐리지 않는다. */
 .sim-skin .vwrap{
@@ -1113,37 +1064,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 
 /* 라이트모드 패널 통일: 모든 메인 박스에 같은 Liquid Glass 재질을 사용한다. */
-:root[data-theme="light"] #pgB.sim-skin{
-  background:
-    radial-gradient(ellipse 72% 82% at 0% 0%,rgba(45,126,255,.22),transparent 68%),
-    radial-gradient(ellipse 68% 78% at 100% 100%,rgba(255,70,92,.16),transparent 70%),
-    #eaf0f7;
-}
-:root[data-theme="light"] #pgB.sim-skin::before,
-:root[data-theme="light"] #pgB.sim-skin::after{
-  display:block; filter:blur(110px); pointer-events:none;
-}
-:root[data-theme="light"] #pgB.sim-skin::before{
-  background:#2d7eff; opacity:.13;
-}
-:root[data-theme="light"] #pgB.sim-skin::after{
-  background:#ff465c; opacity:.10;
-}
 :root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel{
   background:linear-gradient(145deg,rgba(255,255,255,.68),rgba(238,247,255,.40));
   border:1px solid rgba(255,255,255,.92);
   box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 rgba(67,105,153,.09);
   backdrop-filter:blur(36px) saturate(1.42) brightness(1.04);
-}
-:root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel::before{
-  background:
-    radial-gradient(500px circle at var(--glass-x) var(--glass-y),rgba(255,255,255,.30),transparent 34%),
-    linear-gradient(115deg,rgba(255,255,255,.22),transparent 22%,transparent 78%,rgba(105,167,255,.08));
-  opacity:.76;
-}
-:root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel::after{
-  border-color:rgba(255,255,255,.56);
-  box-shadow:inset 0 0 22px rgba(255,255,255,.22);
 }
 :root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel:hover{
   border-color:#fff;
@@ -1197,3 +1122,223 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 잠긴 동안에는 왜 못 누르는지 보이게 살짝 내린다. 감추지는 않는다 —
    무엇이 설정돼 있는지는 계속 확인할 수 있어야 한다. */
 .lockfs:disabled{opacity:.55;}
+
+/* ============================================================================
+   시뮬레이션 · Liquid Glass — 굴절 · 주변색 적응 · 동심원 모서리
+   ----------------------------------------------------------------------------
+   앞선 개편(S15P11E101-646)은 '반투명 + 블러' 까지였다. 애플이 정의한 Liquid Glass 는
+   그보다 세 가지가 더 있다. 여기서 그 셋을 실제로 구현한다.
+
+     1. 굴절 — "주변 환경을 반사하고 굴절시키며"
+        진짜 유리는 두께가 있어 가장자리에서 빛이 가장 크게 휜다. 판 전체를 고르게
+        흐리는 것으로는 유리가 되지 않는다. 테두리에만 별도의 backdrop-filter 를 걸어
+        '두께'를 만든다. mask 로 링 모양만 남기는 것이 요령이다.
+
+     2. 주변색 적응 — "색상은 주변 콘텐츠에 따라 달라지며"
+        흰 반투명을 덧칠하면 무엇을 깔든 흰 유리다. 채도를 끌어올려 뒤에 깔린 색이
+        표면으로 배어 나오게 한다. 유리가 스스로 색을 갖지 않고 빌려 쓰는 것이다.
+
+     3. 동심원 모서리 — "모서리는 동심원 형태로 거듭나"
+        안쪽 상자의 반지름 = 바깥 반지름 − 여백. 이 관계가 어긋나면 두 곡선이
+        평행하지 않아 눈에 거슬린다. --r 과 --pad 로 계산해 강제한다.
+
+   CSS 프레임워크는 쓰지 않는다 — 이 재질은 표준 CSS 로만 만든다.
+   ========================================================================== */
+
+#pgB.sim-skin{
+  /* 유리 한 장의 처방을 한 곳에 둔다. 값이 흩어지면 재질이 아니라 우연이 된다. */
+  --r: 26px;            /* 바깥 유리판 반지름 */
+  --pad: 14px;          /* 유리판 안쪽 여백 */
+  --r-in: 12px;         /* = var(--r) - var(--pad). 동심원 규칙 */
+  --blur: 30px;
+  --sat: 1.9;           /* 주변색을 끌어올리는 정도 */
+}
+
+/* ---- 1. 굴절 : 시도했다가 걷어냈다 ----
+   테두리에만 다른 backdrop-filter 를 걸어 유리 두께를 만들었었다. 원리는 맞지만
+   화면에서는 판 위쪽에 밝은 가로 막대가 생겼다. 링이 배경을 판 본체와 다른 세기로
+   샘플링하는데, 배경에 밝기 변화가 있는 곳에서는 그 차이가 곧 띠로 드러난다.
+   링 폭(10 → 7 → 4px) · 밝기 제거 · 흐림 비율(0.12 → 0.7 → 0.85) · 대비만 다르게 —
+   네 가지를 모두 시험했지만 띠는 옅어질 뿐 사라지지 않았다. 균일한 배경에서만
+   깨끗한 효과라, 색이 흐르는 배경을 쓰는 이 화면과는 함께 갈 수 없다.
+
+   가장자리는 테두리선 하나로만 정의한다. 굴절 대신 남은 두 성질(주변색 적응 ·
+   동심원 모서리)이 유리를 만든다. */
+
+/* ---- 2. 스펙큘러 + 색수차 : ::after 로 옮긴다 ----
+   굴절 링이 ::before 를 쓰므로 반사광은 ::after 가 맡는다.
+   가장자리에 아주 옅은 색 갈라짐을 둔다 — 실제 렌즈에서 보이는 것이고,
+   이것이 있어야 '흰 반투명 사각형' 이 아니라 유리로 읽힌다. */
+.sim-skin .panel::after{
+  content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  /* 반사광은 화면 왼쪽 위 한 곳에서 온다. 커서를 따라다니게 했더니 판마다 원이 하나씩
+     생겨 광원이 다섯 개가 됐다 — 유리가 아니라 얼룩으로 보였다. 고정 방향만 남긴다. */
+  background:none;
+  /* 위쪽 1px 하이라이트는 판 위에 흰 막대를 그어 놓은 것처럼 보였다.
+     모서리에서 사라지도록 가운데만 남기고 양끝을 흘린다. */
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,.12);
+}
+.sim-skin .panel h3{position:relative;}
+:root[data-theme="light"] .sim-skin .panel::after{
+  background:none;
+  box-shadow:inset 0 -1px 0 rgba(70,105,150,.08);
+}
+
+/* ---- 2b. 주변색 적응 ----
+   유리가 스스로 흰색을 갖지 않는다. 배경을 거의 무채색 틴트로만 덮고,
+   채도를 끌어올려 뒤에 있는 색이 표면으로 올라오게 한다. */
+:root[data-theme="dark"] .sim-skin .panel{
+  background:rgba(255,255,255,.045);
+  border-color:rgba(226,240,255,.16);
+  backdrop-filter:blur(var(--blur)) saturate(var(--sat)) brightness(1.06);
+  box-shadow:0 4px 14px rgba(2,7,17,.22);
+}
+:root[data-theme="light"] .sim-skin .panel,
+:root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel{
+  background:rgba(255,255,255,.40);
+  border:1px solid rgba(255,255,255,.85);
+  backdrop-filter:blur(var(--blur)) saturate(var(--sat)) brightness(1.05);
+  box-shadow:0 4px 12px rgba(47,83,130,.10);
+}
+
+/* ---- 3. 동심원 모서리 ----
+   바깥 곡선과 안쪽 곡선이 평행해야 한다. 값을 따로 적지 않고 계산으로 묶는다. */
+.sim-skin .panel{border-radius:var(--r); padding:var(--pad) calc(var(--pad) + 1px);}
+.sim-skin .stat-card,
+.sim-skin .env div,
+.sim-skin .elog li,
+.sim-skin .vwrap,
+.sim-skin .lockfs .panel{border-radius:var(--r-in);}
+/* 알약은 동심원 규칙의 예외다 — 높이의 절반이 곧 반지름이라 늘 평행하다 */
+.sim-skin .seg,.sim-skin .spdbar,.sim-skin .gotor select,
+.sim-skin .gotor .dbtn,.sim-skin .ctl .col .dbtn,
+.sim-skin .logfilter button,.sim-skin .maplegend span{border-radius:999px;}
+.sim-skin .dpad button{border-radius:calc(var(--r-in) + 2px);}
+/* 유리판 안의 얇은 유리들 — 같은 처방을 옅게 쓴다 */
+.sim-skin .stat-card,.sim-skin .env div,.sim-skin .elog li,
+.sim-skin .seg,.sim-skin .spdbar,.sim-skin .dpad button,.sim-skin .gotor select{
+  backdrop-filter:blur(calc(var(--blur) * .5)) saturate(calc(var(--sat) * .8));
+}
+
+/* ---- 콘텐츠는 유리가 아니다 ----
+   영상·열화상·지도는 판독 대상이다. 그 위에 유리를 덧대면 판독을 방해한다.
+   테두리만 유리로 두르고 안은 건드리지 않는다. */
+.sim-skin .vwrap{backdrop-filter:none;}
+.sim-skin .vwrap::before{
+  content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:2;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.30),
+    inset 0 0 0 1px rgba(255,255,255,.07),
+    inset 0 -1px 0 rgba(0,0,0,.22);
+}
+
+/* ---- 조작 계층은 콘텐츠 위에 뜬 기능 레이어다 ----
+   "제어 요소도 Liquid Glass 로 디자인되어 앱 위에서 또렷하게 구분되는 기능 레이어" */
+.sim-skin .ctl .col .dbtn,.sim-skin .dpad button,.sim-skin .seg{
+  position:relative; isolation:isolate;
+}
+.sim-skin .ctl .col .dbtn::after{
+  content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.20),transparent 46%);
+}
+/* 누르면 유리가 눌려 들어간다 — 두께가 있는 물건처럼 */
+.sim-skin .dbtn:not(:disabled):active,.sim-skin .dpad button:not(:disabled):active{
+  transform:scale(.965);
+  box-shadow:inset 0 3px 10px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.10);
+}
+
+/* ---- 상단 바 : 스크롤과 무관하게 늘 떠 있는 시스템 레이어 ---- */
+#nav.sim-nav{backdrop-filter:blur(30px) saturate(1.9) brightness(1.03);}
+#nav.sim-nav .navtabs{backdrop-filter:blur(18px) saturate(1.7);}
+
+/* ---- 명료성 ----
+   "밝거나 어두운 환경에 스마트하게 적응한다" — 유리는 뒤 배경을 끌어오므로
+   바탕 밝기가 흔들린다. 글자는 그 흔들림 위에서도 읽혀야 한다.
+   아래 값은 실제로 칠해지는 색을 재서 4.5:1 이상으로 맞춘 것이다. */
+:root[data-theme="dark"] .sim-skin .panel h3{color:#b9c4d6;}
+:root[data-theme="light"] .sim-skin .panel h3{color:#4a5566;}
+
+/* 굴절 링은 비용이 큰 효과다. 움직임을 줄여 달라는 설정에서는 반사만 끄고
+   굴절은 남긴다 — 굴절은 애니메이션이 아니라 정적인 재질이다. */
+@media (prefers-reduced-motion:reduce){
+  .sim-skin .panel::after{transition:none;}
+}
+
+/* ---- 유리 뒤에는 굴절시킬 것이 있어야 한다 ----
+   앞선 배경은 거의 균일한 남색이었다. 균일한 배경을 아무리 정교하게 굴절시켜도
+   결과가 같으니 유리로 보이지 않는다. 애플 예시가 하나같이 색이 흐르는 벽지를 쓰는
+   이유가 이것이다. 색이 겹치며 흐르는 장(場)을 깔아 표면마다 다른 색이 배어 나오게 한다.
+   관제 화면이므로 채도는 올리되 밝기는 눌러 둔다 — 영상과 열화상이 주인공이다. */
+:root[data-theme="dark"] #pgB.sim-skin{
+  background:
+    radial-gradient(ellipse 58% 46% at 12% 6%,  rgba(46,132,255,.40), transparent 62%),
+    radial-gradient(ellipse 48% 44% at 88% 14%, rgba(140,86,255,.30), transparent 60%),
+    radial-gradient(ellipse 62% 52% at 96% 82%, rgba(255,122,66,.26), transparent 62%),
+    radial-gradient(ellipse 54% 46% at 24% 96%, rgba(0,196,180,.22), transparent 62%),
+    radial-gradient(ellipse 40% 34% at 54% 48%, rgba(80,150,255,.14), transparent 66%),
+    linear-gradient(152deg,#050a14 0%,#070c18 46%,#0b0a14 100%);
+}
+:root[data-theme="light"] #pgB.sim-skin{
+  background:
+    radial-gradient(ellipse 58% 46% at 12% 6%,  rgba(64,146,255,.34), transparent 62%),
+    radial-gradient(ellipse 48% 44% at 88% 14%, rgba(160,110,255,.24), transparent 60%),
+    radial-gradient(ellipse 62% 52% at 96% 82%, rgba(255,146,96,.26), transparent 62%),
+    radial-gradient(ellipse 54% 46% at 24% 96%, rgba(0,206,192,.20), transparent 62%),
+    linear-gradient(152deg,#eef4fc 0%,#f3f6fb 48%,#fdf3ee 100%);
+}
+/* 앞 단계에서 쓰던 흐릿한 원 두 개는 이 장 위에서 얼룩으로만 남는다 */
+
+/* 유리가 색을 더 많이 빌려 오도록 채도를 한 번 더 올린다.
+   흰 틴트를 얇게 유지하는 것이 요령이다 — 두꺼우면 뒤 색이 죽는다. */
+:root[data-theme="dark"] .sim-skin .panel{
+  background:rgba(255,255,255,.045);
+  backdrop-filter:blur(var(--blur)) saturate(2.3) brightness(1.08);
+}
+:root[data-theme="light"] .sim-skin .panel,
+:root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel{
+  background:rgba(255,255,255,.40);
+  backdrop-filter:blur(var(--blur)) saturate(2.1) brightness(1.06);
+}
+
+/* ---- 글자를 인 유리는 한 단계 조밀하게 ----
+   색이 흐르는 배경을 끌어올수록 표면 밝기가 요동친다. 장식만 보면 좋지만 글자는
+   그 위에서 읽혀야 한다. 색을 하나씩 밝히며 쫓는 대신, 글자를 담은 셀의 유리를
+   조금 더 조밀하게 만든다 — 애플이 "밝거나 어두운 환경에 스마트하게 적응한다"고
+   말한 것이 이 조정이다. 판은 계속 투명하고, 글자 뒤만 안정된다.
+   (다크에서 상태 라벨 4.44 · 로그 본문 4.14 로 내려갔던 것을 되돌린다) */
+:root[data-theme="dark"] .sim-skin .stat-card,
+:root[data-theme="dark"] .sim-skin .env div,
+:root[data-theme="dark"] .sim-skin .elog li{
+  background:linear-gradient(150deg,rgba(10,16,28,.52),rgba(10,14,24,.38));
+  border-color:rgba(210,232,255,.14);
+  backdrop-filter:blur(calc(var(--blur) * .55)) saturate(1.3);
+}
+:root[data-theme="light"] .sim-skin .stat-card,
+:root[data-theme="light"] .sim-skin .env div,
+:root[data-theme="light"] .sim-skin .elog li{
+  background:linear-gradient(150deg,rgba(255,255,255,.80),rgba(255,255,255,.62));
+  border-color:rgba(255,255,255,.92);
+  backdrop-filter:blur(calc(var(--blur) * .55)) saturate(1.25);
+}
+:root[data-theme="dark"] .sim-skin .kv{color:#ccd4e1;}
+:root[data-theme="dark"] .sim-skin .elog li.ok b{color:#6bf0b6;}
+:root[data-theme="dark"] .sim-skin .elog li.heat b{color:#ffc061;}
+:root[data-theme="dark"] .sim-skin .elog li.fire b{color:#ff9a92;}
+
+/* ---- 라이트 모드에도 색을 돌려준다 ----
+   흰 유리를 두껍게 깔면 뒤 색이 죽어 그냥 흰 카드가 된다. 틴트를 얇게 유지하고
+   배경 장의 채도를 올려, 밝은 화면에서도 색이 유리를 통과하게 한다. */
+/* 밝은 화면에서는 거의 흰 바탕에 옅은 색을 얹으면 판 사이 틈이 회백색으로 읽힌다.
+   바탕 자체에 색을 넣고 색장의 농도를 올려, 틈에서 배경이 그대로 드러나게 한다. */
+:root[data-theme="light"] #pgB.sim-skin{
+  background:
+    radial-gradient(ellipse 62% 50% at 10% 4%,  rgba(56,132,255,.62), transparent 62%),
+    radial-gradient(ellipse 52% 46% at 90% 12%, rgba(150,96,255,.46), transparent 60%),
+    radial-gradient(ellipse 64% 54% at 96% 84%, rgba(255,132,72,.52), transparent 62%),
+    radial-gradient(ellipse 56% 48% at 22% 97%, rgba(0,201,190,.42), transparent 62%),
+    linear-gradient(152deg,#cfe0f5 0%,#dbe6f4 50%,#f6ddd0 100%);
+}
+
+/* 라이트 배경의 채도를 올리자 긴급 정지 글자가 4.3 으로 내려갔다 — 한 단계 더 짙게 */
+:root[data-theme="light"] .sim-skin .dbtn.stop{color:#8f1c12;}
+:root[data-theme="light"] .sim-skin .dbtn.go{color:#0a4a33;}
