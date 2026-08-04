@@ -127,6 +127,50 @@ FIRE_N, FIRE_M = 5, 3
 # 확정 상태가 지속되는 동안 재경보 간격. 매 폴링마다 EVENT_FIRE 를 쏘면
 # 서버·대시보드가 중복 경보로 뒤덮인다.
 FIRE_REEMIT_SEC = 10.0
+# 🆕 화재 경보 최소 신뢰도 `[사용자 지정 2026-08-04]` — 이 값 미만인 YOLO 탐지는
+# 아예 "화재 프레임"으로 세지 않는다.
+#   🔑 왜 M-of-N **앞**에 거는가: 뒤에 거는 방법(이력 중 최고 conf 가 60% 이상일 때만
+#      확정)도 있지만, 그러면 30%짜리 프레임 5개 + 61%짜리 1개로도 확정된다 —
+#      단발 스파이크를 막으라고 넣은 M-of-N 이 무력해진다. 앞에서 거르면
+#      "60% 이상으로 본 프레임이 N 중 M 번" 이라는 두 조건이 모두 살아 있다.
+#   ⚠️ 이것은 **알림 게이트**이지 판정 알고리즘이 아니다. camera_node.py 의 YOLO
+#      판정(cls==1, fire_hist)은 손대지 않았다 — 로컬 대시보드는 여전히 저신뢰
+#      탐지까지 다 본다. 여기서 막는 것은 관제 서버로 올라가는 EVENT_FIRE 뿐이다.
+FIRE_MIN_CONF = 0.60
+
+# ─────────────────────────────────────────────────────────────
+# 🆕 과열 경보 (EVENT_OVERHEAT) — 카메라 YOLO 와 **완전히 독립된** 경로다.
+#    화재 판정(FireConfirmer)은 cam.json 의 dets 만 보고, 이쪽은 THERMAL_FILE 의
+#    열화상 그리드만 본다. 둘 중 하나만 떠도 경보가 나간다.
+# ─────────────────────────────────────────────────────────────
+# 발동 임계 온도 `[사용자 지정 2026-08-04]`. 실측으로 유도한 값이 아니라 사용자가
+# 직접 준 운영 기준이다 — 임의로 바꾸지 말 것. 패킷의 `threshold` 로도 함께 실어
+# 보내므로(서버가 튜닝 이력을 추적할 수 있게, 인터페이스 초안 §5.3) 나중에 값을
+# 바꿔도 과거 이벤트가 어떤 기준에서 났는지 남는다.
+OVERHEAT_TEMP_C = 100.0
+# 과열 M-of-N. 화재의 5/3 과 **숫자는 다르지만 시간 창은 같게** 맞춘 값이다.
+#   화재: 텔레메트리 2 Hz × 5 폴링 ≈ 2.5 초 창
+#   과열: 열화상 ≈1 Hz × 3 프레임 ≈ 3 초 창  (하드웨어 주사율 -663/-664/-667)
+# 같은 5/3 을 그대로 쓰면 과열만 5 초를 기다리게 된다 — 100°C 는 즉시성이 중요한
+# 경보라 불필요하게 늦다.
+#   🔑 디바운스가 필요한 이유: 판정 지표가 768 픽셀의 **max()** 다. 통계량 중
+#      단일 불량 픽셀에 가장 취약한 값이라, 한 프레임 스파이크로 경보를 내면
+#      오발동한다. 2/3 을 요구하면 비용은 ≈2 초 지연뿐이고, 진짜 과열은 그보다
+#      훨씬 오래 지속된다.
+OVERHEAT_N, OVERHEAT_M = 3, 2
+# 재경보 간격 — 화재와 같은 값. 과열이 지속되는 동안 매 프레임 쏘면 관제가 묻힌다.
+OVERHEAT_REEMIT_SEC = 10.0
+# 경보에 필요한 **최소 고온 픽셀 수**.
+#   🔑 왜 시간 디바운스(M-of-N)만으로는 부족한가: M-of-N 은 프레임마다 랜덤하게
+#      튀는 노이즈를 막는다. 그러나 MLX90640 에서 흔한 **고착 불량 픽셀(stuck hot
+#      pixel)** 은 매 프레임 똑같이 뜨겁게 나오므로 시간 디바운스를 그대로 통과한다.
+#      둘은 막는 대상이 다르다 — 시간(랜덤 스파이크) + 공간(고착 픽셀) 이 모두 필요하다.
+#      `[agy 외부검토 2026-08-04 지적사항]`
+#   2 로 두는 근거: 불량 픽셀은 보통 고립된 1개다. "두 픽셀 이상이 동시에 뜨겁다"는
+#      최소 조건만 걸면 고립 불량 픽셀은 확실히 걸러지고, 실제 100°C 열원은 32×24
+#      화각에서 훨씬 넓게 잡히므로 놓칠 위험이 없다. 3×3 메디안 필터도 검토했으나
+#      (agy 대안 2) 커널 크기라는 새 임의값이 필요하고 연산도 늘어 채택하지 않았다.
+OVERHEAT_MIN_HOT_PIXELS = 2
 
 
 def read_json(path):
@@ -427,23 +471,38 @@ class FireConfirmer:
     또는 확정 지속 중 재경보 간격이 지났을 때만 True 다.
     """
 
-    def __init__(self, n=FIRE_N, m=FIRE_M, reemit_sec=FIRE_REEMIT_SEC):
+    def __init__(self, n=FIRE_N, m=FIRE_M, reemit_sec=FIRE_REEMIT_SEC,
+                 min_conf=FIRE_MIN_CONF):
         self.n = n
         self.m = m
         self.reemit_sec = reemit_sec
+        self.min_conf = min_conf
         self.history = []
         self.active = False
         self.last_emit = 0.0
 
+    @staticmethod
+    def _conf(det):
+        """탐지의 conf 를 float 으로. 없거나 숫자가 아니면 0.0 — 신뢰도를 모르는
+        탐지는 임계값을 통과하지 못한다(모르는 것을 통과시키면 게이트가 무의미)."""
+        try:
+            return float(det.get("conf", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
     def update(self, cam, now):
         dets = (cam or {}).get("dets") or []
-        fire_dets = [d for d in dets if d.get("cls") == 1]
+        # 🆕 min_conf 미만은 여기서 탈락 — 이 프레임은 "화재 아님"으로 세어진다.
+        fire_dets = [
+            d for d in dets
+            if d.get("cls") == 1 and self._conf(d) >= self.min_conf
+        ]
         self.history.append(bool(fire_dets))
         if len(self.history) > self.n:
             self.history.pop(0)
         confirmed = sum(self.history) >= self.m
 
-        confidence = max((float(d.get("conf", 0.0)) for d in fire_dets), default=0.0)
+        confidence = max((self._conf(d) for d in fire_dets), default=0.0)
 
         emit = False
         if confirmed:
@@ -463,6 +522,107 @@ def build_fire(robot_id, confidence, nav_live, now):
         "robot_id": robot_id,
         "confidence": round(confidence, 3),
     }
+    if fresh(nav_live, now):
+        pose = nav_live.get("pose")
+        if pose and pose.get("frame"):
+            packet["location"] = {
+                "x": pose.get("x"),
+                "y": pose.get("y"),
+                "yaw": pose.get("yaw"),
+            }
+    return packet
+
+
+def hot_pixel_floor(thermal, min_hot_pixels=OVERHEAT_MIN_HOT_PIXELS):
+    """가장 뜨거운 `min_hot_pixels` 개 중 **가장 낮은** 온도(°C)를 돌려준다.
+
+    이 값이 임계를 넘었다는 것은 곧 "임계를 넘은 픽셀이 `min_hot_pixels` 개 이상
+    있다"는 뜻이다. min_hot_pixels=2 면 2번째로 뜨거운 픽셀의 온도이므로, 고립된
+    불량 픽셀 1개짜리 스파이크는 여기서 걸러진다.
+
+    표시용 최고온도(build_thermal 의 maxTemp)와 **다른 값**이라는 점이 중요하다 —
+    경보 판정에만 쓰고, 관제에 보고하는 온도는 여전히 화면과 같은 raw max 다.
+    픽셀이 없거나 형식이 틀리면 None(판정 불가 → 경보 안 냄).
+    """
+    pixels_raw = (thermal or {}).get("pixels") or []
+    if len(pixels_raw) < min_hot_pixels:
+        return None
+    try:
+        hottest = sorted((float(v) for v in pixels_raw), reverse=True)
+    except (TypeError, ValueError):
+        return None
+    return hottest[min_hot_pixels - 1] / 10.0
+
+
+class OverheatConfirmer:
+    """열화상 최고온도가 임계값을 넘는지 N/M 규칙으로 확정한다.
+
+    FireConfirmer 와 일부러 같은 모양(update → (emit, ...), 상승엣지 + 재경보 간격)
+    으로 만들었다. 경보 두 종류가 서로 다른 규칙으로 튀면 "왜 이건 뜨고 저건 안 뜨나"
+    를 추적하기 어렵다.
+
+    update(max_temp_c, now) 는 (경보를 지금 보낼지, 최고온도) 를 준다.
+    max_temp_c 가 None 이면(프레임 없음·낡음) "임계 미만" 으로 센다 — 센서가 죽었을 때
+    마지막 뜨거운 프레임으로 경보를 계속 유지하지 않기 위해서다.
+    """
+
+    def __init__(self, threshold_c=OVERHEAT_TEMP_C, n=OVERHEAT_N, m=OVERHEAT_M,
+                 reemit_sec=OVERHEAT_REEMIT_SEC):
+        self.threshold_c = threshold_c
+        self.n = n
+        self.m = m
+        self.reemit_sec = reemit_sec
+        self.history = []
+        self.active = False
+        self.last_emit = 0.0
+
+    def update(self, max_temp_c, now):
+        over = max_temp_c is not None and float(max_temp_c) >= self.threshold_c
+        self.history.append(bool(over))
+        if len(self.history) > self.n:
+            self.history.pop(0)
+        confirmed = sum(self.history) >= self.m
+
+        emit = False
+        if confirmed:
+            rising = not self.active
+            due = (now - self.last_emit) >= self.reemit_sec
+            if rising or due:
+                emit = True
+                self.last_emit = now
+        self.active = confirmed
+        return emit, max_temp_c
+
+
+def build_overheat(robot_id, max_temp_c, nav_live, now,
+                   threshold_c=OVERHEAT_TEMP_C, thermal_image=None):
+    """EVENT_OVERHEAT 패킷을 조립한다.
+
+    🔴 필드 모양은 **인터페이스 초안(§5.3)이 아니라 BE_system 이 실제로 구현한
+       RobotPacket 을 따른다.** 초안은 중첩(`thermal:{max_temp, threshold}`)이지만,
+       서버의 `wss/dto/RobotPacket.java` 는 **평탄한** `temperature`/`threshold` 를
+       읽는다(`RobotWebSocketHandler` 의 `case "EVENT_OVERHEAT"` 이
+       `packet.getTemperature()`/`getThreshold()` 를 로깅한다). 초안대로 중첩해
+       보내면 `@JsonIgnoreProperties(ignoreUnknown = true)` 때문에 **에러 없이
+       조용히 null 로 수신된다** — 가장 찾기 어려운 종류의 실패다.
+       같은 이유로 기존 build_fire() 도 평탄한 `confidence` 를 쓰고 있다.
+
+    `equipment_id` 는 `None` 이다 — 초안 §5.3 의 결론 그대로다. 로봇은 자기 좌표와
+    온도만 알 뿐 설비 목록을 갖고 있지 않으므로, `location` 으로 어느 설비인지
+    판정하는 것은 설비 DB 를 가진 서버의 책임이다.
+    """
+    packet = {
+        "source": "robot",
+        "type": "EVENT_OVERHEAT",
+        "robot_id": robot_id,
+        "equipment_id": None,
+        "temperature": round(float(max_temp_c), 1),
+        "threshold": threshold_c,
+    }
+    if thermal_image:
+        # RobotPacket.thermalImage — 경보와 함께 중계되고 서버에 저장되지는 않는다.
+        # thermal_sender 가 이미 인코딩해 둔 PNG 를 재사용하므로 추가 비용이 없다.
+        packet["thermalImage"] = thermal_image
     if fresh(nav_live, now):
         pose = nav_live.get("pose")
         if pose and pose.get("frame"):
@@ -559,7 +719,28 @@ class Bridge:
         self.map_seq_sent = None
         self.nav_enabled = getattr(args, "nav_hz", 0.0) > 0
         self.nav_period = (1.0 / args.nav_hz) if self.nav_enabled else None
-        self.fire = FireConfirmer()
+        # 🆕 열화상 송신 (S15P11E101 열화상 관제 미표시 수정). 하드웨어 주사율이
+        # 이미 ≈1Hz 로 낮다(-663/-664/-667) — 기본 폴링도 그와 맞춰 1Hz 로 두고,
+        # FRONT 와 똑같이 자주 찌르지 않는다. hz<=0 이면 완전히 끈다(map·nav 와
+        # 같은 패턴 — 문제가 생기면 재배포 없이 끌 수 있게).
+        thermal_hz = getattr(args, "thermal_hz", 1.0)
+        self.thermal_enabled = thermal_hz > 0
+        self.thermal_period = (1.0 / thermal_hz) if self.thermal_enabled else None
+        self.thermal_file = str(getattr(args, "thermal_file", THERMAL_FILE))
+        self.thermal_seq = 0
+        # 🆕 과열 경보. 임계값 <=0 이면 완전히 끈다(thermal_hz 와 같은 패턴 —
+        # 오발동이 나면 재배포 없이 CLI/env 로 끌 수 있게).
+        self.overheat_temp_c = float(
+            getattr(args, "overheat_temp_c", OVERHEAT_TEMP_C)
+        )
+        self.overheat_enabled = self.overheat_temp_c > 0
+        self.overheat = (
+            OverheatConfirmer(threshold_c=self.overheat_temp_c)
+            if self.overheat_enabled else None
+        )
+        self.fire = FireConfirmer(
+            min_conf=float(getattr(args, "fire_min_conf", FIRE_MIN_CONF))
+        )
         self.estop = "RELEASED"
         self.video_seq = 0
         self.mapping = None
@@ -769,6 +950,77 @@ class Bridge:
                 if frame:
                     await ws.send(json.dumps(frame))
             await asyncio.sleep(self.video_period)
+
+    async def thermal_sender(self, ws):
+        """열화상(MLX90640) 영상 루프. FRONT 와 별도 주기·별도 태스크로 뗀다.
+
+        하드웨어 자체가 ≈1Hz 로 느리므로(-663/-664/-667) 매 폴링마다 새로
+        인코딩·전송하면 낭비다 — THERMAL_FILE 의 mtime 이 바뀌었을 때만
+        PNG 를 새로 만들어 보낸다(파일 내용에 "t" 필드가 없어 cam.json 처럼
+        fresh()/타임스탬프 비교를 못 쓴다 — server.py _thermal() 과 같은 이유로
+        mtime 을 쓴다). 오래된 파일(THERMAL_STALE_S 초과)은 아예 건너뛴다 —
+        연결 끊긴 마지막 프레임을 "지금 값"인 양 계속 재전송하지 않기 위해서다.
+        """
+        last_mtime = None
+        while True:
+            try:
+                mtime = os.path.getmtime(self.thermal_file)
+                is_stale = (time.time() - mtime) > THERMAL_STALE_S
+            except OSError:
+                mtime = None
+                is_stale = True
+            if mtime is not None and mtime != last_mtime and not is_stale:
+                last_mtime = mtime
+                thermal = read_json(self.thermal_file)
+                frame = build_thermal(self.robot_id, thermal, self.thermal_seq + 1)
+                if frame:
+                    self.thermal_seq += 1
+                    await ws.send(json.dumps(frame))
+                # 🆕 과열 판정은 **새 프레임 하나당 정확히 한 번**만 한다.
+                #    이 분기 안에 두는 것이 핵심이다 — 바깥에 두면 폴링 주기마다
+                #    같은 프레임을 다시 세어, 하드웨어가 멈춘 동안 M-of-N 이
+                #    옛 프레임만으로 확정돼 버린다.
+                await self._check_overheat(ws, frame, thermal)
+            await asyncio.sleep(self.thermal_period)
+
+    async def _check_overheat(self, ws, frame, thermal):
+        """열화상 프레임 하나에 대해 과열 임계 판정 → EVENT_OVERHEAT 전송.
+
+        판정에 쓰는 값과 보고하는 값이 **의도적으로 다르다**:
+          - 판정: hot_pixel_floor() = 2번째로 뜨거운 픽셀 (고착 불량 픽셀 방어)
+          - 보고: frame["maxTemp"] = raw 최고온도 (관제 HUD 에 뜨는 값과 동일)
+        보고까지 floor 값으로 바꾸면 화면 숫자와 경보 숫자가 어긋나 혼란스럽다.
+        반대로 판정까지 raw max 로 하면 불량 픽셀 하나로 오경보가 난다.
+        """
+        if not self.overheat:
+            return
+        # 임계 판정용 — 고온 픽셀이 min 개수 미만이면 None 이 되어 "임계 미만"으로 센다
+        judged = hot_pixel_floor(thermal) if frame else None
+        emit, _ = self.overheat.update(judged, time.time())
+        if not emit:
+            return
+        temp = frame.get("maxTemp")            # 보고용 = 화면과 같은 raw 최고온도
+        packet = build_overheat(
+            self.robot_id, temp, read_json(NAV_LIVE_FILE), time.time(),
+            threshold_c=self.overheat_temp_c,
+            thermal_image=(frame or {}).get("data"),
+        )
+        await ws.send(json.dumps(packet))
+        if self.event_clips:
+            # event_clip_pipeline._canonical_event_type 이 "OVERHEAT" 를 이미
+            # 정식 종류로 인식한다 — 블랙박스 클립 파이프라인이 화재와 똑같이
+            # EVENT_SAVED 응답을 받아 영상을 올릴 수 있다.
+            try:
+                self.event_clips.note_event("OVERHEAT", time.time())
+            except OSError as exc:
+                print(
+                    f"[event-clip] failed to persist overheat timestamp: {exc}",
+                    flush=True,
+                )
+        # 두 숫자를 함께 남긴다 — 나중에 "왜 떴나/왜 안 떴나"를 로그만으로 설명하려면
+        # 표시온도(max)와 판정온도(floor)가 모두 있어야 한다.
+        print(f"[overheat] EVENT_OVERHEAT 송신 max={temp}°C "
+              f"판정={judged}°C (임계 {self.overheat_temp_c}°C)", flush=True)
 
     async def h264_video_sender(self, ws):
         """Forward each validated H.264 access unit once as a binary WS frame."""
@@ -996,6 +1248,36 @@ def parse_args(argv=None):
         "--h264-video-hz",
         type=float,
         default=float(os.environ.get("ORINCAR_H264_VIDEO_HZ", "15")),
+    )
+    parser.add_argument(
+        "--thermal-hz",
+        type=float,
+        default=float(os.environ.get("ORINCAR_THERMAL_HZ", "1")),
+        help="열화상 송신 폴링 주기(Hz). 0 이하면 끈다. 하드웨어 자체가 ≈1Hz라 "
+             "이보다 올려도 새 프레임을 더 자주 얻지는 못한다(-663/-664/-667)",
+    )
+    parser.add_argument(
+        "--thermal-file",
+        default=os.environ.get("ORINCAR_THERMAL_FILE", THERMAL_FILE),
+        help="server.py 의 THERMAL_FILE 과 같은 파일(기본 /tmp/ir.json)",
+    )
+    parser.add_argument(
+        "--overheat-temp-c",
+        type=float,
+        default=float(
+            os.environ.get("ORINCAR_OVERHEAT_TEMP_C", str(OVERHEAT_TEMP_C))
+        ),
+        help="EVENT_OVERHEAT 발동 임계 온도(°C). 0 이하면 과열 경보를 끈다. "
+             "기본 100 은 사용자 지정 운영 기준값이다",
+    )
+    parser.add_argument(
+        "--fire-min-conf",
+        type=float,
+        default=float(
+            os.environ.get("ORINCAR_FIRE_MIN_CONF", str(FIRE_MIN_CONF))
+        ),
+        help="EVENT_FIRE 를 올릴 최소 YOLO 신뢰도(0~1). 미만인 탐지는 M-of-N "
+             "확정 카운트에도 들어가지 않는다. 기본 0.60 은 사용자 지정값",
     )
     parser.add_argument(
         "--map-hz",
