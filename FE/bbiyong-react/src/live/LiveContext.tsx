@@ -137,8 +137,44 @@ export function LiveProvider({ children }: any) {
       setConnected(c); setLastError(e); setAuthError(!!a)
     })
 
+    const robotStateMap = new Map<string, string>()
+
     const offRobots = subscribe('/topic/robots',
-      /** @param {import('./contracts').RobotTelemetry} msg */ (msg: any) => { telemetryRef.current = msg })
+      /** @param {import('./contracts').RobotTelemetry} msg */ (msg: any) => {
+        telemetryRef.current = msg
+        if (!msg) return
+        const rid = msg.robotId || msg.robot_id || ROBOT_ID
+        const status = msg.status || msg.state
+        const isOffline = status === 'OFFLINE'
+        const isStateUpdate = msg.type === 'STATE_UPDATE' || msg.event === 'STATE_UPDATE'
+        const prevState = robotStateMap.get(rid)
+
+        let logState: 'ONLINE' | 'OFFLINE' | null = null
+        if (isStateUpdate) {
+          logState = (msg.event === 'ONLINE' || msg.status === 'ONLINE' || status === 'ONLINE' || (!isOffline && msg.event !== 'OFFLINE')) ? 'ONLINE' : 'OFFLINE'
+        } else if (status) {
+          const newState = isOffline ? 'OFFLINE' : 'ONLINE'
+          if (prevState && prevState !== newState) {
+            logState = newState
+          }
+          robotStateMap.set(rid, newState)
+        }
+
+        if (logState) {
+          const timestamp = msg.timestamp || Date.now()
+          setAlerts((prev) => [
+            ...prev,
+            {
+              _id: ++alertUid,
+              type: 'SYSTEM',
+              level: logState === 'ONLINE' ? 'WARNING' : 'CRITICAL',
+              robotId: rid,
+              timestamp,
+              message: `로봇 [${rid}] ${logState === 'ONLINE' ? '연결 (ONLINE)' : '해제 (OFFLINE)'}`,
+            }
+          ])
+        }
+      })
 
     const offAlerts = subscribe('/topic/alerts',
       /** @param {import('./contracts').AlertMessage | import('./contracts').MappingMessage} msg */ (msg: any) => {

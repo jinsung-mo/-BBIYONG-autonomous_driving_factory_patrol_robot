@@ -13,6 +13,7 @@ import RobotPage from './components/robot/RobotPage.tsx'
 import MapPage from './components/robot/MapPage.tsx'
 import CameraPage from './components/robot/CameraPage.tsx'
 import EventPage from './components/events/EventPage.tsx'
+import StatsPage from './components/stats/StatsPage.tsx'
 import OpsPage from './components/ops/OpsPage.tsx'
 import ConfigPage from './components/config/ConfigPage.tsx'
 import EventAlert from './components/EventAlert.tsx'
@@ -41,6 +42,7 @@ function Sections({ active, isAdmin }: { active: Section, isAdmin: boolean }) {
       <div hidden={active !== 'live'}><MapPage /></div>
       <div hidden={active !== 'cam'}><CameraPage /></div>
       <div hidden={active !== 'events'}><EventPage /></div>
+      <div hidden={active !== 'stats'}><StatsPage /></div>
       {isAdmin && active === 'ops' && <OpsPage />}
       {isAdmin && active === 'config' && <ConfigPage />}
     </>
@@ -53,7 +55,7 @@ function Dashboard() {
   const [section, setSection] = useState<Section>(() => (sessionStorage.getItem('section') as Section) || 'live')
   useEffect(() => { sessionStorage.setItem('section', section) }, [section])
   // 권한이 줄어드는 경우(관리자 → 뷰어 계정으로 재로그인)를 대비해 접근 가능한 섹션으로 되돌린다
-  const active = !isAdmin && section !== 'live' && section !== 'cam' && section !== 'events' ? 'live' : section
+  const active = !isAdmin && section !== 'live' && section !== 'cam' && section !== 'events' && section !== 'stats' ? 'live' : section
 
   return (
     <SimContext.Provider value={sim}>

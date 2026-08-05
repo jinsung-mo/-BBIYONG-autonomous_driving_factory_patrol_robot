@@ -237,12 +237,6 @@ export default function ControlPanel() {
     <div className="panel" id="pControl">
       <h3 className="control-titlebar">
         <span className="control-title">순찰 로봇 수동 조작 패널</span>
-        <span className="k">MANUAL CONTROL</span>
-        {/* 서버 연결과 로봇 가동은 다른 이야기다 — 로봇이 꺼져 있어도 STOMP 는 붙어 있다.
-            서버가 판정한 online(S15P11E101-510)이 false 면 그 사실을 따로 말한다. */}
-        {enabled && <span className="k" style={{ marginLeft: 8, color: linkColor }}>
-          {linkText}
-        </span>}
         <CapBadge capKey={CAP_KEYS.drive} />
       </h3>
       <div className="control-card">

@@ -84,7 +84,7 @@ export function alertToLog(a: any) {
     eventId: a?.eventId ?? null,
     time: formatTime(a?.timestamp),
     date: formatDate(a?.timestamp),
-    kind: a?.type === 'FIRE' ? 'fire' : 'heat',
+    kind: a?.type === 'FIRE' ? 'fire' : (a?.type === 'OVERHEAT' ? 'heat' : (a?.level === 'CRITICAL' ? 'heat' : 'ok')),
     type: a?.type || 'SYSTEM',
     level: a?.level || null,
     // 방금 들어온 경보는 아직 아무도 처리하지 않았다 — 해결 상태 필터에서 미해결로 잡힌다

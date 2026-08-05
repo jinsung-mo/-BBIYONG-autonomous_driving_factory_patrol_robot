@@ -32,11 +32,10 @@ function Kpi({ value, unit, label, tone = 'none', note }: {
 
 export default function KpiRow() {
   const { status } = useSim()
-  const { enabled, telemetry, alerts } = useLive()
+  const { enabled, connected, telemetry, alerts } = useLive()
 
   const live = enabled ? telemetryToStatus(telemetry) : null
   const batt = live ? live.batt : status.batt
-
 
   const battTone: Tone = batt == null ? 'none' : batt <= 15 ? 'bad' : batt <= 35 ? 'warn' : 'ok'
 
@@ -46,6 +45,9 @@ export default function KpiRow() {
     : Number(String(status.thermalMax || '').match(/-?\d+(\.\d+)?/)?.[0])
   const alarmCount = enabled ? alerts.length
     : (status.logs || []).filter((log: any) => log.kind === 'fire' || log.kind === 'heat').length
+
+  const robotOnline = enabled ? (connected && telemetry?.status !== 'OFFLINE') : true
+  const robotTone: Tone = robotOnline ? 'ok' : 'bad'
 
   return (
     <div className="kpis">
@@ -60,6 +62,10 @@ export default function KpiRow() {
       <Kpi
         value={String(alarmCount)} unit="건"
         label="경보 이벤트" tone={alarmCount > 0 ? 'bad' : 'none'}
+      />
+      <Kpi
+        value={robotOnline ? '온라인' : '오프라인'}
+        label="로봇 상태" tone={robotTone}
       />
     </div>
   )

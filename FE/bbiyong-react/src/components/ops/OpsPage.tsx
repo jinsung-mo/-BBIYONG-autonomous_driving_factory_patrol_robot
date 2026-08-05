@@ -6,8 +6,6 @@ import { ROBOT_ID } from '../../live/config.ts'
 import Modal from '../ui/Modal.tsx'
 import RoutePanel from './RoutePanel.tsx'
 import SchedulePanel from './SchedulePanel.tsx'
-import EventStatsPanel from './EventStatsPanel.tsx'
-import HealthPanel from './HealthPanel.tsx'
 import KpiRow from '../robot/KpiRow.tsx'
 import {
   MAPPING_STATUS, activateMap, activatePath, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
@@ -250,9 +248,6 @@ export default function OpsPage() {
                 </>
               )}
             </div>
-
-            <HealthPanel />
-            <EventStatsPanel />
           </aside>
 
           <div className="nav-canvas">
