@@ -27,11 +27,17 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final RobotWebSocketHandler robotWebSocketHandler;
 
-    /** 로봇 핸드셰이크 인증용 공유 토큰(업로드 필터와 동일 시크릿). 비면 인증 비활성. */
+    /** 로봇 핸드셰이크 인증용 공유 토큰(업로드 필터와 동일 시크릿). 미설정 시 기동 실패. */
     private final String robotToken;
 
     public WebSocketConfig(RobotWebSocketHandler robotWebSocketHandler,
                            @Value("${bbiyong.robot.upload-token:}") String robotToken) {
+        // fail-fast: 토큰 없이 기동하면 /ws/robot 이 무인증으로 열려 로봇 사칭·가짜 경보 주입이
+        // 가능하므로, 미설정은 기동 실패로 처리한다. (S15P11E101-715)
+        if (robotToken == null || robotToken.isBlank()) {
+            throw new IllegalStateException(
+                    "bbiyong.robot.upload-token 이 설정되지 않았습니다. 환경변수 BBIYONG_ROBOT_UPLOAD_TOKEN 을 주입하세요.");
+        }
         this.robotWebSocketHandler = robotWebSocketHandler;
         this.robotToken = robotToken;
     }

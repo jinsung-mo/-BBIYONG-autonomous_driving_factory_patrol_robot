@@ -58,6 +58,15 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
 
             String robotId = packet.getRobotId();
             if (robotId != null && !robotId.trim().isEmpty()) {
+                // 세션-로봇 소유권 검사: 한 세션은 최초 등록한 robot_id 에 고정된다.
+                // 같은 세션이 다른 robot_id 를 실어 보내면 타 로봇 사칭·세션 탈취이므로
+                // 패킷을 폐기한다(바이너리 경로의 검사와 동일 정책). (S15P11E101-715)
+                String boundRobotId = sessionManager.getRobotIdBySessionId(session.getId());
+                if (boundRobotId != null && !boundRobotId.equals(robotId.trim())) {
+                    log.warn("Dropping WSS packet with robot mismatch: session=[{}] bound=[{}], packet=[{}]",
+                            session.getId(), boundRobotId, robotId);
+                    return;
+                }
                 // 새 등록(연결·재연결)일 때만 ONLINE 이벤트 발행 — 관제 시스템 탭 연결 로그용. (S15P11E101-683)
                 if (sessionManager.register(robotId, session)) {
                     eventPublisher.publishEvent(new RobotConnectedEvent(this, robotId));

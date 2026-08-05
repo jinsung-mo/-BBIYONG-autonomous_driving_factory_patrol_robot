@@ -47,7 +47,11 @@ public class RobotHandshakeAuthInterceptor implements HandshakeInterceptor {
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
         if (!StringUtils.hasText(robotToken)) {
-            return true; // 토큰 미설정: 인증 비활성(기존과 동일하게 열림)
+            // 토큰 미설정은 기동 시점(WebSocketConfig)에서 fail-fast 로 차단되지만,
+            // 심층 방어로 이 경로에 도달해도 개방하지 않고 거부한다. (S15P11E101-715)
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            log.error("Rejected /ws/robot handshake: server robot token is not configured");
+            return false;
         }
         String provided = resolveToken(request);
         if (provided != null && constantTimeEquals(provided, robotToken)) {
