@@ -101,7 +101,18 @@ pipeline {
         stage('Deploy') {
             steps {
                 dir('BE_system') {
-                    sh 'docker compose up -d --build'
+                    withCredentials([
+                        string(
+                            credentialsId: 'bbiyong-jwt-secret',
+                            variable: 'BBIYONG_JWT_SECRET'
+                        ),
+                        string(
+                            credentialsId: 'bbiyong-robot-upload-token',
+                            variable: 'BBIYONG_ROBOT_UPLOAD_TOKEN'
+                        )
+                    ]) {
+                        sh 'docker compose up -d --build'
+                    }
                 }
             }
         }
@@ -129,7 +140,7 @@ pipeline {
             }
         }
         failure {
-            sh 'docker compose -f BE_system/compose.yaml logs --tail=100 || true'
+            sh 'docker logs --tail=100 bbiyong-server || true'
             script {
                 sendMattermostNotification(false)
             }
