@@ -65,7 +65,7 @@ export default function DashboardStatsPanel() {
 
           <div className="sumcard">
             <span>오늘 이벤트 발생</span>
-            <b>{count(t?.totalEvents)} <i>건</i></b>
+            <b>{count(t?.eventCount)} <i>건</i></b>
             <div style={{ fontSize: '11px', color: '#C07A72', marginTop: '4px' }}>긴급 {count(t?.criticalEvents)}건 · 미해결 {count(t?.unresolvedEvents)}건</div>
           </div>
 
