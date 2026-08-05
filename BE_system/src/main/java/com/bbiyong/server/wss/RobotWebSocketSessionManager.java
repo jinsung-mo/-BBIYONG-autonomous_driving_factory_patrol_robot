@@ -23,16 +23,22 @@ public class RobotWebSocketSessionManager {
         this.objectMapper = objectMapper;
     }
 
-    public void register(String robotId, WebSocketSession session) {
+    /**
+     * 로봇 세션을 등록한다. 새 등록(최초 연결 또는 세션 교체·재연결)이면 true 를 반환한다.
+     * 호출측은 true 일 때만 연결(ONLINE) 이벤트를 발행해 패킷마다 중복 발행을 막는다. (S15P11E101-683)
+     */
+    public boolean register(String robotId, WebSocketSession session) {
         if (robotId == null || robotId.trim().isEmpty() || session == null) {
-            return;
+            return false;
         }
         WebSocketSession existing = robotSessions.get(robotId);
         if (existing == null || !existing.getId().equals(session.getId())) {
             robotSessions.put(robotId, session);
             sessionIdToRobotId.put(session.getId(), robotId);
             log.info("Registered new WSS session [{}] for robot [{}]", session.getId(), robotId);
+            return true;
         }
+        return false;
     }
 
     /**

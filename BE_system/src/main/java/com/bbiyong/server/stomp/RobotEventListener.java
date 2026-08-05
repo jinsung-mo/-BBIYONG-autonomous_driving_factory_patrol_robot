@@ -1,5 +1,6 @@
 package com.bbiyong.server.stomp;
 
+import com.bbiyong.server.wss.event.RobotConnectedEvent;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
 import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
@@ -39,6 +40,23 @@ public class RobotEventListener {
             messagingTemplate.convertAndSend("/topic/robots", jsonStr);
         } catch (Exception e) {
             log.error("Failed to serialize telemetry event", e);
+        }
+    }
+
+    /** 로봇 연결(신규·재연결)을 /topic/robots 로 즉시 알린다 — 시스템 탭 연결 로그용. (S15P11E101-683) */
+    @EventListener
+    public void handleConnect(RobotConnectedEvent event) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("type", "STATE_UPDATE");
+            payload.put("robot_id", event.getRobotId());
+            payload.put("status", "ONLINE");
+            payload.put("online", true);
+            String jsonStr = objectMapper.writeValueAsString(payload);
+            log.info("Broadcasting ONLINE for robot [{}] to /topic/robots", event.getRobotId());
+            messagingTemplate.convertAndSend("/topic/robots", jsonStr);
+        } catch (Exception e) {
+            log.error("Failed to broadcast connect for robot [{}]", event.getRobotId(), e);
         }
     }
 
