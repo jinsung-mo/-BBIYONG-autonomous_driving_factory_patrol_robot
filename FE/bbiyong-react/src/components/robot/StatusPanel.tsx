@@ -42,13 +42,6 @@ export default function StatusPanel() {
           <RadialGauge value={batt} label="배터리" caption="BATTERY" />
         )}
         <div className="kv">
-          <span>E-STOP</span>
-          {/* 체결은 즉시 눈에 띄어야 한다 — 강한 빨강 + 깜빡임 + 경고 기호 */}
-          <b className={estopUnknown ? '' : (estopReleased ? 'st ok' : 'st danger')}>
-            {estopUnknown ? '—' : (estopReleased ? '✓ 해제' : `⚠ 체결 (${estop})`)}
-          </b>
-        </div>
-        <div className="kv">
           <span>통신 감도</span>
           <b className={`st ${commOk ? 'ok' : 'warn'}`}>{commOk ? '✓' : '▲'} {comm}</b>
         </div>
@@ -60,7 +53,7 @@ export default function StatusPanel() {
         )}
       </div>
       <h3 className="event-title">이벤트 로그</h3>
-      <LogList variant="elog" />
+      <LogList variant="elog" simple={true} />
     </div>
   )
 }

@@ -9,7 +9,7 @@ export default function EventLog() {
   return (
     <div className="panel" id="pEvents">
       <h3 className="event-title">이벤트 로그</h3>
-      <LogList variant="elog" />
+      <LogList variant="elog" simple={true} />
     </div>
   )
 }
