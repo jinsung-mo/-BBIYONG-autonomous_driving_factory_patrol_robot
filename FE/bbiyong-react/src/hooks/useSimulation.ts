@@ -10,7 +10,7 @@ export default function useSimulation() {
 
   const [status, setStatus] = useState(() => sim.snapshot())
   const [clock, setClock] = useState('--:--:--')
-  const [theme, setTheme] = useState('dark') // 'dark' | 'light'
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light') // 'dark' | 'light'
 
   // 구독 + 루프 시작/정리
   useEffect(() => {
@@ -25,6 +25,7 @@ export default function useSimulation() {
   // 테마를 <html data-theme>에 반영
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
   }, [theme])
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
 

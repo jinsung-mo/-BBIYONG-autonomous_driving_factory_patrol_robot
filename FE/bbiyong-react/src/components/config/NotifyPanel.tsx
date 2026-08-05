@@ -70,7 +70,7 @@ export default function NotifyPanel() {
   }
 
   return (
-    <div className="panel" id="pNotify">
+    <div className="nx-card" id="pNotify">
       <h3>Mattermost 알림 <span className="k">NOTIFICATION</span></h3>
       <p className="cfg-help">
         화재·과열이 발생하면 서버가 Mattermost 로 알립니다. 공장이 비는 <b>20시~08시</b>에는

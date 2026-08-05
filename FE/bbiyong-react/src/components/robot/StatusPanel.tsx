@@ -2,7 +2,6 @@ import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { telemetryToStatus } from '../../live/mappers.ts'
 import LogList from '../LogList.tsx'
-import FleetList from '../dashboard/FleetList.tsx'
 import RadialGauge from './RadialGauge.tsx'
 
 // 순찰 로봇 상태 + 환경 + 이벤트 로그
@@ -60,8 +59,6 @@ export default function StatusPanel() {
           </b></div>
         )}
       </div>
-      {/* 편성이 2대 이상이면 나머지 로봇도 여기서 본다(S15P11E101-591) */}
-      <FleetList />
       <h3 className="event-title">이벤트 로그</h3>
       <LogList variant="elog" />
     </div>

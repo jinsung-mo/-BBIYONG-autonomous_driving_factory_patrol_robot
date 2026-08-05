@@ -77,7 +77,7 @@ export default function ConfigPage() {
   }
 
   return (
-    <section id="pgConfig" className="page on section-page sim-skin nav-page">
+    <section id="pgConfig" className="page on sim-skin nav-page">
       <div className="nav-hero">
         <div className="nav-title">
           <h2>시스템 설정</h2>
@@ -90,9 +90,9 @@ export default function ConfigPage() {
           fieldset[disabled] 을 쓰는 이유: 조작 요소를 하나씩 막으면 반드시 빠진다.
           안쪽 폼 요소를 전부, 키보드 접근까지 막아 준다. */}
       <fieldset className="lockfs" disabled={locked}>
-        <div className="cfg-stage">
-          <aside className="cfg-side" aria-label="기본 제어 및 알림 설정">
-            <div className="panel">
+        <div className="nav-stage">
+          <aside className="nav-side" aria-label="기본 제어 및 알림 설정">
+            <div className="nx-card">
               <h3>주행 속도 상한 <span className="k">DRIVE LIMIT</span></h3>
               <p className="cfg-help">
                 로봇이 낼 수 있는 최대 속도입니다. 저장하면 서버에 기록되고 로봇에도 하달됩니다
@@ -116,7 +116,7 @@ export default function ConfigPage() {
               {speedMsg && <div className={`form-msg ${speedMsg.kind}`} id="speedMsg">{speedMsg.text}</div>}
               <div className="gotor">
                 <button
-                  type="button" id="btnSaveSpeed" className="dbtn go"
+                  type="button" id="btnSaveSpeed" className="basebtn primary"
                   onClick={onSaveSpeed}
                   disabled={!enabled || savingSpeed || speedErrs.length > 0}
                 >
@@ -132,7 +132,7 @@ export default function ConfigPage() {
               </div>
             </div>
 
-            <div className="panel">
+            <div className="nx-card">
               <h3>열화상 임계 온도 <span className="k">THERMAL</span></h3>
               <p className="cfg-help">열화상 <b>화면의 색 표시</b> 기준입니다. 로봇의 과열 판정 기준은 <b>설비별 과열 임계 온도</b> 설정에서 분전반마다 따로 정합니다.</p>
               <div className="form-row">
@@ -153,21 +153,21 @@ export default function ConfigPage() {
             <DemoAlertPanel />
             <NotifyPanel />
 
-            <div className="panel">
+            <div className="nx-card">
               <h3>초기화 <span className="k">RESET</span></h3>
               <p className="cfg-help">모든 설정을 기본값으로 되돌립니다. 되돌린 값은 즉시 관제 화면에 반영됩니다.</p>
-              <button type="button" className="dbtn stop" onClick={reset}>기본값으로 되돌리기</button>
+              <button type="button" className="basebtn danger" onClick={reset}>기본값으로 되돌리기</button>
               <div className="cfg-note">
                 기본값: 선속 {DEFAULT_SETTINGS.vMax} m/s · 각속 {DEFAULT_SETTINGS.wMax} rad/s · 주의 {DEFAULT_SETTINGS.tempWarn}℃ · 임계 {DEFAULT_SETTINGS.tempCritical}℃
               </div>
             </div>
           </aside>
 
-          <main className="cfg-main">
+          <div className="nav-canvas">
             <EquipmentPanel />
             <UsersPanel />
 
-            <div className="panel cfg-points">
+            <div className="nx-card cfg-points">
               <h3>순찰 지점 <span className="k">WAYPOINTS</span></h3>
               <p className="cfg-help">
                 관제 화면의 <b>지점 이동</b> 목록입니다. 좌표는 로봇 map 프레임 기준 미터입니다.
@@ -180,20 +180,20 @@ export default function ConfigPage() {
                       onChange={(e) => setPoint(p.id, { x: Number(e.target.value) || 0 })} />
                     <input aria-label="y (m)" type="number" step="0.1" value={p.y}
                       onChange={(e) => setPoint(p.id, { y: Number(e.target.value) || 0 })} />
-                    <button type="button" className="dbtn stop" onClick={() => removePoint(p.id)}
+                    <button type="button" className="basebtn danger" onClick={() => removePoint(p.id)}
                       disabled={settings.points.length <= 1}>삭제</button>
                   </li>
                 ))}
               </ul>
               <div className="gotor">
                 <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="새 지점 이름 (예: 분전반 D)" />
-                <button type="button" className="dbtn go" onClick={addPoint} disabled={!draft.trim()}>추가</button>
+                <button type="button" className="basebtn primary" onClick={addPoint} disabled={!draft.trim()}>추가</button>
               </div>
               {settings.points.length <= 1 && (
                 <div className="cfg-note">지점은 최소 1개가 있어야 관제 화면의 지점 이동이 동작합니다.</div>
               )}
             </div>
-          </main>
+          </div>
         </div>
       </fieldset>
     </section>

@@ -58,7 +58,7 @@ export default function HealthPanel() {
   const last = points[points.length - 1]
 
   return (
-    <div className="panel" id="pHealth">
+    <div className="nx-card" id="pHealth">
       <h3>로봇 건강 이력 <span className="k">HEALTH HISTORY</span></h3>
       <p className="cfg-help">
         배터리·통신 지연·추론 FPS 추이입니다. 통신이 끊겼던 구간(<b>online=false</b>)은

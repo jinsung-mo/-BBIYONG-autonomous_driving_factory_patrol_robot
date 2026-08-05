@@ -53,7 +53,7 @@ export default function DemoAlertPanel() {
   }
 
   return (
-    <div className="panel" id="pDemoAlert">
+    <div className="nx-card" id="pDemoAlert">
       <h3>시연 경보 발생 <span className="k">DEMO ALERT</span></h3>
       <p className="cfg-help">
         실제 화재·과열 이벤트 처리 경로를 실행합니다. 관제 경보와 이벤트 로그에서 결과를 확인하세요.

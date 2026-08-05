@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useSimulation from './hooks/useSimulation.ts'
 import { SimContext } from './SimContext.ts'
 import { AuthProvider, useAuth } from './auth/AuthContext.tsx'
@@ -48,7 +48,8 @@ function Sections({ active, isAdmin }: { active: Section, isAdmin: boolean }) {
 function Dashboard() {
   const sim = useSimulation()
   const { isAdmin } = useAuth()
-  const [section, setSection] = useState<Section>('live')
+  const [section, setSection] = useState<Section>(() => (sessionStorage.getItem('section') as Section) || 'live')
+  useEffect(() => { sessionStorage.setItem('section', section) }, [section])
   // 권한이 줄어드는 경우(관리자 → 뷰어 계정으로 재로그인)를 대비해 접근 가능한 섹션으로 되돌린다
   const active = !isAdmin && section !== 'live' && section !== 'cam' ? 'live' : section
 

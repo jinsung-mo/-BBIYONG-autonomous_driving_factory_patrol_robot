@@ -88,7 +88,7 @@ export default function UsersPanel() {
   }
 
   return (
-    <div className="panel" id="pUsers">
+    <div className="nx-card" id="pUsers">
       <h3>사용자 관리 <span className="k">USERS</span></h3>
       <p className="cfg-help">
         새로 가입한 계정은 <b>사용자</b>로 시작해 모니터링만 할 수 있습니다.
