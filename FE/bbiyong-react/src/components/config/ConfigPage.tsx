@@ -11,7 +11,7 @@ export default function ConfigPage() {
   const { locked } = useAuth()
 
   return (
-    <section id="pgConfig" className="page on sim-skin nav-page">
+    <section id="pgConfig" className="page on v3-theme nav-page">
       <div className="nav-hero">
         <div className="nav-title">
           <h2>시스템 설정</h2>
@@ -25,10 +25,10 @@ export default function ConfigPage() {
           <aside className="nav-side" aria-label="기본 제어 및 알림 설정">
             <NotifyPanel />
 
-            <div className="nx-card">
-              <h3>초기화 <span className="k">RESET</span></h3>
+            <div className="card-v3">
+              <h3 style={{ margin: 0, marginBottom: '12px' }}>초기화 <span className="k">RESET</span></h3>
               <p className="cfg-help">모든 설정을 기본값으로 되돌립니다. 되돌린 값은 즉시 관제 화면에 반영됩니다.</p>
-              <button type="button" className="basebtn danger" onClick={reset}>기본값으로 되돌리기</button>
+              <button type="button" className="btn-tonal" style={{ color: '#B4655C' }} onClick={reset}>기본값으로 되돌리기</button>
             </div>
           </aside>
 

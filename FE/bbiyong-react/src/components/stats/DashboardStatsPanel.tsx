@@ -34,11 +34,11 @@ export default function DashboardStatsPanel() {
   const eq = data?.equipment
 
   return (
-    <div className="nx-card" id="pDashboardStats">
-      <div className="nx-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3>관제 대시보드 종합 통계 <span className="k">DASHBOARD SUMMARY</span></h3>
+    <div className="card-v3" id="pDashboardStats">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <h3 style={{ margin: 0 }}>관제 대시보드 종합 통계 <span className="k">DASHBOARD SUMMARY</span></h3>
         {enabled && (
-          <button type="button" className="basebtn" onClick={load} disabled={loading} style={{ padding: '4px 12px', fontSize: '12px' }}>
+          <button type="button" className="btn-tonal" onClick={load} disabled={loading} style={{ padding: '4px 12px', fontSize: '12px' }}>
             {loading ? '조회 중…' : '새로고침'}
           </button>
         )}
@@ -56,31 +56,31 @@ export default function DashboardStatsPanel() {
       {err && <div className="form-msg err">대시보드 통계를 불러오지 못했습니다 — {err}</div>}
 
       {enabled && !err && (
-        <div className="stats-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginTop: '14px' }}>
-          <div className="stat-card" style={{ padding: '14px', borderRadius: '12px', background: 'var(--nx-elev, #ffffff)', border: '1px solid var(--nx-divider, #e1e7ec)' }}>
-            <div style={{ fontSize: '12px', color: 'var(--nx-muted, #718096)' }}>총 순찰 로봇</div>
-            <div style={{ fontSize: '24px', fontWeight: 600, marginTop: '4px' }}>{count(s?.totalRobots)} <span style={{ fontSize: '13px' }}>대</span></div>
-            <div style={{ fontSize: '11px', color: '#3ddc97', marginTop: '4px' }}>가동 중 {count(s?.activeRobots)}대 · 온라인 {count(s?.onlineRobots)}대</div>
+        <div className="sumbar" style={{ marginTop: '14px' }}>
+          <div className="sumcard">
+            <span>총 순찰 로봇</span>
+            <b>{count(s?.totalRobots)} <i>대</i></b>
+            <div style={{ fontSize: '11px', color: '#74A98D', marginTop: '4px' }}>가동 중 {count(s?.activeRobots)}대 · 온라인 {count(s?.onlineRobots)}대</div>
           </div>
 
-          <div className="stat-card" style={{ padding: '14px', borderRadius: '12px', background: 'var(--nx-elev, #ffffff)', border: '1px solid var(--nx-divider, #e1e7ec)' }}>
-            <div style={{ fontSize: '12px', color: 'var(--nx-muted, #718096)' }}>오늘 이벤트 발생</div>
-            <div style={{ fontSize: '24px', fontWeight: 600, marginTop: '4px' }}>{count(t?.totalEvents)} <span style={{ fontSize: '13px' }}>건</span></div>
-            <div style={{ fontSize: '11px', color: '#ff6b6b', marginTop: '4px' }}>긴급 {count(t?.criticalEvents)}건 · 미해결 {count(t?.unresolvedEvents)}건</div>
+          <div className="sumcard">
+            <span>오늘 이벤트 발생</span>
+            <b>{count(t?.totalEvents)} <i>건</i></b>
+            <div style={{ fontSize: '11px', color: '#C07A72', marginTop: '4px' }}>긴급 {count(t?.criticalEvents)}건 · 미해결 {count(t?.unresolvedEvents)}건</div>
           </div>
 
-          <div className="stat-card" style={{ padding: '14px', borderRadius: '12px', background: 'var(--nx-elev, #ffffff)', border: '1px solid var(--nx-divider, #e1e7ec)' }}>
-            <div style={{ fontSize: '12px', color: 'var(--nx-muted, #718096)' }}>관제 대상 설비</div>
-            <div style={{ fontSize: '24px', fontWeight: 600, marginTop: '4px' }}>{count(eq?.totalEquipments)} <span style={{ fontSize: '13px' }}>개</span></div>
-            <div style={{ fontSize: '11px', color: eq?.overheatingEquipments ? '#ff6b6b' : '#3ddc97', marginTop: '4px' }}>
+          <div className={`sumcard ${eq?.overheatingEquipments ? 'hot' : ''}`}>
+            <span>관제 대상 설비</span>
+            <b>{count(eq?.totalEquipments)} <i>개</i></b>
+            <div style={{ fontSize: '11px', color: eq?.overheatingEquipments ? '#C07A72' : '#74A98D', marginTop: '4px' }}>
               {eq?.overheatingEquipments ? `과열 ${eq.overheatingEquipments}개 감지` : '정상 작동 중'}
             </div>
           </div>
 
-          <div className="stat-card" style={{ padding: '14px', borderRadius: '12px', background: 'var(--nx-elev, #ffffff)', border: '1px solid var(--nx-divider, #e1e7ec)' }}>
-            <div style={{ fontSize: '12px', color: 'var(--nx-muted, #718096)' }}>평균 배터리 잔량</div>
-            <div style={{ fontSize: '24px', fontWeight: 600, marginTop: '4px' }}>{pct(s?.avgBattery)}</div>
-            <div style={{ fontSize: '11px', color: 'var(--nx-muted, #718096)', marginTop: '4px' }}>충전 중 {count(s?.chargingRobots)}대</div>
+          <div className="sumcard">
+            <span>평균 배터리 잔량</span>
+            <b>{pct(s?.avgBattery)}</b>
+            <div style={{ fontSize: '11px', color: '#7C8296', marginTop: '4px' }}>충전 중 {count(s?.chargingRobots)}대</div>
           </div>
         </div>
       )}

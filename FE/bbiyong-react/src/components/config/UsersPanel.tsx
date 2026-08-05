@@ -88,8 +88,8 @@ export default function UsersPanel() {
   }
 
   return (
-    <div className="nx-card" id="pUsers">
-      <h3>사용자 관리 <span className="k">USERS</span></h3>
+    <div className="card-v3" id="pUsers">
+      <h3 style={{ margin: 0, marginBottom: '12px' }}>사용자 관리 <span className="k">USERS</span></h3>
       <p className="cfg-help">
         새로 가입한 계정은 <b>사용자</b>로 시작해 모니터링만 할 수 있습니다.
         로봇을 조작하거나 운영·설정 화면을 쓰려면 <b>관리자</b>로 승격해야 합니다.
@@ -129,8 +129,8 @@ export default function UsersPanel() {
             })}
           </ul>
 
-          <div className="gotor">
-            <button type="button" className="dbtn" onClick={() => load()} disabled={loading}>
+          <div className="gotor" style={{ marginTop: '16px' }}>
+            <button type="button" className="btn-text" onClick={() => load()} disabled={loading}>
               {loading ? '조회 중…' : '목록 새로 고침'}
             </button>
           </div>
@@ -143,9 +143,9 @@ export default function UsersPanel() {
           <div className="cfg-note mono">
             {confirming.target.email} · {roleText(confirming.target.role)} → {roleText(confirming.role)}
           </div>
-          <div className="form-actions">
-            <button type="button" className="btn-ghost" onClick={() => setConfirming(null)}>취소</button>
-            <button type="button" id="btnConfirmRole" className="btn-primary"
+          <div className="gotor" style={{ marginTop: '20px' }}>
+            <button type="button" className="btn-text" onClick={() => setConfirming(null)}>취소</button>
+            <button type="button" id="btnConfirmRole" className="btn-filled"
               onClick={() => apply(confirming.target, confirming.role)}
               disabled={busy === confirming.target.email}>
               {busy === confirming.target.email ? '변경 중…' : '변경'}
