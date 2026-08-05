@@ -65,7 +65,7 @@ export default function DashboardStatsPanel() {
 
           <div className="stat-card" style={{ padding: '14px', borderRadius: '12px', background: 'var(--nx-elev, #ffffff)', border: '1px solid var(--nx-divider, #e1e7ec)' }}>
             <div style={{ fontSize: '12px', color: 'var(--nx-muted, #718096)' }}>오늘 이벤트 발생</div>
-            <div style={{ fontSize: '24px', fontWeight: 600, marginTop: '4px' }}>{count(t?.totalEvents)} <span style={{ fontSize: '13px' }}>건</span></div>
+            <div style={{ fontSize: '24px', fontWeight: 600, marginTop: '4px' }}>{count(t?.eventCount)} <span style={{ fontSize: '13px' }}>건</span></div>
             <div style={{ fontSize: '11px', color: '#ff6b6b', marginTop: '4px' }}>긴급 {count(t?.criticalEvents)}건 · 미해결 {count(t?.unresolvedEvents)}건</div>
           </div>
 

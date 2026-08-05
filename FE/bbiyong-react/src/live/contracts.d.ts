@@ -120,6 +120,19 @@ export interface AlertMessage {
   _id?: number
 }
 
+/** FE가 로봇 연결 상태 변경을 이벤트 로그에 표시하기 위해 만드는 화면 전용 알림. */
+export interface SystemAlertMessage {
+  _id: number
+  type: 'SYSTEM'
+  level: EventLevel
+  robotId: string
+  timestamp: string | number
+  message: string
+}
+
+/** 서버 위험 경보와 FE 화면 전용 시스템 알림의 표시 모델. */
+export type LiveAlertMessage = AlertMessage | SystemAlertMessage
+
 /**
  * /topic/nav/{robotId} — 점유격자 스냅샷.
  * cells 는 flat RLE([값, 개수, ...]) 이고 서버는 해석하지 않고 그대로 중계한다.
@@ -608,7 +621,7 @@ export interface LiveContextValue {
   setDataSource: (v: 'live' | 'mock') => void
   toggleDataSource: () => void
   telemetry: RobotTelemetry | null
-  alerts: AlertMessage[]
+  alerts: LiveAlertMessage[]
   dismissAlert: (id: number) => void
   onVideoFrame: (fn: (ch: 'FRONT' | 'THERMAL', frame: any) => void) => () => void
   onNavUpdate: (fn: (nav: NavState) => void) => () => void
