@@ -211,6 +211,10 @@ export function startFakeBackend(port = 8099) {
   ]
 
   // 구독 중인 클라이언트에 MESSAGE 프레임을 밀어 넣는다 (텔레메트리·경보 흉내)
+  // 매핑 진행 상태 (S15P11E101-744). REST 복원과 STOMP 전환이 같은 값을 봐야 한다 —
+  // 둘이 어긋나면 새로고침할 때마다 화면이 튄다.
+  let mappingPhase = 'IDLE'
+
   function push(destination, payload) {
     let n = 0
     subs.filter((s) => s.destination === destination).forEach((s) => {
@@ -613,6 +617,17 @@ export function startFakeBackend(port = 8099) {
         pageable: { pageNumber: page, pageSize: size },
         totalElements: all.length,
         totalPages: Math.ceil(all.length / size),
+      }))
+      return
+    }
+    // 매핑 진행 상태 — GET /api/maps/status?robotId= (S15P11E101-744). '/{id}' 보다 먼저 매칭.
+    if (req.url.split('?')[0] === '/api/maps/status') {
+      restCalls.push({ url: req.url, method: req.method })
+      const robotId = new URL(req.url, 'http://x').searchParams.get('robotId')
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        robotId, phase: mappingPhase, mapping: mappingPhase === 'MAPPING',
+        since: '2026-08-05T20:00:00Z',
       }))
       return
     }
@@ -1033,6 +1048,16 @@ export function startFakeBackend(port = 8099) {
       // 로봇이 SAVE_MAP 을 처리해 업로드한 상황을 만든다 (최신이 맨 앞)
       addMap: (name) => { maps.unshift({ id: `m${maps.length + 1}`, name, widthPx: 480, heightPx: 320, resolution: 0.05 }); return maps[0] },
       setActivateImplemented: (v) => { activateImplemented = v },
+      // 744 검증용 — REST 복원값과 STOMP 전환을 함께 움직인다
+      mappingPhase: () => mappingPhase,
+      setMappingPhase: (phase, { push: doPush = true } = {}) => {
+        mappingPhase = phase
+        if (doPush) push('/topic/mapping', { type: 'MAPPING_STATUS', phase, robotId: 'orinka_01', mapping: phase === 'MAPPING' })
+      },
+      pushFloorplanReady: (mapId = 'fp1') => {
+        mappingPhase = 'IDLE'
+        return push('/topic/mapping', { type: 'FLOORPLAN_READY', robotId: 'orinka_01', mapId, imageUrl: `/api/maps/${mapId}/image` })
+      },
       activeId: () => activeId,
       setExpiresIn: (v) => { expiresIn = v },
       setRejectAuth: (v) => { rejectAuth = v },

@@ -2569,3 +2569,31 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .event-page-grid { display: grid; grid-template-columns: 280px 1fr; gap: 14px; align-items: start; height: 100%; min-height: 0; }
 .event-page-grid .card-v3 { padding: 16px; margin-bottom: 0; display: flex; flex-direction: column; }
 .event-page-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+/* ── 지도 탭 : 매핑중 · 도면 없음 (S15P11E101-744) ─────────────
+   둘 다 영상 자리를 통째로 채운다. 검은 판만 남겨 두면 조작자는 화면이 죽은
+   것인지 데이터가 없는 것인지 구분하지 못한다 — 어느 쪽인지 글로 말한다. */
+.map-mapping,.map-empty{
+  position:absolute; inset:0; z-index:2;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; padding:24px; text-align:center;
+  background:var(--nx-surface,#0a0c10); color:var(--nx-text,#e6e9ef);
+}
+.map-mapping b,.map-empty b{font-size:18px; font-weight:600; letter-spacing:-.01em;}
+.map-mapping-sub,.map-empty span{font-size:13px; color:var(--nx-muted,#9aa3b2);}
+.map-mapping-hint{
+  font-size:12px; color:var(--nx-faint,#7c8496); max-width:32em; line-height:1.7;
+}
+/* 도는 고리는 '멈춰 있지 않다' 만 알린다. 진행률로 읽히지 않게 눈금을 주지 않는다. */
+.map-mapping-spin{
+  width:34px; height:34px; border-radius:50%;
+  border:3px solid var(--nx-divider,#2a3140);
+  border-top-color:var(--nx-accent,#3ddc97);
+  animation:mapspin 900ms linear infinite;
+}
+@keyframes mapspin{to{transform:rotate(360deg);}}
+/* 움직임을 줄여 달라는 설정에서는 돌리지 않는다. 고리는 그대로 두어
+   '무언가 진행 중' 이라는 표시 자체가 사라지지는 않게 한다. */
+@media (prefers-reduced-motion:reduce){
+  .map-mapping-spin{animation:none; border-top-color:var(--nx-accent,#3ddc97);}
+}

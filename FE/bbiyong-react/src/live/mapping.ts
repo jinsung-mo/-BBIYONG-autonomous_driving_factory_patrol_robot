@@ -26,6 +26,48 @@ export function isMappingComplete(msg: unknown): msg is import('./contracts.d.ts
   return typeof type === 'string' && COMPLETE_TYPES.has(type.toUpperCase())
 }
 
+// ---- 매핑 진행 상태 (S15P11E101-744) ----
+//
+// 지도 탭은 '지금 매핑 중인가' 에 따라 보여 줄 것이 완전히 다르다. 매핑 중에는
+// 아직 도면이 없으므로 진행 안내를 띄우고, 도면이 준비되면 3D 로 전환한다.
+//
+// 상태는 두 경로로 온다. STOMP 는 붙어 있는 동안의 전환만 주므로, 새로고침이나
+// 중간 접속으로 놓친 상태는 REST 로 한 번 읽어 복원해야 한다.
+export const PHASE_MAPPING = 'MAPPING'
+export const PHASE_IDLE = 'IDLE'
+
+/**
+ * @param {unknown} msg
+ * @returns {msg is import('./contracts').MappingStatusMessage}
+ */
+export function isMappingStatus(msg: unknown): msg is import('./contracts.d.ts').MappingStatusMessage {
+  return (msg as { type?: unknown } | null)?.type === 'MAPPING_STATUS'
+}
+
+/**
+ * phase 와 mapping 불리언 중 오는 쪽을 읽는다. 둘 다 없으면 판단하지 않고 null 을
+ * 돌려준다 — 모르는 것을 IDLE 로 단정하면 매핑 중인 화면이 도면으로 바뀐다.
+ * @param {{ phase?: unknown, mapping?: unknown } | null | undefined} src
+ * @returns {import('./contracts').MappingPhase | null}
+ */
+export function phaseOf(src: any): import('./contracts.d.ts').MappingPhase | null {
+  const raw = typeof src?.phase === 'string' ? src.phase.toUpperCase() : null
+  if (raw === PHASE_MAPPING || raw === PHASE_IDLE) return raw
+  if (typeof src?.mapping === 'boolean') return src.mapping ? PHASE_MAPPING : PHASE_IDLE
+  return null
+}
+
+export const mapStatusPath = (robotId: string) => `/api/maps/status?robotId=${encodeURIComponent(robotId)}`
+
+/**
+ * @param {string} robotId
+ * @param {string | null | undefined} accessToken
+ * @returns {Promise<import('./contracts').MapStatusResponse>}
+ */
+export function fetchMapStatus(robotId: string, accessToken: string | null | undefined) {
+  return authedGet(mapStatusPath(robotId), accessToken)
+}
+
 // 서버 맵 레코드의 식별자·이름 필드가 목록/상세에서 조금씩 달라 흡수한다.
 /** @param {(import('./contracts').MapSummary & { mapId?: string }) | null | undefined} m */
 export const mapIdOf = (m: any) => m?.id ?? m?.mapId ?? null
