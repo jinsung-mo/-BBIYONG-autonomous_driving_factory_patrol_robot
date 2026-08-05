@@ -192,7 +192,14 @@ export function LiveProvider({ children }: any) {
     const offMapping = subscribe('/topic/mapping',
       /** @param {import('./contracts').MappingMessage} msg */ (msg: any) => {
       const m = (typeof msg === 'object' && msg) ? msg : {}
-      if (isFloorplanReady(m)) { setPlanReady({ ...m, _at: Date.now() }); return }
+      if (isFloorplanReady(m)) {
+        setPlanReady({ ...m, _at: Date.now() })
+        const mapId = m.mapId || m.map_id
+        if (mapId && accessToken) {
+          activateMap(mapId, accessToken).catch(() => {})
+        }
+        return
+      }
       setMappingComplete({ ...m, _at: Date.now() })
     })
 
@@ -400,8 +407,8 @@ export function LiveProvider({ children }: any) {
       stop: () => send('/app/control/drive', { command: 'DRIVE', linear: 0, angular: 0 }),
       // mode: autonomy | manual | disabled 만 유효
       setMode: (mode: any) => send('/app/control/mode', { command: 'SET_MODE', mode }),
-      // fail-safe — active:true 만 허용(해제 명령 없음)
-      estop: () => send('/app/control/mode', { command: 'ESTOP', active: true }),
+      // SET_MODE mode=disabled 로 ESTOP 명령 교체 (S15P11E101-732)
+      estop: () => send('/app/control/mode', { command: 'SET_MODE', mode: 'disabled' }),
       navigate: (x: any, y: any, yaw = 0) => send('/app/control/operation', { command: 'NAVIGATE', x, y, yaw }),
       // 전면 카메라 상하 각도(S15P11E101-521). 절대각(도)으로 보낸다.
       //

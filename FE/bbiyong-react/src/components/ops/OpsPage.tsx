@@ -8,8 +8,7 @@ import RoutePanel from './RoutePanel.tsx'
 import SchedulePanel from './SchedulePanel.tsx'
 import KpiRow from '../robot/KpiRow.tsx'
 import {
-  MAPPING_STATUS, activateMap, activatePath, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
-  waitForSavedMap, NotImplementedError,
+  MAPPING_STATUS, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
 } from '../../live/mapping.ts'
 
 // 운영 (S15P11E101-475) — 2D 맵 모델링과 저장된 맵 관리. 관리자만 들어온다.
@@ -83,40 +82,12 @@ export default function OpsPage() {
     const n = name.trim()
     if (!n || saving) return
     setSaving(true)
-    setMsg({ kind: 'ok', text: `'${n}' 저장 명령(SAVE_MAP)을 보냈습니다. 로봇이 업로드하면 활성 맵으로 지정합니다…` })
+    setMsg({ kind: 'ok', text: `'${n}' 저장 명령(SAVE_MAP)을 보냈습니다. 서버가 정제 도면(FLOORPLAN)을 활성화하면 지도에 자동으로 반영됩니다.` })
     control.saveMap(n)
-
-    const found = await waitForSavedMap(n, accessToken, { signal: { get aborted() { return !alive.current } } })
-    if (!alive.current) return
-    if (!found) {
-      setMsg({
-        kind: 'warn',
-        text: `'${n}' 저장 명령은 보냈지만 아직 맵 목록에 나타나지 않았습니다. 로봇이 업로드를 끝낸 뒤 아래 '목록 새로고침'으로 확인하세요.`,
-      })
-      setSaving(false)
-      return
-    }
-
-    try {
-      await activateMap(mapIdOf(found), accessToken)
-      if (!alive.current) return
-      setMsg({ kind: 'ok', text: `'${n}' 을(를) 저장하고 활성 맵으로 지정했습니다.` })
-      setName('')
-      clearMappingComplete()
-    } catch (e) {
-      if (!alive.current) return
-      if (e instanceof NotImplementedError) {
-        setMsg({
-          kind: 'warn',
-          text: `'${n}' 은 저장됐지만 활성 맵 지정 API 가 서버에 아직 없습니다 (${activatePath('{id}')}). `
-            + 'BE 에 추가되면 이 화면 수정 없이 바로 동작합니다. 그때까지는 최신 맵이 활성입니다.',
-        })
-      } else {
-        setMsg({ kind: 'err', text: `활성 맵 지정에 실패했습니다 — ${errMessage(e)}` })
-      }
-    }
+    setName('')
+    clearMappingComplete()
     setSaving(false)
-    loadMaps()
+    setTimeout(loadMaps, 1000)
   }
 
   const area = nav ? (nav.w * nav.res * nav.h * nav.res).toFixed(1) : null
@@ -208,11 +179,6 @@ export default function OpsPage() {
                 </button>
               </div>
               {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
-
-              <div className="cfg-note">
-                <b>로봇 파트 구현 대기 중입니다.</b> 시작 명령(START_MAPPING)은 서버가 로봇으로 전달하지만,
-                로봇 브리지가 아직 이 명령과 완료 이벤트를 처리하지 않습니다. 로봇 쪽이 올라오면 이 화면 수정 없이 그대로 동작합니다.
-              </div>
             </div>
 
             <div className="nx-card">
@@ -242,8 +208,8 @@ export default function OpsPage() {
                     ))}
                   </ul>
                   <div className="cfg-note">
-                    <b>이 맵 사용</b>을 누르면 저장 후 <b className="mono">PUT {activatePath('{id}')}</b> 로 활성 맵을 지정합니다.
-                    매핑이 끝나면 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 만들어 활성화하고, 관제 지도에 자동으로 표시됩니다.
+                    <b>이 맵 사용</b>을 누르면 저장 명령(SAVE_MAP)을 전송합니다.
+                    매핑이 완료되면 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 생성해 자동으로 활성화합니다.
                   </div>
                 </>
               )}
