@@ -77,7 +77,7 @@ export default function EventStatsPanel() {
   const unresolved = points.reduce((s, p) => s + (p.unresolvedCount || 0), 0)
 
   return (
-    <div className="panel" id="pEventStats">
+    <div className="nx-card" id="pEventStats">
       <h3>이벤트 통계 <span className="k">EVENT STATS</span></h3>
       <p className="cfg-help">
         기간 내 화재·과열·시스템 이벤트 발생 추이입니다. 막대/선의 색은 심각도이며,

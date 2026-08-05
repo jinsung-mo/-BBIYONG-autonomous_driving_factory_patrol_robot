@@ -22,8 +22,7 @@ export default function Nav({ section, onSection }: { section: Section,
   const { enabled } = useLive()
   const { user, isAdmin } = useAuth()
 
-  // 시뮬레이션에서는 관제가 지도와 카메라 두 화면으로 나뉜다. 실서버는 하나 그대로다.
-  // key 를 리터럴로 고정한다 — 그냥 두면 string 으로 넓어져 onSection 이 받지 못한다.
+  // 실서버와 시뮬레이션 모두 관제를 지도와 카메라 두 화면으로 나눈다.
   const tabs: Array<{ key: Section, label: string }> = [
     { key: 'live' as const, label: '지도' },
     { key: 'cam' as const, label: '카메라' },

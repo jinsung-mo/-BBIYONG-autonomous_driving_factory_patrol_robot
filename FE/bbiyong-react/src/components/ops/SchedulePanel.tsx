@@ -96,7 +96,7 @@ export default function SchedulePanel() {
   }
 
   return (
-    <div className="panel" id="pSchedule">
+    <div className="nx-card" id="pSchedule">
       <h3>자동 순찰 스케줄 <span className="k">PATROL SCHEDULE</span></h3>
       <p className="cfg-help">
         정한 시각에 서버가 순찰을 시작합니다. 삐용은 공장이 비는 <b>20시~08시</b>에 운행하므로

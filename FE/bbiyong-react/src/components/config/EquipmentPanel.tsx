@@ -72,7 +72,7 @@ export default function EquipmentPanel() {
   }
 
   return (
-    <div className="panel" id="pgEquip">
+    <div className="nx-card" id="pgEquip">
       <h3>설비별 과열 임계 온도 <span className="k">EQUIPMENT</span></h3>
       <p className="cfg-help">
         분전반마다 로봇이 <b>과열로 판정할 기준 온도</b>입니다. 저장하면 서버에 기록되고

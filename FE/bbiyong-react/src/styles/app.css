@@ -1834,13 +1834,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-side > .panel{background:var(--nx-panel); box-shadow:var(--nx-sh-lg);}
 /* 지도·카메라 좌측 패널은 반드시 같은 재질을 쓴다. 예전 Liquid Glass 테마 선택자의
    우선순위가 서로 달라 실제 계산색과 그림자가 갈라지던 부분을 ID 묶음으로 덮는다. */
-.nav-page :is(#pStatus,.cam-side-panel){
+.nav-page :is(#pStatus, .cam-side-panel, .ops-side > .panel, .cfg-side > .panel){
   background:var(--nx-side-panel); background-image:none;
   border:0; border-radius:var(--nx-r-lg);
   box-shadow:var(--nx-sh-lg);
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
-:root[data-theme="dark"] .nav-page :is(#pStatus,.cam-side-panel){
+:root[data-theme="dark"] .nav-page :is(#pStatus, .cam-side-panel, .ops-side > .panel, .cfg-side > .panel){
   box-shadow:var(--nx-sh-lg),inset 0 0 0 1px rgba(255,255,255,.045);
 }
 /* 상태 카드와 조작 카드도 한 단계 내려간 동일 표면으로 맞춘다. */
@@ -2286,39 +2286,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   #nav.sim-nav .nav-subtitle,#nav.sim-nav .clock{display:none;}
 }
 
-/* ==========================================================================
-   Liquid Glass - Stage Layouts (Ops & Config 2-column Stage)
-   ========================================================================== */
-.ops-stage, .cfg-stage {
-  display: flex;
-  gap: clamp(14px, 1.6vw, 22px);
-  padding: 0 24px 24px;
-  flex: 1 1 auto;
-  min-height: 0;
-  align-items: start;
-}
-.ops-side, .cfg-side {
-  width: clamp(320px, 30vw, 420px);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: 0 0 auto;
-}
-.ops-main, .cfg-main {
-  flex: 1 1 0%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-@media (max-width: 1024px) {
-  .ops-stage, .cfg-stage {
-    flex-direction: column;
-  }
-  .ops-side, .cfg-side {
-    width: 100%;
-  }
-}
 
 /* ==========================================================================
    Liquid Glass - Expanded Components (Ops, Config, SummaryBar, Fleet)

@@ -1,0 +1,176 @@
+/* ── navexa-system/wireframe.html 정본 ─────────────────────────── */
+.navexa-theme {
+  /* ── 색 (021/tokens.json) ─────────────────────────── */
+  --c-bg:#f0f5f5;
+  --c-bg-sunken:#e8eaec;
+  --c-bg-elev:#ffffff;
+  --c-surface:#f9fbfc;
+  --c-surface-glass:rgba(249,251,252,.88);
+  --c-border:transparent;
+  --c-divider:#d8dbdb;
+  --c-text:#232828;
+  --c-text-muted:#5d6162;
+  --c-text-faint:#a6abab;
+  --c-accent:#11b22c;
+  --c-accent-hover:#0e8f24;
+  --c-accent-contrast:#ffffff;
+  --c-success:#62c47a;
+  --c-warning:#f2b76a;
+  --c-danger:#f27876;
+  --c-danger-vivid:#ff4a3e;
+  --c-danger-contrast:#ffffff;
+  --c-neutral-fill:#cfd5d6;
+  --c-focus:#11b22c;
+  --c-brand:#4c94ee;
+  --c-map-floor:#ffffff;
+  --c-map-grid:#e8eaec;
+  --c-map-grid-major:#d8dbdb;
+
+  /* ── 타이포 ───────────────────────────────────────── */
+  --font-sans:"Pretendard","Pretendard Variable","Poppins","Segoe UI Variable","Segoe UI",system-ui,-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  --fs-xs:10px; --fs-sm:13px; --fs-base:14px; --fs-lg:16px;
+  --fs-xl:20px; --fs-xxl:25px; --fs-xxl2:40px; --fs-xxxl:54px;
+  --fw-normal:400; --fw-medium:500; --fw-semibold:600; --fw-bold:700;
+  --lh-tight:1.1; --lh-normal:1.4; --lh-relaxed:1.6;
+  --tr-tight:-.01em; --tr-wide:.02em; --tr-caps:.04em;
+
+  /* ── 간격 · 반경 · 그림자 ─────────────────────────── */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:64px;
+  --r-sm:8px; --r-md:16px; --r-lg:24px; --r-full:999px;
+  --sh-sm:0 1px 2px rgba(15,23,23,.04);
+  --sh-md:0 8px 24px rgba(15,23,23,.08);
+  --sh-lg:0 20px 48px rgba(15,23,23,.14);
+
+  /* ── 레이아웃 ─────────────────────────────────────── */
+  --container:1440px; --gap:16px; --ctrl-h:44px; --ctrl-px:20px;
+  --panel-w:340px; --stage-min-h:770px;
+
+  /* Base overrides for navexa section */
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+}
+
+.navexa-theme * { box-sizing: border-box; }
+.navexa-theme button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+.navexa-theme input { font: inherit; color: inherit; }
+
+.navexa-theme .wrap { max-width: var(--container); margin: 0 auto; padding: var(--s6) var(--s6) var(--s7); }
+
+/* ══ 1. 상단 바 (Navexa 전용) ═══════════════════════════════════════ */
+.navexa-theme .topbar { display: flex; align-items: flex-start; gap: var(--s5); margin-bottom: var(--s5); }
+.navexa-theme .brand { display: flex; align-items: center; gap: var(--s3); flex: 0 0 auto; min-width: 200px; }
+.navexa-theme .brand-name { font-size: var(--fs-lg); font-weight: var(--fw-semibold); letter-spacing: var(--tr-tight); line-height: 1.15; }
+.navexa-theme .brand-sub { font-size: var(--fs-sm); color: var(--c-text-faint); line-height: 1.2; }
+
+/* 아이콘 버튼 */
+.navexa-theme .iconbtn {
+  width: var(--ctrl-h); height: var(--ctrl-h); border-radius: var(--r-md);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--c-bg-sunken); color: var(--c-text-muted); position: relative;
+}
+.navexa-theme .iconbtn.on-surface { background: var(--c-bg-elev); box-shadow: var(--sh-md); }
+.navexa-theme .iconbtn:focus-visible { outline: 2px solid var(--c-focus); outline-offset: 2px; }
+
+/* ══ 2. 제목 + KPI ════════════════════════════════════ */
+.navexa-theme .titlerow {
+  display: flex; align-items: flex-end; gap: var(--s7);
+  margin-top: var(--s5); flex-wrap: wrap;
+}
+.navexa-theme .titleblock { display: flex; align-items: flex-start; gap: var(--s4); flex: 0 0 auto; }
+.navexa-theme .pagetitle {
+  margin: 0; font-size: var(--fs-xxxl); font-weight: var(--fw-normal);
+  letter-spacing: var(--tr-tight); line-height: var(--lh-tight);
+}
+.navexa-theme .pageid { margin-top: var(--s1); font-size: var(--fs-base); color: var(--c-text-faint); }
+
+.navexa-theme .kpis { display: flex; gap: var(--s7); flex: 1 1 auto; flex-wrap: wrap; padding-bottom: var(--s2); }
+.navexa-theme .kpi { display: flex; align-items: flex-start; gap: var(--s4); }
+.navexa-theme .kpi-num {
+  font-size: var(--fs-xxl2); font-weight: var(--fw-normal);
+  line-height: var(--lh-tight); letter-spacing: var(--tr-tight); white-space: nowrap;
+}
+.navexa-theme .kpi-num .unit { font-size: var(--fs-xl); color: var(--c-text-muted); }
+.navexa-theme .kpi-label { margin-top: var(--s2); font-size: var(--fs-base); color: var(--c-text-muted); }
+.navexa-theme .kpi-badge {
+  width: 20px; height: 20px; border-radius: var(--r-sm); margin-top: 10px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff;
+}
+.navexa-theme .kpi-badge.ok { background: var(--c-accent); }
+.navexa-theme .kpi-badge.idle { background: var(--c-neutral-fill); }
+
+/* ══ 3. 스테이지 (레이아웃) ═══════════ */
+.navexa-theme .stage { position: relative; margin-top: var(--s5); min-height: var(--stage-min-h); display: flex; gap: var(--s6); }
+.navexa-theme .panel {
+  width: var(--panel-w); flex: 0 0 auto;
+  background: var(--c-surface-glass); border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg); padding: var(--s5);
+  display: flex; flex-direction: column; gap: var(--s4);
+}
+.navexa-theme .canvas {
+  flex: 1 1 0%; min-width: 0; position: relative;
+  display: flex; flex-direction: column; gap: var(--s4);
+}
+
+.navexa-theme .panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.navexa-theme .panel-title { font-size: var(--fs-xl); font-weight: var(--fw-medium); letter-spacing: var(--tr-tight); margin: 0; }
+.navexa-theme .panel-rule { height: 1px; background: var(--c-divider); opacity: .5; margin: var(--s4) 0; border: 0; }
+
+.navexa-theme .chips { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.navexa-theme .chip {
+  height: 36px; padding: 0 var(--s4); border-radius: var(--r-md);
+  display: inline-flex; align-items: center; gap: var(--s2);
+  background: var(--c-bg-sunken); color: var(--c-text-muted); font-size: var(--fs-base);
+}
+.navexa-theme .chip[aria-pressed="true"] { background: var(--c-bg-elev); color: var(--c-text); box-shadow: var(--sh-sm); }
+.navexa-theme .dot { width: 8px; height: 8px; border-radius: var(--r-full); flex: 0 0 auto; }
+.navexa-theme .dot.go { background: var(--c-accent); }
+.navexa-theme .dot.stop { background: var(--c-danger-vivid); }
+.navexa-theme .dot.none { background: var(--c-neutral-fill); }
+
+/* 카드류 */
+.navexa-theme .robotcard, .navexa-theme .chartcard, .navexa-theme .nx-card {
+  background: var(--c-bg-elev); border-radius: var(--r-md);
+  box-shadow: var(--sh-md); padding: var(--s4);
+}
+.navexa-theme .rc-head, .navexa-theme .cc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.navexa-theme .rc-title, .navexa-theme .cc-title { font-size: var(--fs-lg); letter-spacing: var(--tr-tight); font-weight: var(--fw-medium); margin: 0; }
+
+/* 폼 요소 오버라이드 */
+.navexa-theme input[type="text"],
+.navexa-theme input[type="number"],
+.navexa-theme select {
+  height: var(--ctrl-h); padding: 0 var(--s3); border-radius: var(--r-md);
+  background: var(--c-bg-elev); border: 1px solid var(--c-divider);
+  color: var(--c-text); font-size: var(--fs-base);
+}
+.navexa-theme input:focus, .navexa-theme select:focus {
+  outline: 2px solid var(--c-focus); outline-offset: -1px; border-color: transparent;
+}
+.navexa-theme .form-row { display: flex; flex-direction: column; gap: var(--s1); margin-bottom: var(--s3); }
+.navexa-theme .form-row label { font-size: var(--fs-sm); color: var(--c-text-muted); }
+
+.navexa-theme .basebtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: var(--ctrl-h); padding: 0 var(--s4);
+  border-radius: var(--r-md); background: var(--c-bg-elev); box-shadow: var(--sh-sm);
+  font-size: var(--fs-base); color: var(--c-text); font-weight: var(--fw-medium);
+}
+.navexa-theme .basebtn.primary { background: var(--c-accent); color: var(--c-accent-contrast); }
+.navexa-theme .basebtn.danger { background: var(--c-danger); color: var(--c-danger-contrast); }
+.navexa-theme .basebtn:disabled { opacity: 0.5; pointer-events: none; }
+
+/* 유틸 */
+.navexa-theme .k { color: var(--c-text-muted); font-size: var(--fs-sm); margin-left: var(--s2); font-weight: var(--fw-normal); }
+.navexa-theme .cfg-help { font-size: var(--fs-sm); color: var(--c-text-muted); line-height: var(--lh-relaxed); margin-bottom: var(--s4); }
+.navexa-theme .cfg-note { font-size: var(--fs-sm); color: var(--c-text-faint); margin-top: var(--s2); }
+
+@media (max-width:1239px){
+  .navexa-theme .wrap { padding: var(--s5) var(--s4) var(--s6); }
+  .navexa-theme .stage { flex-direction: column; }
+  .navexa-theme .panel { width: 100%; }
+}

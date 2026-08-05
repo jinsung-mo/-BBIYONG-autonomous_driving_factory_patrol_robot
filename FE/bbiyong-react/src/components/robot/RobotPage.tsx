@@ -34,7 +34,7 @@ export default function RobotPage() {
   return (
     // 시뮬레이션 화면에만 새 스킨을 입힌다. 실서버 화면은 지금 디자인을 그대로 둔다 —
     // 운영 중인 관제 화면을 시연용 개편과 한 번에 바꾸지 않는다.
-    <section id="pgB" className="page on sim-skin">
+    <section id="pgB" className="page on sim-skin nav-page">
       {/* 편성 전체 집계 — 실서버 모드에서만 나온다 */}
       <SummaryBar />
       <div className="b-grid">

@@ -130,7 +130,7 @@ export default function RoutePanel() {
   const offline = !enabled || !connected
 
   return (
-    <div className="panel" id="pgRoute">
+    <div className="nx-card" id="pgRoute">
       <h3>순찰 경로 <span className="k">PATROL ROUTE</span></h3>
       {!enabled && <p className="cfg-help">시뮬레이션 모드에서는 실제 맵이 없어 지점을 찍을 수 없습니다. 실서버 모드로 로그인하세요.</p>}
       {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
