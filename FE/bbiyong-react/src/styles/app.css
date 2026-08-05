@@ -1279,7 +1279,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    결과가 같으니 유리로 보이지 않는다. 애플 예시가 하나같이 색이 흐르는 벽지를 쓰는
    이유가 이것이다. 색이 겹치며 흐르는 장(場)을 깔아 표면마다 다른 색이 배어 나오게 한다.
    관제 화면이므로 채도는 올리되 밝기는 눌러 둔다 — 영상과 열화상이 주인공이다. */
-:root[data-theme="dark"] #pgB.sim-skin{
+:root[data-theme="dark"] :is(#pgB, #pgOps, #pgConfig).sim-skin{
   background:
     radial-gradient(ellipse 58% 46% at 12% 6%,  rgba(46,132,255,.40), transparent 62%),
     radial-gradient(ellipse 48% 44% at 88% 14%, rgba(140,86,255,.30), transparent 60%),
@@ -1288,7 +1288,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
     radial-gradient(ellipse 40% 34% at 54% 48%, rgba(80,150,255,.14), transparent 66%),
     linear-gradient(152deg,#050a14 0%,#070c18 46%,#0b0a14 100%);
 }
-:root[data-theme="light"] #pgB.sim-skin{
+:root[data-theme="light"] :is(#pgB, #pgOps, #pgConfig).sim-skin{
   background:
     radial-gradient(ellipse 58% 46% at 12% 6%,  rgba(64,146,255,.34), transparent 62%),
     radial-gradient(ellipse 48% 44% at 88% 14%, rgba(160,110,255,.24), transparent 60%),
@@ -2285,3 +2285,145 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   #nav.sim-nav .logo{font-size:15px;}
   #nav.sim-nav .nav-subtitle,#nav.sim-nav .clock{display:none;}
 }
+
+/* ==========================================================================
+   Liquid Glass - Stage Layouts (Ops & Config 2-column Stage)
+   ========================================================================== */
+.ops-stage, .cfg-stage {
+  display: flex;
+  gap: clamp(14px, 1.6vw, 22px);
+  padding: 0 24px 24px;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: start;
+}
+.ops-side, .cfg-side {
+  width: clamp(320px, 30vw, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+.ops-main, .cfg-main {
+  flex: 1 1 0%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+@media (max-width: 1024px) {
+  .ops-stage, .cfg-stage {
+    flex-direction: column;
+  }
+  .ops-side, .cfg-side {
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Liquid Glass - Expanded Components (Ops, Config, SummaryBar, Fleet)
+   ========================================================================== */
+.sim-skin input,
+.sim-skin select,
+.sim-skin textarea {
+  border-radius: var(--r-in, 12px);
+  backdrop-filter: blur(16px) saturate(1.28);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 -1px 0 rgba(0,0,0,.08);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+:root[data-theme="dark"] .sim-skin input,
+:root[data-theme="dark"] .sim-skin select,
+:root[data-theme="dark"] .sim-skin textarea {
+  background: linear-gradient(145deg, rgba(255,255,255,.085), rgba(255,255,255,.028));
+  border: 1px solid rgba(220,238,255,.15);
+  color: var(--dk-ink, #e6e9ef);
+}
+:root[data-theme="light"] .sim-skin input,
+:root[data-theme="light"] .sim-skin select,
+:root[data-theme="light"] .sim-skin textarea {
+  background: linear-gradient(145deg, rgba(255,255,255,.82), rgba(231,243,255,.50));
+  border: 1px solid rgba(255,255,255,.90);
+  box-shadow: inset 0 1px 0 #fff, 0 4px 12px rgba(43,82,132,.06);
+  color: var(--ink, #1c2128);
+}
+.sim-skin input:focus,
+.sim-skin select:focus,
+.sim-skin textarea:focus {
+  border-color: var(--dk-green, #3ddc97);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(61,220,151,.25);
+}
+
+.sumbar.sim-skin {
+  margin-bottom: 12px;
+}
+.sumbar.sim-skin .sumcard,
+.sumbar.sim-skin .sumhot,
+.fleet.sim-skin,
+.sim-skin .route-item,
+.sim-skin .sched-item,
+.sim-skin .health-card,
+.sim-skin .chart-box,
+.sim-skin .equip-card,
+.sim-skin .notify-card,
+.sim-skin .user-item,
+.sim-skin .users-list li,
+.sim-skin .map-list li,
+.sim-skin .sch-list li,
+.sim-skin .sch-new,
+.sim-skin .health-list li,
+.sim-skin .stats-summary,
+.sim-skin .cfg-points li,
+.sim-skin .cfg-note,
+.sim-skin .gotor {
+  border-radius: var(--r-in, 12px);
+  backdrop-filter: blur(18px) saturate(1.35);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+:root[data-theme="dark"] .sumbar.sim-skin .sumcard,
+:root[data-theme="dark"] .sumbar.sim-skin .sumhot,
+:root[data-theme="dark"] .fleet.sim-skin,
+:root[data-theme="dark"] .sim-skin .route-item,
+:root[data-theme="dark"] .sim-skin .sched-item,
+:root[data-theme="dark"] .sim-skin .health-card,
+:root[data-theme="dark"] .sim-skin .chart-box,
+:root[data-theme="dark"] .sim-skin .equip-card,
+:root[data-theme="dark"] .sim-skin .notify-card,
+:root[data-theme="dark"] .sim-skin .user-item,
+:root[data-theme="dark"] .sim-skin .users-list li,
+:root[data-theme="dark"] .sim-skin .map-list li,
+:root[data-theme="dark"] .sim-skin .sch-list li,
+:root[data-theme="dark"] .sim-skin .sch-new,
+:root[data-theme="dark"] .sim-skin .health-list li,
+:root[data-theme="dark"] .sim-skin .stats-summary,
+:root[data-theme="dark"] .sim-skin .cfg-points li,
+:root[data-theme="dark"] .sim-skin .cfg-note,
+:root[data-theme="dark"] .sim-skin .gotor {
+  background: linear-gradient(145deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
+  border: 1px solid rgba(222,239,255,.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.20), 0 8px 24px rgba(2,7,17,.20);
+}
+:root[data-theme="light"] .sumbar.sim-skin .sumcard,
+:root[data-theme="light"] .sumbar.sim-skin .sumhot,
+:root[data-theme="light"] .fleet.sim-skin,
+:root[data-theme="light"] .sim-skin .route-item,
+:root[data-theme="light"] .sim-skin .sched-item,
+:root[data-theme="light"] .sim-skin .health-card,
+:root[data-theme="light"] .sim-skin .chart-box,
+:root[data-theme="light"] .sim-skin .equip-card,
+:root[data-theme="light"] .sim-skin .notify-card,
+:root[data-theme="light"] .sim-skin .user-item,
+:root[data-theme="light"] .sim-skin .users-list li,
+:root[data-theme="light"] .sim-skin .map-list li,
+:root[data-theme="light"] .sim-skin .sch-list li,
+:root[data-theme="light"] .sim-skin .sch-new,
+:root[data-theme="light"] .sim-skin .health-list li,
+:root[data-theme="light"] .sim-skin .stats-summary,
+:root[data-theme="light"] .sim-skin .cfg-points li,
+:root[data-theme="light"] .sim-skin .cfg-note,
+:root[data-theme="light"] .sim-skin .gotor {
+  background: linear-gradient(145deg, rgba(255,255,255,.78), rgba(235,246,255,.45));
+  border: 1px solid rgba(255,255,255,.90);
+  box-shadow: inset 0 1px 0 #fff, 0 8px 20px rgba(47,83,130,.10);
+}
+
