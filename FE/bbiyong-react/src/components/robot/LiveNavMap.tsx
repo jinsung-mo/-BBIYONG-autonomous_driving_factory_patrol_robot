@@ -13,10 +13,13 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgr
  *   onPick?: ((p: { x: number, y: number } | null) => void) | null,
  * }} props
  */
-export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1 }: {
+// planOnly 를 주면 정제 도면만 그린다(S15P11E101-744). 실시간 SLAM 점유격자는
+// 운영 탭 전용이 되었으므로, 지도 탭에서는 원본 격자로 되돌릴 길을 열어 두지 않는다.
+export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
     zoomFactor?: number,
+    planOnly?: boolean,
   }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef<HTMLCanvasElement | null>(null)
@@ -33,7 +36,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   // 도면이 실제와 어긋나 보일 때 원본으로 확인할 방법이 없으면 곤란하다.
   const [showPlan, setShowPlan] = useState(true)
   const showPlanRef = useRef(true)
-  showPlanRef.current = showPlan
+  showPlanRef.current = planOnly ? true : showPlan
   const pickRef = useRef(onPick)
   pickRef.current = onPick
 
@@ -74,10 +77,10 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   useEffect(() => {
     const cv = cvRef.current
     if (!cv || !lastRef.current) return
-    const bg = backgroundOf(lastRef.current, showPlan)
+    const bg = backgroundOf(lastRef.current, showPlanRef.current)
     if (bg) fitView(viewRef.current, cv, bg)
     redraw()
-  }, [showPlan, plan])
+  }, [showPlan, planOnly, plan])
 
   // 지도 클릭 → map 프레임 미터. 맵 밖은 로봇이 갈 수 없는 좌표라 받지 않는다.
   const onClick = (e: any) => {
@@ -117,7 +120,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       >
         {headingUp ? '진행 방향 위' : '북향 고정'}
       </button>
-      {plan && (
+      {plan && !planOnly && (
         <button
           type="button"
           className="mapview mapkind"

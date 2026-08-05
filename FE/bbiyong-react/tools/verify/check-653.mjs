@@ -84,7 +84,10 @@ const link = await ev(`[...document.querySelectorAll('#pControl h3 .k')].map(e=>
 console.log('  조작 패널 헤더 :', link)
 console.log('  → STOMP 연결 유지 :', ok(/LIVE|로봇 오프라인/.test(String(link))), '(DISCONNECTED 가 아니어야 한다)')
 console.log('  → 영상 패널 그대로 :', ok(await ev(`!!document.querySelector('#pCam canvas')`)))
-console.log('  → 2D 지도 그대로 :', ok(await ev(`!!document.querySelector('#pMap canvas, .b-right canvas')`)))
+// 지도 탭은 매핑 진행 상태에 따라 도면·매핑중·안내 셋 중 하나다(S15P11E101-744).
+// 잠금이 정보를 감추지 않는지가 여기서 잴 것이므로, 무엇이든 보이기만 하면 된다 —
+// 빈 검은 판만 남는 것이 실패다.
+console.log('  → 지도 탭이 비지 않는다 :', ok(await ev(`!!document.querySelector('#pMap canvas, #pMap .iso-stage, #pMap .map-mapping, #pMap .map-empty, .b-right canvas')`)))
 console.log('  → 이벤트 로그 그대로 :', ok(await ev(`!!document.querySelector('#pStatus .elog')`)))
 be.push('/topic/alerts', { type: 'FIRE', level: 'CRITICAL', robotId: 'orinka_01', confidence: 0.9, timestamp: new Date().toISOString() })
 await sleep(1500)

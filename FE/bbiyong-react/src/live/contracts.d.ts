@@ -196,8 +196,34 @@ export interface FloorplanReady {
   _at?: number
 }
 
-/** 매핑 토픽으로 오는 두 종류. 도착 자체를 완료로 보면 안 된다(S15P11E101-524). */
-export type MappingMessage = MappingComplete | FloorplanReady
+/** 매핑 진행 단계. MAPPING = 로봇이 돌며 지도를 그리는 중, IDLE = 그렇지 않음. */
+export type MappingPhase = 'MAPPING' | 'IDLE'
+
+/** /topic/mapping — 진행 상태 전환(S15P11E101-744). 시작·중단·완료 모두 이 메시지로 알린다. */
+export interface MappingStatusMessage {
+  type: 'MAPPING_STATUS'
+  phase: MappingPhase
+  robotId?: string
+  /** phase 와 같은 뜻의 불리언. 서버가 둘 다 보낸다 — 어느 쪽이 와도 읽는다. */
+  mapping?: boolean
+  since?: string
+  _at?: number
+}
+
+/**
+ * GET /api/maps/status?robotId= 응답(S15P11E101-744).
+ * 새로고침하거나 매핑 도중에 접속했을 때 상태를 복원하는 유일한 수단이다 —
+ * STOMP 는 붙기 전에 지나간 전환을 다시 주지 않는다.
+ */
+export interface MapStatusResponse {
+  robotId?: string
+  phase: MappingPhase
+  mapping?: boolean
+  since?: string
+}
+
+/** 매핑 토픽으로 오는 세 종류. 도착 자체를 완료로 보면 안 된다(S15P11E101-524). */
+export type MappingMessage = MappingComplete | FloorplanReady | MappingStatusMessage
 
 // ---------------------------------------------------------------- STOMP 발행
 
@@ -643,6 +669,10 @@ export interface LiveContextValue {
   setSpeed: (v: number) => void
   mappingComplete: any
   clearMappingComplete: () => void
+  /** 매핑 진행 단계(S15P11E101-744). null 이면 아직 판단할 근거가 없다는 뜻이다. */
+  mappingPhase: MappingPhase | null
+  /** mappingPhase === 'MAPPING' 을 미리 풀어 둔 값 */
+  mapping: boolean
   /** 서버가 판정한 로봇 가동 여부. null = 아직 모름 */
   robotOnline: boolean | null
   /** 사용자가 고른 제어 모드 */
