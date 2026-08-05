@@ -22,11 +22,12 @@ export default function Nav({ section, onSection }: { section: Section,
   const { enabled } = useLive()
   const { user, isAdmin } = useAuth()
 
-  // 실서버와 시뮬레이션 모두 지도, 카메라, 이벤트로그 화면을 기본으로 제공한다.
+  // 실서버와 시뮬레이션 모두 지도, 카메라, 이벤트, 통계 화면을 기본으로 제공한다.
   const tabs: Array<{ key: Section, label: string }> = [
     { key: 'live' as const, label: '지도' },
     { key: 'cam' as const, label: '카메라' },
     { key: 'events' as const, label: '이벤트' },
+    { key: 'stats' as const, label: '통계' },
     ...(isAdmin
       ? [
         { key: 'ops' as const, label: '운영' }, { key: 'config' as const, label: '설정' },
