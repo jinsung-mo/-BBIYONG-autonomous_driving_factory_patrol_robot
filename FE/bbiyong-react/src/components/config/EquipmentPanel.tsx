@@ -34,8 +34,8 @@ export default function EquipmentPanel() {
   useEffect(() => { load() }, [load])
 
   return (
-    <div className="nx-card" id="pgEquip">
-      <h3>설비 현황 <span className="k">EQUIPMENT</span></h3>
+    <div className="card-v3" id="pgEquip">
+      <h3 style={{ margin: 0, marginBottom: '12px' }}>설비 현황 <span className="k">EQUIPMENT</span></h3>
       <p className="cfg-help">
         관제 대상 분전반 목록 및 최신 상태 현황입니다.
       </p>
@@ -70,7 +70,7 @@ export default function EquipmentPanel() {
             <div className="cfg-note">등록된 설비가 없습니다.</div>
           )}
           <div className="gotor" style={{ marginTop: '12px' }}>
-            <button type="button" id="btnReloadEq" className="basebtn" onClick={() => load()} disabled={loading}>
+            <button type="button" id="btnReloadEq" className="btn-text" onClick={() => load()} disabled={loading}>
               {loading ? '불러오는 중…' : '목록 새로고침'}
             </button>
           </div>

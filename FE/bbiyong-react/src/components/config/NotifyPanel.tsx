@@ -70,8 +70,8 @@ export default function NotifyPanel() {
   }
 
   return (
-    <div className="nx-card" id="pNotify">
-      <h3>Mattermost 알림 <span className="k">NOTIFICATION</span></h3>
+    <div className="card-v3" id="pNotify">
+      <h3 style={{ margin: 0, marginBottom: '12px' }}>Mattermost 알림 <span className="k">NOTIFICATION</span></h3>
       <p className="cfg-help">
         화재·과열이 발생하면 서버가 Mattermost 로 알립니다. 공장이 비는 <b>20시~08시</b>에는
         관제 화면을 보는 사람이 없으므로, 이 설정이 꺼져 있으면 아침까지 아무도 알 수 없습니다.
@@ -108,8 +108,8 @@ export default function NotifyPanel() {
           <div className="cfg-note">{SEVERITY_HELP[severity]}</div>
 
           {isAdmin && (
-            <div className="gotor">
-              <button type="button" className="dbtn go" onClick={onSave} disabled={saving || !!problem}>
+            <div className="gotor" style={{ marginTop: '16px' }}>
+              <button type="button" className="btn-filled" onClick={onSave} disabled={saving || !!problem}>
                 {saving ? '저장 중…' : '저장'}
               </button>
             </div>

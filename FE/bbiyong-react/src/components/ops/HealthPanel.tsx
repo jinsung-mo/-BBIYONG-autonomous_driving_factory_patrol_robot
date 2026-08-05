@@ -12,9 +12,9 @@ type History = import('../../live/contracts.d.ts').RobotHealthHistory
 // 1분마다 다시 받는다(가이드 권장). 이력은 분 단위로 쌓이므로 더 자주 부를 이유가 없다.
 const REFRESH_MS = 60000
 
-const BATT = '#3ddc97'
-const LAT = '#ff6b6b'
-const FPS = '#6db3ff'
+const BATT = '#74A98D'
+const LAT = '#C07A72'
+const FPS = '#4C5695'
 
 // 로봇 건강 이력 (운영 탭) — GET /api/robots/{id}/health-history
 //
@@ -58,8 +58,8 @@ export default function HealthPanel() {
   const last = points[points.length - 1]
 
   return (
-    <div className="nx-card" id="pHealth">
-      <h3>로봇 건강 이력 <span className="k">HEALTH HISTORY</span></h3>
+    <div className="card-v3" id="pHealth" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <h3 style={{ margin: 0, marginBottom: '12px', flex: 'none' }}>로봇 건강 이력 <span className="k">HEALTH HISTORY</span></h3>
       <p className="cfg-help">
         배터리·통신 지연·추론 FPS 추이입니다. 통신이 끊겼던 구간(<b>online=false</b>)은
         값이 있어도 신뢰할 수 없어 선을 끊어 그립니다.
@@ -83,19 +83,21 @@ export default function HealthPanel() {
           {err && <div className="form-msg err">이력을 불러오지 못했습니다 — {err}</div>}
 
           {!err && (
-            <LineChart
-              labels={labels}
-              emptyText={loading ? '조회 중…' : '해당 기간에 기록이 없습니다.'}
-              series={[
-                { key: 'batt', label: '배터리', color: BATT, unit: '%', axis: 'left', values: points.map((p) => liveValue(p, 'battery')) },
-                { key: 'lat', label: '통신 지연', color: LAT, unit: 'ms', axis: 'right', values: points.map((p) => liveValue(p, 'commLatencyMs')) },
-                { key: 'fps', label: '추론 FPS', color: FPS, unit: 'fps', axis: 'right', values: points.map((p) => liveValue(p, 'inferenceFps')) },
-              ]}
-            />
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <LineChart
+                labels={labels}
+                emptyText={loading ? '조회 중…' : '해당 기간에 기록이 없습니다.'}
+                series={[
+                  { key: 'batt', label: '배터리', color: BATT, unit: '%', axis: 'left', values: points.map((p) => liveValue(p, 'battery')) },
+                  { key: 'lat', label: '통신 지연', color: LAT, unit: 'ms', axis: 'right', values: points.map((p) => liveValue(p, 'commLatencyMs')) },
+                  { key: 'fps', label: '추론 FPS', color: FPS, unit: 'fps', axis: 'right', values: points.map((p) => liveValue(p, 'inferenceFps')) },
+                ]}
+              />
+            </div>
           )}
 
           {!err && points.length > 0 && (
-            <div className="cfg-note">
+            <div className="cfg-note" style={{ flex: 'none' }}>
               <div>{robotName(robotId)} · 기록 <b>{points.length}점</b></div>
               <div>
                 마지막 값 배터리 <b>{last?.battery != null ? `${Math.round(last.battery)}%` : '—'}</b>

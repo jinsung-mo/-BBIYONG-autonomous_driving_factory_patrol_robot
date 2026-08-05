@@ -95,7 +95,7 @@ export default function OpsPage() {
   const activeId = activeMapIdOf(maps)
 
   return (
-    <section id="pgOps" className="page on sim-skin nav-page">
+    <section id="pgOps" className="page on v3-theme nav-page">
       <div className="nav-hero">
         <div className="nav-title">
           <h2>운영 관리</h2>
@@ -109,15 +109,15 @@ export default function OpsPage() {
       <fieldset className="lockfs" disabled={locked}>
         <div className="nav-stage">
           <aside className="nav-side" aria-label="운영 요약 및 매핑 제어">
-            <div className="nx-card">
-              <h3>2D 맵 모델링 <span className="k">SLAM MAPPING</span></h3>
+            <div className="card-v3">
+              <h3 style={{ margin: 0, marginBottom: '12px' }}>2D 맵 모델링 <span className="k">SLAM MAPPING</span></h3>
               {!enabled && <p className="cfg-help">시뮬레이션 모드에서는 실제 맵이 없습니다. 실서버 모드로 로그인하면 진행 상황이 표시됩니다.</p>}
               {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
 
               {/* 시작 — 확인을 한 번 받는다. 로봇이 순찰을 멈추고 공장 전체를 돌기 시작하는 명령이다. */}
               <div className="gotor">
                 <button
-                  type="button" id="btnStartMapping" className="basebtn primary"
+                  type="button" id="btnStartMapping" className="btn-filled"
                   onClick={() => setConfirming(true)}
                   disabled={offline || phase === 'running' || phase === 'requested'}
                 >
@@ -126,7 +126,7 @@ export default function OpsPage() {
                 {/* 돌고 있을 때만 멈출 것이 있다 */}
                 {(phase === 'running' || phase === 'requested') && (
                   <button
-                    type="button" id="btnStopMapping" className="basebtn danger"
+                    type="button" id="btnStopMapping" className="btn-tonal" style={{ color: '#B4655C' }}
                     onClick={onStopMapping}
                     disabled={offline}
                   >
@@ -172,7 +172,7 @@ export default function OpsPage() {
                   disabled={offline || saving}
                 />
                 <button
-                  type="button" id="btnUseMap" className="basebtn primary" onClick={onSave}
+                  type="button" id="btnUseMap" className="btn-filled" onClick={onSave}
                   disabled={offline || saving || !name.trim() || !nav}
                 >
                   {saving ? '저장 중…' : '이 맵 사용'}
@@ -181,13 +181,13 @@ export default function OpsPage() {
               {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
             </div>
 
-            <div className="nx-card">
-              <h3>저장된 맵 <span className="k">ARCHIVE</span></h3>
+            <div className="card-v3">
+              <h3 style={{ margin: 0, marginBottom: '12px' }}>저장된 맵 <span className="k">ARCHIVE</span></h3>
               <p className="cfg-help">로봇 <b className="mono">{ROBOT_ID}</b> 의 저장 맵 목록입니다.</p>
               {!enabled && <div className="cfg-note">실서버 모드에서만 조회됩니다.</div>}
               {enabled && (
                 <>
-                  <button type="button" className="basebtn" onClick={loadMaps} disabled={loading}>
+                  <button type="button" className="btn-tonal" onClick={loadMaps} disabled={loading}>
                     {loading ? '불러오는 중…' : '목록 새로고침'}
                   </button>
                   {mapsErr && <div className="form-msg err">맵 목록을 불러오지 못했습니다 — {mapsErr}</div>}
@@ -230,8 +230,8 @@ export default function OpsPage() {
             주행 경로에 사람이나 장애물이 없는지 확인한 뒤 시작하세요.
           </p>
           <div className="gotor">
-            <button type="button" className="basebtn" onClick={() => setConfirming(false)}>취소</button>
-            <button type="button" id="btnStartMappingOk" className="basebtn primary" onClick={onStart}>시작</button>
+            <button type="button" className="btn-text" onClick={() => setConfirming(false)}>취소</button>
+            <button type="button" id="btnStartMappingOk" className="btn-filled" onClick={onStart}>시작</button>
           </div>
         </Modal>
       )}
