@@ -134,7 +134,7 @@ console.log('\n[3] 지표 - 화면 위 KPI 행')
 const env = await ev(`[...document.querySelectorAll('#pgMap .kpis .kpi')].map(d=>
   d.querySelector('.kpi-label').textContent+'='+d.querySelector('.kpi-num').textContent)`)
 console.log('  KPI :', (env || []).join(' / '))
-console.log('  → 네 칸 :', ok((env || []).length === 4))
+console.log('  → 세 칸 :', ok((env || []).length === 3))
 console.log('  → 경보 이벤트 포함 :', ok((env || []).some((e) => e.startsWith('경보 이벤트'))))
 console.log('  → 최고 온도 포함 :', ok((env || []).some((e) => e.startsWith('최고 온도'))))
 // 평소에 붉은 배지가 상주하면 정작 경보가 났을 때 눈에 들어오지 않는다

@@ -236,6 +236,24 @@ console.log('  → 열화상 크기 확대·우하단 동일 여백 :', ok(!!th 
   && th.w >= cam.w * .31
   && Math.abs((cam.left + cam.w - th.left - th.w) - (cam.top + cam.h - th.top - th.h)) <= 1
   && cam.left + cam.w - th.left - th.w >= 12))
+
+// 열화상을 더블클릭하면 두 판이 자리를 바꾼다. 열을 확인해야 할 때는 열화상이 커야 한다.
+const dbl = (sel) => ev(`(()=>{const e=document.querySelector('${sel}'); if(!e) return false
+  e.dispatchEvent(new MouseEvent('dblclick',{bubbles:true})); return true})()`)
+await dbl('#pgCam #pThermal'); await sleep(700)
+const cam2 = await box('#pgCam #pCam'); const th2 = await box('#pgCam #pThermal')
+console.log('  바뀐 뒤 전면', cam2?.w, 'x', cam2?.h, '· 열화상', th2?.w, 'x', th2?.h)
+console.log('  → 더블클릭으로 열화상이 커진다 :', ok(!!th2 && !!cam2
+  && th2.w > cam2.w * 2 && th2.h > cam2.h * 2))
+console.log('  → 전면이 겹쳐 뜨는 작은 판이 된다 :', ok(!!th2 && !!cam2
+  && cam2.left >= th2.left && cam2.left + cam2.w <= th2.left + th2.w + 2
+  && cam2.top + cam2.h <= th2.top + th2.h + 2))
+console.log('  → 두 영상 모두 살아 있다 :', ok(await ev(`[...document.querySelectorAll('#pgCam canvas')]
+  .every(c=>c.width>0 && c.height>0)`)))
+// 다시 더블클릭하면 원래대로 — 되돌릴 수 없는 전환은 두지 않는다
+await dbl('#pgCam #pCam'); await sleep(700)
+const cam3 = await box('#pgCam #pCam'); const th3 = await box('#pgCam #pThermal')
+console.log('  → 다시 더블클릭하면 되돌아온다 :', ok(!!cam3 && !!th3 && cam3.w > th3.w * 2))
 console.log('  → 열화상 테두리가 중성 블루그레이 :', ok(await ev(`(()=>{
   const s=getComputedStyle(document.querySelector('#pgCam #pThermal'));
   return s.borderTopWidth==='1px' && s.borderTopColor!=='rgb(53, 200, 234)'
