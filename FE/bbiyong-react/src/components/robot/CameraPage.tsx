@@ -25,6 +25,8 @@ export default function CameraPage() {
   const { enabled, telemetry, videoSeen } = useLive()
   const [zoom, setZoom] = useState(1)
   const [fullscreen, setFullscreen] = useState(false)
+  // 어느 판을 크게 볼지. 화재를 의심할 때는 열이 오르는 자리를 크게 봐야 한다.
+  const [swapped, setSwapped] = useState(false)
 
   const camDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.camera)) || !videoSeen.FRONT)
   const thermalDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.thermal)) || !videoSeen.THERMAL)
@@ -42,6 +44,12 @@ export default function CameraPage() {
     }
   }, [])
 
+  // 자리를 바꾸면 배율은 1 로 되돌린다 — 방금 전 판에 걸어 둔 배율이
+  // 새로 커진 판에 그대로 얹히면 엉뚱한 곳이 잘려 보인다.
+  const swap = useCallback(() => {
+    setSwapped((current) => !current)
+    setZoom(1)
+  }, [])
   const changeZoom = useCallback((delta: number) => {
     setZoom((current) => clampZoom(current + delta))
   }, [])
@@ -69,59 +77,78 @@ export default function CameraPage() {
         </aside>
 
         <div className="cam-main">
-          <div className="panel" id="pCam">
+          {/* 크게 보는 판과 겹쳐 띄우는 판은 id 가 아니라 .pip 유무로 갈린다.
+              더블클릭하면 둘이 자리를 바꾼다 — 열을 확인해야 할 때는 열화상이 커야 한다. */}
+          <div
+            className={`panel${swapped ? ' pip' : ''}`}
+            id="pCam"
+            onDoubleClick={swapped ? swap : undefined}
+            title={swapped ? '더블클릭하면 크게 봅니다' : undefined}
+          >
             <div className={`vwrap${camDown ? ' down' : ''}`}>
               <canvas
                 ref={refs.rcam}
                 className="camera-zoom-canvas"
-                style={{ transform: `scale(${zoom})` }}
+                style={{ transform: `scale(${swapped ? 1 : zoom})` }}
               />
               <span className="hud">{status.rcamHud}</span>
               <span className="rec">● REC 00:00</span>
               {camDown && <span className="nodata">전면 카메라 영상 없음</span>}
-              <div className="map-controls camera-controls" aria-label="카메라 화면 조절">
-                <button
-                  type="button"
-                  className="map-control zoom-in"
-                  onClick={() => changeZoom(ZOOM_STEP)}
-                  disabled={zoom >= ZOOM_MAX}
-                  aria-label="카메라 확대"
-                  title="카메라 확대"
-                >+</button>
-                <button
-                  type="button"
-                  className="map-control zoom-out"
-                  onClick={() => changeZoom(-ZOOM_STEP)}
-                  disabled={zoom <= ZOOM_MIN}
-                  aria-label="카메라 축소"
-                  title="카메라 축소"
-                >−</button>
-                <button
-                  type="button"
-                  className="map-control fullscreen"
-                  onClick={toggleFullscreen}
-                  aria-label={fullscreen ? '전체화면 종료' : '카메라 전체화면'}
-                  aria-pressed={fullscreen}
-                  title={fullscreen ? '전체화면 종료 (Esc)' : '카메라 전체화면'}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    {fullscreen
-                      ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
-                      : <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />}
-                  </svg>
-                </button>
-              </div>
             </div>
           </div>
 
-          <div className="panel pip" id="pThermal">
+          <div
+            className={`panel${swapped ? '' : ' pip'}`}
+            id="pThermal"
+            onDoubleClick={swapped ? undefined : swap}
+            title={swapped ? undefined : '더블클릭하면 크게 봅니다'}
+          >
             <div className={`vwrap${thermalDown ? ' down' : ''}`}>
-              <canvas ref={refs.tcam} />
+              <canvas
+                ref={refs.tcam}
+                className="camera-zoom-canvas"
+                style={{ transform: `scale(${swapped ? zoom : 1})` }}
+              />
               {!thermalDown && (
                 <span className="hud2" style={{ color: status.thermalColor }}>{status.thermalMax}</span>
               )}
               {thermalDown && <span className="nodata">열화상 미탑재 — 데이터 없음</span>}
             </div>
+          </div>
+
+          {/* 확대·전체화면은 지금 크게 보고 있는 판에 걸린다. 판을 바꿔도 버튼 자리는
+              그대로다 — 손이 가는 자리가 움직이면 급할 때 헛손질이 난다. */}
+          <div className="map-controls camera-controls" aria-label="카메라 화면 조절">
+            <button
+              type="button"
+              className="map-control zoom-in"
+              onClick={() => changeZoom(ZOOM_STEP)}
+              disabled={zoom >= ZOOM_MAX}
+              aria-label="카메라 확대"
+              title="카메라 확대"
+            >+</button>
+            <button
+              type="button"
+              className="map-control zoom-out"
+              onClick={() => changeZoom(-ZOOM_STEP)}
+              disabled={zoom <= ZOOM_MIN}
+              aria-label="카메라 축소"
+              title="카메라 축소"
+            >−</button>
+            <button
+              type="button"
+              className="map-control fullscreen"
+              onClick={toggleFullscreen}
+              aria-label={fullscreen ? '전체화면 종료' : '카메라 전체화면'}
+              aria-pressed={fullscreen}
+              title={fullscreen ? '전체화면 종료 (Esc)' : '카메라 전체화면'}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                {fullscreen
+                  ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+                  : <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />}
+              </svg>
+            </button>
           </div>
         </div>
       </div>

@@ -36,10 +36,7 @@ export default function KpiRow() {
 
   const live = enabled ? telemetryToStatus(telemetry) : null
   const batt = live ? live.batt : status.batt
-  const spd = live ? live.spd : status.spd
 
-  // 속도 문자열에서 숫자만 뽑는다. '0.6 m/s' 처럼 단위가 붙어 온다.
-  const spdNum = String(spd ?? '').match(/-?\d+(\.\d+)?/)?.[0]
 
   const battTone: Tone = batt == null ? 'none' : batt <= 15 ? 'bad' : batt <= 35 ? 'warn' : 'ok'
 
@@ -55,10 +52,6 @@ export default function KpiRow() {
       <Kpi
         value={batt == null ? '—' : String(batt)} unit={batt == null ? undefined : '%'}
         label="배터리" tone={battTone}
-      />
-      <Kpi
-        value={spdNum ?? '—'} unit={spdNum ? ' m/s' : undefined}
-        label="속도" tone={spdNum && Number(spdNum) > 0 ? 'ok' : 'none'}
       />
       <Kpi
         value={Number.isFinite(hot) ? hot.toFixed(1) : '—'} unit={Number.isFinite(hot) ? '°C' : undefined}

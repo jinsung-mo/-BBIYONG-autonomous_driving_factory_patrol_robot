@@ -17,7 +17,6 @@ export default function StatusPanel() {
   const modeText = live ? (connected ? live.modeText : '연결 대기') : status.modeText
   const modeClass = live ? live.modeClass : status.modeClass
   const batt = live ? live.batt : status.batt
-  const spd = live ? live.spd : status.spd
   const estop = live ? live.estop : status.estop
   const comm = live ? live.comm : '양호 · 43ms'
   const name = enabled ? robotId : '삐용'
@@ -43,7 +42,6 @@ export default function StatusPanel() {
         ) : (
           <RadialGauge value={batt} label="배터리" caption="BATTERY" />
         )}
-        <div className="kv"><span>속도</span><b className="num">{spd}</b></div>
         <div className="kv">
           <span>E-STOP</span>
           {/* 체결은 즉시 눈에 띄어야 한다 — 강한 빨강 + 깜빡임 + 경고 기호 */}
