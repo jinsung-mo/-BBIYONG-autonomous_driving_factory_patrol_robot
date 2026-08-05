@@ -12,7 +12,7 @@ import { connect, disconnect, subscribe, publish, onState, setToken } from './st
 import { DEFAULT_DRIVE_SPEED, angularFor, clampDriveSpeed } from './mappers.ts'
 import { useSettings } from '../settings/SettingsContext.tsx'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.ts'
-import { isMappingComplete } from './mapping.ts'
+import { activateMap, isMappingComplete } from './mapping.ts'
 import { TILT_COMMAND } from './cameraTilt.ts'
 import { isFloorplanReady, loadActivePlan, releasePlan } from './floorplan.ts'
 import { authedGet, refreshAccessToken } from './authApi.ts'
@@ -60,7 +60,7 @@ export function LiveProvider({ children }: any) {
   const [lastError, setLastError] = useState<string | null>(null)
   const [authError, setAuthError] = useState(false)
   const [telemetry, setTelemetry] = useState<import('./contracts.d.ts').RobotTelemetry | null>(null)
-  const [alerts, setAlerts] = useState<import('./contracts.d.ts').AlertMessage[]>([])
+  const [alerts, setAlerts] = useState<import('./contracts.d.ts').LiveAlertMessage[]>([])
   // 맵 모델링 완료 이벤트(S15P11E101-483). 마지막 1건만 들고 있으면 충분하다 —
   // 운영 탭이 '이 맵 사용?' 안내를 띄우고 사용자가 확인하면 지운다.
   const [mappingComplete, setMappingComplete] = useState<any>(null)
