@@ -3,8 +3,10 @@ package com.bbiyong.server.map.controller;
 import com.bbiyong.server.map.dto.MapGridResponse;
 import com.bbiyong.server.map.dto.MapResponses;
 import com.bbiyong.server.map.dto.MapUploadRequest;
+import com.bbiyong.server.map.dto.MappingStatusResponse;
 import com.bbiyong.server.map.service.MapGridService;
 import com.bbiyong.server.map.service.MapService;
+import com.bbiyong.server.map.service.MappingStatusService;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -18,12 +20,28 @@ import java.util.List;
 @RequestMapping("/api/maps")
 public class MapController {
 
+    private static final String DEFAULT_ROBOT_ID = "orinka_01";
+
     private final MapService mapService;
     private final MapGridService mapGridService;
+    private final MappingStatusService mappingStatusService;
 
-    public MapController(MapService mapService, MapGridService mapGridService) {
+    public MapController(MapService mapService, MapGridService mapGridService,
+                         MappingStatusService mappingStatusService) {
         this.mapService = mapService;
         this.mapGridService = mapGridService;
+        this.mappingStatusService = mappingStatusService;
+    }
+
+    /**
+     * 온디맨드 매핑 진행 상태 조회. 새로고침·중간접속 클라이언트가 "지도" 탭 상태(매핑중 vs 도면)를
+     * 복원하는 데 사용한다. 실시간 전환은 STOMP {@code /topic/mapping} 의 {@code MAPPING_STATUS} 구독. (S15P11E101-737 후속)
+     */
+    @GetMapping("/status")
+    public ResponseEntity<MappingStatusResponse> mappingStatus(
+            @RequestParam(required = false) String robotId) {
+        String id = (robotId != null && !robotId.isBlank()) ? robotId : DEFAULT_ROBOT_ID;
+        return ResponseEntity.ok(mappingStatusService.snapshot(id));
     }
 
     /** SLAM 맵 이미지 업로드(로봇/게이트웨이가 SAVE_MAP 산출물 등록). */

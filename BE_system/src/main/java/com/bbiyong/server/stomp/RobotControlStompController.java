@@ -1,5 +1,6 @@
 package com.bbiyong.server.stomp;
 
+import com.bbiyong.server.map.service.MappingStatusService;
 import com.bbiyong.server.stomp.dto.ControlCommand;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class RobotControlStompController {
     private static final Set<String> VALID_MODES = Set.of("autonomy", "manual", "disabled");
 
     private final RobotWebSocketSessionManager sessionManager;
+    private final MappingStatusService mappingStatusService;
 
     /** 전면 카메라 tilt 가동 범위(절대각, degrees). FE 는 동일 범위로 버튼 잠금/현재각을 표시한다. */
     private final double tiltMin;
@@ -38,9 +40,11 @@ public class RobotControlStompController {
 
     public RobotControlStompController(
             RobotWebSocketSessionManager sessionManager,
+            MappingStatusService mappingStatusService,
             @Value("${bbiyong.camera.tilt-min:-30.0}") double tiltMin,
             @Value("${bbiyong.camera.tilt-max:45.0}") double tiltMax) {
         this.sessionManager = sessionManager;
+        this.mappingStatusService = mappingStatusService;
         this.tiltMin = tiltMin;
         this.tiltMax = tiltMax;
     }
@@ -77,6 +81,8 @@ public class RobotControlStompController {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("command", "START_MAPPING");
             relay(cmd, payload);
+            // 지도 탭이 "매핑중" 화면으로 전환하도록 진행 상태를 갱신·브로드캐스트한다. (낙관적)
+            mappingStatusService.markMapping(resolveRobotId(cmd));
             return;
         }
         if ("STOP_MAPPING".equalsIgnoreCase(command)) {
@@ -84,6 +90,7 @@ public class RobotControlStompController {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("command", "STOP_MAPPING");
             relay(cmd, payload);
+            mappingStatusService.markIdle(resolveRobotId(cmd));
             return;
         }
         if ("SAVE_MAP".equalsIgnoreCase(command)) {
@@ -130,12 +137,17 @@ public class RobotControlStompController {
     }
 
     private void relay(ControlCommand cmd, Map<String, Object> payload) {
-        String robotId = (cmd.getRobotId() != null && !cmd.getRobotId().isBlank())
-                ? cmd.getRobotId() : DEFAULT_ROBOT_ID;
+        String robotId = resolveRobotId(cmd);
         boolean delivered = sessionManager.sendCommand(robotId, payload);
         if (!delivered) {
             log.warn("Control command not delivered (robot [{}] offline): {}", robotId, payload);
         }
+    }
+
+    /** 명령의 robot_id 를 해석한다(미지정 시 기본 로봇). */
+    private String resolveRobotId(ControlCommand cmd) {
+        return (cmd.getRobotId() != null && !cmd.getRobotId().isBlank())
+                ? cmd.getRobotId() : DEFAULT_ROBOT_ID;
     }
 
     private void drop(ControlCommand cmd, String reason) {

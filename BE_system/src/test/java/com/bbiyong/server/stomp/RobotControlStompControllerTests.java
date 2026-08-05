@@ -1,5 +1,6 @@
 package com.bbiyong.server.stomp;
 
+import com.bbiyong.server.map.service.MappingStatusService;
 import com.bbiyong.server.stomp.dto.ControlCommand;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import org.junit.jupiter.api.Test;
@@ -21,8 +22,9 @@ import static org.mockito.Mockito.when;
 class RobotControlStompControllerTests {
 
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
+    private final MappingStatusService mappingStatusService = mock(MappingStatusService.class);
     private final RobotControlStompController controller =
-            new RobotControlStompController(sessionManager, -30.0, 45.0);
+            new RobotControlStompController(sessionManager, mappingStatusService, -30.0, 45.0);
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> capturePayload(String expectedRobotId) {
@@ -135,6 +137,7 @@ class RobotControlStompControllerTests {
 
         Map<String, Object> p = capturePayload("orinka_01");
         assertThat(p).containsEntry("command", "START_MAPPING");
+        verify(mappingStatusService).markMapping("orinka_01");
     }
 
     @Test
@@ -148,6 +151,7 @@ class RobotControlStompControllerTests {
 
         Map<String, Object> p = capturePayload("orinka_01");
         assertThat(p).containsEntry("command", "STOP_MAPPING");
+        verify(mappingStatusService).markIdle("orinka_01");
     }
 
     @Test
