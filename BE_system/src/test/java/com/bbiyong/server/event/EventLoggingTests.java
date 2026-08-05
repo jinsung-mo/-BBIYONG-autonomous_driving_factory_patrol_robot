@@ -64,8 +64,8 @@ public class EventLoggingTests {
 
         eventPublisher.publishEvent(new RobotOverheatEvent(this, overheatPacket));
 
-        // 3. Assert: Verify database contents
-        List<EventLog> logs = eventLogRepository.findAll();
+        // 3. Assert: 경보 영속화는 @Async(alertTaskExecutor) 로 처리되므로 완료를 폴링 대기한다. (S15P11E101-715)
+        List<EventLog> logs = awaitLogs(2);
         assertThat(logs).hasSize(2);
 
         // Verify Fire Log details
@@ -78,8 +78,9 @@ public class EventLoggingTests {
         assertThat(fireLog.getConfidence()).isEqualTo(0.95);
         assertThat(fireLog.getTemperature()).isEqualTo(65.0);
         assertThat(fireLog.getStatus()).isEqualTo("UNRESOLVED");
-        assertThat(fireLog.getX()).isZero();
-        assertThat(fireLog.getY()).isZero();
+        // 경보 위치 = 이벤트 시점 로봇 보고 위치 (S15P11E101-715)
+        assertThat(fireLog.getX()).isEqualTo(10.0);
+        assertThat(fireLog.getY()).isEqualTo(20.0);
         assertThat(fireLog.getTimestamp()).isEqualTo(Instant.ofEpochSecond(1785806400L));
         // 강화 필드: 화재는 CRITICAL, 메시지 보존, 설비 정보 없음
         assertThat(fireLog.getLevel()).isEqualTo("CRITICAL");
@@ -96,13 +97,30 @@ public class EventLoggingTests {
         assertThat(overheatLog.getConfidence()).isNull();
         assertThat(overheatLog.getTemperature()).isEqualTo(85.5);
         assertThat(overheatLog.getStatus()).isEqualTo("UNRESOLVED");
-        assertThat(overheatLog.getX()).isZero();
-        assertThat(overheatLog.getY()).isZero();
+        // 경보 위치 = 이벤트 시점 로봇 보고 위치 (S15P11E101-715)
+        assertThat(overheatLog.getX()).isEqualTo(30.0);
+        assertThat(overheatLog.getY()).isEqualTo(40.0);
         assertThat(overheatLog.getTimestamp()).isEqualTo(Instant.ofEpochSecond(1785806401L));
         // 강화 필드: 과열은 WARNING, 어느 설비인지·임계치·메시지 보존
         assertThat(overheatLog.getLevel()).isEqualTo("WARNING");
         assertThat(overheatLog.getEquipmentId()).isEqualTo("panel_01");
         assertThat(overheatLog.getThreshold()).isEqualTo(55.0);
         assertThat(overheatLog.getMessage()).isEqualTo("과열 발생");
+    }
+
+    /** 비동기 경보 영속화가 기대 건수에 도달할 때까지 폴링(최대 5초). */
+    private List<EventLog> awaitLogs(int expectedCount) {
+        long deadline = System.currentTimeMillis() + 5_000;
+        List<EventLog> logs = eventLogRepository.findAll();
+        while (logs.size() < expectedCount && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            logs = eventLogRepository.findAll();
+        }
+        return logs;
     }
 }

@@ -33,12 +33,34 @@ public class RobotWebSocketSessionManager {
         }
         WebSocketSession existing = robotSessions.get(robotId);
         if (existing == null || !existing.getId().equals(session.getId())) {
+            // 재접속(같은 robotId, 새 세션): 옛 세션의 매핑을 먼저 지우고 닫는다.
+            // 지우지 않으면 옛 세션이 뒤늦게 close 될 때 unregisterBySessionId 가
+            // 신규 세션의 robotSessions 매핑을 삭제해 살아있는 로봇이 오프라인으로
+            // 오인(명령 전송 불가·OFFLINE 오방송)되는 버그가 있었다. (S15P11E101-715)
+            if (existing != null) {
+                sessionIdToRobotId.remove(existing.getId());
+                closeQuietly(existing, robotId);
+            }
             robotSessions.put(robotId, session);
             sessionIdToRobotId.put(session.getId(), robotId);
             log.info("Registered new WSS session [{}] for robot [{}]", session.getId(), robotId);
             return true;
         }
         return false;
+    }
+
+    /** 교체된 옛 세션을 닫는다. 실패해도 신규 등록에는 영향을 주지 않는다. */
+    private void closeQuietly(WebSocketSession session, String robotId) {
+        try {
+            if (session.isOpen()) {
+                session.close();
+                log.info("Closed stale WSS session [{}] for robot [{}] (replaced by reconnect)",
+                        session.getId(), robotId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to close stale WSS session [{}] for robot [{}]: {}",
+                    session.getId(), robotId, e.getMessage());
+        }
     }
 
     /**

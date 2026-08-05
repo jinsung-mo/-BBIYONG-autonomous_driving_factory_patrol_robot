@@ -41,13 +41,15 @@ class RobotHandshakeAuthInterceptorTests {
     }
 
     @Test
-    void blankConfiguredTokenAllowsWithoutCredential() {
+    void blankConfiguredTokenRejectsHandshake() {
+        // 정책 변경(S15P11E101-715): 토큰 미설정은 기동 시 fail-fast 로 차단되며,
+        // 심층 방어로 이 경로에 도달해도 개방하지 않고 401 거부한다.
         Map<String, Object> attrs = new HashMap<>();
         boolean ok = handshake("", request(null, null), attrs);
 
-        assertThat(ok).isTrue();
+        assertThat(ok).isFalse();
+        assertThat(rawResponse.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         assertThat(attrs).doesNotContainKey(RobotHandshakeAuthInterceptor.ROBOT_AUTHENTICATED);
-        assertThat(rawResponse.getStatus()).isEqualTo(HttpStatus.OK.value());
     }
 
     @Test

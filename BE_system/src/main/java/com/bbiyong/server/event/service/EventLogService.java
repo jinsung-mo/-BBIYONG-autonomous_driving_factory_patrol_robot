@@ -7,6 +7,7 @@ import com.bbiyong.server.event.dto.EventLogDetailResponse;
 import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.repository.EventLogSpecification;
+import com.bbiyong.server.common.config.AsyncConfig;
 import com.bbiyong.server.notification.service.NotificationDispatchService;
 import com.bbiyong.server.video.dto.VideoResponses;
 import com.bbiyong.server.video.repository.VideoClipRepository;
@@ -20,6 +21,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -38,7 +41,8 @@ import java.util.Set;
 @Service
 public class EventLogService {
 
-    private static final Set<String> ALLOWED_STATUS = Set.of("UNRESOLVED", "RESOLVED");
+    // ACKNOWLEDGED(확인됨·조치 진행 중) 포함 — API 문서와 일치. (S15P11E101-715)
+    private static final Set<String> ALLOWED_STATUS = Set.of("UNRESOLVED", "ACKNOWLEDGED", "RESOLVED");
     private static final Duration ALERT_DEDUP_WINDOW = Duration.ofMinutes(1);
 
     private final EventLogRepository eventLogRepository;
@@ -62,7 +66,7 @@ public class EventLogService {
     }
 
     /**
-     * 경보(이벤트) 상태 전이(UNRESOLVED &lt;-&gt; RESOLVED). 관제사가 경보를 처리완료로 표시한다.
+     * 경보(이벤트) 상태 전이(UNRESOLVED | ACKNOWLEDGED | RESOLVED). 관제사가 경보 확인/처리완료를 표시한다.
      *
      * @throws ResponseStatusException 허용되지 않은 status(400) 또는 미존재 이벤트(404)
      */
@@ -71,7 +75,7 @@ public class EventLogService {
         String normalized = status == null ? null : status.trim().toUpperCase();
         if (normalized == null || !ALLOWED_STATUS.contains(normalized)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "유효하지 않은 status 입니다. (UNRESOLVED | RESOLVED)");
+                    "유효하지 않은 status 입니다. (UNRESOLVED | ACKNOWLEDGED | RESOLVED)");
         }
         EventLog event = eventLogRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."));
@@ -170,6 +174,10 @@ public class EventLogService {
         return videoClipRepository.existsByEventId(eventId);
     }
 
+    // @Async: 경보 영속화(DB write)를 WSS 수신 스레드에서 분리한다. 커넥션 풀(개발 SQLite 1개)
+    // 경합 시 텔레메트리·영상 프레임 처리가 함께 막히는 것을 방지한다. 단일 스레드 executor 로
+    // 수신 순서·dedup 직렬성은 보존된다. (S15P11E101-715)
+    @Async(AsyncConfig.ALERT_EXECUTOR)
     @EventListener
     public void handleFireEvent(RobotFireEvent event) {
         if (event.getPacket() == null) {
@@ -178,6 +186,7 @@ public class EventLogService {
         persist(AlertMessage.fromFire(event.getPacket()), null);
     }
 
+    @Async(AsyncConfig.ALERT_EXECUTOR)
     @EventListener
     public void handleOverheatEvent(RobotOverheatEvent event) {
         if (event.getPacket() == null) {
@@ -255,6 +264,16 @@ public class EventLogService {
         private static DeduplicationAttempt notApplied() {
             return new DeduplicationAttempt(null, null, false);
         }
+    }
+
+    /**
+     * 만료된 dedup 엔트리를 주기적으로 제거한다. 제거 로직이 없으면 임의 robot_id 로
+     * 경보를 주입하는 공격/오동작 시 맵이 무한히 자라는 메모리 릭이 된다. (S15P11E101-715)
+     */
+    @Scheduled(fixedDelay = 60_000)
+    void sweepExpiredDeduplicationEntries() {
+        Instant cutoff = Instant.now().minus(ALERT_DEDUP_WINDOW);
+        recentRobotAlerts.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
     }
 
     /**

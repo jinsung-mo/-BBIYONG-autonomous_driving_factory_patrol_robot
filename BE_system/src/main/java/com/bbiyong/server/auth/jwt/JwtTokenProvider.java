@@ -34,10 +34,23 @@ public class JwtTokenProvider {
     private final long accessExpirationSeconds;
     private final long refreshExpirationSeconds;
 
+    /** HS256 최소 키 길이(바이트). 이보다 짧으면 무차별 대입에 취약하다. */
+    private static final int MIN_SECRET_BYTES = 32;
+
     public JwtTokenProvider(
-            @Value("${bbiyong.jwt.secret}") String secret,
+            @Value("${bbiyong.jwt.secret:}") String secret,
             @Value("${bbiyong.jwt.access-expiration-seconds:3600}") long accessExpirationSeconds,
             @Value("${bbiyong.jwt.refresh-expiration-seconds:2592000}") long refreshExpirationSeconds) {
+        // fail-fast: 공개 저장소의 기본 시크릿으로 기동되면 누구나 토큰을 위조할 수 있으므로,
+        // 시크릿 미설정/키 길이 부족은 기동 자체를 실패시킨다. (S15P11E101-715)
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "bbiyong.jwt.secret 이 설정되지 않았습니다. 환경변수 BBIYONG_JWT_SECRET 로 32바이트 이상 시크릿을 주입하세요.");
+        }
+        if (secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "bbiyong.jwt.secret 이 너무 짧습니다. HS256 은 최소 " + MIN_SECRET_BYTES + "바이트가 필요합니다.");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessExpirationSeconds = accessExpirationSeconds;
         this.refreshExpirationSeconds = refreshExpirationSeconds;

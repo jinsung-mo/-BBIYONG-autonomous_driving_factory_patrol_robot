@@ -27,7 +27,7 @@ public record AlertMessage(
     public static AlertMessage fromFire(RobotPacket p) {
         return new AlertMessage(
                 "FIRE", "CRITICAL", sourceOf(p), p.getRobotId(),
-                p.getConfidence(), p.getTemperature(), null, null, null, 0.0, 0.0,
+                p.getConfidence(), p.getTemperature(), null, null, null, locationX(p), locationY(p),
                 prefix(p) + "화재 발생",
                 timestampOf(p).toString(),
                 null);
@@ -36,10 +36,20 @@ public record AlertMessage(
     public static AlertMessage fromOverheat(RobotPacket p) {
         return new AlertMessage(
                 "OVERHEAT", "WARNING", sourceOf(p), p.getRobotId(),
-                null, p.getTemperature(), p.getEquipmentId(), p.getThreshold(), p.getThermalImage(), 0.0, 0.0,
+                null, p.getTemperature(), p.getEquipmentId(), p.getThreshold(), p.getThermalImage(),
+                locationX(p), locationY(p),
                 prefix(p) + "과열 발생",
                 timestampOf(p).toString(),
                 null);
+    }
+
+    /** 경보 위치 = 이벤트 발생 시점의 로봇 보고 위치. 패킷에 location 이 없으면 기존 계약대로 0.0. */
+    private static Double locationX(RobotPacket p) {
+        return (p.getLocation() != null && p.getLocation().getX() != null) ? p.getLocation().getX() : 0.0;
+    }
+
+    private static Double locationY(RobotPacket p) {
+        return (p.getLocation() != null && p.getLocation().getY() != null) ? p.getLocation().getY() : 0.0;
     }
 
     /** 이력이 저장된 뒤에만 웹 경보에 DB 식별자를 붙인다. */
