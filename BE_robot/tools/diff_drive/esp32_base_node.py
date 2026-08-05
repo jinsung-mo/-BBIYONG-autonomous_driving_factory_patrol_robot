@@ -251,6 +251,11 @@ class Esp32Base(Node):
         self.scan_tf_available = 0
         self.last_scan_tf_age_ms = None
         self.last_diag_values = None
+        # Chunked thermal frames are assembled only in serial_loop(), so no
+        # additional lock or reader thread can contend with odometry parsing.
+        self.ir_chunk_key = None
+        self.ir_chunk_total = 0
+        self.ir_chunks = {}
         # 주행로그 상태 — serial_loop 스레드 전용. 락을 걸지 않는다
         self.trace_root = str(g("trace_dir"))
         self.trace_fp = None
@@ -826,6 +831,51 @@ class Esp32Base(Node):
                 self.get_logger().info("펌웨어가 사람용 로그를 보내고 있습니다. 기계용(CSV)으로 전환(t 명령)합니다.")
                 self.ser.write(b"t\n")
                 self.ser.flush()
+                continue
+            if raw.startswith("IRC,"):
+                try:
+                    parts = raw.split(",", 5)
+                    if len(parts) != 6:
+                        raise ValueError("expected six IRC fields")
+                    stamp_ms = int(parts[1])
+                    frame_seq = int(parts[2])
+                    chunk_index = int(parts[3])
+                    chunk_total = int(parts[4])
+                    body = parts[5].strip()
+                    if not 1 <= chunk_total <= 64:
+                        raise ValueError("invalid IRC chunk count")
+                    if not 0 <= chunk_index < chunk_total:
+                        raise ValueError("invalid IRC chunk index")
+                    if len(body) > 128:
+                        raise ValueError("oversized IRC payload")
+
+                    key = (stamp_ms, frame_seq)
+                    if key != self.ir_chunk_key:
+                        self.ir_chunk_key = key
+                        self.ir_chunk_total = chunk_total
+                        self.ir_chunks = {}
+                    elif chunk_total != self.ir_chunk_total:
+                        raise ValueError("IRC chunk count changed within frame")
+                    self.ir_chunks[chunk_index] = body
+
+                    if len(self.ir_chunks) == self.ir_chunk_total:
+                        encoded = "".join(
+                            self.ir_chunks[index]
+                            for index in range(self.ir_chunk_total)
+                        )
+                        pixels = _decode_ir(encoded)
+                        if pixels is not None:
+                            with open("/tmp/ir.json", "w") as f:
+                                json.dump({"width": 32, "height": 24,
+                                           "pixels": pixels}, f)
+                        self.ir_chunk_key = None
+                        self.ir_chunk_total = 0
+                        self.ir_chunks = {}
+                except Exception as exc:
+                    self.get_logger().error(f"IRC parse error: {exc}")
+                    self.ir_chunk_key = None
+                    self.ir_chunk_total = 0
+                    self.ir_chunks = {}
                 continue
             if raw.startswith("IR,"):
                 try:

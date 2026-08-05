@@ -40,7 +40,7 @@
 
 Adafruit_MLX90640 mlx;
 bool mlx_ok = false;
-unsigned long lastMlxMs = 0;
+volatile unsigned long lastMlxMs = 0;
 float mlxFrame[32*24];
 
 // 🔑 [2026-08-04] 열화상 전송을 hex → base64 로 바꾼다 (S15P11E101-663).
@@ -60,7 +60,24 @@ float mlxFrame[32*24];
 //       컴파일이 깨진다. (DHT/INA 블록이 같은 이유로 아래에 있다)
 //       버퍼는 함수가 아니라서 여기 남겨도 된다.
 uint8_t  mlxRaw[32*24*2];      // int16 big-endian ×768 = 1,536B
-char     mlxB64[2052];         // ceil(1536/3)*4 = 2,048 + 여유
+char     mlxB64[2][2052];      // 생산/전송 분리용 double buffer
+
+// IR 획득/인코딩은 저우선순위 task가 담당하고, loop()는 제어·T 텔레메트리
+// deadline 사이에 짧은 base64 chunk만 보낸다. UART writer는 계속 loop() 하나뿐이라
+// T/IRC 라인의 바이트가 서로 섞이지 않는다.
+constexpr size_t IR_CHUNK_CHARS = 64;
+constexpr uint32_t IR_TX_BUDGET_MS = 12;
+portMUX_TYPE irMux = portMUX_INITIALIZER_UNLOCKED;
+volatile int8_t irReadyBuffer = -1;
+volatile size_t irReadyLen = 0;
+volatile uint32_t irReadyStamp = 0;
+volatile uint32_t irReadySeq = 0;
+uint8_t irBuildBuffer = 0;
+uint32_t irNextSeq = 1;
+volatile uint32_t irDroppedFrames = 0;
+uint32_t irTxSeq = 0;
+size_t irTxOffset = 0;
+uint16_t irTxChunkIndex = 0;
 
 // ---------- 핀 (docs/실측_데이터.md §A) ----------
 constexpr int L_A = 32, L_B = 33, R_A = 25, R_B = 26;
@@ -134,12 +151,87 @@ static size_t b64Encode(const uint8_t *in, size_t len, char *out) {
 }
 
 enum Mode { MODE_IDLE, MODE_OPENLOOP, MODE_VELOCITY };
-Mode mode = MODE_IDLE;
+volatile Mode mode = MODE_IDLE;
 
 unsigned long lastCmdMs = 0, lastCtrlMs = 0, lastTeleMs = 0;
 uint32_t deadman_ms = 1000;      // 속도모드 기본 1초 (ROS가 20Hz로 보낸다)
 uint32_t tele_ms = 50;           // 텔레메트리 20Hz (2026-07-30: teleop 소비주기(20Hz)에 맞춤 — 종전 10Hz)
 bool tele_csv = true;            // true=기계 파싱용 CSV, false=사람용
+
+void irAcquireTask(void *unused) {
+  (void)unused;
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(20));
+    uint32_t now = millis();
+    if (!mlx_ok || mode != MODE_VELOCITY || now - lastMlxMs < 500) continue;
+
+    // 실패하거나 오래 걸려도 즉시 재시도 폭주하지 않는다.
+    lastMlxMs = now;
+    if (mlx.getFrame(mlxFrame) != 0) continue;
+
+    for (int i = 0; i < 768; i++) {
+      int16_t dc = (int16_t)(mlxFrame[i] * 10.0f);
+      mlxRaw[i * 2]     = (uint8_t)((uint16_t)dc >> 8);
+      mlxRaw[i * 2 + 1] = (uint8_t)((uint16_t)dc & 0xFF);
+    }
+
+    uint8_t build = irBuildBuffer;
+    size_t len = b64Encode(mlxRaw, sizeof(mlxRaw), mlxB64[build]);
+    portENTER_CRITICAL(&irMux);
+    if (irReadyBuffer < 0) {
+      irReadyBuffer = (int8_t)build;
+      irReadyLen = len;
+      irReadyStamp = now;
+      irReadySeq = irNextSeq++;
+      irBuildBuffer ^= 1;
+    } else {
+      // odometry가 밀리는 것보다 IR 한 프레임을 버리는 편이 안전하다.
+      irDroppedFrames++;
+    }
+    portEXIT_CRITICAL(&irMux);
+  }
+}
+
+void sendIrChunkIfSlack() {
+  uint32_t now = millis();
+  // 한 chunk가 control(20ms) 또는 T telemetry(50ms) deadline을 넘길 수 있으면
+  // 보내지 않는다. 다음 loop에서 deadline 작업이 먼저 실행된 뒤 다시 시도한다.
+  if ((now - lastCtrlMs) + IR_TX_BUDGET_MS >= CTRL_MS ||
+      (now - lastTeleMs) + IR_TX_BUDGET_MS >= tele_ms) return;
+
+  int8_t buffer;
+  size_t len;
+  uint32_t stamp, seq;
+  portENTER_CRITICAL(&irMux);
+  buffer = irReadyBuffer;
+  len = irReadyLen;
+  stamp = irReadyStamp;
+  seq = irReadySeq;
+  portEXIT_CRITICAL(&irMux);
+  if (buffer < 0 || len == 0) return;
+
+  if (seq != irTxSeq) {
+    irTxSeq = seq;
+    irTxOffset = 0;
+    irTxChunkIndex = 0;
+  }
+
+  size_t remaining = len - irTxOffset;
+  size_t chunkLen = min(remaining, IR_CHUNK_CHARS);
+  uint16_t total = (uint16_t)((len + IR_CHUNK_CHARS - 1) / IR_CHUNK_CHARS);
+  Serial.printf("IRC,%lu,%lu,%u,%u,", (unsigned long)stamp,
+                (unsigned long)seq, (unsigned)irTxChunkIndex, (unsigned)total);
+  Serial.write((const uint8_t *)&mlxB64[buffer][irTxOffset], chunkLen);
+  Serial.println();
+  irTxOffset += chunkLen;
+  irTxChunkIndex++;
+
+  if (irTxOffset >= len) {
+    portENTER_CRITICAL(&irMux);
+    if (irReadyBuffer == buffer && irReadySeq == seq) irReadyBuffer = -1;
+    portEXIT_CRITICAL(&irMux);
+  }
+}
 
 // ---------- DHT11(온습도) + INA226(배터리 전압) — 2026-08-03 초안 ----------
 // 🔴 둘 다 저빈도(1Hz) 전용이다. PID 루프(CTRL_HZ=50)는 절대 이 센서들을 기다리지 않는다 —
@@ -399,31 +491,15 @@ void setup() {
   Serial.println("=== speed_pid v1 === v <L m/s> <R m/s> | f/b/l/m/d/s/r | c <deg> | k ? | t");
   Serial.println("# 부호: 양쪽 다 + = 전진 (거울대칭은 펌웨어가 흡수)");
   printTunables();
+  if (mlx_ok) {
+    xTaskCreatePinnedToCore(irAcquireTask, "mlx_acquire", 8192, nullptr, 1, nullptr, 0);
+  }
 }
 
 void loop() {
   while (Serial.available()) handleCommand();
 
   unsigned long now = millis();
-
-  if (mlx_ok && mode == MODE_VELOCITY && (now - lastMlxMs >= 500)) {
-    if (mlx.getFrame(mlxFrame) == 0) {
-      // °C ×10 을 int16 big-endian 으로. 🔴 부호를 유지한다 —
-      //    종전 hex 경로는 uint16 으로 찍어서 영하 온도가 6553.5°C 로 읽혔다.
-      for (int i = 0; i < 768; i++) {
-        int16_t dc = (int16_t)(mlxFrame[i] * 10.0f);
-        mlxRaw[i * 2]     = (uint8_t)((uint16_t)dc >> 8);
-        mlxRaw[i * 2 + 1] = (uint8_t)((uint16_t)dc & 0xFF);
-      }
-      size_t n = b64Encode(mlxRaw, sizeof(mlxRaw), mlxB64);
-      Serial.print("IR,");
-      Serial.print(now);
-      Serial.print(",");
-      Serial.write((const uint8_t *)mlxB64, n);   // 768번이 아니라 1번
-      Serial.println();
-      lastMlxMs = millis();
-    }
-  }
 
   if (now - lastCtrlMs >= CTRL_MS) {
     float dt = (now - lastCtrlMs) / 1000.0f;
@@ -464,6 +540,10 @@ void loop() {
                     wl.target, wl.v, wl.duty, wr.target, wr.v, wr.duty);
     }
   }
+
+  // Control과 T telemetry가 먼저 실행된 뒤, 다음 deadline까지 여유가 있을 때만
+  // base64 IR 한 chunk를 전송한다.
+  sendIrChunkIfSlack();
 
   // ---------- 환경/배터리 센서 (1Hz, 최저 우선순위) ----------
   // 위 명령 파싱 → 제어 틱 → 텔레메트리 출력이 이미 다 끝난 뒤에만 실행된다.
