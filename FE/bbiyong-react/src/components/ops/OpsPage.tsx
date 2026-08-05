@@ -8,6 +8,7 @@ import RoutePanel from './RoutePanel.tsx'
 import SchedulePanel from './SchedulePanel.tsx'
 import EventStatsPanel from './EventStatsPanel.tsx'
 import HealthPanel from './HealthPanel.tsx'
+import KpiRow from '../robot/KpiRow.tsx'
 import {
   MAPPING_STATUS, activateMap, activatePath, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
   waitForSavedMap, NotImplementedError,
@@ -125,134 +126,140 @@ export default function OpsPage() {
   const activeId = activeMapIdOf(maps)
 
   return (
-    <section id="pgOps" className="page on section-page">
+    <section id="pgOps" className="page on section-page sim-skin nav-page">
+      <div className="nav-hero">
+        <div className="nav-title">
+          <h2>운영 관리</h2>
+          <span className="nav-sub">SLAM MAPPING · ROUTE · SCHEDULE</span>
+        </div>
+        <KpiRow />
+      </div>
       {/* 잠금 중에는 운영 조작을 막는다(S15P11E101-653) — 진행 상황은 계속 보인다.
           fieldset[disabled] 을 쓰는 이유: 조작 요소를 하나씩 막으면 반드시 빠진다.
           안쪽 폼 요소를 전부, 키보드 접근까지 막아 준다. */}
       <fieldset className="lockfs" disabled={locked}>
-      <div className="cfg-grid">
-        <div className="panel">
-          <h3>2D 맵 모델링 <span className="k">SLAM MAPPING</span></h3>
-          {!enabled && <p className="cfg-help">시뮬레이션 모드에서는 실제 맵이 없습니다. 실서버 모드로 로그인하면 진행 상황이 표시됩니다.</p>}
-          {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
+        <div className="ops-stage">
+          <aside className="ops-side" aria-label="운영 요약 및 매핑 제어">
+            <div className="panel">
+              <h3>2D 맵 모델링 <span className="k">SLAM MAPPING</span></h3>
+              {!enabled && <p className="cfg-help">시뮬레이션 모드에서는 실제 맵이 없습니다. 실서버 모드로 로그인하면 진행 상황이 표시됩니다.</p>}
+              {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
 
-          {/* 시작 — 확인을 한 번 받는다. 로봇이 순찰을 멈추고 공장 전체를 돌기 시작하는 명령이다. */}
-          <div className="gotor">
-            <button
-              type="button" id="btnStartMapping" className="dbtn go"
-              onClick={() => setConfirming(true)}
-              disabled={offline || phase === 'running' || phase === 'requested'}
-            >
-              {phase === 'running' ? '매핑 진행 중…' : '맵 모델링 시작'}
-            </button>
-            {/* 돌고 있을 때만 멈출 것이 있다 */}
-            {(phase === 'running' || phase === 'requested') && (
-              <button
-                type="button" id="btnStopMapping" className="dbtn stop"
-                onClick={onStopMapping}
-                disabled={offline}
-              >
-                매핑 중단
-              </button>
-            )}
-          </div>
-
-          {/* 진행 표시 */}
-          {phase === 'requested' && (
-            <div className="mapstat wait" id="mapPhase">
-              <i /> 시작 명령을 보냈습니다 — 로봇이 매핑에 들어가면 여기에 진행 상황이 표시됩니다.
-            </div>
-          )}
-          {phase === 'running' && (
-            <div className="mapstat run" id="mapPhase">
-              <i /> 매핑 진행 중 — 로봇이 자율 주행하며 맵을 넓히고 있습니다.
-            </div>
-          )}
-          {phase === 'complete' && (
-            <div className="mapstat done" id="mapPhase">
-              <i /> <b>매핑 완료 — 이 맵을 사용할까요?</b> 아래에 이름을 입력하고 <b>이 맵 사용</b>을 누르면 저장 후 활성 맵으로 지정합니다.
-            </div>
-          )}
-
-          {enabled && connected && !nav && phase === 'idle' && (
-            <p className="cfg-help">아직 맵을 받지 못했습니다. 로봇의 라이다·SLAM 노드가 올라오면 여기에 진행 상황이 뜹니다.</p>
-          )}
-          {nav && (
-            <div className="cfg-note">
-              <div className="kv"><span>갱신 번호</span><b className="num">#{nav.seq}</b></div>
-              <div className="kv"><span>격자</span><b className="num">{nav.w} × {nav.h}</b></div>
-              <div className="kv"><span>해상도</span><b className="num">{nav.res} m/셀</b></div>
-              <div className="kv"><span>포함 면적</span><b className="num">{area} m²</b></div>
-              <div className="kv"><span>원점</span><b className="num">{nav.ox}, {nav.oy} m</b></div>
-            </div>
-          )}
-
-          <div className="gotor">
-            <input
-              id="mapName" value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="저장할 맵 이름 (예: factory_01)"
-              disabled={offline || saving}
-            />
-            <button
-              type="button" id="btnUseMap" className="dbtn go" onClick={onSave}
-              disabled={offline || saving || !name.trim() || !nav}
-            >
-              {saving ? '저장 중…' : '이 맵 사용'}
-            </button>
-          </div>
-          {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
-
-          <div className="cfg-note">
-            <b>로봇 파트 구현 대기 중입니다.</b> 시작 명령(START_MAPPING)은 서버가 로봇으로 전달하지만,
-            로봇 브리지가 아직 이 명령과 완료 이벤트를 처리하지 않습니다. 로봇 쪽이 올라오면 이 화면 수정 없이 그대로 동작합니다.
-          </div>
-        </div>
-
-        <div className="panel">
-          <h3>저장된 맵 <span className="k">ARCHIVE</span></h3>
-          <p className="cfg-help">로봇 <b className="mono">{ROBOT_ID}</b> 의 저장 맵 목록입니다.</p>
-          {!enabled && <div className="cfg-note">실서버 모드에서만 조회됩니다.</div>}
-          {enabled && (
-            <>
-              <button type="button" className="dbtn" onClick={loadMaps} disabled={loading}>
-                {loading ? '불러오는 중…' : '목록 새로고침'}
-              </button>
-              {mapsErr && <div className="form-msg err">맵 목록을 불러오지 못했습니다 — {mapsErr}</div>}
-              {!mapsErr && maps.length === 0 && !loading && (
-                <div className="cfg-note">저장된 맵이 없습니다. 위에서 현재 맵을 저장하면 여기에 쌓입니다.</div>
-              )}
-              <ul className="map-list">
-                {maps.map((m, i) => (
-                  <li key={mapIdOf(m) ?? i}>
-                    <b>{mapNameOf(m) || mapIdOf(m)}</b>
-                    <span className="t mono">
-                      {m.kind ? `${m.kind === 'FLOORPLAN' ? '도면' : '원본'} · ` : ''}
-                      {m.widthPx && m.heightPx ? `${m.widthPx}×${m.heightPx}` : ''}
-                      {m.resolution ? ` · ${m.resolution} m/px` : ''}
-                    </span>
-                    {mapIdOf(m) === activeId && <span className="tag">활성</span>}
-                  </li>
-                ))}
-              </ul>
-              <div className="cfg-note">
-                <b>이 맵 사용</b>을 누르면 저장 후 <b className="mono">PUT {activatePath('{id}')}</b> 로 활성 맵을 지정합니다.
-                매핑이 끝나면 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 만들어 활성화하고, 관제 지도에 자동으로 표시됩니다.
+              {/* 시작 — 확인을 한 번 받는다. 로봇이 순찰을 멈추고 공장 전체를 돌기 시작하는 명령이다. */}
+              <div className="gotor">
+                <button
+                  type="button" id="btnStartMapping" className="dbtn go"
+                  onClick={() => setConfirming(true)}
+                  disabled={offline || phase === 'running' || phase === 'requested'}
+                >
+                  {phase === 'running' ? '매핑 진행 중…' : '맵 모델링 시작'}
+                </button>
+                {/* 돌고 있을 때만 멈출 것이 있다 */}
+                {(phase === 'running' || phase === 'requested') && (
+                  <button
+                    type="button" id="btnStopMapping" className="dbtn stop"
+                    onClick={onStopMapping}
+                    disabled={offline}
+                  >
+                    매핑 중단
+                  </button>
+                )}
               </div>
-            </>
-          )}
+
+              {/* 진행 표시 */}
+              {phase === 'requested' && (
+                <div className="mapstat wait" id="mapPhase">
+                  <i /> 시작 명령을 보냈습니다 — 로봇이 매핑에 들어가면 여기에 진행 상황이 표시됩니다.
+                </div>
+              )}
+              {phase === 'running' && (
+                <div className="mapstat run" id="mapPhase">
+                  <i /> 매핑 진행 중 — 로봇이 자율 주행하며 맵을 넓히고 있습니다.
+                </div>
+              )}
+              {phase === 'complete' && (
+                <div className="mapstat done" id="mapPhase">
+                  <i /> <b>매핑 완료 — 이 맵을 사용할까요?</b> 아래에 이름을 입력하고 <b>이 맵 사용</b>을 누르면 저장 후 활성 맵으로 지정합니다.
+                </div>
+              )}
+
+              {enabled && connected && !nav && phase === 'idle' && (
+                <p className="cfg-help">아직 맵을 받지 못했습니다. 로봇의 라이다·SLAM 노드가 올라오면 여기에 진행 상황이 뜹니다.</p>
+              )}
+              {nav && (
+                <div className="cfg-note">
+                  <div className="kv"><span>갱신 번호</span><b className="num">#{nav.seq}</b></div>
+                  <div className="kv"><span>격자</span><b className="num">{nav.w} × {nav.h}</b></div>
+                  <div className="kv"><span>해상도</span><b className="num">{nav.res} m/셀</b></div>
+                  <div className="kv"><span>포함 면적</span><b className="num">{area} m²</b></div>
+                  <div className="kv"><span>원점</span><b className="num">{nav.ox}, {nav.oy} m</b></div>
+                </div>
+              )}
+
+              <div className="gotor">
+                <input
+                  id="mapName" value={name} onChange={(e) => setName(e.target.value)}
+                  placeholder="저장할 맵 이름 (예: factory_01)"
+                  disabled={offline || saving}
+                />
+                <button
+                  type="button" id="btnUseMap" className="dbtn go" onClick={onSave}
+                  disabled={offline || saving || !name.trim() || !nav}
+                >
+                  {saving ? '저장 중…' : '이 맵 사용'}
+                </button>
+              </div>
+              {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
+
+              <div className="cfg-note">
+                <b>로봇 파트 구현 대기 중입니다.</b> 시작 명령(START_MAPPING)은 서버가 로봇으로 전달하지만,
+                로봇 브리지가 아직 이 명령과 완료 이벤트를 처리하지 않습니다. 로봇 쪽이 올라오면 이 화면 수정 없이 그대로 동작합니다.
+              </div>
+            </div>
+
+            <div className="panel">
+              <h3>저장된 맵 <span className="k">ARCHIVE</span></h3>
+              <p className="cfg-help">로봇 <b className="mono">{ROBOT_ID}</b> 의 저장 맵 목록입니다.</p>
+              {!enabled && <div className="cfg-note">실서버 모드에서만 조회됩니다.</div>}
+              {enabled && (
+                <>
+                  <button type="button" className="dbtn" onClick={loadMaps} disabled={loading}>
+                    {loading ? '불러오는 중…' : '목록 새로고침'}
+                  </button>
+                  {mapsErr && <div className="form-msg err">맵 목록을 불러오지 못했습니다 — {mapsErr}</div>}
+                  {!mapsErr && maps.length === 0 && !loading && (
+                    <div className="cfg-note">저장된 맵이 없습니다. 위에서 현재 맵을 저장하면 여기에 쌓입니다.</div>
+                  )}
+                  <ul className="map-list">
+                    {maps.map((m, i) => (
+                      <li key={mapIdOf(m) ?? i}>
+                        <b>{mapNameOf(m) || mapIdOf(m)}</b>
+                        <span className="t mono">
+                          {m.kind ? `${m.kind === 'FLOORPLAN' ? '도면' : '원본'} · ` : ''}
+                          {m.widthPx && m.heightPx ? `${m.widthPx}×${m.heightPx}` : ''}
+                          {m.resolution ? ` · ${m.resolution} m/px` : ''}
+                        </span>
+                        {mapIdOf(m) === activeId && <span className="tag">활성</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="cfg-note">
+                    <b>이 맵 사용</b>을 누르면 저장 후 <b className="mono">PUT {activatePath('{id}')}</b> 로 활성 맵을 지정합니다.
+                    매핑이 끝나면 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 만들어 활성화하고, 관제 지도에 자동으로 표시됩니다.
+                  </div>
+                </>
+              )}
+            </div>
+
+            <HealthPanel />
+            <EventStatsPanel />
+          </aside>
+
+          <main className="ops-main">
+            <RoutePanel />
+            <SchedulePanel />
+          </main>
         </div>
-      </div>
-
-      {/* 맵을 만든 뒤 그 위에 순찰 경로를 그리는 흐름이라 같은 탭에 둔다(S15P11E101-514) */}
-      <RoutePanel />
-
-      {/* 경로 다음은 '언제 돌지'(스케줄), 그 다음이 '어떻게 돌았나'(건강 이력·통계)다.
-          차트는 폭이 좁으면 읽기 어려워 2열까지만 벌린다. */}
-      <div className="ops-grid">
-        <SchedulePanel />
-        <HealthPanel />
-        <EventStatsPanel />
-      </div>
       </fieldset>
 
       {confirming && (

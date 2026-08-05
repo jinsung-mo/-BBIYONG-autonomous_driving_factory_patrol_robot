@@ -32,7 +32,7 @@ export default function FleetList() {
   if (!enabled || !multi) return null
 
   return (
-    <div className="fleet" id="pFleet">
+    <div className="fleet sim-skin" id="pFleet">
       <h3 className="fleet-h">
         편성 로봇 <span className="k">{robots.length}대</span>
       </h3>

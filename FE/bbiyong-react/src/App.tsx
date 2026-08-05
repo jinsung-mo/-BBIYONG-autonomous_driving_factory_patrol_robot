@@ -33,19 +33,12 @@ import EventLogActivity from './auth/EventLogActivity.tsx'
 // 실서버 화면은 지금 배치를 그대로 둔다 — 운영 중인 화면을 시연용 개편과 한 번에
 // 바꾸지 않는다(S15P11E101-646 이후 계속 지켜 온 원칙).
 function Sections({ active, isAdmin }: { active: Section, isAdmin: boolean }) {
-  const { enabled } = useLive()
   return (
     <>
-      {enabled ? (
-        <div hidden={active !== 'live'}><RobotPage /></div>
-      ) : (
-        <>
-          {/* 두 화면 모두 마운트해 둔다. 탭을 옮겼다고 캔버스를 버리면 돌아올 때마다
-              영상과 지도가 처음부터 다시 붙는다. */}
-          <div hidden={active !== 'live'}><MapPage /></div>
-          <div hidden={active !== 'cam'}><CameraPage /></div>
-        </>
-      )}
+      {/* 두 화면 모두 마운트해 둔다. 탭을 옮겼다고 캔버스를 버리면 돌아올 때마다
+          영상과 지도가 처음부터 다시 붙는다. */}
+      <div hidden={active !== 'live'}><MapPage /></div>
+      <div hidden={active !== 'cam'}><CameraPage /></div>
       {isAdmin && active === 'ops' && <OpsPage />}
       {isAdmin && active === 'config' && <ConfigPage />}
     </>

@@ -28,7 +28,7 @@ export default function SummaryBar() {
   const t = stats?.today
 
   return (
-    <div className="sumbar" id="pSummary">
+    <div className="sumbar sim-skin" id="pSummary">
       <div className="sumcard">
         <span>가동 중 로봇</span>
         <b className="num">{count(s?.activeRobots)}<i>/ {count(s?.totalRobots)}</i></b>
