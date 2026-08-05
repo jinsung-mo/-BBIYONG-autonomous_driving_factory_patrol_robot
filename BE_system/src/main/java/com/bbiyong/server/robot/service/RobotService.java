@@ -85,11 +85,12 @@ public class RobotService {
         }
 
         String robotId = packet.getRobotId();
-        RobotState state = stateCache.getState(robotId);
-        if (state == null) {
-            state = new RobotState();
-            state.setRobotId(robotId);
-        }
+        // 불변 스왑: 캐시에 담긴 인스턴스를 in-place 수정하면 동시 조회(getAllRobots)가
+        // 부분 갱신된 상태(예: battery 는 새 값, location 은 옛 값)를 관측할 수 있다.
+        // 새 인스턴스를 만들어 마지막에 put 해 읽기가 항상 완전한 스냅샷을 보게 한다. (S15P11E101-729)
+        RobotState previous = stateCache.getState(robotId);
+        RobotState state = new RobotState();
+        state.setRobotId(robotId);
         state.setName(robotId);
 
         state.setStatus(packet.getStatus());
@@ -105,6 +106,9 @@ public class RobotService {
                     packet.getLocation().getY(),
                     packet.getLocation().getYaw()
             ));
+        } else if (previous != null) {
+            // 위치 미포함 패킷이면 기존 마지막 위치를 승계(기존 in-place 수정과 동일 의미).
+            state.setLocation(previous.getLocation());
         }
 
         stateCache.updateState(robotId, state);
@@ -115,12 +119,28 @@ public class RobotService {
     /** 세션 종료/타임아웃으로 오프라인이 되면 캐시 상태를 OFFLINE 으로 낮춘다. */
     @EventListener
     public void handleDisconnect(RobotDisconnectedEvent event) {
-        RobotState state = stateCache.getState(event.getRobotId());
-        if (state != null && !OFFLINE_STATUS.equals(state.getStatus())) {
+        RobotState previous = stateCache.getState(event.getRobotId());
+        if (previous != null && !OFFLINE_STATUS.equals(previous.getStatus())) {
+            // 불변 스왑(위 handleTelemetry 참고): 복사본에 상태만 낮춰 put. (S15P11E101-729)
+            RobotState state = copyOf(previous);
             state.setStatus(OFFLINE_STATUS);
             stateCache.updateState(event.getRobotId(), state);
             log.info("Robot [{}] marked OFFLINE", event.getRobotId());
         }
+    }
+
+    private static RobotState copyOf(RobotState src) {
+        RobotState copy = new RobotState();
+        copy.setRobotId(src.getRobotId());
+        copy.setName(src.getName());
+        copy.setStatus(src.getStatus());
+        copy.setBattery(src.getBattery());
+        copy.setEstop(src.getEstop());
+        copy.setCommLatencyMs(src.getCommLatencyMs());
+        copy.setInferenceFps(src.getInferenceFps());
+        copy.setLastConnected(src.getLastConnected());
+        copy.setLocation(src.getLocation());
+        return copy;
     }
 
     /**

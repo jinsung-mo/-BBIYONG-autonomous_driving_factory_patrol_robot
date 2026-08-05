@@ -41,7 +41,20 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-        if (accessor == null || !StompCommand.CONNECT.equals(accessor.getCommand())) {
+        if (accessor == null) {
+            return message;
+        }
+        // SUBSCRIBE 목적지 화이트리스트: 브로드캐스트는 /topic/** 만 사용한다.
+        // /queue, /user 등 미사용 목적지 구독을 차단해 브로커 오남용을 막는다. (S15P11E101-729)
+        if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+            String destination = accessor.getDestination();
+            if (destination == null || !destination.startsWith("/topic/")) {
+                log.debug("STOMP SUBSCRIBE 거부: 허용되지 않은 목적지 {}", destination);
+                throw new MessagingException("허용되지 않은 구독 목적지입니다: " + destination);
+            }
+            return message;
+        }
+        if (!StompCommand.CONNECT.equals(accessor.getCommand())) {
             return message;
         }
 
