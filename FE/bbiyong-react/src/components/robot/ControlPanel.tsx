@@ -202,34 +202,23 @@ export default function ControlPanel() {
     const CAMERA_KEYS = /^arrow(up|down)$/
 
     const onDown = (e: any) => {
-      if (e.key === 'Shift') {
-        if (!e.repeat && !isTyping(e.target)) { shiftAlone = true }
-        return
-      }
-      // Shift 와 다른 키를 함께 누르면 단축키가 아니다
+      if (e.key === 'Shift') return
       shiftAlone = false
       // 주행 키는 모드를 건드리지 않는다(S15P11E101-513). 실제 주행 발행은
       // live 는 LiveSimBridge, mock 은 useSimulation 의 키 리스너가 맡는다.
       if (DRIVE_KEYS.test(e.key.toLowerCase()) || CAMERA_KEYS.test(e.key.toLowerCase())) return
       if (e.code !== 'Space') return
       if (isTyping(e.target)) return
-      // 모드 전환은 조작 권한이 필요하다 — 긴급 정지와 달리 안전 예외가 아니다
+      // 모드 전환은 조작 권한이 필요하다
       if (latest.current.ctlOff) return
       // 포커스된 버튼의 기본 활성화(=중복 실행)와 페이지 스크롤을 막는다
       e.preventDefault()
       if (e.repeat) return
-      // 순찰 ↔ 수동 토글 — Shift(긴급 정지 ↔ 순찰 복귀)와 같은 규칙
+      // 순찰 ↔ 수동 토글
       latest.current.onSetSeg(latest.current.seg !== 'manual')
     }
     const onUp = (e: any) => {
-      if (e.key !== 'Shift') return
-      if (!shiftAlone) return
-      shiftAlone = false
-      if (isTyping(e.target)) return
-      const s = latest.current
-      // 순찰 복귀는 조작 권한이 필요하고, 긴급 정지는 로그인만 하면 누구나 할 수 있다
-      if (s.estopEngaged) { if (!s.ctlOff) s.onReturnPatrol() }
-      else s.onEmergencyStop()
+      if (e.key === 'Shift') return
     }
     // 창을 벗어나면 keyup 을 못 받는다 — 눌린 채로 굳지 않게 함께 푼다
     const onBlur = () => { shiftAlone = false }
