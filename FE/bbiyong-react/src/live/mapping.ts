@@ -3,16 +3,10 @@ import { errMessage, errStatus } from './errors.ts'
 //
 // 계약 근거와 미확정 지점을 한곳에 모아 둔다. 로봇/BE 가 확정되면 이 파일만 고치면 된다.
 //
-// - START_MAPPING : BE 는 이미 릴레이한다(RobotControlStompController#operation).
-//                   다만 로봇 브리지(cloud_bridge.handle_command)는 DRIVE/ESTOP 만 처리하고
-//                   나머지는 "알 수 없는 command" 로 떨어뜨린다 → 실로봇 동작은 로봇 파트 구현 이후.
-// - 진행 표시    : 텔레메트리 status === 'MAPPING'. 서버 DTO 는 이 값을 기대하지만
-//                   현재 cloud_bridge.infer_status() 는 AUTO_PATROL/MANUAL_CONTROL/None 만 반환한다.
-// - 완료 이벤트  : /topic/mapping 으로 확정됐다(S15P11E101-482).
-//                   서버가 로봇 원문을 그대로 relay 한다(RobotEventListener#91) — payload 는
-//                   EVENT_MAPPING_COMPLETE { robot_id, name }. 전용 토픽이라 도착 자체가 완료다.
-//                   alerts·nav 수신도 보조로 남긴다 — 계약 이전 경로로 오는 경우를 버리지 않는다.
-// - 활성 맵 지정 : 엔드포인트가 아직 없다. 경로를 한 곳에 두고 404/405 를 "미구현"으로 구분해 알린다.
+// - START_MAPPING : BE/로봇 릴레이 (RobotControlStompController#operation & be_robot/dev 매핑 오케스트레이션 완료).
+// - 진행 표시    : 텔레메트리 status === 'MAPPING'.
+// - 완료 이벤트  : /topic/mapping (EVENT_MAPPING_COMPLETE & FLOORPLAN_READY).
+// - 활성 맵 지정 : PUT /api/maps/{id}/active. BE 자동 활성화 도면(FLOORPLAN)을 신뢰하며 필요시 지정.
 
 import { authedGet, authedSend } from './authApi.ts'
 
