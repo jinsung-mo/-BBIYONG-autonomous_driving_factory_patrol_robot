@@ -13,8 +13,6 @@ import com.bbiyong.server.video.repository.VideoClipRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
-import com.bbiyong.server.wss.event.SimulatedRobotFireEvent;
-import com.bbiyong.server.wss.event.SimulatedRobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
@@ -177,8 +175,7 @@ public class EventLogService {
         if (event.getPacket() == null) {
             return;
         }
-        persist(AlertMessage.fromFire(event.getPacket()), event instanceof SimulatedRobotFireEvent simulated
-                ? simulated.getRecipientUserId() : null);
+        persist(AlertMessage.fromFire(event.getPacket()), null);
     }
 
     @EventListener
@@ -186,16 +183,7 @@ public class EventLogService {
         if (event.getPacket() == null) {
             return;
         }
-        persist(AlertMessage.fromOverheat(event.getPacket()), event instanceof SimulatedRobotOverheatEvent simulated
-                ? simulated.getRecipientUserId() : null);
-    }
-
-    /**
-     * 실시간 경보(AlertMessage)와 동일한 필드로 이력을 영속화한다.
-     * (열화상 thermalImage 는 설계상 미저장)
-     */
-    public void persistSimulation(AlertMessage alert, String recipientUserId) {
-        persist(alert, recipientUserId);
+        persist(AlertMessage.fromOverheat(event.getPacket()), null);
     }
 
     private void persist(AlertMessage alert, String simulationRecipientUserId) {
