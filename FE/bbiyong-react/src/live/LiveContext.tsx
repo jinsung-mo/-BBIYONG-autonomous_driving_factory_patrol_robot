@@ -12,7 +12,7 @@ import { connect, disconnect, subscribe, publish, onState, setToken } from './st
 import { DEFAULT_DRIVE_SPEED, angularFor, clampDriveSpeed } from './mappers.ts'
 import { useSettings } from '../settings/SettingsContext.tsx'
 import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.ts'
-import { activateMap, isMappingComplete } from './mapping.ts'
+import { activateMap, isMappingComplete, isMappingStatus, phaseOf, fetchMapStatus, PHASE_IDLE, PHASE_MAPPING } from './mapping.ts'
 import { TILT_COMMAND } from './cameraTilt.ts'
 import { isFloorplanReady, loadActivePlan, releasePlan } from './floorplan.ts'
 import { authedGet, refreshAccessToken } from './authApi.ts'
@@ -64,6 +64,10 @@ export function LiveProvider({ children }: any) {
   // 맵 모델링 완료 이벤트(S15P11E101-483). 마지막 1건만 들고 있으면 충분하다 —
   // 운영 탭이 '이 맵 사용?' 안내를 띄우고 사용자가 확인하면 지운다.
   const [mappingComplete, setMappingComplete] = useState<any>(null)
+  // 매핑 진행 단계(S15P11E101-744). null = 아직 모른다.
+  // '모른다' 를 IDLE 과 구분해 둔다 — 모르는 상태에서 도면을 띄우면, 실제로는
+  // 매핑 중인데 지도 탭이 옛 도면을 보여 주는 일이 생긴다.
+  const [mappingPhase, setMappingPhase] = useState<import('./contracts.d.ts').MappingPhase | null>(null)
   // 정제 도면(S15P11E101-524). planReady 는 알림, plan 은 실제로 받아 온 도면이다.
   const [planReady, setPlanReady] = useState<any>(null)
   const [plan, setPlan] = useState<import('./contracts.d.ts').PlanLayer | null>(null)
@@ -192,7 +196,16 @@ export function LiveProvider({ children }: any) {
     const offMapping = subscribe('/topic/mapping',
       /** @param {import('./contracts').MappingMessage} msg */ (msg: any) => {
       const m = (typeof msg === 'object' && msg) ? msg : {}
+      // 진행 전환은 지도 탭이 무엇을 보여 줄지를 가른다 — 가장 먼저 본다.
+      if (isMappingStatus(m)) {
+        const next = phaseOf(m)
+        if (next) setMappingPhase(next)
+        return
+      }
       if (isFloorplanReady(m)) {
+        // 도면이 나왔다는 것은 매핑이 끝났다는 뜻이다. 서버가 MAPPING_STATUS 를
+        // 따로 보내지 않아도 지도 탭이 '매핑중' 에 갇히지 않게 여기서 함께 푼다.
+        setMappingPhase(PHASE_IDLE)
         setPlanReady({ ...m, _at: Date.now() })
         const mapId = m.mapId || m.map_id
         if (mapId && accessToken) {
@@ -283,6 +296,19 @@ export function LiveProvider({ children }: any) {
     poll()
     const id = setInterval(poll, ROBOT_POLL_MS)
     return () => { alive = false; clearInterval(id) }
+  }, [canConnect, accessToken])
+
+  // 매핑 진행 상태를 복원한다(S15P11E101-744). STOMP 는 붙기 전에 지나간 전환을
+  // 다시 주지 않으므로, 새로고침하거나 매핑 도중에 접속하면 이 요청이 유일한 근거다.
+  useEffect(() => {
+    if (!canConnect) { setMappingPhase(null); return undefined }
+    let alive = true
+    fetchMapStatus(ROBOT_ID, accessToken)
+      .then((res) => { if (alive) setMappingPhase(phaseOf(res)) })
+      // 상태 API 가 아직 없거나(404) 실패하면 단계를 모르는 채로 둔다.
+      // 임의로 IDLE 로 단정하면 매핑 중인 화면이 옛 도면으로 바뀐다.
+      .catch(() => { if (alive) setMappingPhase(null) })
+    return () => { alive = false }
   }, [canConnect, accessToken])
 
   // 활성 도면을 받아 온다(S15P11E101-524). 로그인 직후 한 번, 그리고 FLOORPLAN_READY 마다.
@@ -436,12 +462,13 @@ export function LiveProvider({ children }: any) {
     onVideoFrame, onNavUpdate, videoSeen, control, robotId: ROBOT_ID,
     speed, setSpeed,
     mappingComplete, clearMappingComplete, robotOnline,
+    mappingPhase, mapping: mappingPhase === PHASE_MAPPING,
     driveMode, setDriveMode,
     plan, planError,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
       videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline,
-      driveMode, setDriveMode, plan, planError])
+      mappingPhase, driveMode, setDriveMode, plan, planError])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }
