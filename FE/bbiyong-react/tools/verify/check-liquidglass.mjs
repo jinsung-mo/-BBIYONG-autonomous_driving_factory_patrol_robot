@@ -64,8 +64,13 @@ const fw = await ev(`(()=>{const out=[]
   }}catch{} }
   return out.slice(0,3)})()`)
 const links = await ev(`[...document.querySelectorAll('link[rel=stylesheet]')].map(l=>l.href).filter(h=>!h.startsWith('http://localhost:5174'))`)
-console.log('  프레임워크 흔적 :', (fw || []).length ? fw : '없음', '· 외부 CSS :', (links || []).length ? links : '없음')
-console.log('  → 표준 CSS 로만 만들어짐 :', ok((fw || []).length === 0 && (links || []).length === 0))
+// 웹폰트 스타일시트는 프레임워크가 아니다. 금지한 것은 tailwind 처럼 클래스 문법을
+// 통째로 가져오는 물건이지, 글꼴을 받아 오는 링크가 아니다 — 둘을 갈라서 센다.
+const isFont = (h) => h.includes('fonts.googleapis.com') || h.includes('fonts.gstatic.com')
+const fontLinks = (links || []).filter(isFont)
+const otherLinks = (links || []).filter((h) => !isFont(h))
+console.log('  웹폰트 :', fontLinks.length ? fontLinks.length + '건' : '없음', '· 그 밖의 외부 CSS :', otherLinks.length ? otherLinks : '없음')
+console.log('  → 표준 CSS 로만 만들어짐 :', ok((fw || []).length === 0 && otherLinks.length === 0))
 
 console.log('\n[2] 판 위에 사람이 그어 놓은 선·막대가 없는가')
 // 굴절 링과 상단 1px 흰 선은 걷어냈다. 링은 배경에 밝기 변화가 있는 곳마다 띠로 드러났고,
