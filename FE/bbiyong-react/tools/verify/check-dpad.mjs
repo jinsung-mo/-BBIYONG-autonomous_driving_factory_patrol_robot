@@ -111,13 +111,13 @@ for (const want of ['light', 'dark']) {
   console.log('    클래스', JSON.stringify(down?.cls), '· 배경', down?.bgImg?.slice(0, 54))
   console.log('    글자', down?.color, '· 변형', down?.transform)
   console.log('    그림자', down?.shadow?.slice(0, 80))
-  const bgChanged = down?.bgImg !== idle?.bgImg || down?.bgCol !== idle?.bgCol
-  const colorChanged = down?.color !== idle?.color
+  // S15P11E101-691 부터 눌림은 색을 바꾸지 않는다. 색이 튀면 판이 번쩍이는 것처럼 보여
+  // 영상 옆에서 계속 보고 있기 어렵다 — 대신 그림자와 눌려 들어가는 형태로 알린다.
+  const colorHeld = down?.bgImg === idle?.bgImg && down?.color === idle?.color
   const scaled = down?.transform !== idle?.transform && down?.transform !== 'none'
   const inset = /inset/.test(String(down?.shadow))
   console.log('  → 클래스가 붙는다 :', ok(String(down?.cls).includes('active')))
-  console.log('  → 배경이 바뀐다 :', ok(bgChanged))
-  console.log('  → 글자색이 바뀐다 :', ok(colorChanged), '(색맹에게도 밝기 차이로 읽힌다)')
+  console.log('  → 색은 고정된다 :', ok(colorHeld), '(번쩍임 없이 형태로만 알린다)')
   console.log('  → 눌려 들어간다 :', ok(inset && scaled), '(그림자와 축소 — 색 말고 형태로도 알린다)')
   console.log('  → 눌린 글자 대비 :', pressedContrast, ok(pressedContrast >= 4.5))
   const { data } = await send('Page.captureScreenshot', { format: 'png' })

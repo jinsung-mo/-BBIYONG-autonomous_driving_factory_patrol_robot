@@ -1,9 +1,15 @@
+import { useCallback, useEffect, useState } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import ControlPanel from './ControlPanel.tsx'
 import EventLog from './EventLog.tsx'
 import KpiRow from './KpiRow.tsx'
+
+const ZOOM_MIN = 1
+const ZOOM_MAX = 2.2
+const ZOOM_STEP = 0.2
+const clampZoom = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(value.toFixed(2))))
 
 // 카메라 화면 (시뮬레이션 전용).
 //
@@ -17,9 +23,35 @@ import KpiRow from './KpiRow.tsx'
 export default function CameraPage() {
   const { status, refs } = useSim()
   const { enabled, telemetry, videoSeen } = useLive()
+  const [zoom, setZoom] = useState(1)
+  const [fullscreen, setFullscreen] = useState(false)
 
   const camDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.camera)) || !videoSeen.FRONT)
   const thermalDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.thermal)) || !videoSeen.THERMAL)
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      const active = document.fullscreenElement === document.documentElement
+      setFullscreen(active)
+      document.documentElement.classList.toggle('view-fullscreen', active)
+    }
+    document.addEventListener('fullscreenchange', syncFullscreen)
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen)
+      document.documentElement.classList.remove('view-fullscreen')
+    }
+  }, [])
+
+  const changeZoom = useCallback((delta: number) => {
+    setZoom((current) => clampZoom(current + delta))
+  }, [])
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement === document.documentElement) await document.exitFullscreen()
+      else if (!document.fullscreenElement) await document.documentElement.requestFullscreen()
+    } catch { /* 브라우저가 전체화면을 막으면 현재 화면을 유지한다. */ }
+  }, [])
+
   return (
     <section id="pgCam" className="page on sim-skin nav-page">
       <div className="nav-hero">
@@ -39,10 +71,46 @@ export default function CameraPage() {
         <div className="cam-main">
           <div className="panel" id="pCam">
             <div className={`vwrap${camDown ? ' down' : ''}`}>
-              <canvas ref={refs.rcam} />
+              <canvas
+                ref={refs.rcam}
+                className="camera-zoom-canvas"
+                style={{ transform: `scale(${zoom})` }}
+              />
               <span className="hud">{status.rcamHud}</span>
               <span className="rec">● REC 00:00</span>
               {camDown && <span className="nodata">전면 카메라 영상 없음</span>}
+              <div className="map-controls camera-controls" aria-label="카메라 화면 조절">
+                <button
+                  type="button"
+                  className="map-control zoom-in"
+                  onClick={() => changeZoom(ZOOM_STEP)}
+                  disabled={zoom >= ZOOM_MAX}
+                  aria-label="카메라 확대"
+                  title="카메라 확대"
+                >+</button>
+                <button
+                  type="button"
+                  className="map-control zoom-out"
+                  onClick={() => changeZoom(-ZOOM_STEP)}
+                  disabled={zoom <= ZOOM_MIN}
+                  aria-label="카메라 축소"
+                  title="카메라 축소"
+                >−</button>
+                <button
+                  type="button"
+                  className="map-control fullscreen"
+                  onClick={toggleFullscreen}
+                  aria-label={fullscreen ? '전체화면 종료' : '카메라 전체화면'}
+                  aria-pressed={fullscreen}
+                  title={fullscreen ? '전체화면 종료 (Esc)' : '카메라 전체화면'}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    {fullscreen
+                      ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+                      : <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />}
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 

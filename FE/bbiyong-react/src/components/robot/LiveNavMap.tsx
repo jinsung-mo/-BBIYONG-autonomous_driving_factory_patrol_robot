@@ -13,9 +13,10 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgr
  *   onPick?: ((p: { x: number, y: number } | null) => void) | null,
  * }} props
  */
-export default function LiveNavMap({ route = null, onPick = null }: {
+export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1 }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
+    zoomFactor?: number,
   }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef<HTMLCanvasElement | null>(null)
@@ -101,7 +102,11 @@ export default function LiveNavMap({ route = null, onPick = null }: {
       <canvas
         ref={cvRef}
         onClick={onPick ? onClick : undefined}
-        style={onPick ? { cursor: 'crosshair' } : undefined}
+        className="map-zoom-canvas"
+        style={{
+          cursor: onPick ? 'crosshair' : undefined,
+          transform: `scale(${zoomFactor})`,
+        }}
       />
       <button
         type="button"
