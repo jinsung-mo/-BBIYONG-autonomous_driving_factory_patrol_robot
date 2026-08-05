@@ -25,9 +25,8 @@ export default function Nav({ section, onSection }: { section: Section,
   // 시뮬레이션에서는 관제가 지도와 카메라 두 화면으로 나뉜다. 실서버는 하나 그대로다.
   // key 를 리터럴로 고정한다 — 그냥 두면 string 으로 넓어져 onSection 이 받지 못한다.
   const tabs: Array<{ key: Section, label: string }> = [
-    ...(enabled
-      ? [{ key: 'live' as const, label: '관제' }]
-      : [{ key: 'live' as const, label: '지도' }, { key: 'cam' as const, label: '카메라' }]),
+    { key: 'live' as const, label: '지도' },
+    { key: 'cam' as const, label: '카메라' },
     ...(isAdmin
       ? [
         { key: 'ops' as const, label: '운영' }, { key: 'config' as const, label: '설정' },
@@ -36,7 +35,7 @@ export default function Nav({ section, onSection }: { section: Section,
   ]
 
   return (
-    <nav id="nav" className={!enabled && (section === 'live' || section === 'cam') ? 'sim-nav' : undefined}>
+    <nav id="nav" className="sim-nav">
       <div className="logo">
         삐용(BBIYONG)
         <span className="nav-subtitle"> 순찰 로봇 관제</span>
