@@ -21,8 +21,8 @@ const SPANS: Record<Group, number[]> = {
   type: [7, 30],
 }
 
-const CRIT = '#ff6b6b'
-const WARN = '#ffc14d'
+const CRIT = '#C07A72'
+const WARN = '#C9A26A'
 
 // 이벤트 통계 (운영 탭) — /api/events/stats/*
 //
@@ -77,8 +77,8 @@ export default function EventStatsPanel() {
   const unresolved = points.reduce((s, p) => s + (p.unresolvedCount || 0), 0)
 
   return (
-    <div className="nx-card" id="pEventStats">
-      <h3>이벤트 통계 <span className="k">EVENT STATS</span></h3>
+    <div className="card-v3" id="pEventStats" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <h3 style={{ margin: 0, marginBottom: '12px', flex: 'none' }}>이벤트 통계 <span className="k">EVENT STATS</span></h3>
       <p className="cfg-help">
         기간 내 화재·과열·시스템 이벤트 발생 추이입니다. 막대/선의 색은 심각도이며,
         점 위에 마우스를 올리면 정확한 건수가 나옵니다.
@@ -102,39 +102,43 @@ export default function EventStatsPanel() {
                 <option key={v} value={v}>{group === 'hour' ? `최근 ${v}시간` : `최근 ${v}일`}</option>
               ))}
             </select>
-            <button type="button" className="dbtn" onClick={() => load()} disabled={loading}>
+            <button type="button" className="btn-tonal" onClick={() => load()} disabled={loading} style={{ padding: '6px 12px' }}>
               {loading ? '조회 중…' : '새로 고침'}
             </button>
           </div>
 
           {err && <div className="form-msg err">통계를 불러오지 못했습니다 — {err}</div>}
 
-          {!err && (isTimeSeries(group)
-            ? (
-              <LineChart
-                labels={points.map((p) => labelOf(p.label))}
-                emptyText={loading ? '조회 중…' : '해당 기간에 이벤트가 없습니다.'}
-                series={[
-                  { key: 'crit', label: '긴급', color: CRIT, unit: '건', values: points.map((p) => p.criticalCount ?? 0) },
-                  { key: 'warn', label: '경고', color: WARN, unit: '건', values: points.map((p) => p.warningCount ?? 0) },
-                ]}
-              />
-            )
-            : (
-              <BarChart
-                emptyText={loading ? '조회 중…' : '해당 기간에 이벤트가 없습니다.'}
-                bars={points.map((p) => ({
-                  label: labelOf(p.label),
-                  parts: [
-                    { key: 'crit', name: '긴급', value: p.criticalCount ?? 0, color: CRIT },
-                    { key: 'warn', name: '경고', value: p.warningCount ?? 0, color: WARN },
-                  ],
-                }))}
-              />
-            ))}
+          {!err && (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {isTimeSeries(group)
+                ? (
+                  <LineChart
+                    labels={points.map((p) => labelOf(p.label))}
+                    emptyText={loading ? '조회 중…' : '해당 기간에 이벤트가 없습니다.'}
+                    series={[
+                      { key: 'crit', label: '긴급', color: CRIT, unit: '건', values: points.map((p) => p.criticalCount ?? 0) },
+                      { key: 'warn', label: '경고', color: WARN, unit: '건', values: points.map((p) => p.warningCount ?? 0) },
+                    ]}
+                  />
+                )
+                : (
+                  <BarChart
+                    emptyText={loading ? '조회 중…' : '해당 기간에 이벤트가 없습니다.'}
+                    bars={points.map((p) => ({
+                      label: labelOf(p.label),
+                      parts: [
+                        { key: 'crit', name: '긴급', value: p.criticalCount ?? 0, color: CRIT },
+                        { key: 'warn', name: '경고', value: p.warningCount ?? 0, color: WARN },
+                      ],
+                    }))}
+                  />
+                )}
+            </div>
+          )}
 
           {!err && points.length > 0 && (
-            <div className="cfg-note">
+            <div className="cfg-note" style={{ flex: 'none' }}>
               합계 <b>{total}건</b> · 긴급 <b>{critical}건</b> · 미해결 <b>{unresolved}건</b>
             </div>
           )}

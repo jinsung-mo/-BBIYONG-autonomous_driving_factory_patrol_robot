@@ -130,8 +130,8 @@ export default function RoutePanel() {
   const offline = !enabled || !connected
 
   return (
-    <div className="nx-card" id="pgRoute">
-      <h3>순찰 경로 <span className="k">PATROL ROUTE</span></h3>
+    <div className="card-v3" id="pgRoute">
+      <h3 style={{ margin: 0, marginBottom: '12px' }}>순찰 경로 <span className="k">PATROL ROUTE</span></h3>
       {!enabled && <p className="cfg-help">시뮬레이션 모드에서는 실제 맵이 없어 지점을 찍을 수 없습니다. 실서버 모드로 로그인하세요.</p>}
       {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
       {enabled && (
@@ -162,23 +162,23 @@ export default function RoutePanel() {
               aria-label={`${i + 1}번 지점 이름`}
             />
             <span className="t mono">{Number(w.x).toFixed(2)}, {Number(w.y).toFixed(2)} m</span>
-            <button type="button" className="dbtn" onClick={() => move(i, -1)} disabled={offline || busy || i === 0} aria-label="위로">↑</button>
-            <button type="button" className="dbtn" onClick={() => move(i, 1)} disabled={offline || busy || i === route.length - 1} aria-label="아래로">↓</button>
-            <button type="button" className="dbtn" onClick={() => onDelete(w, i)} disabled={offline || busy} aria-label="삭제">삭제</button>
+            <button type="button" className="btn-tonal" onClick={() => move(i, -1)} disabled={offline || busy || i === 0} aria-label="위로" style={{ padding: '4px 8px' }}>↑</button>
+            <button type="button" className="btn-tonal" onClick={() => move(i, 1)} disabled={offline || busy || i === route.length - 1} aria-label="아래로" style={{ padding: '4px 8px' }}>↓</button>
+            <button type="button" className="btn-tonal" onClick={() => onDelete(w, i)} disabled={offline || busy} aria-label="삭제" style={{ color: '#B4655C', padding: '4px 8px' }}>삭제</button>
           </li>
         ))}
       </ul>
 
       <div className="gotor">
-        <button type="button" className="dbtn" onClick={load} disabled={offline || busy}>다시 불러오기</button>
-        <button type="button" id="btnSaveRoute" className="dbtn go" onClick={onSave} disabled={offline || busy || !route.length || !dirty}>
+        <button type="button" className="btn-text" onClick={load} disabled={offline || busy}>다시 불러오기</button>
+        <button type="button" id="btnSaveRoute" className="btn-tonal" onClick={onSave} disabled={offline || busy || !route.length || !dirty}>
           경로 저장{dirty ? ' *' : ''}
         </button>
-        <button type="button" id="btnApplyRoute" className="dbtn" onClick={onApply} disabled={offline || busy || !route.length}>
+        <button type="button" id="btnApplyRoute" className="btn-tonal" onClick={onApply} disabled={offline || busy || !route.length}>
           경로 적용
         </button>
         {/* 시작은 눈에 띄게 둔다 — 로봇이 실제로 움직이기 시작하는 버튼이다 */}
-        <button type="button" id="btnStartPatrol" className="dbtn go" onClick={onStart} disabled={offline || busy || !route.length}>
+        <button type="button" id="btnStartPatrol" className="btn-filled" onClick={onStart} disabled={offline || busy || !route.length}>
           순찰 시작
         </button>
       </div>

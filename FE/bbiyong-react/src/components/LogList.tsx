@@ -190,116 +190,152 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
   return (
     <>
       {!simple && (
-        <>
-          <div className="logfilter" role="group" aria-label="이벤트 종류 필터">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                className={filter === f.key ? 'on' : ''}
-                aria-pressed={filter === f.key}
-                onClick={() => setFilter(f.key)}
-              >
-                {f.label}
-              </button>
-            ))}
+        <div className="event-page-grid">
+          <div className="event-page-col">
+            <div className="card-v3">
+              <b style={{ fontSize: '14px' }}>요약</b>
+              <div className="kv" style={{ borderTop: 0, paddingTop: '10px' }}>
+                조건 검색 결과 <b className="mono" style={{ color: '#232733' }}>{rows.length}</b>
+              </div>
+              <div className="kv">미해결 <b className="mono" style={{ color: '#B4655C' }}>
+                {rows.filter(r => r.status === 'UNRESOLVED').length}
+              </b></div>
+            </div>
+
+            <div className="card-v3">
+              <b style={{ fontSize: '14px' }}>필터</b>
+              <div style={{ marginTop: '11px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <select style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
+                  value={filter} onChange={(e) => setFilter(e.target.value)}>
+                  {FILTERS.map((f) => (
+                    <option key={f.key} value={f.key}>{f.label}</option>
+                  ))}
+                </select>
+                <select style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
+                  aria-label="심각도" value={level} onChange={(e) => setLevel(e.target.value)}>
+                  <option value="">심각도 전체</option>
+                  <option value="CRITICAL">{LEVEL_LABEL.CRITICAL}</option>
+                  <option value="WARNING">{LEVEL_LABEL.WARNING}</option>
+                </select>
+                <select style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
+                  aria-label="해결 상태" value={statusF} onChange={(e) => setStatusF(e.target.value)}>
+                  <option value="">상태 전체</option>
+                  <option value="UNRESOLVED">{EVENT_STATUS_LABEL.UNRESOLVED}</option>
+                  <option value="RESOLVED">{EVENT_STATUS_LABEL.RESOLVED}</option>
+                </select>
+                <select style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
+                  aria-label="조회 기간" value={range} onChange={(e) => setRange(e.target.value)}>
+                  {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                </select>
+                <select style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
+                  aria-label="설비" value={equipment} onChange={(e) => setEquipment(e.target.value)}>
+                  <option value="">설비 전체</option>
+                  {equipments.map((eq) => {
+                    const eid = eq.equipmentId
+                    return <option key={eid} value={eid}>{equipmentName(eid)}</option>
+                  })}
+                </select>
+                <input style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
+                  type="date" aria-label="종료일" value={endDate} max={TODAY}
+                  onChange={(e) => setEndDate(e.target.value)} />
+                {multi && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#5A6072', marginTop: '2px' }}>
+                    <input type="checkbox" checked={byRobot} onChange={(e) => setByRobot(e.target.checked)} />
+                    {robots.find((r) => r.robotId === selected)?.name || selected} 것만 보기
+                  </label>
+                )}
+              </div>
+            </div>
           </div>
-          {/* 심각도·상태·기간은 서버가 걸러 준다 — 화면에서 자르면 '더 보기'가 어긋난다 */}
-          <div className="logfilter2">
-            <select aria-label="심각도" value={level} onChange={(e) => setLevel(e.target.value)}>
-              <option value="">심각도 전체</option>
-              <option value="CRITICAL">{LEVEL_LABEL.CRITICAL}</option>
-              <option value="WARNING">{LEVEL_LABEL.WARNING}</option>
-            </select>
-            <select aria-label="해결 상태" value={statusF} onChange={(e) => setStatusF(e.target.value)}>
-              <option value="">상태 전체</option>
-              <option value="UNRESOLVED">{EVENT_STATUS_LABEL.UNRESOLVED}</option>
-              <option value="RESOLVED">{EVENT_STATUS_LABEL.RESOLVED}</option>
-            </select>
-            <select aria-label="조회 기간" value={range} onChange={(e) => setRange(e.target.value)}>
-              {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </select>
-          </div>
-          <div className="logfilter2">
-            {/* 이름으로 고르되 서버에는 equipmentId 를 보낸다 */}
-            <select aria-label="설비" value={equipment} onChange={(e) => setEquipment(e.target.value)}>
-              <option value="">설비 전체</option>
-              {equipments.map((eq) => {
-                const eid = eq.equipmentId
-                return <option key={eid} value={eid}>{equipmentName(eid)}</option>
-              })}
-            </select>
-            <input type="date" aria-label="종료일" value={endDate} max={TODAY}
-              onChange={(e) => setEndDate(e.target.value)} />
-          </div>
-          {multi && (
-            <label className="logfilter-rb">
-              <input type="checkbox" checked={byRobot} onChange={(e) => setByRobot(e.target.checked)} />
-              {robots.find((r) => r.robotId === selected)?.name || selected} 것만 보기
-            </label>
-          )}
-        </>
-      )}
-      <ul className={variant}>
-        {rows.length === 0 && (
-          <li className="ok">
-            <b>{loading ? '이력 불러오는 중…' : (connected ? '경보 없음 — 수신 대기 중' : '실서버 연결 중…')}</b>
-          </li>
-        )}
-        {rows.map((log) => (
-          <li key={log.id} className={log.kind}>
-            <span className="t mono">{simple ? log.time : (log.date ? `${log.date} ${log.time}` : log.time)}</span>
-            {simple ? (
-              <b>{log.msg}</b>
-            ) : (
-              <>
-                {log.eventId != null
-                  ? (
-                    <button type="button" className="logopen" title="상세와 영상 보기"
-                      onClick={() => setDetailId(log.eventId)}>
-                      {log.msg}
+
+          <div className="card-v3">
+            <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '9px' }}>
+              <b style={{ fontSize: '15px' }}>전체 이벤트</b>
+              <span className="mono" style={{ fontSize: '10px', letterSpacing: '1px', color: '#A8ADBC' }}>
+                EVENT LOG · {filter}
+              </span>
+              <span style={{ marginLeft: 'auto', fontSize: '11.5px', color: '#A8ADBC' }}>
+                {RANGES.find(r => r.key === range)?.label} · <span className="mono">{rows.length}</span>건
+              </span>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', marginTop: '9px' }}>
+              <ul className={variant} style={{ listStyle: 'none', padding: 0 }}>
+                {rows.length === 0 && (
+                  <li className="logrow">
+                    <b>{loading ? '이력 불러오는 중…' : (connected ? '경보 없음 — 수신 대기 중' : '실서버 연결 중…')}</b>
+                  </li>
+                )}
+                {rows.map((log) => (
+                  <li key={log.id} className={`logrow ${log.kind}`}>
+                    <i className={`logdot c-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'sub'}`} />
+                    <span className="logtime">{simple ? log.time : (log.date ? `${log.date} ${log.time}` : log.time)}</span>
+                    <>
+                      {log.eventId != null
+                        ? (
+                          <button type="button" className={`logopen logtext t-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'}`} title="상세와 영상 보기"
+                            onClick={() => setDetailId(log.eventId)} style={{ background: 'transparent', border: 0, textAlign: 'left', cursor: 'pointer', padding: 0 }}>
+                            {log.msg}
+                          </button>
+                        )
+                        : <span className={`logtext t-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'}`}>{log.msg}</span>}
+                      {log.live && <span className="tag live" style={{ marginLeft: 'auto' }}>실시간</span>}
+                      {log.level === 'CRITICAL' && <span className="tag crit" style={{ marginLeft: log.live ? '4px' : 'auto' }}>{LEVEL_LABEL.CRITICAL}</span>}
+                      {log.status === 'UNRESOLVED' && !log.live && <span className="tag open" style={{ marginLeft: (log.live || log.level === 'CRITICAL') ? '4px' : 'auto' }}>{EVENT_STATUS_LABEL.UNRESOLVED}</span>}
+                      {log.status === 'RESOLVED' && <span className="tag done" style={{ marginLeft: (log.live || log.level === 'CRITICAL') ? '4px' : 'auto' }}>{EVENT_STATUS_LABEL.RESOLVED}</span>}
+                      {canOperate && log.eventId != null && (
+                        <button type="button" className="logact"
+                          title={log.status === 'RESOLVED' ? '미해결로 되돌리기' : '이 이벤트를 해결 처리'}
+                          aria-label={`${log.status === 'RESOLVED' ? '미해결로 되돌리기' : '해결 처리'} — ${log.msg}`}
+                          disabled={resolving === log.eventId}
+                          onClick={() => onResolve(log, log.status === 'RESOLVED' ? 'UNRESOLVED' : 'RESOLVED')}>
+                          {resolving === log.eventId ? '…' : (log.status === 'RESOLVED' ? '되돌리기' : '해결')}
+                        </button>
+                      )}
+                      {canOperate && log.eventId != null && (
+                        <button type="button" className="logact" title="이 이벤트를 서버에서 삭제" style={{ color: '#B4655C' }}
+                          aria-label={`이벤트 삭제 — ${log.msg}`} onClick={() => { setDelErr(null); setPending(log) }}>
+                          삭제
+                        </button>
+                      )}
+                      {canOperate && log.live && (
+                        <button type="button" className="logact" title="화면에서 닫기 (서버 기록은 남습니다)"
+                          aria-label={`경보 닫기 — ${log.msg}`} onClick={() => dismissAlert(log.id)}>
+                          닫기
+                        </button>
+                      )}
+                    </>
+                  </li>
+                ))}
+                {resolveErr && <li className="heat"><b>해결 처리 실패 — {resolveErr}</b></li>}
+                {error && <li className="heat"><b>이력 조회 실패 — {error}</b></li>}
+                {more && (
+                  <li className="loadmore">
+                    <button type="button" onClick={() => load(page + 1, false)} disabled={loading}>
+                      {loading ? '불러오는 중…' : '이전 기록 더 보기'}
                     </button>
-                  )
-                  : <b>{log.msg}</b>}
-                {log.live && <span className="tag live">실시간</span>}
-                {log.level === 'CRITICAL' && <span className="tag crit">{LEVEL_LABEL.CRITICAL}</span>}
-                {log.status === 'UNRESOLVED' && !log.live && <span className="tag open">{EVENT_STATUS_LABEL.UNRESOLVED}</span>}
-                {log.status === 'RESOLVED' && <span className="tag done">{EVENT_STATUS_LABEL.RESOLVED}</span>}
-                {canOperate && log.eventId != null && (
-                  <button type="button" className="logfix"
-                    title={log.status === 'RESOLVED' ? '미해결로 되돌리기' : '이 이벤트를 해결 처리'}
-                    aria-label={`${log.status === 'RESOLVED' ? '미해결로 되돌리기' : '해결 처리'} — ${log.msg}`}
-                    disabled={resolving === log.eventId}
-                    onClick={() => onResolve(log, log.status === 'RESOLVED' ? 'UNRESOLVED' : 'RESOLVED')}>
-                    {resolving === log.eventId ? '…' : (log.status === 'RESOLVED' ? '되돌리기' : '해결')}
-                  </button>
+                  </li>
                 )}
-                {canOperate && log.eventId != null && (
-                  <button type="button" className="logdel" title="이 이벤트를 서버에서 삭제"
-                    aria-label={`이벤트 삭제 — ${log.msg}`} onClick={() => { setDelErr(null); setPending(log) }}>
-                    삭제
-                  </button>
-                )}
-                {canOperate && log.live && (
-                  <button type="button" className="logdel" title="화면에서 닫기 (서버 기록은 남습니다)"
-                    aria-label={`경보 닫기 — ${log.msg}`} onClick={() => dismissAlert(log.id)}>
-                    닫기
-                  </button>
-                )}
-              </>
-            )}
-          </li>
-        ))}
-        {resolveErr && <li className="heat"><b>해결 처리 실패 — {resolveErr}</b></li>}
-        {error && <li className="heat"><b>이력 조회 실패 — {error}</b></li>}
-        {more && (
-          <li className="loadmore">
-            <button type="button" onClick={() => load(page + 1, false)} disabled={loading}>
-              {loading ? '불러오는 중…' : '이전 기록 더 보기'}
-            </button>
-          </li>
-        )}
-      </ul>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+      {simple && (
+        <ul className={variant} style={{ listStyle: 'none', padding: 0 }}>
+          {rows.length === 0 && (
+            <li className="logrow">
+              <b>{loading ? '이력 불러오는 중…' : (connected ? '경보 없음 — 수신 대기 중' : '실서버 연결 중…')}</b>
+            </li>
+          )}
+          {rows.map((log) => (
+            <li key={log.id} className={`logrow ${log.kind}`}>
+              <i className={`logdot c-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'sub'}`} />
+              <span className="logtime">{log.time}</span>
+              <span className={`logtext t-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'}`}>{log.msg}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {detailId != null && (
         <EventDetailModal

@@ -96,8 +96,8 @@ export default function SchedulePanel() {
   }
 
   return (
-    <div className="nx-card" id="pSchedule">
-      <h3>자동 순찰 스케줄 <span className="k">PATROL SCHEDULE</span></h3>
+    <div className="card-v3" id="pSchedule">
+      <h3 style={{ margin: 0, marginBottom: '12px' }}>자동 순찰 스케줄 <span className="k">PATROL SCHEDULE</span></h3>
       <p className="cfg-help">
         정한 시각에 서버가 순찰을 시작합니다. 삐용은 공장이 비는 <b>20시~08시</b>에 운행하므로
         보통 퇴근 시각에 맞춰 걸어 둡니다.
@@ -122,12 +122,12 @@ export default function SchedulePanel() {
                 <div className="sch-meta">{robotName(s.robotId)} · <span className="mono">최근 실행 {lastRunText(s.lastExecuted)}</span></div>
                 {canOperate && (
                   <div className="gotor">
-                    <button type="button" className="dbtn" disabled={busy === s.scheduleId}
+                    <button type="button" className="btn-text" disabled={busy === s.scheduleId}
                       onClick={() => onToggle(s)}>
                       {s.enabled ? '중지' : '실행'}
                     </button>
-                    <button type="button" className="dbtn" disabled={busy === s.scheduleId}
-                      onClick={() => { setMsg(null); setPending(s) }}>
+                    <button type="button" className="btn-text" disabled={busy === s.scheduleId}
+                      onClick={() => { setMsg(null); setPending(s) }} style={{ color: '#B4655C' }}>
                       삭제
                     </button>
                   </div>
@@ -168,7 +168,7 @@ export default function SchedulePanel() {
                 </div>
               )}
               <div className="gotor">
-                <button type="button" className="dbtn go" onClick={onCreate}
+                <button type="button" className="btn-filled" onClick={onCreate}
                   disabled={busy === 'new' || !name.trim() || !!cronProb}>
                   {busy === 'new' ? '추가 중…' : '스케줄 추가'}
                 </button>
@@ -182,9 +182,9 @@ export default function SchedulePanel() {
         <Modal title="스케줄 삭제" onClose={() => setPending(null)}>
           <p>‘{pending.name}’ 스케줄을 삭제합니다. 되돌릴 수 없습니다.</p>
           <div className="cfg-note mono">{pending.cronExpression}</div>
-          <div className="form-actions">
-            <button type="button" className="btn-ghost" onClick={() => setPending(null)}>취소</button>
-            <button type="button" className="btn-primary" onClick={onDelete}
+          <div className="gotor" style={{ marginTop: '20px' }}>
+            <button type="button" className="btn-text" onClick={() => setPending(null)}>취소</button>
+            <button type="button" className="btn-filled" onClick={onDelete}
               disabled={busy === pending.scheduleId}>
               {busy === pending.scheduleId ? '삭제 중…' : '삭제'}
             </button>
