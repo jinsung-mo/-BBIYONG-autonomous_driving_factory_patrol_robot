@@ -121,4 +121,27 @@ public class FloorPlanService {
             return Optional.empty();
         }
     }
+
+    /**
+     * 도면 생성 실패 시 폴백: 방금 업로드된 최신 RAW 맵을 활성화한다.
+     *
+     * <p>매핑을 완주(SLAM→업로드→COMPLETE)했는데 도면 생성이 실패하면 어떤 맵도
+     * 활성화되지 않아 관제 활성맵이 이전 상태로 남는다. 도면이 없어도 최소한
+     * 새 원본 맵으로 관제가 이어지도록 한다. (S15P11E101-480)
+     */
+    @Transactional
+    public void activateLatestRawFallback(String robotId) {
+        List<MapArtifact> raws = mapRepository.findLatestRaw(robotId, PageRequest.of(0, 1));
+        if (raws.isEmpty()) {
+            log.warn("폴백 활성화 스킵: 로봇 [{}] 의 원본 맵이 없습니다.", robotId);
+            return;
+        }
+        MapArtifact raw = raws.get(0);
+        try {
+            mapService.setActive(raw.getId());
+            log.info("도면 생성 실패 폴백: 로봇 [{}] 최신 RAW 맵 [{}] 을 활성화했습니다.", robotId, raw.getId());
+        } catch (Exception e) {
+            log.error("폴백 활성화 실패 (robot [{}], raw={}): {}", robotId, raw.getId(), e.getMessage(), e);
+        }
+    }
 }
