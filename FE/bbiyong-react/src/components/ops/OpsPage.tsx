@@ -12,6 +12,7 @@ import KpiRow from '../robot/KpiRow.tsx'
 import { useInspection } from '../../live/inspection.ts'
 import {
   MAPPING_STATUS, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
+  activateMap, loadMapImageUrl, releaseMapImageUrl, NotImplementedError,
 } from '../../live/mapping.ts'
 
 // 운영 (S15P11E101-475) — 2D 맵 모델링과 저장된 맵 관리. 관리자만 들어온다.
@@ -38,9 +39,50 @@ export default function OpsPage() {
   const [showRaw, setShowRaw] = useState(false)
   const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)                // { kind: ok|warn|err, text }
 
+  // 저장 맵 이미지 미리보기 팝업(S15P11E101-791). 제목을 눌러 도면 그림을 크게 본다.
+  const [preview, setPreview] = useState<{ url: string, name: string } | null>(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  // 목록에서 활성화(이 맵 사용) 중인 맵 id
+  const [activatingId, setActivatingId] = useState<string | null>(null)
+
   // 언마운트 뒤 setState 를 막는다 — 저장 흐름은 최대 12초까지 폴링한다
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])
+  // 미리보기 objectURL 은 닫을 때 반드시 돌려준다 — 안 그러면 열 때마다 blob 이 쌓인다
+  useEffect(() => () => releaseMapImageUrl(preview?.url), [preview])
+
+  // 저장된 맵 제목 클릭 — 도면 이미지를 팝업으로 크게 본다(S15P11E101-791).
+  const openPreview = async (m: any) => {
+    if (previewBusy || !m?.imageUrl) return
+    setPreviewBusy(true); setMsg(null)
+    try {
+      const url = await loadMapImageUrl(m.imageUrl, accessToken)
+      if (!alive.current) { releaseMapImageUrl(url); return }
+      setPreview((prev) => { releaseMapImageUrl(prev?.url); return { url, name: mapNameOf(m) || mapIdOf(m) } })
+    } catch (e) {
+      if (alive.current) setMsg({ kind: 'err', text: `맵 이미지를 열지 못했습니다 — ${errMessage(e)}` })
+    } finally { if (alive.current) setPreviewBusy(false) }
+  }
+  const closePreview = () => setPreview((prev) => { releaseMapImageUrl(prev?.url); return null })
+
+  // 목록의 '이 맵 사용' — 저장된 맵을 활성 맵으로 지정(PUT /api/maps/{id}/active).
+  // 완료 직후의 '이 맵 사용'(SAVE_MAP 발행)과 달리, 이미 저장된 맵을 다시 활성화하는 것이다.
+  const onActivate = async (m: any) => {
+    const id = mapIdOf(m)
+    if (!id || activatingId) return
+    setActivatingId(id); setMsg(null)
+    try {
+      await activateMap(id, accessToken)
+      if (!alive.current) return
+      setMsg({ kind: 'ok', text: `'${mapNameOf(m) || id}' 을(를) 활성 맵으로 지정했습니다.` })
+      await loadMaps()
+    } catch (e) {
+      if (!alive.current) return
+      setMsg(e instanceof NotImplementedError
+        ? { kind: 'warn', text: '이 서버 버전은 맵 활성화 API를 아직 제공하지 않습니다.' }
+        : { kind: 'err', text: `활성화하지 못했습니다 — ${errMessage(e)}` })
+    } finally { if (alive.current) setActivatingId(null) }
+  }
 
   // 실시간 맵 진행 상황 — /topic/nav 의 MAP 스냅샷을 그대로 본다
   useEffect(() => onNavUpdate((n: any) => setNav(n?.map ? { ...n.map } : null)), [onNavUpdate])
@@ -251,7 +293,15 @@ export default function OpsPage() {
                   <ul className="map-list">
                     {shownMaps.map((m, i) => (
                       <li key={mapIdOf(m) ?? i} className={isPlan(m) ? 'plan' : 'raw'}>
-                        <b>{mapNameOf(m) || mapIdOf(m)}</b>
+                        {/* 제목을 누르면 도면 이미지를 팝업으로 크게 본다(S15P11E101-791) */}
+                        <button
+                          type="button" className="btn-text maptitle"
+                          onClick={() => openPreview(m)} disabled={previewBusy || !m.imageUrl}
+                          title="도면 이미지 크게 보기"
+                          style={{ padding: 0, fontWeight: 700, textAlign: 'left', cursor: 'pointer' }}
+                        >
+                          {mapNameOf(m) || mapIdOf(m)}
+                        </button>
                         {/* 종류를 뱃지로 못 박는다. 글자 사이에 섞어 두면 훑을 때 안 보인다. */}
                         <span className={`tag kind ${isPlan(m) ? 'plan' : 'raw'}`}>
                           {isPlan(m) ? '도면' : '원본'}
@@ -264,7 +314,19 @@ export default function OpsPage() {
                         {isPlan(m) && sourceNameOf(m) && (
                           <span className="t mono src">원본 {sourceNameOf(m)}</span>
                         )}
-                        {mapIdOf(m) === activeId && <span className="tag">활성</span>}
+                        {mapIdOf(m) === activeId
+                          ? <span className="tag">활성</span>
+                          : (
+                            <button
+                              type="button" className="btn-tonal"
+                              onClick={() => onActivate(m)}
+                              disabled={offline || !!activatingId}
+                              title="이 맵을 활성 맵으로 지정합니다"
+                              style={{ padding: '4px 8px', marginLeft: 'auto' }}
+                            >
+                              {activatingId === mapIdOf(m) ? '적용 중…' : '이 맵 사용'}
+                            </button>
+                          )}
                       </li>
                     ))}
                     {!shownMaps.length && (
@@ -274,8 +336,8 @@ export default function OpsPage() {
                     )}
                   </ul>
                   <div className="cfg-note">
-                    <b>이 맵 사용</b>을 누르면 저장 명령(SAVE_MAP)을 전송합니다.
-                    매핑이 완료되면 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 생성해 자동으로 활성화합니다.
+                    제목을 누르면 도면 이미지를 크게 볼 수 있고, <b>이 맵 사용</b>을 누르면 그 맵을 활성 맵으로 지정합니다.
+                    매핑을 새로 마치면 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 생성해 자동으로 활성화합니다.
                   </div>
                 </>
               )}
@@ -303,6 +365,16 @@ export default function OpsPage() {
             <button type="button" className="btn-text" onClick={() => setConfirming(false)}>취소</button>
             <button type="button" id="btnStartMappingOk" className="btn-filled" onClick={onStart}>시작</button>
           </div>
+        </Modal>
+      )}
+
+      {/* 저장 맵 도면 이미지 미리보기(S15P11E101-791) */}
+      {preview && (
+        <Modal title={`도면 미리보기 — ${preview.name}`} onClose={closePreview} width={720}>
+          <img
+            src={preview.url} alt={`${preview.name} 도면`}
+            style={{ display: 'block', width: '100%', height: 'auto', background: '#fff', borderRadius: 8 }}
+          />
         </Modal>
       )}
     </section>
