@@ -649,8 +649,19 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* ============ 화재 미확인 점멸 (S15P11E101-643) ============ */
 /* 화면을 덮되 클릭은 통과시킨다 — 경보가 긴급 정지·영상 확인을 가로막으면 안 된다. */
 .fireflash{position:fixed; inset:0; z-index:190; pointer-events:none;
-  background:rgba(255,86,72,.16); box-shadow:inset 0 0 0 6px rgba(255,86,72,.85), inset 0 0 90px rgba(255,86,72,.5);
+  /* 테두리만 뛴다(S15P11E101-809).
+     전에는 inset 0 0 90px 로 가장자리 90px 안쪽까지 50% 불투명 적색을 깔았다.
+     상단바와 KPI 히어로가 정확히 그 띠 안에 있어서, 경보가 울리면 로고·탭·배터리·
+     로봇 상태가 통째로 사라진 것처럼 보였다. pointer-events:none 이라 클릭은 되는데
+     보이지는 않는 상태 — 조작자가 탭을 눈으로 찾지 못했다.
+     화재는 가장 급한 상황인데 그때 화면이 가장 안 읽혔다.
+     점멸 자체는 그대로 둔다(1.1s, 진폭도 같다). 덮는 넓이만 줄인다. */
+  background:rgba(255,86,72,.06);
+  box-shadow:inset 0 0 0 6px rgba(255,86,72,.85), inset 0 0 18px rgba(255,86,72,.28);
   animation:fireflash-pulse 1.1s ease-in-out infinite;}
+/* 어떤 연출이 와도 탭과 KPI 는 가려지지 않는다. 점멸 막(z-index:190) 위에 둔다 —
+   경보 중에 화면을 못 읽으면 대응할 수가 없다. */
+#nav{position:relative; z-index:195;}
 /* 1.1초 주기 ≈ 0.9Hz. WCAG 2.3.1 광과민성 발작 기준(초당 3회)보다 한참 아래로 둔다. */
 @keyframes fireflash-pulse{0%,100%{opacity:1;} 50%{opacity:.25;}}
 .fireflash-bar{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:201;
@@ -663,7 +674,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .fireflash-ack:hover{background:#ff6d61;}
 /* 점멸을 견디기 어려운 사용자에게는 깜빡임 대신 고정된 적색 테두리로 알린다 */
 @media (prefers-reduced-motion: reduce){
-  .fireflash{animation:none; opacity:1; background:rgba(255,86,72,.1);}
+  .fireflash{animation:none; opacity:1; background:rgba(255,86,72,.05);
+    box-shadow:inset 0 0 0 6px rgba(255,86,72,.7);}
 }
 
 /* ============ 유저 메뉴 (네비게이션, 상시 다크) ============ */
