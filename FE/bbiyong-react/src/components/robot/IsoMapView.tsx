@@ -21,6 +21,11 @@ const TILT_MIN = 20
 const TILT_MAX = 82
 const ZOOM_MIN = 0.4
 const ZOOM_MAX = 3
+/** 방향키 한 번에 옮기는 거리(px). 한 번 눌러 움직인 것이 보여야 하고,
+    그렇다고 화면 밖으로 튀어서도 안 되는 값이다(S15P11E101-777). */
+const PAN_STEP = 48
+/** 이보다 멀리는 못 간다 — 지도를 잃어버리고 빈 화면만 남는 일을 막는다. */
+const PAN_MAX = 1200
 
 /** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다. */
 const LAYER_STEP = 1.15
@@ -59,6 +64,8 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   const [tilt, setTilt] = useState(58)
   const [spin, setSpin] = useState(SPIN_BASE)
   const [zoom, setZoom] = useState(1)
+  // 화면 이동(S15P11E101-777). 확대해 놓고 구석을 보려면 옮길 길이 있어야 한다.
+  const [pan, setPan] = useState({ x: 0, y: 0 })
   const dragRef = useRef<{ x: number, y: number, tilt: number, spin: number } | null>(null)
 
   // 로봇 위치는 자주 바뀐다. 상태로 두면 프레임마다 다시 렌더되므로 DOM 을 직접 옮긴다.
@@ -235,22 +242,48 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     e.preventDefault()
     setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY > 0 ? 0.9 : 1.1))))
   }
-  // 마우스에만 길을 두지 않는다 — 방향키로 돌리고 +/- 로 확대한다
+  // 마우스에만 길을 두지 않는다.
+  //   방향키       — 지도를 옮긴다(S15P11E101-777)
+  //   Shift+방향키 — 돌린다·기울인다 (748 에서 방향키에 있던 것을 옮겼다.
+  //                 돌리는 길은 드래그로도 있지만 키보드만 쓰는 사람에게는 여기뿐이다)
+  //   +/-          — 확대
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const step = e.shiftKey ? 15 : 5
-    if (e.key === 'ArrowLeft') { setSpin((v) => v - step); e.preventDefault() }
-    else if (e.key === 'ArrowRight') { setSpin((v) => v + step); e.preventDefault() }
-    else if (e.key === 'ArrowUp') { setTilt((v) => Math.max(TILT_MIN, v - step)); e.preventDefault() }
-    else if (e.key === 'ArrowDown') { setTilt((v) => Math.min(TILT_MAX, v + step)); e.preventDefault() }
-    else if (e.key === '+' || e.key === '=') { setZoom((z) => Math.min(ZOOM_MAX, z * 1.15)); e.preventDefault() }
+    const arrow = e.key === 'ArrowLeft' || e.key === 'ArrowRight'
+      || e.key === 'ArrowUp' || e.key === 'ArrowDown'
+    if (arrow && e.shiftKey) {
+      const step = 15
+      if (e.key === 'ArrowLeft') setSpin((v) => v - step)
+      else if (e.key === 'ArrowRight') setSpin((v) => v + step)
+      else if (e.key === 'ArrowUp') setTilt((v) => Math.max(TILT_MIN, v - step))
+      else setTilt((v) => Math.min(TILT_MAX, v + step))
+      e.preventDefault()
+      return
+    }
+    if (arrow) {
+      // 확대해 놓았으면 한 번에 더 많이 움직여야 같은 거리를 간다 —
+      // 배율만큼 나누면 화면에서 느껴지는 이동량이 일정해진다.
+      const step = PAN_STEP / Math.max(0.4, zoom * zoomFactor)
+      const dx = e.key === 'ArrowLeft' ? step : e.key === 'ArrowRight' ? -step : 0
+      const dy = e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0
+      setPan((p) => ({
+        x: Math.min(PAN_MAX, Math.max(-PAN_MAX, p.x + dx)),
+        y: Math.min(PAN_MAX, Math.max(-PAN_MAX, p.y + dy)),
+      }))
+      e.preventDefault()
+      return
+    }
+    if (e.key === '+' || e.key === '=') { setZoom((z) => Math.min(ZOOM_MAX, z * 1.15)); e.preventDefault() }
     else if (e.key === '-') { setZoom((z) => Math.max(ZOOM_MIN, z / 1.15)); e.preventDefault() }
   }
-  const reset = useCallback(() => { setTilt(58); setSpin(SPIN_BASE); setZoom(1) }, [])
+  const reset = useCallback(() => {
+    setTilt(58); setSpin(SPIN_BASE); setZoom(1); setPan({ x: 0, y: 0 })
+  }, [])
   // 지금 정면 각도인가. 눌러도 화면이 이미 정면이면 아무것도 안 바뀌어 '먹었는지'
   // 알 수 없었다 — 버튼이 지금 상태를 말하게 한다(S15P11E101-748).
   const atFront = Math.abs(tilt - 58) < 0.5
     && Math.abs(((spin - SPIN_BASE) % 360 + 540) % 360 - 180) < 0.5
     && Math.abs(zoom - 1) < 0.01
+    && Math.abs(pan.x) < 0.5 && Math.abs(pan.y) < 0.5
 
   // 층. 위로 갈수록 밝게 — 빛이 위에서 온다(S15P11E101-748).
   //
@@ -267,6 +300,19 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
         : `hsl(214 8% ${56 + t * 14}%)`,
     }
   }), [])
+
+  // 장애물 층. 벽의 절반 높이에 주황 계열 — 낮고 색이 달라 '치울 수 있는 것' 으로 읽힌다.
+  // 명도 폭은 벽과 같게 좁힌다(748). 한 물건 안에서 명도가 크게 벌어지면 발광체처럼 보인다.
+  const obstacleLayers = useMemo(() => {
+    const n = Math.max(2, Math.round(WALL_H * 0.45))
+    return Array.from({ length: n }, (_, k) => ({
+      z: k * LAYER_STEP,
+      t: k / (n - 1),
+    })).map((l) => ({
+      z: l.z,
+      color: `hsl(28 52% ${52 + l.t * 14}%)`,
+    }))
+  }, [])
 
   if (!plan) {
     return <span className="nodata">{connected ? '활성 도면이 없습니다' : '연결 대기'}</span>
@@ -290,20 +336,23 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
       onKeyDown={onKeyDown}
       tabIndex={0}
       role="img"
-      aria-label="순찰 구역 입체 지도 — 드래그하거나 방향키로 돌리고 휠 또는 +/− 로 확대"
+      aria-label="순찰 구역 입체 지도 — 방향키로 이동, Shift+방향키로 회전, 휠 또는 +/− 로 확대, 드래그로 회전"
     >
       <div
         className="iso-scene"
         style={{
-          transform: `rotateX(${tilt}deg) rotateZ(${spin}deg) scale(${zoom * zoomFactor})`,
+          // translate 를 회전보다 앞에 둔다 — 기울어진 지도 안이 아니라 화면 기준으로
+          // 움직여야, 누른 방향과 지도가 가는 방향이 같다.
+          transform: `translate(${pan.x}px, ${pan.y}px) rotateX(${tilt}deg) rotateZ(${spin}deg) scale(${zoom * zoomFactor})`,
           width: src.w,
           height: src.h,
           marginLeft: -src.w / 2,
           marginTop: -src.h / 2,
         }}
       >
-        {/* 바닥 — 도면 그림 그대로 */}
-        <div className="iso-floor" style={{ backgroundImage: `url(${src.floorUrl})` }} />
+        {/* 바닥 — 흰 판 한 장(S15P11E101-777). 도면 그림을 깔면 벽 그림자·미탐색
+            얼룩이 기둥과 뒤섞여, 어디가 실제 벽인지 눈이 한 번 더 헤맨다. */}
+        <div className="iso-floor" />
         {/* 벽 — 같은 마스크를 층층이 쌓는다 */}
         {layers.map((l) => (
           <div
@@ -314,6 +363,20 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
               background: l.color,
               WebkitMaskImage: `url(${src.maskUrl})`,
               maskImage: `url(${src.maskUrl})`,
+            }}
+          />
+        ))}
+        {/* 장애물 — 벽보다 낮고 주황(S15P11E101-777). 벽은 건물이라 못 치우지만
+            장애물은 사람이 치울 수 있는 것이다. 같은 색이면 그 구분이 사라진다. */}
+        {src.obstacleUrl && obstacleLayers.map((l) => (
+          <div
+            key={`o${l.z}`}
+            className="iso-wall iso-obst"
+            style={{
+              transform: `translateZ(${l.z}px)`,
+              background: l.color,
+              WebkitMaskImage: `url(${src.obstacleUrl})`,
+              maskImage: `url(${src.obstacleUrl})`,
             }}
           />
         ))}

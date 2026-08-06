@@ -154,6 +154,7 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
           onPick={editLocked ? null : onPick}
           mapping={mapping}
           inspection={mapping ? null : inspection}
+          follow={mapping}
         />
         {mapping && (
           <div className="routemap-note" role="status">

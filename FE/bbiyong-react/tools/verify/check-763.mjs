@@ -58,10 +58,10 @@ const goTab = async (label) => {
 // 격자 스냅샷 하나. cols×rows 를 키워 지도가 넓어지는 상황을 만든다.
 let seq = 0
 const pushMap = (cols, rows) => be.push('/topic/nav/orinka_01', {
-  type: 'MAP', sequence: ++seq, cols, rows, resolution: 0.05,
-  originX: -2.0, originY: -1.5, originYaw: 0,
-  // 전부 자유 공간(0)으로 채운 RLE — 값 0 이 cols*rows 개
-  rle: [[0, cols * rows]],
+  // decodeMapSnapshot 계약: w/h/res/ox/oy + cells 는 [값, 반복]이 번갈아 든 평탄 배열이다.
+  // 예전에는 cols/rows/rle 로 보내 앱이 통째로 버렸다 — 검사가 나침반 픽셀만 세고 통과했다.
+  type: 'MAP', sequence: ++seq, w: cols, h: rows, res: 0.05, ox: -2.0, oy: -1.5,
+  cells: [0, Math.floor(cols * rows / 2), 100, cols * rows - Math.floor(cols * rows / 2)],
 })
 const pose = (x, y, yaw = 0) => be.push('/topic/nav/orinka_01', { type: 'NAV_LIVE', pose: { x, y, yaw }, scan: null })
 const noteShown = () => ev(`!!document.querySelector('#pgOps .routemap-note')`)

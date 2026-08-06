@@ -49,6 +49,25 @@ export function bakeMap(m: any) {
 // view.s = 픽셀/미터, view.x/y = 팬 오프셋
 export function makeView() { return { x: 0, y: 0, s: 60, init: false } }
 
+/**
+ * 로봇이 화면 가운데 오도록 팬 오프셋을 옮긴다(S15P11E101-775).
+ *
+ * 배율(s)은 건드리지 않는다 — 따라간다고 확대까지 바뀌면 조작자가 보던 축척을 잃는다.
+ * k 는 한 프레임에 목표로 다가가는 비율이다. 1 이면 즉시, 작을수록 부드럽다.
+ */
+export function followPose(view: any, cv: any, pose: any, k = 1) {
+  if (!cv?.width || !cv?.height || !pose) return false
+  if (!Number.isFinite(Number(pose.x)) || !Number.isFinite(Number(pose.y))) return false
+  const wantX = cv.width / 2 - Number(pose.x) * view.s
+  const wantY = cv.height / 2 + Number(pose.y) * view.s
+  view.x += (wantX - view.x) * k
+  view.y += (wantY - view.y) * k
+  // init 은 건드리지 않는다. 배율을 정하는 것은 fitView 뿐이다 —
+  // 여기서 세워 버리면 자세가 지도보다 먼저 온 경우 fitView 가 영영 돌지 않아
+  // 기본 배율(60px/m)에 갇힌 채 화면이 텅 빈 것처럼 보인다.
+  return true
+}
+
 // 맵을 캔버스에 맞춘다 (첫 MAP 수신 시 · 캔버스 크기가 바뀌었을 때)
 export function fitView(view: any, cv: any, m: any) {
   if (!cv.width || !cv.height) return false

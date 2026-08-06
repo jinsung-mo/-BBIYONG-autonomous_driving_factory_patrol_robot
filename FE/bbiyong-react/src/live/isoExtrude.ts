@@ -9,6 +9,83 @@
 /** 벽 판정 임계. 서버 도면은 흰 배경 + 검은 벽인 순수 흑백이라 밝기만 보면 된다. */
 const WALL_THRESHOLD = 128
 
+// 벽/장애물 구분 (S15P11E101-777)
+//
+// BE 가 격자를 3값(0 자유 / 1 벽 / 2 장애물)으로 내보내기로 했다. 도면은 PNG 로 오므로
+// 그 세 번째 값은 중간 회색으로 찍혀 온다 — 밝기 띠로 가른다.
+//   lum <  OBSTACLE_LO            벽      (지금의 순수 흑백 도면에서 검정 0)
+//   OBSTACLE_LO ≤ lum < OBSTACLE_HI  장애물 (중간 회색)
+//   그 위                          자유    (흰 배경 255)
+//
+// 지금 도면은 0 아니면 255 뿐이라 이 띠는 비어 있다. 그래서 BE 가 3값을 내보내기
+// 전까지는 obstacleRatio 가 0 이고 화면도 지금과 똑같다 — 먼저 넣어 두고 기다린다.
+// BE 가 정하는 회색값이 이 띠 밖이면 여기만 고치면 된다.
+const OBSTACLE_LO = 96
+const OBSTACLE_HI = 200
+
+/**
+ * 벽을 몇 픽셀 깎을지 (S15P11E101-777).
+ *
+ * 도면의 벽은 실제보다 두껍게 그려져 있어 기둥이 방을 잡아먹는다. 양쪽에서 이만큼
+ * 깎는다. 다만 얇은 벽은 통째로 사라지므로 능선(가운데 심)은 남긴다 —
+ * 벽이 없어지면 방이 뚫린 것으로 읽혀, 두꺼운 것보다 나쁘다.
+ */
+const WALL_ERODE = 1
+
+/**
+ * 벽 픽셀에서 '가장 가까운 비벽까지의 맨해튼 거리'. 두 번 훑으면 구해진다.
+ * 벽 안쪽일수록 값이 크다 — 그 값으로 겉을 깎고 심을 남긴다.
+ */
+function distanceToEdge(wall: Uint8Array, w: number, h: number) {
+  const INF = w + h
+  const d = new Int32Array(w * h)
+  for (let i = 0; i < d.length; i++) d[i] = wall[i] ? INF : 0
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      if (!d[i]) continue
+      // 맵 밖은 비벽으로 본다 — 도면 가장자리에 닿은 벽을 안쪽으로 착각하지 않게
+      const up = y > 0 ? d[i - w] : 0
+      const left = x > 0 ? d[i - 1] : 0
+      d[i] = Math.min(d[i], up + 1, left + 1)
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x
+      if (!d[i]) continue
+      const down = y < h - 1 ? d[i + w] : 0
+      const right = x < w - 1 ? d[i + 1] : 0
+      d[i] = Math.min(d[i], down + 1, right + 1)
+    }
+  }
+  return d
+}
+
+/**
+ * 벽을 얇게. 겉에서 WALL_ERODE 만큼 깎되, 능선(주변보다 안쪽인 픽셀)은 남긴다.
+ * 그래서 두꺼운 벽은 얇아지고 1~2px 짜리 얇은 벽은 그대로 살아남는다.
+ */
+function thinWalls(wall: Uint8Array, w: number, h: number) {
+  if (WALL_ERODE <= 0) return wall
+  const d = distanceToEdge(wall, w, h)
+  const out = new Uint8Array(wall.length)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      if (!d[i]) continue
+      if (d[i] > WALL_ERODE) { out[i] = 1; continue }
+      // 능선이면 남긴다 — 이 픽셀을 지우면 이 자리 벽이 통째로 없어진다
+      const up = y > 0 ? d[i - w] : 0
+      const down = y < h - 1 ? d[i + w] : 0
+      const left = x > 0 ? d[i - 1] : 0
+      const right = x < w - 1 ? d[i + 1] : 0
+      if (d[i] >= up && d[i] >= down && d[i] >= left && d[i] >= right) out[i] = 1
+    }
+  }
+  return out
+}
+
 /** 층 수 기본값. 저사양에서는 이 값부터 줄인다 — 픽셀 수보다 층 수가 비용에 더 민감하다. */
 export const WALL_H = 40
 
@@ -27,8 +104,8 @@ export function downscaleOf(w: number, h: number) {
 export interface ExtrudeSource {
   /** 벽만 불투명한 마스크 (CSS mask-image 로 쓴다) */
   maskUrl: string
-  /** 바닥에 깔 도면 그림 */
-  floorUrl: string
+  /** 장애물만 불투명한 마스크. 장애물이 없으면 null 이다(S15P11E101-777). */
+  obstacleUrl: string | null
   /** 축소 후 픽셀 크기 */
   w: number
   h: number
@@ -36,6 +113,10 @@ export interface ExtrudeSource {
   scale: number
   /** 벽으로 판정된 픽셀 비율(0~1). 0 이면 압출할 것이 없다. */
   wallRatio: number
+  /** 깎기 전 벽 비율. 얼마나 얇아졌는지 재는 값이다. */
+  wallRatioRaw: number
+  /** 장애물로 판정된 픽셀 비율(0~1). BE 가 3값을 내보내기 전에는 0 이다. */
+  obstacleRatio: number
 }
 
 const toUrl = (cv: HTMLCanvasElement) => new Promise<string>((resolve, reject) => {
@@ -59,44 +140,74 @@ export async function buildExtrudeSource(img: HTMLImageElement): Promise<Extrude
   const w = Math.max(1, Math.round(sw * scale))
   const h = Math.max(1, Math.round(sh * scale))
 
-  const floor = document.createElement('canvas')
-  floor.width = w; floor.height = h
-  const fg = floor.getContext('2d')
+  // 도면 픽셀을 읽기 위한 임시 캔버스. 바닥에는 이 그림을 깔지 않는다 —
+  // 바닥은 흰색 한 장이다(S15P11E101-777). 도면의 회색이 그대로 깔려 있으면
+  // 기둥이 선 자리와 그림자·미탐색 얼룩이 뒤섞여 어디가 벽인지 눈이 헤맨다.
+  const read = document.createElement('canvas')
+  read.width = w; read.height = h
+  const fg = read.getContext('2d', { willReadFrequently: true })
   if (!fg) throw new Error('캔버스를 만들지 못했습니다.')
   fg.imageSmoothingEnabled = true
   fg.drawImage(img, 0, 0, w, h)
 
-  // 벽만 남긴 마스크. 알파만 쓰므로 색은 흰색으로 통일한다 —
-  // 층마다 색을 다르게 입히는 것은 CSS 가 한다(위로 갈수록 밝게).
   const src = fg.getImageData(0, 0, w, h)
-  const mask = document.createElement('canvas')
-  mask.width = w; mask.height = h
-  const mg = mask.getContext('2d')
-  if (!mg) throw new Error('캔버스를 만들지 못했습니다.')
-  const out = mg.createImageData(w, h)
-  let walls = 0
-  for (let i = 0; i < src.data.length; i += 4) {
+  const n = w * h
+  const wall = new Uint8Array(n)
+  const obst = new Uint8Array(n)
+  let obstacles = 0
+  for (let p = 0; p < n; p++) {
+    const i = p * 4
     const a = src.data[i + 3]
     // 투명한 자리는 벽이 아니다. 알파를 무시하면 투명 배경이 검정(밝기 0)으로 읽혀
     // 도면 전체가 벽이 된다.
     const lum = a < 8 ? 255
       : 0.299 * src.data[i] + 0.587 * src.data[i + 1] + 0.114 * src.data[i + 2]
-    if (lum < WALL_THRESHOLD) {
-      out.data[i] = 255; out.data[i + 1] = 255; out.data[i + 2] = 255; out.data[i + 3] = 255
-      walls++
-    }
+    if (lum < OBSTACLE_LO) wall[p] = 1
+    else if (lum < OBSTACLE_HI) { obst[p] = 1; obstacles++ }
   }
-  mg.putImageData(out, 0, 0)
+  let rawWalls = 0
+  for (let p = 0; p < n; p++) if (wall[p]) rawWalls++
 
-  const [maskUrl, floorUrl] = await Promise.all([toUrl(mask), toUrl(floor)])
-  return { maskUrl, floorUrl, w, h, scale, wallRatio: walls / (w * h) }
+  const thin = thinWalls(wall, w, h)
+  let walls = 0
+  for (let p = 0; p < n; p++) if (thin[p]) walls++
+
+  // 알파만 쓰므로 색은 흰색으로 통일한다 — 층마다 색을 입히는 것은 CSS 가 한다.
+  const toMask = (bits: Uint8Array) => {
+    const cv = document.createElement('canvas')
+    cv.width = w; cv.height = h
+    const g = cv.getContext('2d')
+    if (!g) throw new Error('캔버스를 만들지 못했습니다.')
+    const out = g.createImageData(w, h)
+    for (let p = 0; p < n; p++) {
+      if (!bits[p]) continue
+      const i = p * 4
+      out.data[i] = 255; out.data[i + 1] = 255; out.data[i + 2] = 255; out.data[i + 3] = 255
+    }
+    g.putImageData(out, 0, 0)
+    return cv
+  }
+
+  const maskUrl = await toUrl(toMask(thin))
+  // 장애물이 하나도 없으면 빈 마스크를 만들지 않는다 — 빈 층을 40장 쌓을 이유가 없다
+  const obstacleUrl = obstacles ? await toUrl(toMask(obst)) : null
+  return {
+    maskUrl,
+    obstacleUrl,
+    w,
+    h,
+    scale,
+    wallRatio: walls / n,
+    wallRatioRaw: rawWalls / n,
+    obstacleRatio: obstacles / n,
+  }
 }
 
 /** objectURL 은 명시적으로 풀어야 한다 — 매핑을 반복하면 blob 이 쌓인다. */
 export function releaseExtrudeSource(s: ExtrudeSource | null | undefined) {
   if (!s) return
   URL.revokeObjectURL(s.maskUrl)
-  URL.revokeObjectURL(s.floorUrl)
+  if (s.obstacleUrl) URL.revokeObjectURL(s.obstacleUrl)
 }
 
 /**

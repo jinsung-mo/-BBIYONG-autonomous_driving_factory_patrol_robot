@@ -89,7 +89,11 @@ function grayPng(w, h, pixels) {
 }
 
 // 방 몇 개와 복도가 있는 도면. 벽 두께는 균일하고 직각이다 — 실제 정제 도면과 같은 성질.
-export function makeFloorplan(w = 320, h = 240) {
+/**
+ * 정제 도면. obstacles 를 주면 격자 3값(0 자유 / 1 벽 / 2 장애물) 중 장애물을
+ * 중간 회색으로 함께 찍는다(S15P11E101-777) — BE 가 3값을 내보낼 때의 도면 모습이다.
+ */
+export function makeFloorplan(w = 320, h = 240, { obstacles = false } = {}) {
   const px = Buffer.alloc(w * h, 255)          // 흰 바닥
   const set = (x, y) => { if (x >= 0 && y >= 0 && x < w && y < h) px[y * w + x] = 0 }
   const rect = (x0, y0, x1, y1, t = 3) => {
@@ -105,6 +109,18 @@ export function makeFloorplan(w = 320, h = 240) {
   R(150, 30, 250, 110)                          // 방 2
   R(30, 140, 130, 210)                          // 방 3
   R(170, 140, 290, 210)                         // 방 4
+  if (obstacles) {
+    // 통로 한가운데 놓인 물건 두 개. 벽(0)과 달리 중간 회색(128)이다.
+    const box = (x0, y0, x1, y1) => {
+      for (let y = Math.round(y0 * sy); y <= Math.round(y1 * sy); y++) {
+        for (let x = Math.round(x0 * sx); x <= Math.round(x1 * sx); x++) {
+          if (x >= 0 && y >= 0 && x < w && y < h) px[y * w + x] = 128
+        }
+      }
+    }
+    box(138, 120, 152, 134)
+    box(255, 118, 272, 132)
+  }
   return grayPng(w, h, px)
 }
 
