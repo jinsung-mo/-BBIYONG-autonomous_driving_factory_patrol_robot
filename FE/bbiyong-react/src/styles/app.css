@@ -266,12 +266,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .maplegend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
 @media (prefers-reduced-motion: reduce){ .cam.alert{box-shadow:none;} }
 
-/* ============ 진입(Welcome) 화면 — v3 "플로팅 씬"(시안 A) ============
+/* ============ 진입(Welcome) 화면 — v3 "플로팅 씬"(확정 시안 welcome-v5-B2) ============
    ⚠ 전면 라이트다. 이전 판은 테마와 무관하게 항상 다크였고, 이번 개편의 핵심이 그 톤 반전이다.
    값은 styles/tokens.css 의 --bb-* 만 참조한다 — 여기서 hex 를 새로 정하지 않는다.
-   (씬의 경로 stroke 2색만 예외: 상태색 계열의 옅은 변형이라 토큰에 없다. 컴포넌트 SVG 에 있다.) */
+   (씬의 경로 stroke 2색만 예외: 상태색 계열의 옅은 변형이라 토큰에 없다. 컴포넌트 SVG 에 있다.)
+   하단 통계 카드는 2연이고 화면 안에 완전히 들어간다 — 이전 판의 "하단에서 잘리는 카드"는 폐기했다. */
 .welcome-wrap{
-  position:relative; min-height:100vh; overflow:hidden;   /* edge 카드가 하단에서 잘리게 한다 */
+  position:relative; min-height:100vh; overflow:hidden;
   font-family:var(--bb-font); color:var(--bb-ink); cursor:default; outline:none;
   background:var(--bb-grad-frame);   /* 규칙 1: 평평한 회색이 아니라 미세한 그라디언트 */
   /* ⚠ 이 요소에는 transform 애니메이션을 걸지 않는다. overflow:hidden 컨테이너에 transform 이
@@ -315,6 +316,39 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   display:flex; align-items:center; justify-content:center;
 }
 .welcome-alarm svg{ width:12px; height:11px; display:block; }
+
+/* ── 배전반: 세로 캐비닛 (일반 설비는 가로 슬래브라 형태로 구분된다) ── */
+.welcome-cab{
+  position:absolute; width:22px; height:56px; margin:-28px 0 0 -11px;
+  border-radius:5px; background:linear-gradient(90deg, #E7E9F1 0 52%, #CBD0DE 52% 100%);
+  box-shadow:0 2px 6px rgba(35,39,51,.14);
+}
+.welcome-cab::before{
+  content:''; position:absolute; left:50%; top:6px; bottom:6px; width:1px;
+  background:rgba(35,39,51,.16);
+}
+.welcome-cab::after{
+  content:''; position:absolute; left:4px; top:5px; width:4px; height:4px;
+  border-radius:50%; background:var(--bb-ok);
+}
+.welcome-cab.is-on::after{ background:var(--bb-primary); }
+
+/* 배전반 온도 배지 — dwell(점검 중)일 때만, 그 배전반에만 뜬다.
+   🔴 항상 캐비닛 **아래**다. 상태 카드가 로봇 위를 늘 덮으므로 위에 두면 정지할 때마다
+   카드에 가려 사라진다(시안이 검증 중 잡은 버그 — 되살리지 않는다). */
+.welcome-badge{ position:absolute; transform:translate(-50%, 0); margin-top:34px; pointer-events:none; }
+.welcome-badge__in{
+  display:flex; align-items:center; gap:7px; white-space:nowrap;
+  background:#fff; border-radius:var(--bb-r-tile); box-shadow:var(--bb-sh-3);
+  padding:6px 10px;
+  opacity:0; transform:translateY(-5px);
+  transition:opacity .28s var(--bb-ease), transform .28s var(--bb-ease);
+}
+.welcome-badge.is-on .welcome-badge__in{ opacity:1; transform:none; }
+.welcome-badge__t{ font-weight:600; font-size:var(--bb-fs-label); color:var(--bb-ink); letter-spacing:-.2px; }
+.welcome-badge__j{ font-size:var(--bb-fs-caption); font-weight:600; padding:2px 6px; border-radius:999px; }
+.welcome-badge__j--ok{ background:var(--bb-ok-tint); color:var(--bb-ok-text); }
+.welcome-badge__j--warn{ background:var(--bb-warn-tint); color:var(--bb-warn-text); }
 
 /* ── 히어로: 밝은 씬 위 → 유리 허용 (어두운 영상 위엔 금지) ── */
 .welcome-hero{
@@ -377,17 +411,36 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   font-size:var(--bb-fs-caption); color:var(--bb-body); }
 .welcome-robotcard__st i{ width:5px; height:5px; border-radius:50%; background:var(--bb-ok); flex:none; }
 
-/* ── 규칙 "경계는 그어도 가두지 않는다": 하단 한쪽만 잘린다 ── */
-.welcome-edge{
-  position:absolute; left:calc(var(--bb-sp-9) + 574px); bottom:-34px; width:344px;
-  background:#fff; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4); padding:18px 20px 34px;
+/* ── 하단 통계 2연 카드 ──────────────────────────────────────────────────
+   🔴 가로 폭 규칙 — 왼쪽은 히어로와 부딪히면 안 되니 left 고정(608px), 오른쪽은 좁은
+   화면에서 잘리면 안 되니 right:34px, 무한정 늘어나 "띠"가 되지 않게 max-width:658px.
+   결과: 폭 = min(658, 뷰포트폭 - 642) — 어느 폭에서도 오른쪽 여백이 남아 잘리지 않는다.
+   🔴 세로 — bottom 은 양수(26px), padding 도 정상값. 카드는 화면 안에 완전히 들어간다
+   (이전 판의 "하단에서 잘리는 카드"는 이 개편으로 폐기한다). */
+.welcome-stats{
+  position:absolute; left:calc(var(--bb-sp-9) + 574px); right:var(--bb-sp-9); bottom:26px;
+  max-width:658px; display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:stretch;
 }
-.welcome-edge__t{ font-size:var(--bb-fs-label); color:var(--bb-muted-2); }
-.welcome-edge__v{ margin-top:6px; display:flex; align-items:baseline; gap:6px; }
-.welcome-edge__v b{ font-weight:600; font-size:28px; letter-spacing:-1px; color:var(--bb-ink); }
-.welcome-edge__v span{ font-size:14px; font-weight:500; color:var(--bb-faint); }
-.welcome-spark{ margin-top:12px; display:flex; align-items:flex-end; gap:6px; height:30px; }
-.welcome-spark i{ width:2.5px; border-radius:1.2px; background:#DEE0E7; display:block; }
+.welcome-stat{
+  background:#fff; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4);
+  padding:18px 20px; display:flex; flex-direction:column;
+}
+/* 제목·수치를 둘 다 굵게. muted-2 는 흰 면에서 대비가 모자라니 ink 로 올린다. */
+.welcome-stat__t{
+  font-size:var(--bb-fs-card); font-weight:700; color:var(--bb-ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.welcome-stat__v{ margin-top:8px; display:flex; align-items:baseline; gap:6px; }
+.welcome-stat__v b{ font-weight:700; font-size:28px; letter-spacing:-1px; }
+.welcome-stat__v span{ font-size:14px; font-weight:500; color:var(--bb-faint); }
+/* 3단째 면 — tokens.css 의 `.bb-card > .bb-subsurface` 문법. 그림자 없음(그림자를 세 번
+   겹치면 화면이 지저분해진다) · radius 는 카드(16)보다 작은 tile(10). */
+.welcome-spark{
+  margin-top:12px; background:var(--bb-grad-subsurface); border:1px solid rgba(255,255,255,.9);
+  border-radius:var(--bb-r-tile); box-shadow:none; padding:9px 11px; height:50px;
+  display:flex; align-items:flex-end; gap:6px; overflow:hidden;
+}
+.welcome-spark i{ width:2.5px; border-radius:1.2px; background:#DEE0E7; display:block; flex:none; }
 
 /* ══════ 모션 ══════════════════════════════════════════════════════════════
    관제 제품이지 마케팅 랜딩이 아니다 — 움직이는 것은 "실제로 움직이는 것"뿐이다.
@@ -401,21 +454,25 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 히어로는 세로 중앙정렬에 translateY(-50%) 를 이미 쓰고 있다 — 그 값을 품은 별도 키프레임이 필요하다 */
 @keyframes welcomeHeroRise{ from{opacity:0; transform:translateY(calc(-50% + 10px));} to{opacity:1; transform:translateY(-50%);} }
 @keyframes welcomeFade{ from{opacity:0;} to{opacity:1;} }
+@keyframes welcomeFadeCorr{ from{opacity:0;} to{opacity:.82;} }  /* 배경 통로는 끝까지 .82 — 명도차 확보 */
 @keyframes welcomePop{ from{opacity:0; transform:scale(.86);} to{opacity:1; transform:none;} }
 @keyframes welcomeDraw{ to{ stroke-dashoffset:0; } }
 @keyframes welcomeSweep{ to{ transform:rotate(360deg); } }
 
 .welcome-hero{ animation:welcomeHeroRise .55s var(--bb-ease) both; }
-.welcome-edge{ animation:welcomeRise .5s var(--bb-ease) .58s both; }
+.welcome-stats{ animation:welcomeRise .5s var(--bb-ease) .58s both; }
 .welcome-eq{ animation:welcomePop .5s var(--bb-ease) both; }  /* 지연은 컴포넌트에서 인라인으로 준다 */
+.welcome-cab{ opacity:0; animation:welcomePop .5s var(--bb-ease) 1.0s forwards; }
 .welcome-alarm{ opacity:0; animation:welcomeFade .5s var(--bb-ease) 1.7s forwards; }
 
-/* 경로: pathLength="1" 이라 길이를 몰라도 1 → 0 으로 그릴 수 있다.
+/* 통로/코스 등장 순서 — 통로가 먼저 옅게 뜨고(0.1s) 그 위로 코스가 그려진다(0.35s).
+   코스는 pathLength="1" 이라 길이를 몰라도 1 → 0 으로 그릴 수 있다.
    자취(p-trail)는 dasharray 를 자취 길이에 쓰고 있어 그릴 수 없다 — 뒤늦게 떠오르게 한다. */
-.welcome-scene__path .p-ok{ stroke-dasharray:1; stroke-dashoffset:1; animation:welcomeDraw 2s var(--bb-ease) .15s forwards; }
-.welcome-scene__path .p-trail{ opacity:0; animation:welcomeFade .6s var(--bb-ease) 1.5s forwards; }
-.welcome-scene__path .p-alarm{ opacity:0; animation:welcomeFade .8s var(--bb-ease) 1.5s forwards; }
-.welcome-scene__path .p-node{ opacity:0; animation:welcomeFade .5s var(--bb-ease) .9s forwards; }
+.welcome-scene__path .p-corridor{ opacity:0; animation:welcomeFadeCorr .8s var(--bb-ease) .1s forwards; }
+.welcome-scene__path .p-route{ stroke-dasharray:1; stroke-dashoffset:1; animation:welcomeDraw 2.2s var(--bb-ease) .35s forwards; }
+.welcome-scene__path .p-trail{ opacity:0; animation:welcomeFade .6s var(--bb-ease) 1.7s forwards; }
+.welcome-scene__path .p-alarm{ opacity:0; animation:welcomeFade .8s var(--bb-ease) 1.7s forwards; }
+.welcome-scene__path .p-node{ opacity:0; animation:welcomeFade .5s var(--bb-ease) 1.1s forwards; }
 
 /* ── 순찰 로봇: 위치는 JS 가 transform 하나로만 쓴다(레이아웃 속성 건드리지 않음) ── */
 .welcome-robot{
@@ -460,8 +517,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
     padding:var(--bb-sp-8) var(--bb-sp-9); }
   .welcome-hero{ position:static; transform:none; width:100%; max-width:620px; margin:0;
     animation-name:welcomeRise; }   /* 중앙정렬을 안 쓰므로 -50% 를 품은 키프레임도 안 쓴다 */
-  .welcome-edge,.welcome-scene__path,
-  .welcome-robot,.welcome-robotcard,.welcome-eq,.welcome-alarm{ display:none; }
+  /* 2연 카드는 폭 658 이 통째로 필요해서 여기서는 접는다(잘린 카드를 보이느니 감춘다). */
+  .welcome-stats,.welcome-scene__path,
+  .welcome-robot,.welcome-robotcard,.welcome-eq,.welcome-cab,.welcome-badge,.welcome-alarm{ display:none; }
 }
 @media (max-width:620px){
   .welcome-wrap{ padding:var(--bb-sp-6) var(--bb-sp-6); }
@@ -472,11 +530,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 모션을 원치 않는 사용자에게는 전부 끄되 "최종 상태"로 세운다 — 꺼서 안 보이면 안 된다.
    (로봇 rAF 루프도 컴포넌트 쪽에서 같은 미디어쿼리를 보고 시작하지 않는다.) */
 @media (prefers-reduced-motion: reduce){
-  .welcome-hero,.welcome-edge,.welcome-eq,.welcome-alarm,
+  .welcome-hero,.welcome-stats,.welcome-eq,.welcome-cab,.welcome-alarm,
   .welcome-robot,.welcome-robot__sweep,.welcome-robotcard,.welcome-eyebrow i{ animation:none; }
-  .welcome-robot,.welcome-robotcard,.welcome-alarm{ opacity:1; }
+  .welcome-robot,.welcome-robotcard,.welcome-alarm,.welcome-cab{ opacity:1; }
   .welcome-robot__sweep{ opacity:.6; }
-  .welcome-scene__path .p-ok{ stroke-dashoffset:0; animation:none; }
+  .welcome-scene__path .p-route{ stroke-dashoffset:0; animation:none; }
+  .welcome-scene__path .p-corridor{ opacity:.82; animation:none; }
   .welcome-scene__path .p-trail,
   .welcome-scene__path .p-alarm,
   .welcome-scene__path .p-node{ opacity:1; animation:none; }

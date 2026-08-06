@@ -1,19 +1,21 @@
 // 진입(랜딩) 화면 — 로그인 전에 표시. "접속" → 로그인 화면으로 진입.
 //
-// v3 디자인 시스템 "플로팅 씬" 배치(시안 A). 이전 다크 하드코딩판을 대체한다.
+// v3 디자인 시스템 "플로팅 씬" 배치 — 확정 시안 welcome-v5-B2(하단 2연 카드)를 그대로 이식했다.
 // 화면 끝까지 밝은 씬을 깔고, 정보는 그 위에 뜬다 — 좌우로 칸을 나누지 않는다.
 //
 // 씬의 형태는 레퍼런스(Navexa Warehouses)의 "라우팅 씬"에서 가져왔다:
-//   직교(90°) 경로가 모서리마다 둥글게 꺾이며 설비 사이를 지나고, 경로 위를 로봇이
+//   통로망(옅게, 배경) 위로 직교(90°) 순찰 코스(굵게)가 지나가고, 코스 위를 로봇이
 //   다니며 상태 카드를 달고 다닌다. 이상 구간은 붉은 경로로 갈라진다.
-// 레퍼런스의 좌측 로봇 목록 패널과 하단 대형 차트 카드는 가져오지 않는다 — 우리 화면의
-// 좌측은 히어로(브랜드·CTA)이고, 하단은 잘려 걸친 통계 카드 한 장이다.
+// 레퍼런스의 좌측 로봇 목록 패널은 가져오지 않는다 — 우리 화면의 좌측은 히어로(브랜드·CTA)다.
+// 범례는 없다 — 통로/코스는 굵기·색·등장 순서 세 축의 대비만으로 형태상 구분된다.
+// 하단은 히어로 폭만큼 오른쪽에 걸린 통계 카드 2연(누적 순찰 시간 · 예상 구동 가능 시간)이다.
 //
 // 색·타이포·radius·그림자는 한 값도 여기 적지 않는다. styles/tokens.css 의 --bb-* 를
 // styles/app.css 의 .welcome-* 규칙이 참조한다.
 //
-// 모션: 진입 stagger·경로 draw-in·라이다 스윕은 전부 CSS 다. JS 가 하는 일은 하나뿐 —
-// 순찰 로봇(과 그 상태 카드)을 경로 위에서 움직이는 것.
+// 모션: 진입 stagger·경로 draw-in·라이다 스윕은 전부 CSS 다. JS 가 하는 일은 두 가지 —
+// ① 순찰 로봇(과 그 상태 카드)을 경로 위에서 움직이는 것 ② dwell 중인 배전반에만
+// 온도 배지를 켜는 것(둘 다 transform/classList 만 건드리고 리렌더는 없다).
 
 import { useEffect, useRef } from 'react'
 import { ROBOT_ID } from '../../live/config.ts'
@@ -21,12 +23,12 @@ import { ROBOT_ID } from '../../live/config.ts'
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║ 🔶 [더미 데이터 — 실측/실데이터 아님]                                      ║
 // ║ 🔴 실데이터 연동 시 이 블록을 통째로 지운다.                                ║
+// ║ 🔴 이 화면 밖 인용 금지 · docs/실측_데이터.md 와 아무 관계가 없다.          ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 // 로그인 전 랜딩이라 붙일 실데이터가 없다. 값을 비워 두면 "불러오기 실패"처럼 읽혀서
 // 사용자 승인(2026-08-06) 아래 장식용 더미를 넣었다.
-// docs/실측_데이터.md 와 아무 관계가 없다 — 이 화면 밖으로 인용하지 말 것.
 //
-// 값의 근거: 우리 제품이 운용하는 순찰 로봇은 **1대**다(live/config.ts ROBOT_ID).
+// [A] 누적 순찰 시간 — 우리 제품이 운용하는 순찰 로봇은 **1대**다(live/config.ts ROBOT_ID).
 // 대수가 많은 물류 로봇 레퍼런스의 숫자를 그대로 베끼면 거짓말이 된다.
 // 아래는 1대가 충전을 껴 가며 하루 5~8.5시간 순찰하는, 배치 20일차 기준 일별 순찰 시간(h).
 const PATROL_HOURS_BY_DAY = [
@@ -35,15 +37,36 @@ const PATROL_HOURS_BY_DAY = [
 ]
 // 총계는 배열의 합으로 계산한다 — 손으로 적으면 막대 합과 어긋나고, 그 어긋남이 눈에 띈다.
 const PATROL_HOURS_TOTAL = PATROL_HOURS_BY_DAY.reduce((a, b) => a + b, 0)   // 128.5 h
-// 미니 차트는 "추세의 인상"만 준다 — 축·격자선·범례·툴팁 없음(디자인 규칙 4).
-// 컨테이너가 30px 라 4.8~8.5h 가 16~29px 로 들어가는 배율. 마지막 3개(최근 3일)만 강조.
+// 미니 차트는 "추세의 인상"만 준다 — 축·격자선·범례·툴팁 없음. 컨테이너가 30px 라
+// 4.8~8.5h 가 16~29px 로 들어가는 배율. 마지막 3개(최근 3일)만 강조.
 const SPARK_PX_PER_HOUR = 3.4
 
 // 로봇 상태 카드도 더미다. 통계 카드와 모순되지 않게 맞춘다 — 통계가 "누적 순찰 시간"이니
 // 상태는 순찰/점검/복귀 사이만 오간다. "충전 중"은 쓰지 않는다(그러면 순찰 중이 아니게 된다).
 const BATTERY_PCT = 68
 const BATTERY_LOW_PCT = 30            // 이 아래면 주의색(과열 계열)으로 넘어간다
+
+// [B] 예상 구동 가능 시간 — [A]와 모순 없이 맞춘 값이다.
+// 질문이 다르다: [A]는 "지금까지 얼마나 돌았나"(지나온 것),
+//               [B]는 "지금 배터리로 앞으로 얼마나 더 도나"(남은 것) — 반드시 배터리 68%와 정합.
+// 모델: 68% → 예비 10%까지 남은 58%p 를 20구간으로 쪼개고, 구간마다 얻어지는 순찰 시간(h)을
+// 적는다. 저 SoC 로 갈수록 전압이 떨어져 같은 %p 라도 실사용 시간이 조금씩 줄어드는 형태다.
+// 합계 검산: 20개 합 ≈ 2.53h. 1회 만충(100→10%, 90%p) 환산 시 90/58 × 2.53 ≈ 3.9h —
+// [A]의 "하루 5~8.5h"는 하루 1.5~2회 충전을 낀 값이므로 서로 모순되지 않는다.
+// 🔴 합계는 이 배열에서 계산한다(손으로 적지 않는다).
+const RUNTIME_BLOCKS_H = [
+  0.137, 0.136, 0.135, 0.134, 0.133, 0.132, 0.131, 0.130, 0.129, 0.128,
+  0.127, 0.126, 0.124, 0.123, 0.121, 0.120, 0.118, 0.116, 0.114, 0.112,
+]
+const BATTERY_RESERVE_PCT = 10        // 이 아래로는 안 쓴다(복귀·충전 여유)
+
 // 붉은 경로와 경보 배지도 더미다 — 실제 감지 이벤트가 아니라 "이상 구간이 이렇게 보인다"는 예시.
+// 배전반 온도도 전부 더미다 — 열화상으로 실제로 잰 값이 아니다.
+const CABINET_TEMPS: readonly { c: number, judge: 'ok' | 'warn' }[] = [
+  { c: 42.6, judge: 'ok' },    // 배전반 A
+  { c: 58.3, judge: 'warn' },  // 배전반 B — 주의 판정이 하나는 있어야 색 대비가 읽힌다
+  { c: 39.1, judge: 'ok' },    // 배전반 C
+]
 // ── 더미 블록 끝 ────────────────────────────────────────────────────────────
 
 // 씬 SVG 의 좌표계. preserveAspectRatio="none" 이라 viewBox 가 박스에 선형으로 늘어난다 —
@@ -51,45 +74,71 @@ const BATTERY_LOW_PCT = 30            // 이 아래면 주의색(과열 계열)�
 const VB_W = 1440
 const VB_H = 900
 
-// ── 순찰 경로 ───────────────────────────────────────────────────────────────
-// 자유곡선 왕복이 아니라 **직교 통로**다. 공장/창고 통로 느낌은 여기서 나온다.
-// 구역을 훑는 보스트로페돈(지그재그) 커버리지 + 좌측 복귀 통로로 닫힌 루프를 만든다.
-// 한 방향으로만 돌기 때문에 왕복 티가 나지 않는다.
-//   좌측 x<740 은 히어로 패널이, 하단 중앙은 통계 카드가 차지하므로 구역을 우측에 잡았다.
-// 안쪽은 구역을 훑는 지그재그 스윕, 바깥은 그 구역을 한 바퀴 도는 복귀 통로다.
-// 🔴 모든 꼭짓점이 **진짜 90° 코너**여야 한다 — 일직선 위의 꼭짓점(예: 같은 y 에서 좌우로만
-// 이어지는 세 점)을 넣으면 필렛 원호가 퇴화해 경로에 혹이 생기고 로봇 방향도 틀어진다.
-// (buildRoute 가 그런 점을 걸러내지만, 애초에 넣지 않는 것이 맞다.)
+// ── 하단 2연 카드 금지 구역 ──────────────────────────────────────────────────
+// 카드가 넓어진 만큼(2연) 좌우로 회피 차선을 낼 여유가 없다 — 대신 세로로 통째로 비운다.
+// 씬의 모든 요소는 viewBox y ≤ 500(경로) / ≤ 568(설비·배전반) 안에 둔다.
+// 추가 금지 구역: x < 740 은 히어로 패널 자리(기존과 동일).
+
+// ── 통로망 vs 순찰 코스 ─────────────────────────────────────────────────────
+// 범례가 없으므로 "무엇이 오늘 가는 길인가"를 **형태만으로** 갈라야 한다.
+// 통로망(옅게, 배경 · 굵기 1.5 · opacity .82)이 먼저 뜨고, 그 위로 순찰 코스(굵게 · 3.8)가
+// 그려진다 — 굵기 대비 2.5배 + 등장 순서(통로 0.1s 페이드 → 코스 0.35s draw-in)로 구분한다.
+// 행은 180 / 320 / 370 / 500, 열은 800 / 940 / 1080 / 1220 / 1350.
+const CORRIDORS =
+  'M800 180 H1350 ' +      // 북쪽 간선
+  'M940 250 H1220 ' +      // 짧은 연결 통로 — 순찰 코스가 안 쓰는 길
+  'M1080 320 H1350 ' +
+  'M800 370 H1350 ' +      // 가운데 간선
+  'M800 500 H1350 ' +      // 남쪽 간선 (이 아래는 하단 2연 카드 금지 구역 — 아무것도 두지 않는다)
+  'M800 180 V500 ' +       // 서쪽 간선
+  'M940 180 V370 ' +
+  'M1080 320 V500 ' +
+  'M1220 180 V500 ' +
+  'M1350 180 V500'         // 동쪽 간선
+
+// 순찰 코스 — 통로망 위의 닫힌 순환로. 한 방향으로만 돈다.
+// 🔴 모든 꼭짓점이 **진짜 90° 코너**여야 한다 — 일직선 위의 꼭짓점을 넣으면 필렛 원호가
+// 퇴화해 경로에 혹이 생기고 로봇 방향도 틀어진다(buildRoute 가 그런 점을 걸러내지만,
+// 애초에 넣지 않는 것이 맞다).
 const PATROL: readonly (readonly [number, number])[] = [
-  [760, 260], [1290, 260],   // 스윕 1 →
-  [1290, 420], [760, 420],   // 스윕 2 ←
-  [760, 580], [1290, 580],   // 스윕 3 →
-  [1290, 700], [760, 700],   // 스윕 4 ←
-  [760, 780], [1350, 780],   // 복귀: 아래 통로 →
-  [1350, 200], [760, 200],   // 복귀: 오른쪽 ↑ · 위 통로 ← (닫힘: ↓ [760,260])
+  [800, 180], [1220, 180],   // 북쪽 간선을 동쪽으로 길게
+  [1220, 320],               // 남하 (← 배전반 A 점검, 꼭짓점 2)
+  [1350, 320],               // 동쪽 간선으로
+  [1350, 500],               // 남하 (← 배전반 B 점검, 꼭짓점 4)
+  [1080, 500],               // 남쪽 간선을 서쪽으로
+  [1080, 370],               // 북상 (← 배전반 C 점검, 꼭짓점 6)
+  [800, 370],                // 가운데 간선으로 서쪽 끝까지 (복귀, 닫힘: → [800,180])
 ]
-const CORNER_R = 22          // 모서리 필렛 반지름. 가장 짧은 구간(60)의 절반보다 작아야 한다.
+const CORNER_R = 22          // 모서리 필렛 반지름. 가장 짧은 구간(130)의 절반보다 작아야 한다.
 
-// 이상 구간 — 경보 경로. 아래 통로에서 갈라져 경보 설비로 내려간다.
-const ALARM_D = 'M1100 780 L1100 828'
+// 이상 구간 — 경보 경로. 남쪽 간선에서 갈라져 경보 설비로 내려간다.
+const ALARM_D = 'M940 500 L940 542'
 
-// 설비 블록. 레퍼런스의 태양광 패널·선반을 베끼지 않는다 — 우리는 공장 안전 관제이므로
-// 추상 블록으로 절제한다. 경로가 이 사이를 지나가는 것이 "공장을 순찰한다"를 만든다.
+// 설비 블록. 통로망의 빈 칸 중앙에 놓아 통로를 안 막는다. 배전반(세로 캐비닛) 및 그 아래
+// 온도 배지와도 겹치지 않는 셀만 남는다.
 const EQUIPMENT: readonly { x: number, y: number, tone?: 'ok' | 'alarm' }[] = [
-  { x: 900, y: 340 },
-  { x: 1130, y: 340, tone: 'ok' },
-  { x: 930, y: 500 },
-  { x: 1200, y: 500 },
-  { x: 1060, y: 640 },
-  { x: 1100, y: 845, tone: 'alarm' },
+  { x: 870, y: 285 },              // 셀 800~940 / 180~370
+  { x: 1300, y: 245, tone: 'ok' }, // 셀 1220~1350 / 180~320
+  { x: 1000, y: 440 },             // 셀 940~1080 / 370~500
+  { x: 870, y: 435 },              // 셀 800~940 / 370~500
+  { x: 940, y: 568, tone: 'alarm' },
 ]
 
-// 스윕이 끝나는 꼭짓점에 도착하면 잠깐 멈춘다. 등속으로 계속 흐르면 기계적으로 보이고,
-// 멈췄다 도는 순간에 "순찰"이 읽힌다.
-const DWELL_AT_VERTEX = [1, 3, 5, 7]
+// 배전반 — 통로 벽면에 붙은 세로 캐비닛(일반 설비와 형태로 구분). DWELL_AT_VERTEX 와 1:1
+// (0→꼭짓점2, 1→4, 2→6). 🔴 셋 다 정지 지점의 **아래쪽** — 상태 카드가 로봇 위를 늘 덮으므로
+// 위에 두면 정지할 때마다 카드에 가려 사라진다. 동시에 셋 다 vb y ≤ 568(하단 2연 카드 금지 구역).
+const CABINETS: readonly { x: number, y: number, name: string }[] = [
+  { x: 1272, y: 412, name: '배전반 A' },   // 꼭짓점 2 (1220,320) 아래
+  { x: 1302, y: 568, name: '배전반 B' },   // 꼭짓점 4 (1350,500) 아래
+  { x: 1138, y: 435, name: '배전반 C' },   // 꼭짓점 6 (1080,370) 아래
+]
+
+// 스윕이 끝나는 꼭짓점(2·4·6)에 도착하면 잠깐 멈춘다 — 각 지점의 배전반을 "점검"하는 동안이다.
+const DWELL_AT_VERTEX = [2, 4, 6]
 const DWELL_MS = 1800
-const SPEED_U_PER_S = 46      // viewBox 단위/초. 한 바퀴 약 100초 — 시선을 뺏지 않는 속도.
-const RETURN_FROM_SEG = 15    // 이 세그먼트부터 복귀 통로 구간(스윕 4 를 마치고 바깥 통로로 나간다)
+// SPEED_U_PER_S 는 로봇의 체감 속도 — 경로가 짧아진 만큼 한 바퀴 시간도 줄었다(≈ 81초).
+const SPEED_U_PER_S = 22
+const RETURN_FROM_SEG = 12    // 꼭짓점 6 을 떠나는 순간부터 가운데 간선을 타고 복귀
 const TRAIL = 0.09            // 로봇 뒤에 남는 지나온 자취의 길이(경로 전체 대비)
 
 type Pt = { x: number, y: number }
@@ -170,6 +219,9 @@ function buildTimeline() {
   return { phases, cycleMs: t }
 }
 
+// dwell 세그먼트 인덱스 → 배전반 인덱스 역매핑(온도 배지를 그 배전반에만 켜기 위해).
+const SEG_TO_CAB = new Map(DWELL_AT_VERTEX.map((k, i) => [2 * k - 1, i]))
+
 /** 세그먼트 위 위치와 진행 방향(viewBox 단위). */
 function sample(g: Seg, e: number) {
   if (g.kind === 'line') {
@@ -185,8 +237,9 @@ function sample(g: Seg, e: number) {
   }
 }
 
-/** 순찰 로봇과 그 상태 카드를 경로 위에서 움직인다.
- *  - 매 프레임 건드리는 건 transform 세 개(로봇·방향 화살표·카드)뿐 — 리렌더도, 레이아웃도 없다.
+/** 순찰 로봇과 그 상태 카드를 경로 위에서 움직이고, dwell 중인 배전반에만 온도 배지를 켠다.
+ *  - 매 프레임 건드리는 건 transform 세 개(로봇·방향 화살표·카드)와 classList 뿐 —
+ *    리렌더도, 레이아웃도 없다.
  *  - 자취(stroke-dashoffset)는 값이 눈에 띄게 변할 때만 갱신해 리페인트를 줄인다.
  *  - 탭이 가려지면 진행을 멈추고, 돌아오면 시계를 다시 잡아 튀지 않게 한다.
  *  - prefers-reduced-motion 이면 루프를 시작하지 않고 경로 시작점에 세워 둔다. */
@@ -197,6 +250,8 @@ function usePatrolMotion(refs: {
   card: React.RefObject<HTMLDivElement>
   status: React.RefObject<HTMLSpanElement>
   trail: React.RefObject<SVGPathElement>
+  cabs: React.RefObject<(HTMLDivElement | null)[]>
+  badges: React.RefObject<(HTMLDivElement | null)[]>
 }) {
   useEffect(() => {
     const scene = refs.scene.current, robot = refs.robot.current, dirEl = refs.dir.current
@@ -209,6 +264,7 @@ function usePatrolMotion(refs: {
     let clock = 0
     let lastLabel = ''
     let lastTrail = -1
+    let lastDwellSeg = -2
 
     const place = () => {
       const p = phases.find((q) => clock < q.t1) ?? phases[phases.length - 1]
@@ -224,16 +280,26 @@ function usePatrolMotion(refs: {
       robot.style.transform = `translate3d(${rx}px, ${ry}px, 0) translate(-50%, -50%)`
       dirEl.style.transform = `rotate(${deg}deg)`
 
-      // 카드는 로봇 오른쪽에 붙이되, 씬 밖으로 나갈 것 같으면 반대편으로 넘긴다.
-      // (우측 스윕에서 자동으로 왼쪽에 붙고, 그 자리는 히어로 패널보다 한참 오른쪽이다.)
-      let cx = rx + 32
-      if (cx + cardW > w - 18) cx = rx - 32 - cardW
-      cx = Math.max(18, Math.min(cx, w - cardW - 18))
-      const cy = Math.max(18, Math.min(ry - cardH / 2, h - cardH - 18))
+      // 🔴 카드는 항상 로봇 "위"에 고정한다(사용자 결정 2026-08-07) — 좌우로는 절대 넘기지
+      // 않는다. 가로는 로봇 중심 정렬 + 씬 좌우 경계 클램프. 세로만 예외: 위에 자리가 없을
+      // 때(씬 상단을 지날 때)만 아래로 내린다. 배전반을 정지 지점 아래에 두는 배치와 짝을
+      // 이뤄야 상태 카드가 온도 배지를 가리지 않는다.
+      const cx = Math.max(18, Math.min(rx - cardW / 2, w - cardW - 18))
+      let cy = ry - cardH - 26
+      if (cy < 18) cy = Math.min(ry + 26, h - cardH - 18)
       card.style.transform = `translate3d(${cx}px, ${cy}px, 0)`
 
       const label = p.dwell ? '점검 중' : p.seg >= RETURN_FROM_SEG ? '복귀 중' : '순찰 중'
       if (label !== lastLabel) { status.textContent = label; lastLabel = label }
+
+      // 정지 중인 배전반에만 온도 배지를 켠다 — dwell 세그먼트를 배전반 인덱스로 역매핑.
+      const dSeg = p.dwell ? p.seg : -1
+      if (dSeg !== lastDwellSeg) {
+        const on = SEG_TO_CAB.has(dSeg) ? SEG_TO_CAB.get(dSeg)! : -1
+        refs.badges.current?.forEach((el, i) => el?.classList.toggle('is-on', i === on))
+        refs.cabs.current?.forEach((el, i) => el?.classList.toggle('is-on', i === on))
+        lastDwellSeg = dSeg
+      }
 
       // 지나온 자취 — 로봇 뒤로 TRAIL 만큼만 진하게. 닫힌 루프라 "다 차고 리셋"이 없다.
       const s = p.dwell ? p.s1 : p.s0 + (p.s1 - p.s0) * e
@@ -278,6 +344,15 @@ function usePatrolMotion(refs: {
 
 const pct = (v: number, of: number) => `${(v / of) * 100}%`
 
+// 남은 시간 램프: remaining[i] = blocks[i..끝] 의 합. remaining[0] 이 곧 총계다.
+// i 번째 막대 = 그 시점 이후 남은 시간의 합 — 왼쪽 첫 막대가 곧 총계이고 오른쪽으로 0 에
+// 수렴하는 단조 하강 램프다. [A]의 불규칙한 히스토그램과 형태로 구분된다.
+const RUNTIME_REMAINING_H = RUNTIME_BLOCKS_H.map(
+  (_, i) => RUNTIME_BLOCKS_H.slice(i).reduce((a, b) => a + b, 0),
+)
+const RUNTIME_TOTAL_H = RUNTIME_REMAINING_H[0]                 // ≈ 2.53 h
+const RUNTIME_PX_PER_HOUR = 29 / RUNTIME_TOTAL_H                // 첫 막대가 컨테이너(30px)에 딱 맞게
+
 export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
   const scene = useRef<HTMLDivElement>(null)
   const robot = useRef<HTMLDivElement>(null)
@@ -285,7 +360,9 @@ export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
   const card = useRef<HTMLDivElement>(null)
   const status = useRef<HTMLSpanElement>(null)
   const trail = useRef<SVGPathElement>(null)
-  usePatrolMotion({ scene, robot, dir, card, status, trail })
+  const cabRefs = useRef<(HTMLDivElement | null)[]>([])
+  const badgeRefs = useRef<(HTMLDivElement | null)[]>([])
+  usePatrolMotion({ scene, robot, dir, card, status, trail, cabs: cabRefs, badges: badgeRefs })
 
   const batteryLow = BATTERY_PCT < BATTERY_LOW_PCT
 
@@ -301,8 +378,10 @@ export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
         <div className="welcome-scene__grid" />
 
         <svg className="welcome-scene__path" viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none">
-          {/* 훑어야 할 전체 통로. pathLength="1" 이라 CSS 가 실제 길이를 몰라도 1→0 으로 그려 낸다. */}
-          <path className="p-ok" pathLength={1} d={ROUTE.d} fill="none" stroke="#B9D3C4" strokeWidth="2" />
+          {/* 통로망 — 배경. 형태만으로 코스와 갈리도록 굵기 1.5 + opacity .82. */}
+          <path className="p-corridor" d={CORRIDORS} fill="none" stroke="#D2D6E2" strokeWidth="1.5" strokeLinecap="round" />
+          {/* 오늘 도는 순찰 코스. pathLength="1" 이라 CSS 가 실제 길이를 몰라도 1→0 으로 그려 낸다. */}
+          <path className="p-route" pathLength={1} d={ROUTE.d} fill="none" stroke="#B9D3C4" strokeWidth="3.8" strokeLinejoin="round" />
           {/* 로봇이 지나온 자취 — dashoffset 만 움직여 로봇 뒤를 따라온다 */}
           <path
             ref={trail} className="p-trail" pathLength={1} d={ROUTE.d}
@@ -316,7 +395,7 @@ export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
             <circle key={`${n.x}-${n.y}`} className="p-node" cx={n.x} cy={n.y} r="4.5" fill="#fff" stroke="#C3C9D6" strokeWidth="1.5" />
           ))}
           {/* 경보 경로 끝 — 아래 ALARM_D 의 끝점과 같은 자리여야 한다 */}
-          <circle className="p-node" cx="1100" cy="828" r="4" fill="#D08C84" />
+          <circle className="p-node" cx="940" cy="542" r="4" fill="#D08C84" />
         </svg>
 
         {/* 설비 블록 — 경로가 이 사이를 지난다 */}
@@ -330,8 +409,36 @@ export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
           />
         ))}
 
+        {/* 배전반 — 세로 캐비닛. dwell 중인 배전반에만 아래 온도 배지가 뜬다. */}
+        {CABINETS.map((c, i) => (
+          <div
+            key={c.name}
+            className="welcome-cab"
+            ref={(el) => { cabRefs.current[i] = el }}
+            style={{ left: pct(c.x, VB_W), top: pct(c.y, VB_H), animationDelay: `${1.0 + i * 0.1}s` }}
+          />
+        ))}
+        {CABINETS.map((c, i) => {
+          const t = CABINET_TEMPS[i]
+          return (
+            <div
+              key={`${c.name}-badge`}
+              className="welcome-badge"
+              ref={(el) => { badgeRefs.current[i] = el }}
+              style={{ left: pct(c.x, VB_W), top: pct(c.y, VB_H) }}
+            >
+              <div className="welcome-badge__in">
+                <span className="welcome-badge__t mono">{t.c.toFixed(1)}°C</span>
+                <span className={`welcome-badge__j welcome-badge__j--${t.judge}`}>
+                  {t.judge === 'ok' ? '정상' : '주의'}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+
         {/* 경보 배지 */}
-        <div className="welcome-alarm" style={{ left: pct(1030, VB_W), top: pct(812, VB_H) }}>
+        <div className="welcome-alarm" style={{ left: pct(892, VB_W), top: pct(536, VB_H) }}>
           <svg viewBox="0 0 12 11" aria-hidden="true"><path d="M6 0.6 11.4 10.4H0.6z" fill="currentColor" /></svg>
         </div>
 
@@ -381,24 +488,46 @@ export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
         <div className="welcome-foot mono">BBIYONG CONTROL · v1.0 · © 2026 E101</div>
       </section>
 
-      {/* ── 하단 경계에 걸쳐 잘리는 통계 카드 — "더 있다"는 암시 ──
+      {/* ── 하단 통계 2연 카드 — 왼쪽 = 지나온 것(누적) · 오른쪽 = 남은 것(예상).
            수치는 위의 [더미 데이터] 블록에서 온다. 장식이라 스크린리더에서 감춘다 —
-           읽어 줘 봐야 사실이 아닌 값이다. */}
-      <div className="welcome-edge" aria-hidden="true">
-        <div className="welcome-edge__t">누적 순찰 시간</div>
-        <div className="welcome-edge__v">
-          <b className="mono">{PATROL_HOURS_TOTAL.toFixed(1)}</b><span>/ h</span>
+           읽어 줘 봐야 사실이 아닌 값이다.
+           ⚠ 두 스파크라인은 배율이 다르다(128.5h vs 2.5h) — 막대 높이를 카드끼리
+           비교하면 안 된다. 각 카드 안에서만 의미가 있다. */}
+      <div className="welcome-stats" aria-hidden="true">
+        <div className="welcome-stat">
+          <div className="welcome-stat__t">누적 순찰 시간</div>
+          <div className="welcome-stat__v">
+            <b className="mono">{PATROL_HOURS_TOTAL.toFixed(1)}</b><span>/ h</span>
+          </div>
+          <div className="welcome-spark">
+            {PATROL_HOURS_BY_DAY.map((h, i) => (
+              <i
+                key={i}
+                style={{
+                  height: `${(h * SPARK_PX_PER_HOUR).toFixed(1)}px`,
+                  background: i >= PATROL_HOURS_BY_DAY.length - 3 ? 'var(--bb-ok)' : undefined,
+                }}
+              />
+            ))}
+          </div>
         </div>
-        <div className="welcome-spark">
-          {PATROL_HOURS_BY_DAY.map((h, i) => (
-            <i
-              key={i}
-              style={{
-                height: `${(h * SPARK_PX_PER_HOUR).toFixed(1)}px`,
-                background: i >= PATROL_HOURS_BY_DAY.length - 3 ? 'var(--bb-ok)' : undefined,
-              }}
-            />
-          ))}
+        <div className="welcome-stat">
+          <div className="welcome-stat__t">예상 구동 가능 시간</div>
+          <div className="welcome-stat__v">
+            <b className="mono">{RUNTIME_TOTAL_H.toFixed(1)}</b><span>/ h</span>
+          </div>
+          <div className="welcome-spark">
+            {RUNTIME_REMAINING_H.map((h, i) => (
+              <i
+                key={i}
+                style={{
+                  height: `${(h * RUNTIME_PX_PER_HOUR).toFixed(1)}px`,
+                  // 꼬리 3칸 = 예비 구간(BATTERY_RESERVE_PCT 부근). 주의색으로 "곧 충전"이 읽히게 한다.
+                  background: i >= RUNTIME_REMAINING_H.length - 3 ? 'var(--bb-warn)' : undefined,
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>
