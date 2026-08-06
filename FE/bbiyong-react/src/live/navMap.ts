@@ -355,6 +355,21 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     }
     route.forEach((w: any, i: any) => {
       const X = sx(w.x), Y = sy(w.y)
+      // 방향(heading) 화살표 — 로봇이 이 지점에서 바라볼 방향(S15P11E101-790).
+      // yaw 가 없으면(자동) 그리지 않는다 — 로봇이 가까운 구조물을 스스로 바라본다.
+      // 원보다 먼저 그려 번호가 화살표에 가리지 않게 한다.
+      if (Number.isFinite(Number(w.yaw))) {
+        const a = Number(w.yaw)
+        const L = 22, hx = X + Math.cos(a) * L, hy = Y - Math.sin(a) * L
+        g.strokeStyle = '#3ddc97'; g.lineWidth = 2.5
+        g.beginPath(); g.moveTo(X, Y); g.lineTo(hx, hy); g.stroke()
+        g.fillStyle = '#3ddc97'
+        g.beginPath()
+        g.moveTo(hx, hy)
+        g.lineTo(hx + Math.cos(a + 2.6) * 7, hy - Math.sin(a + 2.6) * 7)
+        g.lineTo(hx + Math.cos(a - 2.6) * 7, hy - Math.sin(a - 2.6) * 7)
+        g.closePath(); g.fill()
+      }
       g.fillStyle = '#3ddc97'
       g.beginPath(); g.arc(X, Y, 9, 0, Math.PI * 2); g.fill()
       g.fillStyle = '#0b0d11'
