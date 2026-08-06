@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgroundOf, followPose } from '../../live/navMap.ts'
+import { localized } from '../../live/mappers.ts'
 
 // live 모드의 2D 맵 캔버스 — 로봇이 보내는 실제 SLAM 맵/스캔/자세를 그린다.
 // 렌더 로직은 navMap.js(로봇팀 nav.html 포팅)에 있고, 여기서는 캔버스 수명주기만 다룬다.
@@ -80,7 +81,9 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       // refit 만 하면 새로 발견한 구역 쪽으로 화면이 끌려가 로봇이 가장자리로 밀린다.
       // 자세는 3Hz 로 온다. 한 프레임에 조금씩 따라가면 로봇이 화면 가장자리를 맴돈다 —
       // 눈에 띄게 흔들리지 않으면서 따라잡는 값이 이 정도다.
-      if (followingRef.current && nav?.pose) followPose(viewRef.current, cv, nav.pose, 0.5)
+      // map 프레임이 아닌 자세는 믿을 수 없다(S15P11E101-773). 그 값으로 화면을 끌면
+      // 지도가 엉뚱한 곳으로 밀려나고, 조작자는 그 사실조차 모른다 — 차라리 가만히 둔다.
+      if (followingRef.current && localized(nav?.pose)) followPose(viewRef.current, cv, nav!.pose!, 0.5)
       drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly)
     }
 

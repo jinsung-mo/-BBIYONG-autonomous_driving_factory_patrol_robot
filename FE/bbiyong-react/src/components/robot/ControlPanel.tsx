@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import CapBadge from './CapBadge.tsx'
 import CameraTilt from './CameraTilt.tsx'
+import { DENY, formatLeft } from '../../live/controlOwnership.ts'
 
 // 순찰 로봇 수동 조작 패널 (WASD 이동 · 모드 · 카메라 각도)
 //
@@ -27,6 +28,7 @@ export default function ControlPanel() {
   const {
     enabled, connected, control, telemetry, robotOnline,
     driveMode: seg, setDriveMode: setSeg,
+    ownership, controlOwnership,
   } = useLive()
   const { canOperate } = useAuth()
   // 조작 결과 안내 — 명령이 조용히 버려지는 경우를 알린다(S15P11E101-595)
@@ -57,6 +59,41 @@ export default function ControlPanel() {
   // 뷰어는 조작할 수 없다 — 버튼을 숨기지 않고 회색으로 남겨 '권한 없음'이 드러나게 한다.
   // 잠금(S15P11E101-653)도 같은 자리에 얹는다. canOperate = 권한 있음 && 잠기지 않음.
   const ctlOff = (enabled && !connected) || driveDown || !canOperate
+
+  // ---- 조종 점유 (S15P11E101-778 · 779 / BE MR !344) ----
+  //
+  // 남이 조종 중이면 수동 모드 진입 버튼 자체를 잠근다. 다만 점유 기능이 없는 서버
+  // (MR !344 머지 전)에서는 /topic/control 이 한 번도 오지 않아 supported 가 false 로 남는데,
+  // 그것을 이유로 수동 주행을 막으면 지금 배포본이 통째로 멈춘다 — 모르면 열어 둔다.
+  // 막는 것은 "남이 잡고 있다는 사실을 서버에서 확인했을 때" 뿐이다.
+  const ownedByOther = ownership.supported && ownership.otherOwns
+  // 하트비트가 끊긴 구간. 마지막으로 본 값을 지금의 사실인 양 단언하지 않는다.
+  const ownStale = ownership.supported && ownership.stale
+  const ownerName = ownership.ownerEmail || '다른 사용자'
+  const leftLabel = formatLeft(ownership.leftMs)
+  // 내가 조종자인데 갱신이 3초 넘게 끊겼다. 서버 리스는 2초라 그사이 만료됐을 공산이 크고,
+  // 그렇다면 내 DRIVE 는 지금 서버에서 조용히 버려지고 있다 — 조이스틱을 열어 두면 거짓말이다.
+  // 모드에서 내쫓지는 않는다. 방송이 돌아오면 그대로 이어서 조종할 수 있어야 한다.
+  const ownUnsure = ownStale && ownership.mine
+
+  const denyText: Record<string, string> = {
+    [DENY.FORBIDDEN_ROLE]: '조종 권한이 없습니다 — 관리자 계정으로만 조작할 수 있습니다.',
+    [DENY.OWNED_BY_OTHER]: `${ownerName} 님이 조종 중이라 수동 모드로 들어갈 수 없습니다.`,
+    [DENY.TAKEN_OVER_BY_OTHER]: `${ownerName} 님이 조종권을 가져갔습니다 — 조작이 잠겼습니다.`,
+  }
+  const deniedMsg = ownership.denied ? (denyText[ownership.denied.reason] || '조종 요청이 거부되었습니다.') : null
+
+  // 강제 탈취는 파괴적이다 — 남이 로봇을 움직이는 중에 그 사람의 조종을 끊고, 서버가
+  // DRIVE(0,0) 정지 프레임을 강제로 쏜다. 누구의 조종을 끊는지 이름을 보여주고 확인받는다.
+  const onTakeover = () => {
+    const ok = window.confirm(
+      `${ownerName} 님이 지금 이 로봇을 조종하고 있습니다.\n\n`
+      + '조종권을 강제로 가져오면 그 사람의 조작이 즉시 잠기고 로봇은 한 번 정지합니다.\n'
+      + '계속하시겠습니까?')
+    if (!ok) return
+    controlOwnership.takeover()
+    setSeg('manual')
+  }
 
   // E-STOP 체결 여부 — live는 텔레메트리가, mock은 시뮬 상태가 정답이다.
   // 텔레메트리가 아직 없으면(estop === undefined) 체결로 오해하지 않도록 명시적으로 검사한다.
@@ -115,9 +152,10 @@ export default function ControlPanel() {
       <button
         className={pressedKeys[k] ? 'active' : ''}
         aria-label={`${dirLabel[k]} (${glyph[k]})`}
-        // 순찰 중에는 주행 명령이 무효다 — 눌러도 아무 일이 없는 버튼으로 두지 않고 잠근다
-        disabled={ctlOff || !manual}
-        title={!manual ? '수동 모드에서 조작할 수 있습니다 (Space)' : undefined}
+        // 순찰 중에는 주행 명령이 무효다 — 눌러도 아무 일이 없는 버튼으로 두지 않고 잠근다.
+        // 점유를 확인할 수 없는 구간(ownUnsure)도 같다 — 서버가 버릴 명령을 받아 주면 안 된다.
+        disabled={ctlOff || !manual || ownUnsure}
+        title={ownUnsure ? '조종 점유를 확인하는 중입니다' : (!manual ? '수동 모드에서 조작할 수 있습니다 (Space)' : undefined)}
         {...(enabled ? live : { onClick: () => actions.dpadMove(k) })}
       >
         {glyph[k]}
@@ -134,6 +172,9 @@ export default function ControlPanel() {
   }
 
   const onSetSeg = (man: any) => {
+    // 남이 잡고 있으면 수동으로 못 들어간다 — 서버도 거부하므로 화면만 바뀌면 거짓말이 된다.
+    // 순찰로 나오는 것(man=false)은 언제나 허용한다.
+    if (man && ownedByOther) return
     setSeg(man ? 'manual' : 'patrol')
     if (liveReady) { control.setMode(man ? 'manual' : 'autonomy'); warnIfOffline() }
     else actions.setSeg(man)
@@ -222,11 +263,13 @@ export default function ControlPanel() {
               <button
                 className={seg === 'manual' ? 'on' : ''}
                 onClick={() => onSetSeg(true)}
-                disabled={ctlOff}
+                // 남이 조종 중이면 눌러도 서버가 거부한다 — 눌리는 버튼으로 두지 않는다
+                disabled={ctlOff || ownedByOther}
+                title={ownedByOther ? `${ownerName} 님이 조종 중입니다` : undefined}
                 aria-keyshortcuts={seg === 'patrol' ? 'Space' : undefined}
               >
                 수동 모드
-                {seg === 'patrol' && <kbd className="kbd">Space</kbd>}
+                {seg === 'patrol' && !ownedByOther && <kbd className="kbd">Space</kbd>}
               </button>
             </div>
 
@@ -234,6 +277,32 @@ export default function ControlPanel() {
             <CameraTilt manual={manual} />
           </div>
         </div>
+        {/* 조종 점유 배너 — 누가 잡고 있는지와 남은 시간을 그대로 보여 준다.
+            갱신이 끊기면(stale) 남은 시간을 단언하지 않고 '확인 중'으로 내린다. */}
+        {ownedByOther && (
+          <div className="ctlown warn" id="ctlOwn" role="status">
+            <span className="ctlown-txt">
+              <b>{ownerName}</b> 님이 조종 중입니다
+              {ownStale ? ' — 점유 상태 확인 중…' : ` (남은 ${leftLabel}초)`}
+            </span>
+            <button className="ctlown-take" onClick={onTakeover} disabled={ctlOff}>
+              강제 탈취
+            </button>
+          </div>
+        )}
+        {ownership.mine && (
+          <div className="ctlown mine" id="ctlOwnMine" role="status">
+            <span className="ctlown-txt">
+              내가 조종 중입니다{ownStale ? ' — 점유 상태 확인 중…' : ` (남은 ${leftLabel}초)`}
+            </span>
+          </div>
+        )}
+        {/* 거부 사유는 서버가 개인 큐로 알려 준 것을 그대로 옮긴다(S15P11E101-779) */}
+        {deniedMsg && (
+          <div className="ctlmsg err" id="ctlDenied" role="alert" onClick={controlOwnership.clearDenied}>
+            {deniedMsg}
+          </div>
+        )}
         {/* 명령이 조용히 버려진 경우를 알린다 — 패널 아래 한 줄로만 쓴다(S15P11E101-595) */}
         {ctlMsg && <div className={`ctlmsg ${ctlMsg.kind}`} id="ctlMsg" role="status">{ctlMsg.text}</div>}
       </div>

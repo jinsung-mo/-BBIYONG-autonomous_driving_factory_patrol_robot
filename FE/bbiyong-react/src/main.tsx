@@ -1,6 +1,8 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+// 디자인 시스템 v3 토큰(--bb-*)이 먼저 와야 한다 — app.css 의 .welcome-* 규칙이 이 값을 참조한다.
+import './styles/tokens.css'
 import './styles/app.css'
 import './styles/navexa.css'
 

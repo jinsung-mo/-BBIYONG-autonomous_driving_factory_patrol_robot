@@ -119,6 +119,9 @@ export function floorplanDetail(imageBytes, id = 'fp1') {
 }
 
 export function startFakeBackend(port = 8099) {
+  // 다른 작업이 이미 8099 를 쓰고 있으면 검증 전체가 EADDRINUSE 로 죽는다.
+  // 스크립트를 하나하나 고치는 대신 환경변수 하나로 전부 옮길 수 있게 한다.
+  if (process.env.FAKE_PORT) port = Number(process.env.FAKE_PORT)
   const sends = []          // { t, destination, body }
   const restCalls = []      // { url, type, page, size, returned }
   const subs = []           // { id, destination, socket }
@@ -151,11 +154,14 @@ export function startFakeBackend(port = 8099) {
   ]
   // 발급한 access 토큰이 어떤 역할인지 기억한다 — 403 판정에 쓴다
   const tokenRole = new Map()
+  // 조종 점유(S15P11E101-779)는 소유자를 email(principal 이름)로 알린다 — 토큰마다 기억해 둔다
+  const tokenEmail = new Map()
   const issue = (email, role) => {
     tokenSeq++
     const access = `fake-access-${tokenSeq}`
     liveAccess.add(access)
     tokenRole.set(access, role)
+    tokenEmail.set(access, String(email || '').toLowerCase())
     const out = { tokenType: 'Bearer', accessToken: access, expiresIn, role }
     if (!legacyAuth) {
       const refresh = `fake-refresh-${tokenSeq}`
@@ -221,9 +227,9 @@ export function startFakeBackend(port = 8099) {
   let statsBattery = null
   let zones = []
 
-  function push(destination, payload) {
+  function push(destination, payload, filter = null) {
     let n = 0
-    subs.filter((s) => s.destination === destination).forEach((s) => {
+    subs.filter((s) => s.destination === destination && (!filter || filter(s))).forEach((s) => {
       const body = typeof payload === 'string' ? payload : JSON.stringify(payload)
       sendText(s.socket, `MESSAGE\nsubscription:${s.id}\nmessage-id:${++msgId}\n`
         + `destination:${destination}\ncontent-type:application/json\n\n${body}`)
@@ -231,6 +237,114 @@ export function startFakeBackend(port = 8099) {
     })
     return n
   }
+
+  // ---- 조종 점유 (S15P11E101-778 · 779 / BE MR !344) ----
+  // ControlOwnershipService 를 그대로 흉내낸다. 실서버와 다른 점은 없어야 한다 —
+  // 리스 2초, 500ms 스윕(만료 처리 + HEARTBEAT), 암묵 획득, 명시적 TAKEOVER, 세션 종료 시 해제.
+  const LEASE_MS = 2000
+  const ROBOT_DEFAULT = 'orinka_01'
+  /** socket → { sessionId, email, role } */
+  const socketMeta = new Map()
+  /** robotId → { sessionId, email, expiresAt } */
+  const leases = new Map()
+  let sessSeq = 0
+  // Spring simple broker 가 CONNECTED 에 session 헤더를 실어 줄지 확실하지 않다.
+  // 기본은 '안 실어 준다'(비관적) — FE 가 ACQUIRE 왕복으로 자기 sessionId 를 학습하는
+  // 경로를 그대로 검증하기 위해서다. FAKE_STOMP_SESSION_HEADER=1 이면 실어 준다.
+  const sendSessionHeader = process.env.FAKE_STOMP_SESSION_HEADER === '1'
+
+  const liveLease = (robotId) => {
+    const l = leases.get(robotId)
+    if (!l) return null
+    return l.expiresAt > Date.now() ? l : null
+  }
+
+  function broadcastControl(robotId, event) {
+    const now = Date.now()
+    const l = liveLease(robotId)
+    // 실서버는 JSON 문자열을 그대로 body 에 싣는다 — FE 의 파싱 경로를 같게 만든다
+    return push(`/topic/control/${robotId}`, JSON.stringify({
+      robotId, event,
+      owner: l ? l.sessionId : null,
+      ownerEmail: l ? l.email : null,
+      leftMs: l ? Math.max(0, l.expiresAt - now) : 0,
+      serverTime: now,
+    }))
+  }
+
+  /** 거부 사유는 요청자 '계정'에게 간다 — Spring user destination 과 같이 같은 계정의 모든 탭이 받는다. */
+  function notifyDenied(email, robotId, reason) {
+    if (!email) return 0
+    const now = Date.now()
+    const l = liveLease(robotId)
+    return push('/user/queue/control', JSON.stringify({
+      type: 'CONTROL_DENIED', robotId, reason,
+      owner: l ? l.sessionId : null,
+      ownerEmail: l ? l.email : null,
+      leftMs: l ? Math.max(0, l.expiresAt - now) : 0,
+      serverTime: now,
+    }), (s) => socketMeta.get(s.socket)?.email === email)
+  }
+
+  /** 탈취·강제해제 시 정지 프레임 1회. 로봇이 없으므로 기록만 남긴다. */
+  function forceStop(robotId) {
+    sends.push({
+      t: t0 === null ? 0 : Date.now() - t0, at: Date.now(),
+      destination: '(server)', body: JSON.stringify({ command: 'DRIVE', linear: 0, angular: 0 }),
+      relayed: true, reason: `점유 전환 정지 프레임 (${robotId})`,
+      payload: { command: 'DRIVE', linear: 0, angular: 0 },
+    })
+  }
+
+  /** ControlOwnershipService.claim — ACQUIRED | RENEWED | TAKEN_OVER | DENIED */
+  function claimOwnership(robotId, sessionId, email, takeover) {
+    const now = Date.now()
+    const prev = leases.get(robotId)
+    const alive = prev && prev.expiresAt > now
+    if (alive && prev.sessionId !== sessionId && !takeover) return 'DENIED'
+
+    let decision
+    if (alive && prev.sessionId === sessionId) decision = 'RENEWED'
+    else if (alive) decision = 'TAKEN_OVER'
+    else decision = 'ACQUIRED'
+
+    leases.set(robotId, { sessionId, email, expiresAt: now + LEASE_MS })
+    if (decision === 'TAKEN_OVER') {
+      forceStop(robotId)
+      notifyDenied(prev.email, robotId, 'TAKEN_OVER_BY_OTHER')
+    }
+    if (decision !== 'RENEWED') broadcastControl(robotId, decision)
+    return decision
+  }
+
+  function releaseOwnership(robotId, sessionId) {
+    const cur = leases.get(robotId)
+    if (!cur || cur.sessionId !== sessionId) return false
+    leases.delete(robotId)
+    broadcastControl(robotId, 'RELEASED')
+    return true
+  }
+
+  function releaseAllForSession(sessionId) {
+    if (!sessionId) return
+    for (const [robotId, l] of [...leases]) {
+      if (l.sessionId !== sessionId) continue
+      leases.delete(robotId)
+      forceStop(robotId)
+      broadcastControl(robotId, 'DISCONNECTED')
+    }
+  }
+
+  // 500ms 스윕 — 만료 제거 + 살아 있는 리스에 HEARTBEAT.
+  // 점유가 비어 있으면 아무것도 보내지 않는다(실서버와 동일). FE 는 STATUS 로 공백을 메운다.
+  const sweep = setInterval(() => {
+    const now = Date.now()
+    for (const [robotId, l] of [...leases]) {
+      if (l.expiresAt <= now) { leases.delete(robotId); broadcastControl(robotId, 'EXPIRED') }
+      else broadcastControl(robotId, 'HEARTBEAT')
+    }
+  }, 500)
+  sweep.unref?.()
 
   const server = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return }
@@ -1060,7 +1174,12 @@ export function startFakeBackend(port = 8099) {
 
   server.on('upgrade', (req, socket) => {
     wsSockets.add(socket)
-    socket.on('close', () => wsSockets.delete(socket))
+    socket.on('close', () => {
+      wsSockets.delete(socket)
+      // 브라우저 탭이 닫히면 그 세션이 들고 있던 조종 점유를 즉시 해제한다(실서버와 동일)
+      const meta = socketMeta.get(socket)
+      if (meta) { socketMeta.delete(socket); releaseAllForSession(meta.sessionId) }
+    })
     const key = req.headers['sec-websocket-key']
     const accept = crypto.createHash('sha1').update(key + GUID).digest('base64')
     const head = [
@@ -1120,9 +1239,17 @@ export function startFakeBackend(port = 8099) {
         socket.end()
         return
       }
+      // 세션마다 고유 id — 조종 점유의 owner 가 이 값이다
+      const sid = `sess-${++sessSeq}`
+      socketMeta.set(socket, {
+        sessionId: sid,
+        email: tokenEmail.get(tok) || lastEmail || '',
+        role: tokenRole.get(tok) || lastRole,
+      })
       // heart-beat:0,0 → 하트비트 없이 유지 (계측 프레임만 남기려고)
-      sendText(socket, 'CONNECTED' + String.fromCharCode(10) + 'version:1.2'
-        + String.fromCharCode(10) + 'heart-beat:0,0' + String.fromCharCode(10) + String.fromCharCode(10))
+      const nl = String.fromCharCode(10)
+      sendText(socket, 'CONNECTED' + nl + 'version:1.2' + nl + 'heart-beat:0,0'
+        + (sendSessionHeader ? nl + `session:${sid}` : '') + nl + nl)
       return
     }
     if (command === 'SUBSCRIBE') {
@@ -1139,6 +1266,39 @@ export function startFakeBackend(port = 8099) {
       try { body2 = JSON.parse(body) } catch { body2 = null }
       const cmd = String(body2?.command || '').toUpperCase()
       const OPERATION = ['START_MAPPING', 'STOP_MAPPING', 'SAVE_MAP', 'NAVIGATE']
+      const meta = socketMeta.get(socket) || {}
+      const robotId = body2?.robot_id || body2?.robotId || ROBOT_DEFAULT
+
+      // ---- 조종 점유 명령 (S15P11E101-779) ----
+      // 로봇에 중계하지 않는다 — 점유 상태만 바꾸고 방송한다.
+      if (dest === '/app/control/ownership') {
+        // 로봇으로 중계되지는 않지만 '버려진 명령' 도 아니다 — 서버가 제 몫을 다한 프레임이다.
+        // reason 을 비워 둬야 버려진 제어 명령을 세는 다른 검증(check-627 §7)이 오탐하지 않는다.
+        sends.push({ t: now - t0, at: now, destination: dest, body, relayed: true, reason: '', payload: body2 })
+        if (meta.role !== 'ROLE_ADMIN') { notifyDenied(meta.email, robotId, 'FORBIDDEN_ROLE'); return }
+        if (cmd === 'RELEASE') { releaseOwnership(robotId, meta.sessionId); return }
+        if (cmd === 'STATUS') { broadcastControl(robotId, 'STATUS'); return }
+        const decision = claimOwnership(robotId, meta.sessionId, meta.email, cmd === 'TAKEOVER')
+        if (decision === 'DENIED') notifyDenied(meta.email, robotId, 'OWNED_BY_OTHER')
+        return
+      }
+
+      // ---- 제어 명령 관문: 권한 → 점유 ----
+      // 실서버 RobotControlStompController.gate 와 같은 순서다. 통과 못 하면 로봇에 가지 않는다.
+      if (dest.startsWith('/app/control/')) {
+        if (meta.role !== 'ROLE_ADMIN') {
+          notifyDenied(meta.email, robotId, 'FORBIDDEN_ROLE')
+          sends.push({ t: now - t0, at: now, destination: dest, body, relayed: false, reason: 'FORBIDDEN_ROLE', payload: null })
+          return
+        }
+        // 암묵 획득 — 비어 있으면 첫 명령자가 소유자가 된다(하위호환 경로)
+        if (claimOwnership(robotId, meta.sessionId, meta.email, false) === 'DENIED') {
+          notifyDenied(meta.email, robotId, 'OWNED_BY_OTHER')
+          sends.push({ t: now - t0, at: now, destination: dest, body, relayed: false, reason: 'OWNED_BY_OTHER', payload: null })
+          return
+        }
+      }
+
       let relayed = true
       let reason = ''
       if (dest === '/app/control/operation' && !OPERATION.includes(cmd)) {
@@ -1179,7 +1339,11 @@ export function startFakeBackend(port = 8099) {
       push,
       maps,
       // 로봇이 SAVE_MAP 을 처리해 업로드한 상황을 만든다 (최신이 맨 앞)
-      addMap: (name) => { maps.unshift({ id: `m${maps.length + 1}`, name, widthPx: 480, heightPx: 320, resolution: 0.05 }); return maps[0] },
+      addMap: (name, kind = 'RAW', sourceMapId = null) => {
+        maps.unshift({ id: `m${maps.length + 1}`, name, kind, sourceMapId,
+          widthPx: 480, heightPx: 320, resolution: 0.05 })
+        return maps[0]
+      },
       setActivateImplemented: (v) => { activateImplemented = v },
       // 744 검증용 — REST 복원값과 STOMP 전환을 함께 움직인다
       setGridImplemented: (v) => { gridImplemented = v },
@@ -1227,7 +1391,11 @@ export function startFakeBackend(port = 8099) {
       waypoints,
       drive,
       events: EVENTS,
+      // 조종 점유 — 검증 스크립트가 서버 쪽 진실을 직접 확인할 수 있게 열어 둔다
+      ownership: () => liveLease(ROBOT_DEFAULT),
+      ownershipSessions: () => [...socketMeta.values()],
       close: () => new Promise((r) => {
+        clearInterval(sweep)
         sockets.forEach((s) => s.destroy())
         sockets.clear()
         server.close(r)

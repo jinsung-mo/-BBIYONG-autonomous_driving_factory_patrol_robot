@@ -155,6 +155,24 @@ console.log('  → 버튼이 사라진다 :', ok((await followBtn()) === false))
   const { data } = await send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(OUT + 'F775-follow.png', Buffer.from(data, 'base64'))
 }
+console.log('\n[5] 프레임을 믿을 수 없는 자세는 따라가지 않는가 (S15P11E101-773 과의 합의)')
+// odom 프레임 자세는 map 좌표가 아니다. 그 값으로 화면을 끌면 지도가 엉뚱한 곳으로
+// 밀려나고, 조작자는 그 사실조차 모른다 — 가만히 있는 편이 낫다.
+await ev(`document.querySelector('#btnFollowRobot')?.click()`)
+for (let i = 0; i < 5; i++) { pose(9.0, 9.0); await sleep(300) }
+await sleep(600)
+const before = await robotScreen()
+for (let i = 0; i < 6; i++) {
+  be.push('/topic/nav/orinka_01', { type: 'NAV_LIVE', pose: { frame: 'odom', x: 30.0, y: 25.0, yaw: 0 } })
+  await sleep(320)
+}
+await sleep(700)
+const after = await robotScreen()
+const moved = (before && after) ? Math.hypot(after.x - before.x, after.y - before.y) : -1
+console.log('  odom 자세 6회 후 화면 이동 :', Math.round(moved), 'px')
+console.log('  → 화면이 끌려가지 않는다 :', ok(moved >= 0 && moved < 25),
+  '(틀린 위치로 지도를 옮기느니 가만히 두는 편이 낫다)')
+
 console.log('\n콘솔 에러 :', errs.length ? errs.slice(0, 2) : '없음')
 ws.close(); chrome.kill()
 process.exit(0)

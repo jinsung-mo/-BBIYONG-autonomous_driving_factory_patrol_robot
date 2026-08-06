@@ -34,6 +34,7 @@ node tools/verify/run-all.mjs                # 전부 (FAIL 이 있으면 종료
 | --- | --- |
 | `CHROME` | `C:/Program Files/Google/Chrome/Application/chrome.exe` |
 | `APP_URL` | `http://localhost:5174/` |
+| `FAKE_PORT` | `8099` (다른 작업이 8099 를 쓰고 있으면 이 값으로 통째로 옮긴다) |
 
 스크린샷은 `shots/` 에 떨어진다(git 에 올리지 않는다).
 
@@ -52,6 +53,7 @@ node tools/verify/run-all.mjs                # 전부 (FAIL 이 있으면 종료
 | `check-613` / `614` | 토큰 갱신 · 사용자 권한 관리 |
 | `check-625` ~ `630` | 순찰 시작 · STOMP 제어 · 이벤트 상세 · 맵 좌표 · 설비 집계 |
 | `check-cc` | 관제센터 전반 회귀 |
+| `check-ctlown` | 조종 점유 — 브라우저 두 개로 수동 진입 차단 · 강제 탈취 · 무수신 시 확인 중 강등 · 관전 탭이 남의 조종을 끊지 않음 |
 
 ## 주의
 

@@ -160,3 +160,24 @@ function formatDate(iso: any) {
   if (d.toDateString() === today.toDateString()) return ''
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+/**
+ * 이 위치를 도면 위에 그려도 되는가(S15P11E101-773).
+ *
+ * 로봇이 로컬라이즈되지 않으면 odom 폴백 pose 가 온다. 그것을 map 좌표로 알고
+ * 그리면 도면 위 엉뚱한 자리에 마커가 '자신 있게' 찍힌다 — 틀린 위치를 확신에 차서
+ * 보여 주는 것이 가장 나쁘다. 모르면 안 그리는 편이 낫다.
+ *
+ * frame 이 없는 구버전 텔레메트리는 예전처럼 그린다. 하위호환을 깨면서까지
+ * 방어할 일은 아니다.
+ */
+export function isMapFrame(loc: { frame?: string } | null | undefined) {
+  const f = loc?.frame
+  if (f == null || f === '') return true          // 구버전 — 기존 동작 유지
+  return String(f).toLowerCase() === 'map'
+}
+
+/** 위치를 그릴 수 있는가 — 값이 있고, 그 값이 map 프레임인가. */
+export function localized(loc: { x?: number, y?: number, frame?: string } | null | undefined) {
+  return !!loc && Number.isFinite(Number(loc.x)) && Number.isFinite(Number(loc.y)) && isMapFrame(loc)
+}
