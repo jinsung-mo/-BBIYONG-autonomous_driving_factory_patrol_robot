@@ -272,51 +272,220 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .maplegend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
 @media (prefers-reduced-motion: reduce){ .cam.alert{box-shadow:none;} }
 
-/* ============ 진입(Welcome) 화면 — 산업용 관제 콘솔 톤 (항상 다크) ============ */
+/* ============ 진입(Welcome) 화면 — v3 "플로팅 씬"(시안 A) ============
+   ⚠ 전면 라이트다. 이전 판은 테마와 무관하게 항상 다크였고, 이번 개편의 핵심이 그 톤 반전이다.
+   값은 styles/tokens.css 의 --bb-* 만 참조한다 — 여기서 hex 를 새로 정하지 않는다.
+   (씬의 경로 stroke 2색만 예외: 상태색 계열의 옅은 변형이라 토큰에 없다. 컴포넌트 SVG 에 있다.) */
 .welcome-wrap{
-  min-height:100vh; display:flex; align-items:center; justify-content:center;
-  padding:32px clamp(28px,6vw,80px); color:#dfe3ea; cursor:default; outline:none;
-  background:#0a0c10;
-  background-image:
-    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(255,255,255,.018) 1px, transparent 1px);
-  background-size:64px 64px; background-position:center;
+  position:relative; min-height:100vh; overflow:hidden;   /* edge 카드가 하단에서 잘리게 한다 */
+  font-family:var(--bb-font); color:var(--bb-ink); cursor:default; outline:none;
+  background:var(--bb-grad-frame);   /* 규칙 1: 평평한 회색이 아니라 미세한 그라디언트 */
+  /* ⚠ 이 요소에는 transform 애니메이션을 걸지 않는다. overflow:hidden 컨테이너에 transform 이
+     걸리면 자식 히어로의 backdrop-filter 가 브라우저에 따라 깜빡이거나 잘린다(agy 지적).
+     진입 모션은 자식별로 건다 — 어차피 stagger 가 필요하다. */
 }
-.welcome-inner{
-  width:100%; max-width:600px; margin:0 auto; text-align:center;
-  display:flex; flex-direction:column; align-items:center;
-  animation:welcomeIn .5s ease both;
-}
+.welcome-wrap .mono{ font-family:var(--bb-font-mono); }  /* 전역 .mono(Consolas)를 v3 로 덮는다 */
 @keyframes welcomeIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
 
-.welcome-top{ display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:26px; }
-.welcome-status{ display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:600; letter-spacing:1.5px; color:#8a93a1; }
-.welcome-status i{ width:7px; height:7px; border-radius:50%; background:#3ddc97; box-shadow:0 0 0 3px rgba(61,220,151,.14); }
-.welcome-org{ font-size:11px; letter-spacing:.5px; color:#59616e; padding-left:14px; border-left:1px solid #23282f; }
-
-.welcome-brand{ font-size:clamp(46px,7vw,72px); font-weight:800; letter-spacing:-1px; color:#fff; line-height:1; }
-.welcome-brand .en{ margin-left:16px; font-size:.32em; font-weight:500; letter-spacing:4px; color:#6b7480; vertical-align:middle; }
-.welcome-tag{ margin-top:22px; font-size:clamp(15px,2vw,18px); font-weight:600; color:#c6ccd6; }
-.welcome-desc{ margin-top:12px; max-width:480px; font-size:13.5px; line-height:1.85; color:#828b98; }
-
-.welcome-modules{
-  margin:30px auto 4px; padding:22px 0; list-style:none;
-  border-top:1px solid #1b1f26; border-bottom:1px solid #1b1f26;
-  display:grid; grid-template-columns:auto auto; justify-content:center; gap:14px 48px;
+/* ── 씬: 화면 끝까지 (규칙 3 — 좌우로 칸을 나누지 않는다) ── */
+.welcome-scene{ position:absolute; inset:0; }
+.welcome-scene__grid{
+  position:absolute; inset:0;
+  background-image:
+    linear-gradient(90deg, rgba(120,128,150,.05) 1px, transparent 1px),
+    linear-gradient(0deg,  rgba(120,128,150,.05) 1px, transparent 1px);
+  background-size:56px 56px;
 }
-.welcome-modules li{ display:flex; align-items:baseline; gap:12px; font-size:13.5px; color:#c2c8d2; text-align:left; }
-.welcome-modules .idx{ font-size:11px; color:#4d5560; letter-spacing:1px; }
+.welcome-scene__path{ position:absolute; inset:0; width:100%; height:100%; }
 
-.welcome-cta{
-  margin-top:32px; padding:13px 30px; border-radius:6px;
-  border:1px solid #2f3742; background:#161a20; color:#eef1f5; font-size:14px; font-weight:600; letter-spacing:.5px;
-  transition:background .14s ease, border-color .14s ease;
+/* ── 설비 블록: 경로가 이 사이를 지난다. 아이소메트릭 흉내가 아니라 2톤 슬래브로 절제. ── */
+.welcome-eq{
+  position:absolute; width:76px; height:52px; margin:-26px 0 0 -38px;
+  border-radius:9px;
+  /* 윗면 / 옆면 2톤. 경계가 또렷해야 "바닥에 놓인 블록"으로 읽힌다. */
+  background:linear-gradient(180deg, #F2F3F8 0 64%, #D3D7E4 64% 100%);
+  box-shadow:0 1px 0 rgba(255,255,255,.9) inset;
 }
-.welcome-cta:hover{ background:#1d222a; border-color:#3ddc97; }
-.welcome-foot{ margin-top:28px; font-size:10.5px; letter-spacing:1px; color:#454d57; }
+.welcome-eq::after{            /* 접지 그림자 — 바닥에 놓인 것처럼 보이게 한다 */
+  content:''; position:absolute; left:7px; right:7px; bottom:-7px; height:11px;
+  border-radius:50%; background:rgba(35,39,51,.13); filter:blur(6px); z-index:-1;
+}
+.welcome-eq--ok{    background:linear-gradient(180deg, var(--bb-ok-tint) 0 66%, #C3DCCD 66% 100%); }
+.welcome-eq--alarm{ background:linear-gradient(180deg, var(--bb-danger-tint) 0 66%, #DEB6B0 66% 100%); }
 
-@media (max-width:640px){
-  .welcome-modules{ grid-template-columns:auto; }
+/* 경보 배지 — 레퍼런스의 떠 있는 빨간 삼각형 */
+.welcome-alarm{
+  position:absolute; width:28px; height:28px; margin:-14px 0 0 -14px;
+  border-radius:var(--bb-r-tile); background:var(--bb-danger-tint);
+  color:var(--bb-danger-text); box-shadow:var(--bb-sh-2);
+  display:flex; align-items:center; justify-content:center;
+}
+.welcome-alarm svg{ width:12px; height:11px; display:block; }
+
+/* ── 히어로: 밝은 씬 위 → 유리 허용 (어두운 영상 위엔 금지) ── */
+.welcome-hero{
+  position:absolute; left:var(--bb-sp-9); top:50%; transform:translateY(-50%);
+  width:534px; max-width:calc(100% - 68px);
+  padding:34px 34px 26px; border-radius:var(--bb-r-panel);
+  background:rgba(255,255,255,.68);
+  backdrop-filter:blur(16px) saturate(1.4);
+  -webkit-backdrop-filter:blur(16px) saturate(1.4);
+  box-shadow:0 18px 46px rgba(35,39,51,.07);
+}
+.welcome-eyebrow{
+  display:flex; align-items:center; gap:10px;
+  font-size:11px; font-weight:500; letter-spacing:1.6px; color:var(--bb-muted);
+}
+.welcome-eyebrow i{                     /* 실시간 상태 점만 깜빡인다 */
+  width:7px; height:7px; border-radius:50%; background:var(--bb-ok);
+  animation:bb-fade 1.4s ease-in-out infinite;
+}
+.welcome-eyebrow .sep{
+  padding-left:12px; margin-left:2px; border-left:1px solid var(--bb-line-strong);
+  letter-spacing:.5px; color:#A8ADBC;
+}
+
+.welcome-brand{ margin-top:16px; font-size:46px; font-weight:800; letter-spacing:-1.6px; line-height:1.05; }
+.welcome-brand .dot{ color:var(--bb-danger-text); }
+.welcome-brand .en{ margin-left:14px; font-size:.28em; font-weight:500; letter-spacing:3px; color:#A8ADBC; vertical-align:middle; }
+
+.welcome-tag{ margin-top:18px; font-size:var(--bb-fs-display); font-weight:700; letter-spacing:-1.1px; line-height:1.25; text-wrap:balance; }
+.welcome-desc{ margin-top:14px; font-size:13.5px; line-height:1.9; color:var(--bb-body); text-wrap:pretty; }
+
+.welcome-cta-row{ display:flex; align-items:center; gap:var(--bb-sp-4); margin-top:var(--bb-sp-8); }
+.welcome-cta{                            /* Filled CTA 는 화면당 1개 */
+  font-family:var(--bb-font); font-weight:600; font-size:13px; border-radius:20px; border:0;
+  padding:10px 20px; background:var(--bb-primary); color:#fff;
+  transition:background var(--bb-dur) var(--bb-ease);
+}
+.welcome-cta:hover{ background:var(--bb-primary-hover); }
+.welcome-foot{
+  margin-top:22px; padding-top:14px; border-top:1px solid var(--bb-line);
+  font-size:var(--bb-fs-caption); letter-spacing:1px; color:#A8ADBC;
+}
+
+/* ── 로봇을 따라다니는 상태 카드 (레퍼런스의 Haulix 카드에 해당) ──
+   위치는 JS 가 transform 으로만 준다. 폭을 고정해야 좌/우 뒤집기 계산이 안 흔들린다. */
+.welcome-robotcard{
+  position:absolute; left:0; top:0; width:178px;
+  background:#fff; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4);
+  padding:12px 14px; will-change:transform;
+  opacity:0; animation:welcomeFade .6s var(--bb-ease) 1.05s forwards;
+}
+.welcome-robotcard__id{ font-size:var(--bb-fs-label); font-weight:500; color:var(--bb-ink); letter-spacing:.2px; }
+.welcome-robotcard__bat{ margin-top:9px; display:flex; align-items:center; gap:6px; }
+.welcome-robotcard__bat .lbl{ font-size:var(--bb-fs-caption); color:var(--bb-muted-2); }
+.welcome-robotcard__bat .val{ font-size:var(--bb-fs-label); font-weight:600; color:var(--bb-ink); }
+.welcome-robotcard__bat .gauge{ flex:1; height:3px; border-radius:2px; background:var(--bb-line); overflow:hidden; }
+.welcome-robotcard__bat .gauge i{ display:block; height:100%; background:var(--bb-ok); }
+.welcome-robotcard__bat .gauge.low i{ background:var(--bb-warn); }
+.welcome-robotcard__st{ margin-top:8px; display:flex; align-items:center; gap:6px;
+  font-size:var(--bb-fs-caption); color:var(--bb-body); }
+.welcome-robotcard__st i{ width:5px; height:5px; border-radius:50%; background:var(--bb-ok); flex:none; }
+
+/* ── 규칙 "경계는 그어도 가두지 않는다": 하단 한쪽만 잘린다 ── */
+.welcome-edge{
+  position:absolute; left:calc(var(--bb-sp-9) + 574px); bottom:-34px; width:344px;
+  background:#fff; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4); padding:18px 20px 34px;
+}
+.welcome-edge__t{ font-size:var(--bb-fs-label); color:var(--bb-muted-2); }
+.welcome-edge__v{ margin-top:6px; display:flex; align-items:baseline; gap:6px; }
+.welcome-edge__v b{ font-weight:600; font-size:28px; letter-spacing:-1px; color:var(--bb-ink); }
+.welcome-edge__v span{ font-size:14px; font-weight:500; color:var(--bb-faint); }
+.welcome-spark{ margin-top:12px; display:flex; align-items:flex-end; gap:6px; height:30px; }
+.welcome-spark i{ width:2.5px; border-radius:1.2px; background:#DEE0E7; display:block; }
+
+/* ══════ 모션 ══════════════════════════════════════════════════════════════
+   관제 제품이지 마케팅 랜딩이 아니다 — 움직이는 것은 "실제로 움직이는 것"뿐이다.
+   ① 순찰 로봇이 경로를 따라 왕복(JS, rAF) ② 로봇 주변 라이다 스윕(CSS rotate)
+   ③ 경로가 그려지는 진입 1회 ④ 카드 stagger 진입 1회 ⑤ 상태 점 pulse.
+   애니메이트하는 속성은 transform / opacity 뿐이다(경로 draw-in 의 stroke-dashoffset 만
+   예외 — 진입 1회로 끝나고 루프하지 않는다).
+   prefers-reduced-motion: reduce 는 맨 아래에서 전부 끄고 "최종 상태"로 세운다. */
+
+@keyframes welcomeRise{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+/* 히어로는 세로 중앙정렬에 translateY(-50%) 를 이미 쓰고 있다 — 그 값을 품은 별도 키프레임이 필요하다 */
+@keyframes welcomeHeroRise{ from{opacity:0; transform:translateY(calc(-50% + 10px));} to{opacity:1; transform:translateY(-50%);} }
+@keyframes welcomeFade{ from{opacity:0;} to{opacity:1;} }
+@keyframes welcomePop{ from{opacity:0; transform:scale(.86);} to{opacity:1; transform:none;} }
+@keyframes welcomeDraw{ to{ stroke-dashoffset:0; } }
+@keyframes welcomeSweep{ to{ transform:rotate(360deg); } }
+
+.welcome-hero{ animation:welcomeHeroRise .55s var(--bb-ease) both; }
+.welcome-edge{ animation:welcomeRise .5s var(--bb-ease) .58s both; }
+.welcome-eq{ animation:welcomePop .5s var(--bb-ease) both; }  /* 지연은 컴포넌트에서 인라인으로 준다 */
+.welcome-alarm{ opacity:0; animation:welcomeFade .5s var(--bb-ease) 1.7s forwards; }
+
+/* 경로: pathLength="1" 이라 길이를 몰라도 1 → 0 으로 그릴 수 있다.
+   자취(p-trail)는 dasharray 를 자취 길이에 쓰고 있어 그릴 수 없다 — 뒤늦게 떠오르게 한다. */
+.welcome-scene__path .p-ok{ stroke-dasharray:1; stroke-dashoffset:1; animation:welcomeDraw 2s var(--bb-ease) .15s forwards; }
+.welcome-scene__path .p-trail{ opacity:0; animation:welcomeFade .6s var(--bb-ease) 1.5s forwards; }
+.welcome-scene__path .p-alarm{ opacity:0; animation:welcomeFade .8s var(--bb-ease) 1.5s forwards; }
+.welcome-scene__path .p-node{ opacity:0; animation:welcomeFade .5s var(--bb-ease) .9s forwards; }
+
+/* ── 순찰 로봇: 위치는 JS 가 transform 하나로만 쓴다(레이아웃 속성 건드리지 않음) ── */
+.welcome-robot{
+  position:absolute; left:0; top:0; width:46px; height:46px;
+  will-change:transform; opacity:0;
+  animation:welcomeFade .6s var(--bb-ease) .9s forwards;
+}
+/* 카드는 원형이다 — 방향 화살표가 도는데 사각 카드까지 같이 돌면 격자와 어긋나 보인다.
+   카드는 가만히 있고 안의 화살표만 진행 방향을 향한다. */
+.welcome-robot__card{
+  position:relative; z-index:1; width:46px; height:46px; border-radius:50%;
+  background:#fff; box-shadow:var(--bb-sh-4);
+  display:flex; align-items:center; justify-content:center;
+}
+.welcome-robot__dir{
+  position:relative; width:20px; height:20px; border-radius:50%;
+  background:var(--bb-primary-tonal);
+  will-change:transform;      /* JS 가 매 프레임 rotate 만 준다 */
+}
+.welcome-robot__dir::after{   /* 진행 방향을 가리키는 코 (0deg = +x) */
+  content:''; position:absolute; left:50%; top:50%;
+  width:0; height:0; margin:-4px 0 0 3px;
+  border-top:4px solid transparent; border-bottom:4px solid transparent;
+  border-left:7px solid var(--bb-primary);
+}
+/* 라이다 스윕 — 우리 제품 정체성. 아주 옅게, 아주 천천히. */
+.welcome-robot__sweep{
+  position:absolute; left:50%; top:50%; width:168px; height:168px; margin:-84px 0 0 -84px;
+  border-radius:50%; pointer-events:none;
+  /* 선행 에지(0deg)만 또렷하고 꼬리는 흩어진다 — 레이더 스윕이 읽히는 최소 조건 */
+  background:conic-gradient(from 0deg, rgba(76,86,149,.13), rgba(76,86,149,.035) 22%, rgba(76,86,149,0) 44%);
+  /* 바깥 원호가 선으로 보이면 얼룩처럼 읽힌다. 끝까지 길게 흩어 없앤다. */
+  -webkit-mask-image:radial-gradient(circle, #000 6%, rgba(0,0,0,.45) 38%, transparent 72%);
+          mask-image:radial-gradient(circle, #000 6%, rgba(0,0,0,.45) 38%, transparent 72%);
+  animation:welcomeSweep 7s linear infinite;
+}
+
+/* 좁아지면 씬을 펼칠 자리가 없다. 경로·설비·로봇을 접고 히어로 한 장만 가운데 세운다 —
+   격자 배경과 그라디언트는 남기므로 빈 화면이 아니라 "여백을 준 화면"으로 읽힌다. */
+@media (max-width:1180px){
+  .welcome-wrap{ overflow:auto; display:flex; align-items:center; justify-content:center;
+    padding:var(--bb-sp-8) var(--bb-sp-9); }
+  .welcome-hero{ position:static; transform:none; width:100%; max-width:620px; margin:0;
+    animation-name:welcomeRise; }   /* 중앙정렬을 안 쓰므로 -50% 를 품은 키프레임도 안 쓴다 */
+  .welcome-edge,.welcome-scene__path,
+  .welcome-robot,.welcome-robotcard,.welcome-eq,.welcome-alarm{ display:none; }
+}
+@media (max-width:620px){
+  .welcome-wrap{ padding:var(--bb-sp-6) var(--bb-sp-6); }
+  .welcome-brand{ font-size:38px; }
+  .welcome-tag{ font-size:26px; letter-spacing:-.8px; }
+  .welcome-hero{ padding:26px 22px 22px; }
+}
+/* 모션을 원치 않는 사용자에게는 전부 끄되 "최종 상태"로 세운다 — 꺼서 안 보이면 안 된다.
+   (로봇 rAF 루프도 컴포넌트 쪽에서 같은 미디어쿼리를 보고 시작하지 않는다.) */
+@media (prefers-reduced-motion: reduce){
+  .welcome-hero,.welcome-edge,.welcome-eq,.welcome-alarm,
+  .welcome-robot,.welcome-robot__sweep,.welcome-robotcard,.welcome-eyebrow i{ animation:none; }
+  .welcome-robot,.welcome-robotcard,.welcome-alarm{ opacity:1; }
+  .welcome-robot__sweep{ opacity:.6; }
+  .welcome-scene__path .p-ok{ stroke-dashoffset:0; animation:none; }
+  .welcome-scene__path .p-trail,
+  .welcome-scene__path .p-alarm,
+  .welcome-scene__path .p-node{ opacity:1; animation:none; }
 }
 
 /* ============ 회원 인증 화면 — Welcome 색감에 맞춘 다크(테마 무관) ============ */
