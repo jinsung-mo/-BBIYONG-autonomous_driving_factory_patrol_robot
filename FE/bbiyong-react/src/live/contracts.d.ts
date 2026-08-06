@@ -892,3 +892,46 @@ export interface EventDetail extends EventLog {
  * 한 화면에 다 넣으면 어느 것도 크지 않다. 실서버는 'live' 하나로 유지한다.
  */
 export type Section = 'live' | 'cam' | 'events' | 'stats' | 'ops' | 'config'
+
+// ---------------------------------------------------------------- 통계 지표 3종 (S15P11E101-768)
+
+/** GET /api/stats/overheat-equipment 한 건. name 은 미등록 설비면 ID 폴백이다. */
+export interface OverheatRankItem {
+  equipmentId: string
+  name: string
+  count: number
+  /** 마지막 발생 시각(ISO-8601 UTC) */
+  lastAt: string
+}
+export interface OverheatRanking {
+  periodDays: number
+  totalCount: number
+  items: OverheatRankItem[]
+}
+
+/** GET /api/stats/alerts-weekly 한 건. 0 건인 날도 0 으로 채워 온다. */
+export interface AlertsWeeklyItem {
+  /** Asia/Seoul 로컬 날짜 'YYYY-MM-DD'. 문자열 정렬로 연말·연초가 깨지지 않는다. */
+  date: string
+  fire: number
+  overheat: number
+  total: number
+}
+export interface AlertsWeekly {
+  periodDays: number
+  items: AlertsWeeklyItem[]
+}
+
+/**
+ * GET /api/stats/battery-estimate.
+ * 충전 중이거나 표본이 모자라면 dischargePerHour·estimatedRemainingMinutes 가 null 이고
+ * battery 만 온다 — 그때 화면은 '—' 로 둔다.
+ */
+export interface BatteryEstimate {
+  robotId: string
+  battery: number | null
+  dischargePerHour: number | null
+  estimatedRemainingMinutes: number | null
+  /** 추정에 쓴 이력 구간(분) */
+  basisMinutes?: number
+}
