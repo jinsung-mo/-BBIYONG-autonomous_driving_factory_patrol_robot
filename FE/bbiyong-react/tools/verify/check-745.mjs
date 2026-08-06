@@ -134,6 +134,34 @@ be.push('/topic/robots', { type: 'STATE_UPDATE', robotId: 'orinka_01', online: t
 await sleep(1200)
 console.log('  → 돌아오면 원래대로 :', ok((await marker())?.off === false))
 
+console.log('\n[7] 티켓이 지정한 소스를 쓰는가')
+// 격자 메타(/api/maps/active/grid)를 실제로 조회하는지
+const gridCalls = be.restCalls.filter((c) => c.url.startsWith('/api/maps/active/grid')).length
+console.log('  격자 메타 조회 :', gridCalls, '회')
+console.log('  → /api/maps/active/grid 를 본다 :', ok(gridCalls >= 1), '(좌표 정합의 기준)')
+
+// nav 가 끊겨도 /topic/robots 의 location 으로 자리를 잇는지
+pose(3.0, 4.2, 0)
+await sleep(1600)
+await sleep(2600)   // nav 를 멈추고 신선도가 지나기를 기다린다
+be.push('/topic/robots', { type: 'TELEMETRY', robotId: 'orinka_01', online: true,
+  location: { x: 5.0, y: 6.0, yaw: 0 } })
+await sleep(1800)
+m = await marker()
+const byTel = m && Math.abs(m.left - 140) < 2 && Math.abs(m.top - 90) < 2
+console.log('  텔레메트리만으로 :', `(${m?.left?.toFixed(1)}, ${m?.top?.toFixed(1)})px`, '기대 (140, 90)')
+console.log('  → nav 가 없으면 /topic/robots 로 잇는다 :', ok(byTel), '(마커가 사라지면 로봇이 없는 것으로 읽힌다)')
+
+// nav 가 살아 있으면 텔레메트리가 덮지 않는지 — 두 소스가 번갈아 오면 마커가 떨린다
+pose(3.0, 4.2, 0)
+await sleep(1600)
+be.push('/topic/robots', { type: 'TELEMETRY', robotId: 'orinka_01', online: true,
+  location: { x: -2.0, y: -1.5, yaw: 0 } })
+await sleep(900)
+m = await marker()
+console.log('  nav 우선 :', `(${m?.left?.toFixed(1)}, ${m?.top?.toFixed(1)})px`, '기대 (100, 126)')
+console.log('  → nav 가 있으면 덮지 않는다 :', ok(m && Math.abs(m.left - 100) < 2 && Math.abs(m.top - 126) < 2))
+
 {
   const { data } = await send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(OUT + 'R745-marker.png', Buffer.from(data, 'base64'))
