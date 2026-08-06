@@ -3348,3 +3348,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .tag.kind.plan{color:#3F6A56; border-color:rgba(116,169,141,.5); background:rgba(116,169,141,.1);}
 .tag.kind.raw{color:#5A6072; border-color:#D6D9E3; background:#F4F5F8;}
 .map-list .t.src{color:#6E7385;}
+
+/* 위치 확인 중 (S15P11E101-773)
+   틀린 위치를 자신 있게 그리는 것보다 안 그리는 편이 낫다 — 대신 왜 없는지 말한다. */
+.loc-wait{
+  position:absolute; left:50%; top:18px; transform:translateX(-50%); z-index:6;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:9px 16px; border-radius:10px;
+  background:rgba(12,16,20,.8); backdrop-filter:blur(6px);
+  color:#fff; font-size:12.5px; font-weight:600; text-align:center;
+}
+.loc-wait span{font-size:11px; font-weight:500; color:rgba(255,255,255,.78);}
+.loc-wait-badge{white-space:nowrap;}

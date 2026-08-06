@@ -62,6 +62,13 @@ export interface RobotLocation {
   x?: number
   y?: number
   yaw?: number
+  /**
+   * 이 좌표가 어느 프레임의 값인가(S15P11E101-773).
+   * 'map' 이라야 도면 위에 그릴 수 있다. 로봇이 로컬라이즈되지 않으면 odom 폴백이
+   * 오는데, 그것을 map 으로 오인해 그리면 도면 위 엉뚱한 곳에 자신 있게 찍힌다.
+   * 필드가 없는 구버전 텔레메트리는 기존대로 map 으로 본다(하위호환).
+   */
+  frame?: string
 }
 
 export type Capabilities = Partial<Record<
