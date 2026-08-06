@@ -122,7 +122,9 @@ const cases = [
 ]
 for (const t of cases) {
   be.push('/topic/nav/orinka_01', { type: 'NAV_LIVE', pose: { x: t.x, y: t.y, yaw: 0.6 } })
-  await sleep(900)
+  // S15P11E101-745 부터 마커는 목표로 보간해 다가간다. 자리는 여전히 정확해야 하지만
+  // 즉시는 아니다 — 수렴할 시간을 주고 정밀도는 그대로 잰다.
+  await sleep(2200)
   const m = await ev(`(()=>{const e=document.querySelector('.iso-robot'); if(!e) return null
     return {left:parseFloat(e.style.left), top:parseFloat(e.style.top), shown:e.style.display!=='none'}})()`)
   const hit = m && m.shown && Math.abs(m.left - t.px) < 0.5 && Math.abs(m.top - t.py) < 0.5
