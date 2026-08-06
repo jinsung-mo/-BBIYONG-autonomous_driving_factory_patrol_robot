@@ -2353,38 +2353,45 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :is(#pgMap,#pgCam) .map-control svg{width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round;}
 /* 전체 문서를 전체화면으로 올려 상단 내비게이션을 남긴다. 지도 화면에서는
    KPI·상태 패널만 접고, 지도 프레임이 상단바 아래의 나머지 공간을 모두 사용한다. */
-:root.view-fullscreen,:root.view-fullscreen body,:root.view-fullscreen #root{
+/* 전체화면 표시는 클래스 하나만 믿지 않는다(S15P11E101-809).
+   이 규칙들은 상단 KPI 와 좌측 패널을 display:none 으로 접는다. 그래서 클래스가
+   실제 상태보다 오래 남으면 '상단바와 KPI 가 사라진' 것으로 보이고, 새로고침해야
+   돌아온다. 이 앱은 탭을 옮겨도 페이지를 언마운트하지 않아 cleanup 이 돌지 않으므로
+   클래스가 남을 길이 여럿이다.
+   :fullscreen 을 함께 요구하면, 클래스가 남아 있어도 실제로 전체화면이 아니면
+   규칙이 성립하지 않는다 — 화면이 저절로 제자리로 돌아온다. */
+:root.view-fullscreen:fullscreen,:root.view-fullscreen:fullscreen body,:root.view-fullscreen:fullscreen #root{
   width:100%; height:100%; overflow:hidden; background:var(--nx-bg);
 }
-:root.view-fullscreen #nav.sim-nav{position:relative; z-index:20; flex:0 0 76px; height:76px;}
-:root.view-fullscreen #pgMap.page.nav-page{
+:root.view-fullscreen:fullscreen #nav.sim-nav{position:relative; z-index:20; flex:0 0 76px; height:76px;}
+:root.view-fullscreen:fullscreen #pgMap.page.nav-page{
   height:calc(100dvh - 76px); padding:16px 24px 24px;
 }
-:root.view-fullscreen #pgMap .nav-hero,
-:root.view-fullscreen #pgMap .nav-side{display:none;}
-:root.view-fullscreen #pgMap .nav-stage{display:block; flex:1 1 0; min-height:0;}
-:root.view-fullscreen #pgMap .nav-canvas,
-:root.view-fullscreen #pgMap .nav-canvas > #pMap,
-:root.view-fullscreen #pgMap .nav-canvas .vwrap{width:100%; height:100%; min-height:0;}
-:root.view-fullscreen #pgMap .nav-canvas .vwrap{
+:root.view-fullscreen:fullscreen #pgMap .nav-hero,
+:root.view-fullscreen:fullscreen #pgMap .nav-side{display:none;}
+:root.view-fullscreen:fullscreen #pgMap .nav-stage{display:block; flex:1 1 0; min-height:0;}
+:root.view-fullscreen:fullscreen #pgMap .nav-canvas,
+:root.view-fullscreen:fullscreen #pgMap .nav-canvas > #pMap,
+:root.view-fullscreen:fullscreen #pgMap .nav-canvas .vwrap{width:100%; height:100%; min-height:0;}
+:root.view-fullscreen:fullscreen #pgMap .nav-canvas .vwrap{
   border-radius:var(--nx-r-md); background:var(--nx-elev)!important;
 }
-:root.view-fullscreen #pgMap .map-controls{right:26px;}
+:root.view-fullscreen:fullscreen #pgMap .map-controls{right:26px;}
 
 /* 카메라 전체화면도 상단 관제 바는 유지하고 영상만 남은 영역을 채운다. */
-:root.view-fullscreen #pgCam.page.nav-page{
+:root.view-fullscreen:fullscreen #pgCam.page.nav-page{
   height:calc(100dvh - 76px); padding:16px 24px 24px;
 }
-:root.view-fullscreen #pgCam .nav-hero,
-:root.view-fullscreen #pgCam .cam-side-panel{display:none;}
-:root.view-fullscreen #pgCam .cam-stage{display:block; flex:1 1 0; min-height:0;}
-:root.view-fullscreen #pgCam .cam-main,
-:root.view-fullscreen #pgCam .cam-main > .panel:not(.pip),
-:root.view-fullscreen #pgCam .cam-main > .panel:not(.pip) .vwrap{width:100%; height:100%; min-height:0;}
-:root.view-fullscreen #pgCam .cam-main > .panel:not(.pip) .vwrap{
+:root.view-fullscreen:fullscreen #pgCam .nav-hero,
+:root.view-fullscreen:fullscreen #pgCam .cam-side-panel{display:none;}
+:root.view-fullscreen:fullscreen #pgCam .cam-stage{display:block; flex:1 1 0; min-height:0;}
+:root.view-fullscreen:fullscreen #pgCam .cam-main,
+:root.view-fullscreen:fullscreen #pgCam .cam-main > .panel:not(.pip),
+:root.view-fullscreen:fullscreen #pgCam .cam-main > .panel:not(.pip) .vwrap{width:100%; height:100%; min-height:0;}
+:root.view-fullscreen:fullscreen #pgCam .cam-main > .panel:not(.pip) .vwrap{
   border-radius:var(--nx-r-md); background:var(--nx-elev)!important;
 }
-:root.view-fullscreen #pgCam .camera-controls{right:26px;}
+:root.view-fullscreen:fullscreen #pgCam .camera-controls{right:26px;}
 @media (prefers-reduced-motion:reduce){
   .map-zoom-canvas,.camera-zoom-canvas,:is(#pgMap,#pgCam) .map-control{transition:none;}
 }
