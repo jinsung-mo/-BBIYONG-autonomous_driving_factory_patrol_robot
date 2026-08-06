@@ -101,12 +101,14 @@ class NavigationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_manual_mode_cancels_navigation_and_selects_manual(self):
         orchestrator = self.make()
+        self.assertFalse(orchestrator.manual_control_allowed)
         (self.root / "drive.json").write_text(json.dumps({
             "armed": True, "v": 0.7, "w": 0.2, "ts": time.time()
         }))
         accepted, _ = await orchestrator.set_mode("manual")
         self.assertTrue(accepted)
         self.assertEqual(orchestrator.state, NavigationState.MANUAL)
+        self.assertTrue(orchestrator.manual_control_allowed)
         self.assertEqual(self.control()["mode"], "manual")
         self.assertFalse(self.control()["estop"])
         self.assertEqual(
@@ -183,6 +185,7 @@ class NavigationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(accepted)
         self.assertIsNotNone(process.returncode)
         self.assertEqual(orchestrator.state, NavigationState.ESTOPPED)
+        self.assertFalse(orchestrator.manual_control_allowed)
         self.assertTrue(self.control()["estop"])
         self.assertFalse(self.drive()["armed"])
 

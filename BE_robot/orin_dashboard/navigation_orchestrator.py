@@ -164,6 +164,11 @@ class NavigationOrchestrator:
         except (OSError, ValueError, TypeError):
             return True
 
+    @property
+    def manual_control_allowed(self):
+        """Only an explicit MANUAL handoff may accept velocity commands."""
+        return self.state == NavigationState.MANUAL and not self.estop_engaged
+
     def _load_route(self):
         self.route_session_id = None
         try:

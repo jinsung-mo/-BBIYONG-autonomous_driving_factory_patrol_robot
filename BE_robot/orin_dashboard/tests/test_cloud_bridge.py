@@ -805,9 +805,55 @@ class BridgeControlTest(unittest.IsolatedAsyncioTestCase):
 
             enabled = self.make_bridge(root, backend_control_enabled=True)
             await enabled.receiver(self.Incoming(
+                {"command": "DRIVE", "linear": 0.2, "angular": 0.0},
+            ))
+            self.assertFalse(json.loads(drive_file.read_text())["armed"])
+
+            await enabled.receiver(self.Incoming(
+                {"command": "SET_MODE", "mode": "manual"},
                 {"command": "DRIVE", "linear": 0.2, "angular": 0.0}
             ))
             self.assertTrue(json.loads(drive_file.read_text())["armed"])
+
+    async def test_estop_and_mode_change_reject_later_drive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bridge = self.make_bridge(root, backend_control_enabled=True)
+            drive_file = root / "drive.json"
+
+            await bridge.receiver(self.Incoming(
+                {"command": "SET_MODE", "mode": "manual"},
+                {"command": "DRIVE", "linear": 0.2, "angular": 0.0},
+            ))
+            self.assertTrue(json.loads(drive_file.read_text())["armed"])
+
+            await bridge.receiver(self.Incoming(
+                {"command": "ESTOP", "active": True},
+                {"command": "DRIVE", "linear": 0.2, "angular": 0.0},
+            ))
+            self.assertFalse(json.loads(drive_file.read_text())["armed"])
+
+            await bridge.receiver(self.Incoming(
+                {"command": "SET_MODE", "mode": "manual"},
+                {"command": "SET_MODE", "mode": "disabled"},
+                {"command": "DRIVE", "linear": 0.2, "angular": 0.0},
+            ))
+            self.assertFalse(json.loads(drive_file.read_text())["armed"])
+
+    async def test_command_error_does_not_stop_receiver(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bridge = self.make_bridge(root, backend_control_enabled=True)
+
+            with patch("cloud_bridge.traceback.print_exc") as print_exc:
+                await bridge.receiver(self.Incoming(
+                    {"command": "SET_MODE", "mode": "manual"},
+                    {"command": "DRIVE", "linear": "invalid", "angular": 0.0},
+                    {"command": "DRIVE", "linear": 0.2, "angular": 0.0},
+                ))
+
+            self.assertTrue(json.loads((root / "drive.json").read_text())["armed"])
+            print_exc.assert_called_once_with()
 
     async def test_navigation_capabilities_are_independent(self):
         with tempfile.TemporaryDirectory() as directory:
