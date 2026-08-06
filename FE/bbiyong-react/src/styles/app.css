@@ -3102,3 +3102,45 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   /* 비율은 지킨다. 늘려 채우면 열원 위치가 실제와 어긋나 보인다. */
   object-fit:contain;
 }
+
+/* 운영 지표 3종 (S15P11E101-768)
+   ------------------------------------------------------------------
+   셋 다 '숫자 구경' 이 아니라 '무엇을 할지 정하기' 위한 칸이라, 숫자 옆에
+   근거(마지막 발생·기간·소모율)를 함께 둔다. */
+.metric-grid{display:grid; grid-template-columns:1.2fr 1.4fr .9fr; gap:18px; margin-top:6px;}
+.metric{min-width:0; display:flex; flex-direction:column; gap:10px;}
+.metric-head{display:flex; align-items:baseline; gap:8px;}
+.metric-head b{font-size:13.5px;}
+.metric-head .k{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#6E7385; margin-left:auto;}
+
+/* ① 과열 랭킹 — 막대 하나에 설비명·건수·마지막 시각을 함께 얹는다 */
+.rankbars{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+.rankbars li{display:flex; flex-direction:column; gap:4px;}
+.rankbar-top{display:flex; align-items:baseline; gap:8px; font-size:12.5px;}
+.rankbar-top b{font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.rankbar-top .mono{margin-left:auto; font-family:'IBM Plex Mono',monospace; color:#7E6222; font-weight:600;}
+.rankbar{height:8px; border-radius:4px; background:#F0F1F5; overflow:hidden;}
+.rankbar i{display:block; height:100%; border-radius:4px; background:linear-gradient(90deg,#E2C48A,#C9A26A);}
+.rankbar-when{font-size:11px; color:#6E7385;}
+
+/* ② 주간 추이 — 0 인 날도 자리를 지킨다. 빠지면 추이가 아니라 목록이 된다. */
+.weekbars{list-style:none; padding:0; margin:0; display:grid;
+  grid-auto-flow:column; grid-auto-columns:1fr; gap:6px; align-items:end; height:120px;}
+.weekbars li{display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; height:100%;}
+.weekbar{flex:1; width:100%; display:flex; flex-direction:column; justify-content:flex-end; gap:2px;
+  background:#F4F5F8; border-radius:6px; overflow:hidden; padding:2px;}
+.weekbar i{display:block; border-radius:3px; min-height:0;}
+.weekbar i.fire{background:#C07A72;}
+.weekbar i.heat{background:#C9A26A;}
+.weekbar-day{font-size:10px; color:#6E7385;}
+.metric-legend{display:flex; gap:14px; font-size:11px; color:#5A6072;}
+.metric-legend .sw{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px;}
+.metric-legend .sw.fire{background:#C07A72;} .metric-legend .sw.heat{background:#C9A26A;}
+
+/* ③ 배터리 — 지금 값은 크게, 근거는 아래에 */
+.metric-big{font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:700;
+  letter-spacing:-1px; line-height:1; color:#232733;}
+.metric-big .unit{font-family:'Gothic A1','Malgun Gothic',system-ui,sans-serif;
+  font-size:15px; font-weight:500; color:#5A6072; margin-left:2px;}
+
+@media (max-width:1360px){ .metric-grid{grid-template-columns:1fr 1fr;} .metric:last-child{grid-column:span 2;} }

@@ -215,6 +215,10 @@ export function startFakeBackend(port = 8099) {
   // 둘이 어긋나면 새로고침할 때마다 화면이 튄다.
   let mappingPhase = 'IDLE'
   let gridImplemented = true
+  // 768 검증용 — 응답을 갈아 끼워 '충전 중'·'자료 없음' 같은 상태를 만든다
+  let statsOverheat = null
+  let statsWeekly = null
+  let statsBattery = null
 
   function push(destination, payload) {
     let n = 0
@@ -618,6 +622,48 @@ export function startFakeBackend(port = 8099) {
         pageable: { pageNumber: page, pageSize: size },
         totalElements: all.length,
         totalPages: Math.ceil(all.length / size),
+      }))
+      return
+    }
+    // 통계 지표 3종 — S15P11E101-768. BE 계약(2026-08-06 확인) 그대로 흉내낸다.
+    if (req.url.split('?')[0] === '/api/stats/overheat-equipment') {
+      restCalls.push({ url: req.url, method: req.method })
+      const days = Number(new URL(req.url, 'http://x').searchParams.get('days') || 7)
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(statsOverheat ?? {
+        periodDays: days, totalCount: 5,
+        items: [
+          { equipmentId: 'panel_A', name: '분전반 A', count: 3, lastAt: '2026-08-06T05:12:34Z' },
+          { equipmentId: 'panel_B', name: 'panel_B', count: 2, lastAt: '2026-08-05T22:01:10Z' },
+        ],
+      }))
+      return
+    }
+    if (req.url.split('?')[0] === '/api/stats/alerts-weekly') {
+      restCalls.push({ url: req.url, method: req.method })
+      const days = Number(new URL(req.url, 'http://x').searchParams.get('days') || 7)
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(statsWeekly ?? {
+        periodDays: days,
+        items: [
+          { date: '2026-07-31', fire: 0, overheat: 0, total: 0 },
+          { date: '2026-08-01', fire: 1, overheat: 0, total: 1 },
+          { date: '2026-08-02', fire: 0, overheat: 2, total: 2 },
+          { date: '2026-08-03', fire: 0, overheat: 0, total: 0 },
+          { date: '2026-08-04', fire: 2, overheat: 1, total: 3 },
+          { date: '2026-08-05', fire: 0, overheat: 1, total: 1 },
+          { date: '2026-08-06', fire: 2, overheat: 1, total: 3 },
+        ],
+      }))
+      return
+    }
+    if (req.url.split('?')[0] === '/api/stats/battery-estimate') {
+      restCalls.push({ url: req.url, method: req.method })
+      const rid = new URL(req.url, 'http://x').searchParams.get('robotId')
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(statsBattery ?? {
+        robotId: rid, battery: 68.0, dischargePerHour: 12.0,
+        estimatedRemainingMinutes: 340, basisMinutes: 60,
       }))
       return
     }
@@ -1069,6 +1115,9 @@ export function startFakeBackend(port = 8099) {
       setActivateImplemented: (v) => { activateImplemented = v },
       // 744 검증용 — REST 복원값과 STOMP 전환을 함께 움직인다
       setGridImplemented: (v) => { gridImplemented = v },
+      setStatsOverheat: (v) => { statsOverheat = v },
+      setStatsWeekly: (v) => { statsWeekly = v },
+      setStatsBattery: (v) => { statsBattery = v },
       mappingPhase: () => mappingPhase,
       setMappingPhase: (phase, { push: doPush = true } = {}) => {
         mappingPhase = phase

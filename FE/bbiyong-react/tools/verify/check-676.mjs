@@ -109,8 +109,21 @@ await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'ArrowRight', co
 await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 })
 await sleep(400)
 console.log('  → 방향키로도 돌아간다 :', ok((await scene())?.transform !== afterZoom?.transform))
-await ev(`[...document.querySelectorAll('.iso-reset')][0]?.click()`); await sleep(400)
-console.log('  → 정면으로 되돌아온다 :', ok((await scene())?.transform === before?.transform))
+// 값이 멈출 때까지 기다린다. 고정 대기로 재면 애니메이션·보간이 끝나기 전에 읽어
+// 같은 코드가 돌 때마다 결과가 달라진다 — 이 검사가 오래 플레이키했던 이유다.
+// (S15P11E101-748 이 씬 전환에 0.32초를, 745 가 마커에 보간을 넣었다.)
+// 보간은 값이 점점 작게 계속 바뀌어 '정확히 멈추는' 순간이 없다. 그래서 '같아질
+// 때까지' 가 아니라 '조건을 만족할 때까지' 기다린다 — 단언과 같은 조건을 쓴다.
+const waitFor = async (pred, tries = 60, gap = 100) => {
+  for (let i = 0; i < tries; i++) {
+    if (await pred()) return true
+    await sleep(gap)
+  }
+  return false
+}
+await ev(`[...document.querySelectorAll('.iso-reset')][0]?.click()`)
+const backToFront = await waitFor(async () => (await scene())?.transform === before?.transform)
+console.log('  → 정면으로 되돌아온다 :', ok(backToFront))
 
 console.log('\n[3] 로봇 실시간 위치가 올바른 좌표에 오는가')
 // 도면 메타: 320x240px · res 0.05 · origin(-2.0,-1.5) · yaw 0 · 축소 없음(긴 변 320 < 720)
@@ -124,7 +137,11 @@ for (const t of cases) {
   be.push('/topic/nav/orinka_01', { type: 'NAV_LIVE', pose: { x: t.x, y: t.y, yaw: 0.6 } })
   // S15P11E101-745 부터 마커는 목표로 보간해 다가간다. 자리는 여전히 정확해야 하지만
   // 즉시는 아니다 — 수렴할 시간을 주고 정밀도는 그대로 잰다.
-  await sleep(2200)
+  // 마커도 보간이 목표에 닿을 때까지 기다린다 — 자리는 정확해야 하지만 즉시는 아니다.
+  await waitFor(async () => await ev(`(()=>{const e=document.querySelector('.iso-robot')
+    if(!e) return false
+    return Math.abs(parseFloat(e.style.left) - ${'${t.px}'}) < 0.5
+      && Math.abs(parseFloat(e.style.top) - ${'${t.py}'}) < 0.5})()`))
   const m = await ev(`(()=>{const e=document.querySelector('.iso-robot'); if(!e) return null
     return {left:parseFloat(e.style.left), top:parseFloat(e.style.top), shown:e.style.display!=='none'}})()`)
   const hit = m && m.shown && Math.abs(m.left - t.px) < 0.5 && Math.abs(m.top - t.py) < 0.5
