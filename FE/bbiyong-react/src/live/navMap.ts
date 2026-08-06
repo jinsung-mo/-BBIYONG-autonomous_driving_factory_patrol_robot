@@ -381,7 +381,9 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
       // 방향(heading) 화살표 — 로봇이 이 지점에서 바라볼 방향(S15P11E101-790).
       // yaw 가 없으면(자동) 그리지 않는다 — 로봇이 가까운 구조물을 스스로 바라본다.
       // 원보다 먼저 그려 번호가 화살표에 가리지 않게 한다.
-      if (Number.isFinite(Number(w.yaw))) {
+      // Number(null) === 0 이라 '자동'(null)이 명시적 0도(동쪽)로 오인돼 그려지던 버그(S15P11E101-797).
+      // null·undefined 는 반드시 먼저 걸러야 한다.
+      if (w.yaw != null && Number.isFinite(Number(w.yaw))) {
         const a = Number(w.yaw)
         const L = 22, hx = X + Math.cos(a) * L, hy = Y - Math.sin(a) * L
         g.strokeStyle = '#3ddc97'; g.lineWidth = 2.5

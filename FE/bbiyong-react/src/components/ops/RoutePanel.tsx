@@ -96,6 +96,11 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
   }))
   const clearHeading = (i: any) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, yaw: null } : w)))
 
+  // 지도에서 지점을 눌러 드래그해 방향을 정한다(S15P11E101-797). 도(degree) 입력칸과
+  // 같은 값(route[i].yaw, radians)을 쓴다 — 어느 쪽으로 정해도 서로 바로 반영된다.
+  const onSetHeading = (i: number, yawRadians: number) =>
+    setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, yaw: yawRadians } : w)))
+
   // yaw 도 변경 감지에 넣는다 — 방향만 바꾸고 저장을 안 누르면 서버에 안 남는다.
   const key = (w: any) => [w.x, w.y, w.name || '', w.yaw == null ? 'auto' : Number(w.yaw).toFixed(4)]
   const dirty = JSON.stringify(route.map(key)) !== JSON.stringify(saved.map(key))
@@ -159,8 +164,9 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
       {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
       {enabled && (
         <p className="cfg-help">
-          지도를 클릭하면 그 자리에 순찰 지점이 추가됩니다. 순서를 정한 뒤 <b>경로 저장</b>으로
-          서버에 남기고, <b>순찰 시작</b>을 누르면 로봇이 그 경로로 돕니다.
+          지도를 클릭하면 그 자리에 순찰 지점이 추가됩니다. <b>지점을 누른 채 바라볼 방향으로
+          끌면</b> 그 지점의 방향이 정해집니다(분전반을 바라보게 하고 싶을 때). 순서를 정한 뒤
+          <b>경로 저장</b>으로 서버에 남기고, <b>순찰 시작</b>을 누르면 로봇이 그 경로로 돕니다.
           <b>경로 적용</b>은 로봇에 경로만 보내고 순찰은 시작하지 않습니다.
         </p>
       )}
@@ -170,6 +176,7 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
         <LiveNavMap
           route={mapping ? null : route}
           onPick={editLocked ? null : onPick}
+          onSetHeading={editLocked ? null : onSetHeading}
           mapping={mapping}
           inspection={mapping ? null : inspection}
           follow={mapping}
