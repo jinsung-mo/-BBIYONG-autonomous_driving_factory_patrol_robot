@@ -52,8 +52,14 @@ for (const [tab,name] of [['지도','MAP'],['카메라','CAM']]) {
   const logs = await ev(`(()=>{const els=[...document.querySelectorAll('#pgMap .elog li b, #pgCam .elog li b, #pgMap .elog .logtext, #pgCam .elog .logtext')]
     return JSON.stringify([...new Set(els.map(e=>getComputedStyle(e).color))])})()`)
   console.log('  로그 본문 색 :', logs)
-  console.log('  → 본문이 한 가지 잉크색이다 :', ok(JSON.parse(logs).length<=1),
-    '(점이 심각도를 말하고 글자는 잉크색이다)')
+  // -797 에서 뒤집혔다. 디자인 문서(BBIYONG 디자인 시스템 v3)의 실제 예시는
+  // 점과 글자 양쪽에 심각도를 준다 — 문서를 따르기로 했다.
+  // 여기서 보는 것은 '한 가지 색' 이 아니라 '알록달록하지 않은가' 다.
+  const cols = JSON.parse(logs)
+  console.log('  → 심각도가 글자에도 나타난다 :', ok(cols.length >= 1),
+    '(문서 예시가 글자에도 색을 준다 — S15P11E101-797)')
+  console.log('  → 색이 종류만큼만 쓰인다 :', ok(cols.length <= 4),
+    '(줄마다 색이 다르면 어느 줄이 심각한지 훑어서 알 수 없다)')
 
   const onoff = await ev(`(()=>{const t=document.body.innerText
     return JSON.stringify({on:t.includes('ON'), ko:t.includes('온라인')||t.includes('오프라인')})})()`)

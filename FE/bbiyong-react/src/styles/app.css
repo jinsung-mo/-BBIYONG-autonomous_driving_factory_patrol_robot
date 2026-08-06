@@ -3608,3 +3608,92 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root[data-theme="light"] #pgCam #camTilt .camtilt-val i{
   font-size:12px;
 }
+
+/* ============ 좌측 사이드를 카드 두 장으로 (S15P11E101-797) ============
+   성격이 다른 두 정보가 한 장에 있으면 어디까지가 한 덩어리인지 읽히지 않는다.
+   카드 사이는 24px — v3 의 '카드 사이 최소 여백' 이다. */
+#pgMap.v3-theme .nav-side,
+#pgCam.v3-theme .cam-side-panel{
+  display:flex; flex-direction:column; gap:24px; min-height:0;
+  /* 껍데기는 카드가 아니다. 카드는 자식 둘이 각자 갖는다. */
+  background:transparent; border:0; box-shadow:none; padding:0;
+}
+/* 조작·상태는 제 높이를 지키고, 넘치는 것은 이벤트 로그만 접는다 —
+   조작 패널이 스크롤에 밀려 사라지면 수동 주행을 시작할 길이 없어진다. */
+#pgMap.v3-theme .nav-side > #pStatus,
+#pgCam.v3-theme .cam-side-panel > #pControl{flex:none;}
+#pgMap.v3-theme .nav-side > #pEvents,
+#pgCam.v3-theme .cam-side-panel > #pEvents{flex:1 1 auto; min-height:0; overflow:hidden;}
+#pgMap.v3-theme #pEvents .elog,
+#pgCam.v3-theme #pEvents .elog{flex:1; min-height:0; overflow-y:auto;}
+
+/* 이벤트 로그 행 — 디자인 문서(BBIYONG 디자인 시스템 v3)의 '점+글자' 그대로.
+   상자가 아니라 구분선 한 줄이고, 점과 글자가 함께 심각도를 말한다.
+   -793 에서 본문을 잉크색 한 가지로 통일했는데, 문서의 실제 예시는 글자에도
+   색을 준다 — 문서를 따른다. */
+:root[data-theme="light"] #pgMap.v3-theme .elog li,
+:root[data-theme="light"] #pgCam.v3-theme .elog li{
+  display:flex; align-items:center; gap:9px; padding:10px 2px;
+  background:transparent; border:0; border-bottom:1px solid var(--bb-line); border-radius:0; margin:0;
+}
+:root[data-theme="light"] #pgMap.v3-theme .elog li:last-child,
+:root[data-theme="light"] #pgCam.v3-theme .elog li:last-child{border-bottom:0;}
+:root[data-theme="light"] #pgMap.v3-theme .elog .logdot,
+:root[data-theme="light"] #pgCam.v3-theme .elog .logdot{
+  flex:none; width:6px; height:6px; border-radius:50%;
+}
+:root[data-theme="light"] #pgMap.v3-theme .elog :is(.logtime,li > .t),
+:root[data-theme="light"] #pgCam.v3-theme .elog :is(.logtime,li > .t){
+  flex:none; font-family:var(--bb-font-mono); font-size:12px;
+  /* 문서 값은 #A8ADBC(2.24:1) 다. 색상 계열은 지키고 명도만 내려 기준(4.5)을 넘긴다 —
+     무인 시간대에 시각을 못 읽으면 로그가 순서 없는 글자 더미가 된다. */
+  color:#6B7183;
+}
+:root[data-theme="light"] #pgMap.v3-theme .elog :is(.logtext,li > b),
+:root[data-theme="light"] #pgCam.v3-theme .elog :is(.logtext,li > b){
+  flex:1; min-width:0; font-size:12.5px; font-weight:500;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  /* 일반 항목 — 문서의 #8B92A3(3.11:1) 을 같은 계열에서 내렸다 */
+  color:#656C7D;
+}
+/* 심각한 항목만 진하게. 문서 값 #B4655C 는 4.22:1 이라 한 단 내렸다. */
+:root[data-theme="light"] #pgMap.v3-theme .elog :is(li.fire b,li.fire .logtext),
+:root[data-theme="light"] #pgCam.v3-theme .elog :is(li.fire b,li.fire .logtext){
+  color:#A85950; font-weight:600;
+}
+:root[data-theme="light"] #pgMap.v3-theme .elog :is(li.heat b,li.heat .logtext),
+:root[data-theme="light"] #pgCam.v3-theme .elog :is(li.heat b,li.heat .logtext){
+  color:#7E6222; font-weight:600;
+}
+:root[data-theme="light"] #pgMap.v3-theme .elog :is(li.ok b,li.ok .logtext),
+:root[data-theme="light"] #pgCam.v3-theme .elog :is(li.ok b,li.ok .logtext){color:#3F6A56;}
+/* 점 — 문서 값 그대로. 글자와 달리 대비 하한이 걸리는 요소가 아니다. */
+:root[data-theme="light"] #pgMap.v3-theme .elog li.fire .logdot,
+:root[data-theme="light"] #pgCam.v3-theme .elog li.fire .logdot{background:var(--bb-danger);}
+:root[data-theme="light"] #pgMap.v3-theme .elog li.heat .logdot,
+:root[data-theme="light"] #pgCam.v3-theme .elog li.heat .logdot{background:var(--bb-warn);}
+:root[data-theme="light"] #pgMap.v3-theme .elog li:not(.fire):not(.heat) .logdot,
+:root[data-theme="light"] #pgCam.v3-theme .elog li:not(.fire):not(.heat) .logdot{
+  background:var(--bb-neutral-dot);
+}
+/* 예전에는 aside 가 카드였고 그 안의 두 패널은 면을 지웠다(1926·3226행).
+   이제 카드가 자식 둘이므로 그 규칙을 되돌린다 — 아니면 카드가 투명하게 남는다. */
+/* 특이도 주의: 위 규칙이 #pControl / #pEvents 를 id 로 짚고 있어(id 2개)
+   .panel 하나로는 못 이긴다. 같은 id 로 맞춘다. */
+#pgCam.v3-theme .cam-side-panel > #pControl,
+#pgCam.v3-theme .cam-side-panel > #pEvents{
+  background:#fff; border:0; border-radius:16px;
+  box-shadow:3px 5px 16px rgba(35,39,51,.08); padding:13px;
+}
+/* 여백은 gap 이 준다 — margin 까지 더하면 24px 규칙이 어긋난다 */
+#pgCam.v3-theme .cam-side-panel > .panel + .panel{margin-top:0;}
+
+/* 이벤트 로그 (S15P11E101-797)
+   카드 자체는 다른 카드와 똑같이 그림자로 떠 있다 — 층이 하나만 어긋나면
+   그 카드만 화면에 눌러붙은 것처럼 보인다.
+   대신 안쪽 목록과 행에는 그림자를 두지 않는다. 카드 안에서 또 뜨는 면이
+   생기면 층이 두 겹이 되어, 무엇이 떠 있는 것인지 알 수 없게 된다. */
+#pgMap.v3-theme #pEvents .elog,
+#pgCam.v3-theme #pEvents .elog,
+#pgMap.v3-theme #pEvents .elog li,
+#pgCam.v3-theme #pEvents .elog li{box-shadow:none;}
