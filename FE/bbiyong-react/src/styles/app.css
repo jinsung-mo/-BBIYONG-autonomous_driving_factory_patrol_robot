@@ -3360,3 +3360,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .loc-wait span{font-size:11px; font-weight:500; color:rgba(255,255,255,.78);}
 .loc-wait-badge{white-space:nowrap;}
+
+/* 로봇 따라가기 복귀 버튼 (S15P11E101-775)
+   위치 확인 중 배지(.loc-wait, z-index 6)보다 아래에 둔다 — 위치를 모른다는
+   말이 먼저 보여야 한다. 가리는 자리도 다르다(위 가운데 / 오른쪽 아래). */
+.follow-back{left:auto; right:12px; bottom:12px; top:auto; z-index:4;}
