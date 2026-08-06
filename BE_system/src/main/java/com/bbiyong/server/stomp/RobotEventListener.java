@@ -3,6 +3,7 @@ package com.bbiyong.server.stomp;
 import com.bbiyong.server.wss.event.RobotConnectedEvent;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
+import com.bbiyong.server.wss.event.RobotInspectionPointEvent;
 import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
@@ -119,6 +120,16 @@ public class RobotEventListener {
             messagingTemplate.convertAndSend("/topic/mapping", event.getRawPayload());
         } catch (Exception e) {
             log.error("Failed to relay mapping complete for robot [{}]", event.getRobotId(), e);
+        }
+    }
+
+    @EventListener
+    public void handleInspectionPointEvent(RobotInspectionPointEvent event) {
+        // AprilTag 점검 지점 원문(후보/확정/이벤트)을 /topic/inspection 으로 그대로 relay. (S15P11E101-778)
+        try {
+            messagingTemplate.convertAndSend("/topic/inspection", event.getRawPayload());
+        } catch (Exception e) {
+            log.error("Failed to relay inspection point for robot [{}]", event.getRobotId(), e);
         }
     }
 

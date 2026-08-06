@@ -10,6 +10,10 @@ public class RobotPacket {
     private String source;
     private String type; // REGISTER, TELEMETRY, STATE_UPDATE, VIDEO_FRAME, EVENT_FIRE, EVENT_OVERHEAT, INSPECTION
 
+    // AprilTag 점검 지점(wall-ping) 메시지는 type 대신 kind 를 쓴다: inspection_candidate |
+    // inspection_candidates | inspection_point(s) | inspection_point_event. 원문 그대로 관제에 중계. (S15P11E101-778)
+    private String kind;
+
     @JsonProperty("robot_id")
     private String robotId;
 
