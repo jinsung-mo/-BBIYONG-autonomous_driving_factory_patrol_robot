@@ -3,6 +3,7 @@
 // 계약 원본: docs/fe_backend_integration_guide.md §3.1 (텔레메트리) · §3.2 (경보)
 
 import { ROBOT_V_MAX, ROBOT_W_MAX } from './config.ts'
+import { withDisplayNames } from './robotName.ts'
 
 // /topic/robots 의 status → 상태 pill 문구/색
 // (modeClass: '' 정상 · 'emg' 긴급 · 'man' 수동 — 기존 CSS 클래스를 그대로 쓴다)
@@ -70,7 +71,11 @@ export function eventToLog(e: any) {
     status: e?.status || null,
     robotId: e?.robotId || null,
     equipmentId: e?.equipmentId || null,
-    msg: [e?.message || TYPE_LABEL[e?.type] || e?.type || '이벤트', e?.robotId].filter(Boolean).join(' · '),
+    // 표시명으로 갈아 끼운다(S15P11E101-766). BE 가 조립한 message 안에도 id 가 박혀 오므로
+    // 문장 전체를 통과시킨다 — 뒤에 붙이는 robotId 만 바꾸면 문장 속 id 가 남는다.
+    msg: withDisplayNames(
+      [e?.message || TYPE_LABEL[e?.type] || e?.type || '이벤트', e?.robotId].filter(Boolean).join(' · '),
+    ),
   }
 }
 
@@ -93,7 +98,7 @@ export function alertToLog(a: any) {
     robotId: a?.robotId || null,
     equipmentId: a?.equipmentId || null,
     live: true,   // 실시간 수신분 — 히스토리와 구분해 표시한다
-    msg: a?.message || alertToToast(a).sub,
+    msg: withDisplayNames(a?.message || alertToToast(a).sub),
   }
 }
 

@@ -1,4 +1,5 @@
 import { errMessage } from '../../live/errors.ts'
+import { displayName } from '../../live/robotName.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
@@ -187,7 +188,7 @@ export default function OpsPage() {
 
             <div className="card-v3">
               <h3 style={{ margin: 0, marginBottom: '12px' }}>저장된 맵 <span className="k">ARCHIVE</span></h3>
-              <p className="cfg-help">로봇 <b className="mono">{ROBOT_ID}</b> 의 저장 맵 목록입니다.</p>
+              <p className="cfg-help">로봇 <b className="mono">{displayName(ROBOT_ID)}</b> 의 저장 맵 목록입니다.</p>
               {!enabled && <div className="cfg-note">실서버 모드에서만 조회됩니다.</div>}
               {enabled && (
                 <>
