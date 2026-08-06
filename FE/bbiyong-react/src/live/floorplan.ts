@@ -60,6 +60,10 @@ async function loadImage(imageUrl: any, accessToken: any) {
 export async function loadActivePlan(accessToken: string | null | undefined) {
   const detail = await authedGet('/api/maps/active', accessToken)
   if (!detail?.imageUrl) return null
+  // 좌표 정합의 기준은 격자 메타다(S15P11E101-745). 서버가 그 API 를 주면 그것이 정답이고,
+  // 없으면(404) 도면 상세의 같은 값으로 되돌아간다 — 한쪽만 있어도 지도가 어긋나지 않게.
+  const grid = await authedGet('/api/maps/active/grid', accessToken).catch(() => null)
+  const pick = (...vals: any[]) => vals.find((v) => Number.isFinite(Number(v)))
   const { img, url } = await loadImage(detail.imageUrl, accessToken)
   return {
     id: detail.id,
@@ -68,13 +72,13 @@ export async function loadActivePlan(accessToken: string | null | undefined) {
     img,
     url,
     // drawNav 가 쓰는 맵 기하와 같은 형태로 맞춘다(미터 단위 원점 + m/px)
-    w: detail.widthPx,
-    h: detail.heightPx,
-    res: detail.resolution,
-    ox: detail.originX,
-    oy: detail.originY,
+    w: Number(pick(grid?.cols, grid?.columns, detail.widthPx)),
+    h: Number(pick(grid?.rows, detail.heightPx)),
+    res: Number(pick(grid?.cellResolution, detail.resolution)),
+    ox: Number(pick(grid?.originX, detail.originX)),
+    oy: Number(pick(grid?.originY, detail.originY)),
     // ROS map 규약의 원점 회전각(radians). 서버가 주지 않으면 0 — 축에 나란한 맵이다.
-    oyaw: Number.isFinite(Number(detail.originYaw)) ? Number(detail.originYaw) : 0,
+    oyaw: Number(pick(grid?.originYaw, detail.originYaw, 0)),
   }
 }
 

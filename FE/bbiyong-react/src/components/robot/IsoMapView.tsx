@@ -22,9 +22,12 @@ const ZOOM_MAX = 3
 
 /** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다. */
 const LAYER_STEP = 1.15
+// nav 자세가 이 시간 안에 들어왔다면 텔레메트리로 덮지 않는다.
+// 텔레메트리는 1Hz 라, 3Hz 인 nav 와 섞으면 마커가 앞뒤로 떨린다.
+const NAV_FRESH_MS = 2500
 
 export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) {
-  const { plan, connected, onNavUpdate, robotOnline } = useLive()
+  const { plan, connected, onNavUpdate, robotOnline, telemetry } = useLive()
   const [src, setSrc] = useState<ExtrudeSource | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -40,6 +43,8 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   // 받은 값(목표)과 화면에 그리는 값(현재)을 나눠 둔다 — 사이를 보간한다
   const targetRef = useRef<{ x: number, y: number, yaw: number } | null>(null)
   const shownRef = useRef<{ x: number, y: number, yaw: number } | null>(null)
+  // nav 자세를 마지막으로 받은 시각. 텔레메트리로 채울지 가르는 기준이다.
+  const navAtRef = useRef(0)
   const planRef = useRef(plan)
   planRef.current = plan
   const srcRef = useRef(src)
@@ -109,24 +114,45 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  useEffect(() => onNavUpdate((nav: any) => {
+  // 목표 자세를 옮긴다. 자리를 계산하는 식은 한 곳에 둔다.
+  const aim = (x: number, y: number, yaw: number) => {
     const el = markerRef.current
     const p = planRef.current
-    const s = srcRef.current
-    if (!el || !p || !s) return
-    const pose = nav?.pose
-    if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) {
-      targetRef.current = null
-      shownRef.current = null
-      el.style.display = 'none'
-      return
-    }
-    const { x, y } = worldToPlanPx(p as any, pose.x, pose.y, s.scale)
-    const yaw = Number(pose.yaw)
-    targetRef.current = { x, y, yaw: Number.isFinite(yaw) ? yaw : 0 }
+    const s2 = srcRef.current
+    if (!el || !p || !s2) return
+    const px = worldToPlanPx(p as any, x, y, s2.scale)
+    targetRef.current = { x: px.x, y: px.y, yaw: Number.isFinite(yaw) ? yaw : 0 }
     // 로봇은 벽 위로 띄운다 — 바닥에 붙이면 기울인 화면에서 벽에 가린다
     el.style.setProperty('--rz', `${WALL_H * LAYER_STEP + 10}px`)
+  }
+
+  // 1순위: /topic/nav 의 자세. 3Hz 로 오고 스캔과 같은 시점이라 가장 정확하다.
+  useEffect(() => onNavUpdate((nav: any) => {
+    const el = markerRef.current
+    if (!el) return
+    const pose = nav?.pose
+    if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) return
+    navAtRef.current = Date.now()
+    aim(pose.x, pose.y, Number(pose.yaw))
   }), [onNavUpdate])
+
+  // 2순위: /topic/robots 텔레메트리의 location(S15P11E101-745 계약).
+  // nav 노드가 죽어도 로봇은 위치를 계속 보낸다 — 그때 마커가 사라지면
+  // '로봇이 어디 있는지 모른다' 가 아니라 '로봇이 없다' 로 잘못 읽힌다.
+  // nav 가 살아 있으면 건드리지 않는다. 두 소스가 번갈아 들어오면 마커가 떨린다.
+  useEffect(() => {
+    const loc = telemetry?.location
+    if (!loc || !Number.isFinite(Number(loc.x)) || !Number.isFinite(Number(loc.y))) return
+    if (Date.now() - navAtRef.current < NAV_FRESH_MS) return
+    aim(Number(loc.x), Number(loc.y), Number(loc.yaw))
+  }, [telemetry])
+
+  // 두 소스 모두 자세를 주지 못하면 마커를 감춘다 — 없는 위치를 그리지 않는다.
+  useEffect(() => {
+    const el = markerRef.current
+    if (!el) return
+    if (!targetRef.current) { el.style.display = 'none'; shownRef.current = null }
+  }, [plan])
 
   // 로봇이 꺼져 있으면 마커를 흐린다. 지우지는 않는다 —
   // 마지막으로 알던 자리는 남겨야 어디서 멈췄는지 알 수 있다.
