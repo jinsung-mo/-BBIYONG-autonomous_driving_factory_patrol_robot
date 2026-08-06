@@ -12,6 +12,7 @@ import { errMessage, errStatus } from './errors.ts'
 //                  활성화하며, 다른 맵을 쓰려면 이 API 로 지정한다.
 
 import { authedGet, authedSend } from './authApi.ts'
+import { REST_BASE } from './config.ts'
 
 export const MAPPING_STATUS = 'MAPPING'
 
@@ -138,6 +139,25 @@ export const activatePath = (id: any) => `/api/maps/${id}/active`
 export const ACTIVATE_METHOD = 'PUT'
 
 export class NotImplementedError extends Error {}
+
+/**
+ * 저장된 맵 이미지를 인증 fetch → objectURL 로 받는다(S15P11E101-791).
+ * 이미지 엔드포인트는 Bearer 인증이 필요해 <img src> 로 직접 못 건다.
+ * 다 쓰면 releaseMapImageUrl 로 돌려준다.
+ * @param {string} imageUrl MapSummary.imageUrl (예: /api/maps/{id}/image)
+ * @returns {Promise<string>} objectURL
+ */
+export async function loadMapImageUrl(imageUrl: string, accessToken: string | null | undefined) {
+  const res = await fetch(`${REST_BASE}${imageUrl}`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  })
+  if (!res.ok) throw new Error(`맵 이미지를 받지 못했습니다 (HTTP ${res.status})`)
+  return URL.createObjectURL(await res.blob())
+}
+
+export function releaseMapImageUrl(url: string | null | undefined) {
+  if (url) URL.revokeObjectURL(url)
+}
 
 /**
  * @param {string} id
