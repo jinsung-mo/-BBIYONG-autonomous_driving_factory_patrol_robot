@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { isFloorplan } from '../../live/floorplan.ts'
 import {
-  buildExtrudeSource, releaseExtrudeSource, worldToPlanPx, WALL_H,
+  buildExtrudeSource, releaseExtrudeSource, worldToScenePx, WALL_H,
   type ExtrudeSource,
 } from '../../live/isoExtrude.ts'
 import { errMessage } from '../../live/errors.ts'
@@ -163,7 +163,9 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     const p = planRef.current
     const s2 = srcRef.current
     if (!el || !p || !s2) return
-    const px = worldToPlanPx(p as any, x, y, s2.scale)
+    // 씬 픽셀 공간은 격자 셀이 아니라 도면 이미지 픽셀이다(S15P11E101-789).
+    // 맵 전체 대비 비율로 옮겨야 2D 와 같은 자리에 찍힌다.
+    const px = worldToScenePx(p as any, x, y, { w: s2.w, h: s2.h })
     targetRef.current = { x: px.x, y: px.y, yaw: Number.isFinite(yaw) ? yaw : 0 }
     // 로봇은 벽 위로 띄운다 — 바닥에 붙이면 기울인 화면에서 벽에 가린다
     // 차량은 벽 높이 위에 둔다(S15P11E101-745 의 결정을 지킨다).

@@ -141,6 +141,8 @@ export function startFakeBackend(port = 8099) {
   const sends = []          // { t, destination, body }
   const restCalls = []      // { url, type, page, size, returned }
   const subs = []           // { id, destination, socket }
+  // 격자 셀 하나가 도면 이미지 몇 픽셀인지. 실제 BE 는 1 이 아니다.
+  let gridCellPx = 8
   let t0 = null             // 첫 SEND 기준 시각
   let msgId = 0
 
@@ -876,8 +878,14 @@ export function startFakeBackend(port = 8099) {
       }
       res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
       res.end(JSON.stringify({
-        cols: activePlan.widthPx, rows: activePlan.heightPx,
-        cellResolution: activePlan.resolution,
+        // BE 계약(S15P11E101-728/789): 격자는 셀 단위다. 1셀 = cellSizePx 픽셀이라
+        // cols = widthPx / cellSizePx, cellResolution = resolution × cellSizePx 다.
+        // 예전에는 여기서 cellSizePx 를 1 로 두어 두 해상도가 같아졌고, 그래서
+        // 3D↔2D 투영 불일치(-789)를 재현하지 못했다.
+        cols: Math.round(activePlan.widthPx / gridCellPx),
+        rows: Math.round(activePlan.heightPx / gridCellPx),
+        cellSizePx: gridCellPx,
+        cellResolution: activePlan.resolution * gridCellPx,
         originX: activePlan.originX, originY: activePlan.originY,
         originYaw: activePlan.originYaw ?? 0,
       }))
@@ -1350,6 +1358,7 @@ export function startFakeBackend(port = 8099) {
 
     server.listen(port, '127.0.0.1', () => resolve({
       sends,
+      setGridCellPx: (n) => { gridCellPx = Math.max(1, Number(n) || 1) },
       subs,
       restCalls,
       push,
