@@ -84,25 +84,17 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
 
   return (
     <div className="auth-wrap">
-      {/* 씬: 순찰 경로 2줄 + 마커 2개. 유리 밑을 관통시켜야 유리가 유리로 보인다 —
-          격자·색 얼룩은 .auth-wrap::before/::after(순수 CSS)로 이미 깔려 있다.
-          이 SVG 와 마커만 마크업이 필요하다(경로선·아이콘이라 CSS 배경만으론 못 그린다). */}
-      <svg className="auth-scene__path" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-        <path d="M-60 250 L260 250 L260 662 L1500 662" fill="none" stroke="#96C2A9" strokeWidth="2" />
-        <path d="M1010 662 L1010 300 L1340 300" fill="none" stroke="#D9AFA9" strokeWidth="2" strokeDasharray="5 6" />
-        <circle cx="260" cy="250" r="4" fill="#96C2A9" />
-        <circle cx="260" cy="662" r="4" fill="#96C2A9" />
-        <circle cx="1010" cy="662" r="4" fill="#D9AFA9" />
-      </svg>
-      <div className="auth-marker auth-marker--edge" aria-hidden="true">
-        <i style={{ background: 'var(--bb-ok-tint)', boxShadow: 'inset 0 0 0 2px var(--bb-ok)' }} />
-      </div>
-      <div className="auth-marker auth-marker--warn" aria-hidden="true">
-        <i style={{ background: 'var(--bb-warn-tint)', boxShadow: 'inset 0 0 0 2px var(--bb-warn)' }} />
-      </div>
+      {/* 🔴 이 화면의 배경은 더 이상 자기 것이 아니다(S15P11E101-808). 전에는 여기에
+          전용 씬(순찰 경로 2줄 + 마커 2개)을 그렸는데, 이제는 웰컴과 공유하는 순찰 씬
+          (AuthFlow 의 PatrolScene)이 뒤에 살아 있고 그 위에 스크림이 블러를 건다.
+          두 씬을 겹쳐 두면 흐려진 경로선이 두 벌 보여 지저분하므로 전용 씬은 걷어냈다.
 
-      {/* 1단 유리 패널. tokens.css 의 .bb-glass 를 그대로 물린다(radius 만 auth-glass 가 덮음). */}
-      <div className={`auth-glass bb-glass${mode === 'signup' ? ' is-signup' : ''}`}>
+          1단 패널. 🔴 유리(.bb-glass)를 쓰지 않는다 — 스크림이 이미 backdrop-filter 를
+          쓰고 있어 여기에 또 걸면 tokens.css 가 금지하는 "유리 위에 유리"(블러 중첩)가
+          된다. 대신 반투명 단색(app.css)으로 간다. 스크림(.42)+패널(.74) 두 겹의 흰
+          반투명이 쌓여 실질적으로 밝은 면이 되므로, 그 위 순백 카드(.col)와의
+          "패널 > 카드" 계층은 -807 그대로 선다. */}
+      <div className={`auth-glass${mode === 'signup' ? ' is-signup' : ''}`}>
         <div className="auth-brand">삐용(BBIYONG)<span> 통합 관제 시스템</span></div>
         {/* 세그먼트 필(S15P11E101-791). 탭 그룹을 알약 하나로 — 선택만 진하게 채운다. */}
         <div className="auth-seg" role="tablist" aria-label="로그인 또는 회원가입">

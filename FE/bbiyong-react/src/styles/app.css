@@ -280,7 +280,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
      진입 모션은 자식별로 건다 — 어차피 stagger 가 필요하다. */
 }
 .welcome-wrap .mono{ font-family:var(--bb-font-mono); }  /* 전역 .mono(Consolas)를 v3 로 덮는다 */
-@keyframes welcomeIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
 
 /* ── 씬: 화면 끝까지 (규칙 3 — 좌우로 칸을 나누지 않는다) ── */
 .welcome-scene{ position:absolute; inset:0; }
@@ -550,69 +549,40 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
      2단 불투명 카드 — 그 안에 들어앉는 "항목"(필드 묶음: 계정 정보 / 개인 정보)
      3단 서브 표면  — 카드 안에서 면 밝기로만 구분(입력·성별 세그먼트)
    값은 tokens.css(핸드오프 정본)에서만 가져온다 — 손으로 베껴 적지 않는다. */
+/* 🔴 배경·씬은 이 화면의 것이 아니다(S15P11E101-808). 뒤에 웰컴과 공유하는 순찰 씬이
+   살아 있고, 그 앞의 스크림(.authflow .scrim)이 블러를 전담한다. 전에 여기 있던
+   전용 배경(grad-frame)·격자(::before)·색 얼룩(::after)·전용 경로 SVG·마커는
+   순찰 씬과 두 겹으로 겹쳐 보이므로 걷어냈다.
+   position:fixed + overflow-y:auto — 화면을 덮되 내용이 길면(회원가입·좁은 폭)
+   패널 안에서 스크롤된다. 전환 상태(opacity·transform)는 아래 .authflow 절이 준다. */
 .auth-wrap{
-  position:relative;
-  min-height:100vh; display:flex; justify-content:center; padding:32px 20px;
+  position:fixed; inset:0; z-index:4;
+  display:flex; justify-content:center; padding:32px 20px; overflow-y:auto;
   font-family:var(--bb-font); color:var(--bb-ink);
-  /* Welcome 과 같은 씬 배경. 두 화면이 이어져야 '같은 시스템' 으로 읽힌다. */
-  background:var(--bb-grad-frame);
 }
-/* 씬 격자 — 카드가 '무엇 위에' 떠 있는지 알려 준다. 평평한 회색이면 카드가 뜬 것이
-   아니라 그냥 상자로 보인다. tokens.css 의 .bb-scene-grid 와 같은 값이다. */
-.auth-wrap::before{
-  content:''; position:fixed; inset:0; pointer-events:none;
-  background-image:
-    linear-gradient(90deg, rgba(120,128,150,.05) 1px, transparent 1px),
-    linear-gradient(0deg,  rgba(120,128,150,.05) 1px, transparent 1px);
-  background-size:56px 56px;
-}
-/* 색 얼룩 — 유리가 빨아들일 색. 경계가 없어 글자 뒤를 지나도 가독성을 깎지 않는다.
-   🔴 유리가 화면에서 안 보이던 원인은 유리가 아니라 씬이었다 — backdrop-filter: blur()
-   는 뒤를 흐리는 필터일 뿐인데, 뒤가 격자뿐이면 흐려도 흰색이라 유리를 켜든 끄든
-   픽셀이 거의 같다. 얼룩은 블러에 뭉개지지 않고 saturate(1.4)를 타서 유리 면 전체에
-   옅은 색조를 남긴다 — 유리를 유리로 보이게 하는 건 블러가 아니라 뒤에 흐려질 것이다.
-   좌하 정상(ok)·우상 위험(warn) 두 점만, 유리(폭 432/756)를 확실히 물도록 잡는다.
-   ⚠️ 알파를 여기서 더 올리지 마라. .10 을 넘기면 유리 위 힌트 문구(--bb-body) 대비가 흔들린다. */
-.auth-wrap::after{
-  content:''; position:fixed; inset:0; pointer-events:none;
-  background:
-    radial-gradient(340px 300px at calc(50% - 150px) 72%, rgba(111,164,135,.10), transparent 70%),
-    radial-gradient(300px 280px at calc(50% + 210px) 24%, rgba(201,162,106,.09), transparent 70%);
-}
-/* 순찰 경로 2줄(정상·위험) + 마커 2개. 유리 밑을 관통시켜야 비친다 — v4-A(카드 뒤로
-   가려짐)와 반대로 쪼개지 않은 한 장짜리 SVG 를 쓴다. slice 로 x=720 을 화면 중앙에
-   고정해 유리(중앙 정렬)와 경로의 좌우 관계를 어떤 폭에서도 유지한다. */
-.auth-scene__path{position:fixed; inset:0; width:100%; height:100%; opacity:.6; pointer-events:none;}
-.auth-marker{position:fixed; width:54px; height:54px; border-radius:var(--bb-r-scene);
-  background:#fff; box-shadow:var(--bb-sh-3); pointer-events:none;
-  display:flex; align-items:center; justify-content:center;}
-.auth-marker i{width:20px; height:20px; border-radius:6px; display:block;}
-/* 🔴 유리 왼쪽 모서리를 물고 있는 마커(정상, y=662/900=73.5%). 유리를 끄면 통째로
-   또렷해지고, 켜면 안쪽 절반만 뿌옇게 밀린다 — on/off 비교에서 가장 크게 갈리는 지점.
-   회원가입(756)에서는 마커가 통째로 유리 밑에 들어가 흐린 덩어리가 된다. 그것도 증거다. */
-.auth-marker--edge{left:calc(50% - 216px - 27px); top:calc(73.5% - 27px);}
-/* 대조군(위험). 로그인 폭에서는 유리 밖이라 또렷하다 — 같은 마커가 유리에 걸친
-   쪽만 뿌옇다는 대비를 옆에서 보여 준다. 위험 분기 꼭짓점(1010,300) 위. */
-.auth-marker--warn{right:calc(50% - 290px - 27px); top:calc(33.3% - 27px);}
 
-/* ── 1단: 유리 패널 ─────────────────────────────────────────────
-   tokens.css 의 .bb-glass 를 그대로 물린다. 여기서 덮는 건 radius 하나뿐이다 —
-   .bb-glass 기본값은 r-card(16)인데 그 안에 같은 16짜리 카드가 들어오면 두 모서리가
-   겹쳐 한 덩어리로 보인다. 그래서 바깥만 r-panel(22)로 올린다.
-   폭: 로그인 432 = 계정 정보 380(기준안 C 계승) + 유리 좌우 패딩(26×2), 회원가입 756.
+/* ── 1단: 패널 ─────────────────────────────────────────────────
+   🔴 -807 은 여기에 tokens.css 의 .bb-glass 를 물렸다. -808 에서 뗐다 — 전환 스크림이
+   backdrop-filter 를 쓰므로 패널까지 유리면 tokens.css 가 금지하는 블러 중첩이 된다.
+   대신 반투명 단색. 알파 .74 는 스크림(.42) 위에 다시 얹히므로 흰 반투명이 두 겹
+   쌓여 거의 불투명한 밝은 면이 되고, 그 위 순백 카드(.col)와의 명도차는 그대로 선다.
+   radius 는 바깥만 r-panel(22) — 안쪽 카드(16)와 같으면 두 모서리가 겹쳐 한 덩어리로 보인다.
+   폭: 로그인 432 = 계정 정보 380(기준안 C 계승) + 좌우 패딩(26×2), 회원가입 756.
    🔴 폭 전환은 max-width 하나만 애니메이트한다 — 내용(2열 배치·필드 표시)은 즉시
    바뀐다. 함께 움직이면 필드가 흘러다녀 어지럽다. */
 .auth-glass{
-  position:relative;                      /* 격자 위에 온다 */
+  position:relative;
   margin:auto;
   width:100%; max-width:432px;
   border-radius:var(--bb-r-panel);
   padding:26px 26px 22px;
-  animation:welcomeIn .5s ease both;
+  background:rgba(255,255,255,.74);
+  border:1px solid rgba(255,255,255,.85);
+  box-shadow:0 18px 46px rgba(35,39,51,.09),
+             inset 0 1px 0 rgba(255,255,255,.92);
   transition:max-width calc(var(--bb-dur) * 3) var(--bb-ease);
 }
 .auth-glass.is-signup{max-width:756px;}
-@media (prefers-reduced-motion: reduce){ .auth-glass{transition:none;} }
 
 /* ── 2단: 유리 안에 들어앉는 불투명 카드 ────────────────────────
    tokens.css 의 `.bb-glass > .bb-card` 는 직계 자식 셀렉터라 여기서는 안 먹는다 —
@@ -747,7 +717,86 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @media (max-width:620px){
   .auth-glass{padding:18px 14px;}
   .auth-glass .col{padding:14px;}
-  .auth-scene__path,.auth-marker{display:none;}
+}
+
+/* ============ 웰컴 ↔ 로그인 전환 (S15P11E101-808) ============
+   확정 시안: docs/design/mockups/flow-welcome-to-login.html
+   구조는 components/auth/AuthFlow.tsx 참고 — 두 화면이 동시에 마운트돼 있고,
+   .authflow 에 붙는 두 클래스만으로 상태가 갈린다.
+     .is-login  → 히어로 퇴장 · 스크림 · 하단 통계 페이드 (나가는 쪽, 먼저)
+     .login-in  → 로그인 패널 등장 (들어오는 쪽, 70ms 늦게 — JS 타이머)
+   애니메이트하는 속성은 transform / opacity 뿐이다. width·left·filter 는 건드리지 않는다
+   (레이아웃 재계산 · 매 프레임 재블러를 부른다).
+
+   지속시간: --bb-dur(.12s)은 hover 용이라 화면 전환엔 너무 빠르다. 화면 전체가 밀려나는
+   전환이라 토큰에서 4배를 파생시킨다(≈ .48s). 새 숫자를 짓지 않고 토큰에서 끌어온다. */
+.authflow{ --fl-dur: calc(var(--bb-dur) * 4); }
+
+/* ① 히어로 — 왼쪽으로 밀려나며 사라진다.
+   -120% 는 자기 폭 기준 상대값이라 히어로 폭이 달라져도 항상 화면 밖으로 나간다
+   (고정 px 이면 좁은 화면에서 덜 밀려나 꼬리가 남는다).
+   translateY(-50%) 는 세로 중앙정렬 값이라 전환 중에도 유지해야 한다. */
+.authflow .welcome-hero{
+  transition:transform var(--fl-dur) var(--bb-ease), opacity var(--fl-dur) var(--bb-ease);
+}
+.authflow.is-login .welcome-hero{ transform:translate(-120%,-50%); opacity:0; pointer-events:none; }
+
+/* ② 하단 2연 통계 카드 — 히어로와 함께 사라진다.
+   스크림이 화면 전체를 흐리는데 카드만 남겨 두면 숫자를 읽을 수 없는 반쯤 죽은 요소가
+   된다. 자리를 지킨 채 opacity 만 낮추지 않고 살짝 가라앉히며(translateY) 방향을 준다. */
+.authflow .welcome-stats{
+  transition:transform var(--fl-dur) var(--bb-ease), opacity var(--fl-dur) var(--bb-ease);
+}
+.authflow.is-login .welcome-stats{ opacity:0; transform:translateY(16px); pointer-events:none; }
+
+/* ③ 스크림 — 블러를 전담한다.
+   🔴 순찰 씬에 filter 를 걸지 않는 이유 둘: (a) filter 는 조상에 containing block 을
+   만들어 position:fixed 자식이 깨진다 (b) 매 프레임 transform 이 도는 씬에 blur 를 걸면
+   GPU 가 매 프레임 다시 흐린다. 스크림은 자기 뒤만 흐리므로 씬은 원래 비용 그대로 돈다.
+   blur 8px + 흰 .42 — 로봇 실루엣과 라이다 스윕이 형태로는 계속 보이되, 로그인 카드 위
+   글자 대비는 그대로다(카드가 불투명 흰색이라 스크림보다 위 z-index 에 있다).
+   전환 중 클릭이 씬으로 새지 않도록 로그인 상태에서만 pointer-events 를 켠다. */
+.authflow .scrim{
+  position:fixed; inset:0; z-index:3;
+  opacity:0; pointer-events:none;
+  backdrop-filter:blur(8px) saturate(1.05);
+  -webkit-backdrop-filter:blur(8px) saturate(1.05);
+  background:rgba(255,255,255,.42);
+  transition:opacity var(--fl-dur) var(--bb-ease);
+}
+.authflow.is-login .scrim{ opacity:1; pointer-events:auto; }
+
+/* ④ 로그인 패널 — 아래에서 올라와 제자리로.
+   "제자리"가 곧 margin:auto 로 중앙 정렬된 자리이므로 시작 위치만 잡고 도착점은
+   transform:none 이면 된다(값을 두 군데서 따로 계산할 필요가 없다). */
+.authflow .auth-wrap{
+  opacity:0; transform:translateY(64px); pointer-events:none;
+  transition:transform var(--fl-dur) var(--bb-ease), opacity var(--fl-dur) var(--bb-ease);
+}
+.authflow.login-in .auth-wrap{ opacity:1; transform:none; pointer-events:auto; }
+
+/* 좁은 폭에서는 히어로가 static 이라 세로 중앙정렬 값(-50%)이 없다 — 그대로 쓰면
+   전환 순간 히어로가 위로 반쯤 튄다. 가로 이동만 남긴다. */
+@media (max-width:1180px){
+  .authflow.is-login .welcome-hero{ transform:translateX(-120%); }
+}
+
+/* 이동을 원치 않는 사용자 — 이동은 끄고 opacity 만으로 전환한다(사라지긴 해야 한다).
+   패널 폭 전환(max-width)도 끈다: 회원가입으로 넓어질 때 폼이 움직여 보인다. */
+@media (prefers-reduced-motion: reduce){
+  .authflow .welcome-hero,
+  .authflow .welcome-stats,
+  .authflow .scrim,
+  .authflow .auth-wrap{
+    transition:opacity var(--fl-dur) var(--bb-ease) !important;
+  }
+  .authflow .welcome-hero,.authflow.is-login .welcome-hero{ transform:translateY(-50%) !important; }
+  .authflow .welcome-stats,.authflow.is-login .welcome-stats{ transform:none !important; }
+  .authflow .auth-wrap,.authflow.login-in .auth-wrap{ transform:none !important; }
+  .auth-glass{ transition:none; }
+}
+@media (prefers-reduced-motion: reduce) and (max-width:1180px){
+  .authflow .welcome-hero,.authflow.is-login .welcome-hero{ transform:none !important; }
 }
 
 /* ============ 폼 (인증 · 모달 공용) ============ */

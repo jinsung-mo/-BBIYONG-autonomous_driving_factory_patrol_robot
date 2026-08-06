@@ -7,8 +7,7 @@ import type { Section } from './live/contracts.d.ts'
 import LiveSimBridge from './live/LiveSimBridge.tsx'
 import { ZoneProvider } from './live/ZoneContext.tsx'
 import { FleetProvider } from './live/FleetContext.tsx'
-import WelcomeScreen from './components/auth/WelcomeScreen.tsx'
-import AuthScreen from './components/auth/AuthScreen.tsx'
+import AuthFlow from './components/auth/AuthFlow.tsx'
 import Nav from './components/Nav.tsx'
 import RobotPage from './components/robot/RobotPage.tsx'
 import MapPage from './components/robot/MapPage.tsx'
@@ -91,15 +90,16 @@ function Dashboard() {
   )
 }
 
-// 로그아웃 상태: Welcome(랜딩) → 로그인. 로그인 성공 시 대시보드(순찰 로봇 관제)로 진입.
+// 로그아웃 상태: Welcome(랜딩) ↔ 로그인. 로그인 성공 시 대시보드(순찰 로봇 관제)로 진입.
+//
+// 랜딩과 로그인은 더 이상 두 화면이 아니라 한 화면(AuthFlow)의 두 상태다(S15P11E101-808).
+// 여기서 삼항으로 갈랐더니 배경 순찰 씬이 매번 언마운트돼 로봇이 처음부터 다시 돌았고,
+// 나가는 화면이 애니메이션을 마칠 프레임도 없었다. 상태 전환은 AuthFlow 안에서 한다.
+// (자동 로그아웃 사유는 AuthFlow 가 직접 읽어 곧바로 로그인 상태로 시작한다.)
 function Gate() {
-  const { user, logoutReason } = useAuth()
-  const [entered, setEntered] = useState(false) // Welcome을 지나 로그인 화면으로 들어왔는지
-
-  // 자동 로그아웃되면 랜딩이 아니라 로그인 화면으로 보낸다 — 사유를 바로 읽을 수 있어야 한다
+  const { user } = useAuth()
   if (user) return <><SessionWatcher /><Dashboard /></>
-  if (!entered && !logoutReason) return <WelcomeScreen onEnter={() => setEntered(true)} />
-  return <AuthScreen onBack={() => setEntered(false)} />
+  return <AuthFlow />
 }
 
 export default function App() {
