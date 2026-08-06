@@ -1,4 +1,5 @@
 import { useSim } from '../../SimContext.ts'
+import { displayName } from '../../live/robotName.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { telemetryToStatus } from '../../live/mappers.ts'
 import LogList from '../LogList.tsx'
@@ -18,7 +19,8 @@ export default function StatusPanel() {
   const batt = live ? live.batt : status.batt
   const estop = live ? live.estop : status.estop
   const comm = live ? live.comm : '양호 · 43ms'
-  const name = enabled ? robotId : '삐용'
+  // 화면에는 표시명을 쓴다(S15P11E101-766). 통신·구독은 계약 id 그대로다.
+  const name = enabled ? displayName(robotId) : '삐용'
 
   // 상태를 색만으로 구분하지 않는다 — 색각 이상에서도 읽히도록 기호와 문구를 함께 준다.
   // 시뮬레이션 지표 카드용 — 화재·과열로 기록된 줄만 센다(정상 복귀 로그는 경보가 아니다)

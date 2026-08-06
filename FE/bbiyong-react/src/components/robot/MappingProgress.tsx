@@ -1,4 +1,5 @@
 import { useLive } from '../../live/LiveContext.tsx'
+import { displayName } from '../../live/robotName.ts'
 
 // 지도 탭의 '매핑중' 화면 (S15P11E101-744).
 //
@@ -16,7 +17,7 @@ export default function MappingProgress() {
       <span className="map-mapping-spin" aria-hidden="true" />
       <b>지도를 그리는 중입니다</b>
       <span className="map-mapping-sub">
-        {robotId} 가 구역을 돌며 도면을 만들고 있습니다.
+        {displayName(robotId)} 가 구역을 돌며 도면을 만들고 있습니다.
       </span>
       <span className="map-mapping-hint">
         진행 상황은 운영 탭의 실시간 지도에서 볼 수 있습니다.

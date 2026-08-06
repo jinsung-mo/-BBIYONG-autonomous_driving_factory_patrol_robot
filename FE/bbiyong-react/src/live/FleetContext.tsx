@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { displayName } from './robotName.ts'
 import { useLive } from './LiveContext.tsx'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { fetchDashboardStats } from './dashboard.ts'
@@ -111,7 +112,9 @@ export function FleetProvider({ children }: { children?: import('react').ReactNo
 
   const robotName = useCallback((id: string | null | undefined) => {
     if (!id) return '—'
-    return robots.find((r) => r.robotId === id)?.name || id
+    // 서버가 준 이름이 먼저다. 없으면 표시명으로 바꾼다(S15P11E101-766) —
+    // 계약 id 를 화면에 그대로 내보내지 않는다.
+    return robots.find((r) => r.robotId === id)?.name || displayName(id)
   }, [robots])
 
   const equipmentName = useCallback((id: string | null | undefined) => {

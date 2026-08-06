@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { displayName, withDisplayNames } from '../live/robotName.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { errMessage, errStatus } from '../live/errors.ts'
 import { EVENT_STATUS_LABEL, LEVEL_LABEL, updateEventStatus } from '../live/events.ts'
@@ -137,8 +138,8 @@ export default function EventDetailModal({
           </div>
 
           <div className="cfg-note evd-meta">
-            <div>{clipTime(detail.timestamp)} · {detail.robotId || '로봇 미상'}</div>
-            {detail.message && <div>{detail.message}</div>}
+            <div>{clipTime(detail.timestamp)} · {displayName(detail.robotId) || '로봇 미상'}</div>
+            {detail.message && <div>{withDisplayNames(detail.message)}</div>}
             <div className="mono">
               {[
                 detail.equipmentId,
