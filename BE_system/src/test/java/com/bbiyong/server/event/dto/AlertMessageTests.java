@@ -42,4 +42,18 @@ class AlertMessageTests {
         assertThat(alert.threshold()).isEqualTo(55.0);
         assertThat(alert.thermalImage()).isEqualTo("BASE64_THERMAL");
     }
+
+    @Test
+    void cautionUsesWarningContractAndKeepsFireConfidence() {
+        RobotPacket packet = new RobotPacket();
+        packet.setConfidence(0.61);
+        packet.setTemperature(48.0);
+
+        AlertMessage alert = AlertMessage.fromCaution(packet);
+
+        assertThat(alert.type()).isEqualTo("CAUTION");
+        assertThat(alert.level()).isEqualTo("WARNING");
+        assertThat(alert.confidence()).isEqualTo(0.61);
+        assertThat(alert.message()).contains("추가 확인 필요");
+    }
 }
