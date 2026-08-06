@@ -6,6 +6,7 @@ import {
   type ExtrudeSource,
 } from '../../live/isoExtrude.ts'
 import { errMessage } from '../../live/errors.ts'
+import { DISPLAY_ROT } from '../../live/navMap.ts'
 
 // 2D 도면을 압출해 2.5D 로 보여주는 뷰 (S15P11E101-676).
 //
@@ -22,6 +23,10 @@ const ZOOM_MAX = 3
 
 /** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다. */
 const LAYER_STEP = 1.15
+// 표시 회전(S15P11E101-746). SLAM 뷰와 같은 값을 쓴다 — 두 화면이 다른 방향을 보면
+// 조작자가 지도를 옮겨 볼 때마다 방향 감각을 다시 잡아야 한다.
+// 씬 전체를 돌리므로 도면과 로봇 마커가 함께 돈다(마커는 씬 안에 있다).
+const SPIN_BASE = -24 + (DISPLAY_ROT * 180) / Math.PI
 
 export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) {
   const { plan, connected, onNavUpdate } = useLive()
@@ -31,7 +36,7 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
 
   // 보는 각도. 기울기(rotateX)와 방위(rotateZ), 확대.
   const [tilt, setTilt] = useState(58)
-  const [spin, setSpin] = useState(-24)
+  const [spin, setSpin] = useState(SPIN_BASE)
   const [zoom, setZoom] = useState(1)
   const dragRef = useRef<{ x: number, y: number, tilt: number, spin: number } | null>(null)
 
@@ -116,7 +121,7 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     else if (e.key === '+' || e.key === '=') { setZoom((z) => Math.min(ZOOM_MAX, z * 1.15)); e.preventDefault() }
     else if (e.key === '-') { setZoom((z) => Math.max(ZOOM_MIN, z / 1.15)); e.preventDefault() }
   }
-  const reset = useCallback(() => { setTilt(58); setSpin(-24); setZoom(1) }, [])
+  const reset = useCallback(() => { setTilt(58); setSpin(SPIN_BASE); setZoom(1) }, [])
 
   // 층. 위로 갈수록 밝게 — 빛이 위에서 온다.
   const layers = useMemo(() => Array.from({ length: WALL_H }, (_, k) => {
