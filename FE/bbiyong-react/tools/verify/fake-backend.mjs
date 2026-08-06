@@ -1339,7 +1339,11 @@ export function startFakeBackend(port = 8099) {
       push,
       maps,
       // 로봇이 SAVE_MAP 을 처리해 업로드한 상황을 만든다 (최신이 맨 앞)
-      addMap: (name) => { maps.unshift({ id: `m${maps.length + 1}`, name, widthPx: 480, heightPx: 320, resolution: 0.05 }); return maps[0] },
+      addMap: (name, kind = 'RAW', sourceMapId = null) => {
+        maps.unshift({ id: `m${maps.length + 1}`, name, kind, sourceMapId,
+          widthPx: 480, heightPx: 320, resolution: 0.05 })
+        return maps[0]
+      },
       setActivateImplemented: (v) => { activateImplemented = v },
       // 744 검증용 — REST 복원값과 STOMP 전환을 함께 움직인다
       setGridImplemented: (v) => { gridImplemented = v },
