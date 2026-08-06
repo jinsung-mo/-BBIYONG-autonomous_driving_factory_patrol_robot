@@ -29,6 +29,10 @@ const NAV_FRESH_MS = 2500
 
 // 차체 높이(S15P11E101-750). 벽(WALL_H * LAYER_STEP ≈ 46px)보다 낮아야 방 안의
 // 물건으로 읽힌다 — 벽보다 크면 로봇이 건물을 밟고 선 것처럼 보인다.
+// 목표까지 이보다 멀면 아직 가는 중이다. 보간 잔차(1px 미만)와 갈리는 값이다.
+const MOVING_PX = 1.2
+// 멈춘 뒤에도 잠시 켜 둔다. 프레임마다 껐다 켜면 신호등처럼 깜빡인다.
+const MOVING_HOLD_MS = 700
 const CAR_H = 11
 // 판을 쌓아 부피를 만든다. 벽과 같은 방식이라 같은 씬의 물건으로 읽힌다.
 // 위로 갈수록 밝게 — 748 에서 벽에 쓴 것과 같은 폭(좁은 음영)을 지킨다.
@@ -61,6 +65,9 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   const shownRef = useRef<{ x: number, y: number, yaw: number } | null>(null)
   // nav 자세를 마지막으로 받은 시각. 텔레메트리로 채울지 가르는 기준이다.
   const navAtRef = useRef(0)
+  // 이동 중 표시. 목표에 이만큼 못 미치면 아직 가고 있는 것으로 본다.
+  const movingUntilRef = useRef(0)
+  const movingRef = useRef(false)
   const planRef = useRef(plan)
   planRef.current = plan
   const srcRef = useRef(src)
@@ -122,6 +129,16 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
           el.style.left = `${v.x}px`
           el.style.top = `${v.y}px`
           el.style.setProperty('--yaw', `${-v.yaw}rad`)
+          // 이동 중인가(S15P11E101-750). 목표와의 거리로 잰다 — 텔레메트리의 speed 는
+          // 1Hz 라 짧은 이동을 놓치고, 여기 값은 매 프레임 갱신되므로 화면과 어긋나지 않는다.
+          // 멈춘 순간 바로 끄면 신호등처럼 깜빡인다 — 잠시 유지하고 끈다.
+          const far = Math.hypot(t.x - v.x, t.y - v.y) > MOVING_PX
+          if (far) movingUntilRef.current = performance.now() + MOVING_HOLD_MS
+          const moving = performance.now() < movingUntilRef.current
+          if (moving !== movingRef.current) {
+            movingRef.current = moving
+            el.classList.toggle('moving', moving)
+          }
         }
       }
       raf = requestAnimationFrame(step)
