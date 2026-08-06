@@ -86,8 +86,17 @@ export function backgroundOf(nav: any, showPlan = true) {
 // 화면 픽셀 → map 프레임 미터 (S15P11E101-514).
 // drawNav 의 sx/sy 를 그대로 뒤집는다. heading-up 일 때는 캔버스가 로봇 화면 위치를 축으로
 // (yaw - 90°) 만큼 돌아가 있으므로, 클릭 지점을 같은 축에서 반대로 돌린 뒤 환산한다.
-export function canvasToWorld(view: any, nav: any, headingUp: any, px: any, py: any) {
+export function canvasToWorld(view: any, nav: any, headingUp: any, px: any, py: any, cv: any = null) {
   let x = px, y = py
+  // 표시 회전을 먼저 되돌린다(S15P11E101-746). 화면에서 찍은 자리를 그리기 전 좌표로
+  // 옮겨야 한다 — 안 그러면 조작자가 찍은 곳과 로봇이 가는 곳이 정반대가 된다.
+  if (cv) {
+    const mx = cv.width / 2, my = cv.height / 2
+    const a = -DISPLAY_ROT
+    const dx = x - mx, dy = y - my
+    x = mx + dx * Math.cos(a) - dy * Math.sin(a)
+    y = my + dx * Math.sin(a) + dy * Math.cos(a)
+  }
   if (headingUp && nav?.pose) {
     const cx = view.x + nav.pose.x * view.s
     const cy = view.y - nav.pose.y * view.s
@@ -120,6 +129,12 @@ export function insideMap(m: any, x: any, y: any) {
 
 // 맵 + 궤적 + 스캔 + 로봇 — nav.html 그대로
 //
+/**
+ * 지도 표시 회전(S15P11E101-746). 순수하게 보여 주는 각도이고 데이터는 건드리지 않는다.
+ * SLAM·도면·로봇이 이 하나를 같이 써야 서로 어긋나지 않는다.
+ */
+export const DISPLAY_ROT = Math.PI
+
 // headingUp: 로봇 진행 방향이 항상 위를 향하도록 화면을 돌린다(주행 시 방향 감각 유지).
 // 끄면 북향(+y 위) 고정 — ROS map 프레임 그대로다.
 // route: 순찰 경로(S15P11E101-514). [{x, y, name}] 순서대로 선으로 잇고 번호를 붙인다.
@@ -128,6 +143,17 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
   g.fillStyle = '#15171c'
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
+
+  // 표시 회전(S15P11E101-746). 화면에 나오는 지도가 실제와 180도 뒤집혀 있었다.
+  // 데이터(격자·origin·resolution·pose)는 방향 중립이고 BE 는 원문을 그대로 중계하므로,
+  // 돌리는 자리는 여기 렌더뿐이다.
+  //
+  // 캔버스 변환으로 건다 — 배경·스캔·로봇·경로가 모두 이 변환 아래에서 그려지므로
+  // 함께 돈다. 지도만 돌리면 로봇이 어긋난다.
+  g.save()
+  g.translate(cv.width / 2, cv.height / 2)
+  g.rotate(DISPLAY_ROT)
+  g.translate(-cv.width / 2, -cv.height / 2)
 
   const sx = (mx: any) => view.x + mx * view.s
   const sy = (my: any) => view.y - my * view.s   // 화면 y 는 아래로 증가 → 부호 반전
@@ -223,8 +249,11 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
 
   if (rotating) g.restore()
 
-  // 방위 표시 — 회전 여부와 무관하게 북쪽이 어디인지 항상 알 수 있게 화면 좌표계에 그린다
-  drawCompass(g, cv, rotating ? nav.pose.yaw - Math.PI / 2 : 0)
+  // 표시 회전을 여기서 푼다. 나침반은 화면 좌표계에 그려야 하기 때문이다.
+  g.restore()
+  // 방위 표시 — 회전 여부와 무관하게 북쪽이 어디인지 항상 알 수 있게 화면 좌표계에 그린다.
+  // 표시 회전도 화면이 돌아간 각도이므로 함께 더한다 — 안 더하면 N 이 반대를 가리킨다.
+  drawCompass(g, cv, (rotating ? nav.pose.yaw - Math.PI / 2 : 0) + DISPLAY_ROT)
 }
 
 // 우상단 나침반. angle 만큼 돌아간 화면에서 북(+y)이 향하는 방향을 가리킨다.

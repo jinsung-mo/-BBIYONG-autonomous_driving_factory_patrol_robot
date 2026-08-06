@@ -95,7 +95,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
     // 캔버스 내부 해상도와 표시 크기가 다를 수 있다(ResizeObserver 사이 시점) — 비율로 환산한다
     const px = (e.clientX - r.left) * (cv.width / r.width)
     const py = (e.clientY - r.top) * (cv.height / r.height)
-    const { x, y } = canvasToWorld(viewRef.current, nav, headingUpRef.current, px, py)
+    const { x, y } = canvasToWorld(viewRef.current, nav, headingUpRef.current, px, py, cv)
     if (!insideMap(bg, x, y)) { pick(null); return }
     pick({ x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) })
   }
