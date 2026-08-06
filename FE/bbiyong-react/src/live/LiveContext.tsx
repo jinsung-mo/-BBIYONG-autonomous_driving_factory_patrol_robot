@@ -156,6 +156,12 @@ export function LiveProvider({ children }: any) {
         let logState: 'ONLINE' | 'OFFLINE' | null = null
         if (isStateUpdate) {
           logState = (msg.event === 'ONLINE' || msg.status === 'ONLINE' || status === 'ONLINE' || (!isOffline && msg.event !== 'OFFLINE')) ? 'ONLINE' : 'OFFLINE'
+          // 온·오프 판정은 REST 폴링(아래)이 정답이지만 주기가 있어 몇 초 늦는다.
+          // STATE_UPDATE 는 그 사실이 확정된 순간에 오므로 먼저 반영한다 —
+          // 로봇이 꺼졌는데 지도 위 마커가 몇 초 더 멀쩡히 떠 있으면 안 된다(S15P11E101-745).
+          if (rid === ROBOT_ID) {
+            setRobotOnline(typeof msg.online === 'boolean' ? msg.online : logState === 'ONLINE')
+          }
         } else if (status) {
           const newState = isOffline ? 'OFFLINE' : 'ONLINE'
           if (prevState && prevState !== newState) {

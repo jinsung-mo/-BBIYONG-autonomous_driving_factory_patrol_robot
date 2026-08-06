@@ -28,7 +28,7 @@ export default function MapPage() {
   const mapDown = enabled && isDown(capOf(telemetry, CAP_KEYS.map))
 
   return (
-    <section id="pgMap" className="page on sim-skin nav-page">
+    <section id="pgMap" className="page on sim-skin nav-page v3-theme">
       <div className="nav-hero">
         <div className="nav-title">
           <h2>순찰 구역</h2>

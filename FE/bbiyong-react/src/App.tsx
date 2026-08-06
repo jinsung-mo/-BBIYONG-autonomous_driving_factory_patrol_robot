@@ -57,6 +57,15 @@ function Dashboard() {
   // 권한이 줄어드는 경우(관리자 → 뷰어 계정으로 재로그인)를 대비해 접근 가능한 섹션으로 되돌린다
   const active = !isAdmin && section !== 'live' && section !== 'cam' && section !== 'events' && section !== 'stats' ? 'live' : section
 
+  // 상단바는 페이지 밖에 있어 페이지 배경을 물려받지 못한다. 문서 뿌리에 표시를
+  // 달아 배경을 뿌리로 올리고 상단바는 비운다 — 가로로 남는 흰 띠가 사라진다.
+  // 이제 모든 화면이 같은 톤이라 탭을 가리지 않는다.
+  const v3Page = true
+  useEffect(() => {
+    document.documentElement.classList.toggle('v3-page', v3Page)
+    return () => document.documentElement.classList.remove('v3-page')
+  }, [v3Page])
+
   return (
     <SimContext.Provider value={sim}>
       <SettingsProvider>

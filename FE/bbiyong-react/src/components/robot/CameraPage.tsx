@@ -61,7 +61,7 @@ export default function CameraPage() {
   }, [])
 
   return (
-    <section id="pgCam" className="page on sim-skin nav-page">
+    <section id="pgCam" className="page on sim-skin nav-page v3-theme">
       <div className="nav-hero">
         <div className="nav-title">
           <h2>순찰 카메라 뷰</h2>

@@ -214,6 +214,7 @@ export function startFakeBackend(port = 8099) {
   // 매핑 진행 상태 (S15P11E101-744). REST 복원과 STOMP 전환이 같은 값을 봐야 한다 —
   // 둘이 어긋나면 새로고침할 때마다 화면이 튄다.
   let mappingPhase = 'IDLE'
+  let gridImplemented = true
 
   function push(destination, payload) {
     let n = 0
@@ -617,6 +618,24 @@ export function startFakeBackend(port = 8099) {
         pageable: { pageNumber: page, pageSize: size },
         totalElements: all.length,
         totalPages: Math.ceil(all.length / size),
+      }))
+      return
+    }
+    // 격자 메타 — GET /api/maps/active/grid (S15P11E101-745). 좌표 정합의 기준이다.
+    // gridImplemented=false 로 두면 이 API 가 없는 서버를 흉내낸다.
+    if (req.url.split('?')[0] === '/api/maps/active/grid') {
+      restCalls.push({ url: req.url, method: req.method })
+      if (!gridImplemented || !activePlan) {
+        res.writeHead(404, { ...CORS, 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ message: '격자 메타가 없습니다.' }))
+        return
+      }
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        cols: activePlan.widthPx, rows: activePlan.heightPx,
+        cellResolution: activePlan.resolution,
+        originX: activePlan.originX, originY: activePlan.originY,
+        originYaw: activePlan.originYaw ?? 0,
       }))
       return
     }
@@ -1049,6 +1068,7 @@ export function startFakeBackend(port = 8099) {
       addMap: (name) => { maps.unshift({ id: `m${maps.length + 1}`, name, widthPx: 480, heightPx: 320, resolution: 0.05 }); return maps[0] },
       setActivateImplemented: (v) => { activateImplemented = v },
       // 744 검증용 — REST 복원값과 STOMP 전환을 함께 움직인다
+      setGridImplemented: (v) => { gridImplemented = v },
       mappingPhase: () => mappingPhase,
       setMappingPhase: (phase, { push: doPush = true } = {}) => {
         mappingPhase = phase

@@ -23,13 +23,17 @@ const ZOOM_MAX = 3
 
 /** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다. */
 const LAYER_STEP = 1.15
+// nav 자세가 이 시간 안에 들어왔다면 텔레메트리로 덮지 않는다.
+// 텔레메트리는 1Hz 라, 3Hz 인 nav 와 섞으면 마커가 앞뒤로 떨린다.
+const NAV_FRESH_MS = 2500
+
 // 표시 회전(S15P11E101-746). SLAM 뷰와 같은 값을 쓴다 — 두 화면이 다른 방향을 보면
 // 조작자가 지도를 옮겨 볼 때마다 방향 감각을 다시 잡아야 한다.
 // 씬 전체를 돌리므로 도면과 로봇 마커가 함께 돈다(마커는 씬 안에 있다).
 const SPIN_BASE = -24 + (DISPLAY_ROT * 180) / Math.PI
 
 export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) {
-  const { plan, connected, onNavUpdate } = useLive()
+  const { plan, connected, onNavUpdate, robotOnline, telemetry } = useLive()
   const [src, setSrc] = useState<ExtrudeSource | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -42,6 +46,11 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
 
   // 로봇 위치는 자주 바뀐다. 상태로 두면 프레임마다 다시 렌더되므로 DOM 을 직접 옮긴다.
   const markerRef = useRef<HTMLDivElement | null>(null)
+  // 받은 값(목표)과 화면에 그리는 값(현재)을 나눠 둔다 — 사이를 보간한다
+  const targetRef = useRef<{ x: number, y: number, yaw: number } | null>(null)
+  const shownRef = useRef<{ x: number, y: number, yaw: number } | null>(null)
+  // nav 자세를 마지막으로 받은 시각. 텔레메트리로 채울지 가르는 기준이다.
+  const navAtRef = useRef(0)
   const planRef = useRef(plan)
   planRef.current = plan
   const srcRef = useRef(src)
@@ -69,27 +78,94 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   // 떠날 때 objectURL 을 푼다
   useEffect(() => () => releaseExtrudeSource(srcRef.current), [])
 
-  // 로봇 위치 — 압출 씬의 픽셀 좌표로 옮긴다
-  useEffect(() => onNavUpdate((nav: any) => {
+  // 로봇 위치 — 압출 씬의 픽셀 좌표로 옮긴다 (S15P11E101-745)
+  //
+  // 텔레메트리는 1~3Hz 라, 받은 값을 그대로 찍으면 마커가 초당 한두 번 순간이동한다.
+  // 순찰을 '보고 있다' 는 느낌이 사라지고, 튀는 순간이 이상 동작처럼 읽힌다 —
+  // 받은 값은 목표로 두고 매 프레임 그쪽으로 다가가게 한다.
+  //
+  // yaw 는 -π ~ π 를 오가므로 그냥 섞으면 한 바퀴를 거꾸로 돈다. 짧은 쪽으로 감는다.
+  useEffect(() => {
+    // 마커는 압출 소스가 준비된 뒤에야 그려진다. 마운트 시점에 ref 를 잡아 두면
+    // 그때는 아직 null 이라 루프가 시작조차 못 한다 — 매 프레임 다시 찾는다.
+    let raf = 0
+    const step = () => {
+      const el = markerRef.current
+      const t = targetRef.current
+      const c = shownRef.current
+      if (el && t) {
+        if (!c) {
+          shownRef.current = { ...t }
+        } else {
+          const k = 0.18
+          c.x += (t.x - c.x) * k
+          c.y += (t.y - c.y) * k
+          // 각도 차이를 -π ~ π 로 접은 뒤 섞는다
+          let d = t.yaw - c.yaw
+          while (d > Math.PI) d -= Math.PI * 2
+          while (d < -Math.PI) d += Math.PI * 2
+          c.yaw += d * k
+        }
+        const v = shownRef.current
+        if (v) {
+          el.style.display = ''
+          el.style.left = `${v.x}px`
+          el.style.top = `${v.y}px`
+          el.style.setProperty('--yaw', `${-v.yaw}rad`)
+        }
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  // 목표 자세를 옮긴다. 자리를 계산하는 식은 한 곳에 둔다.
+  const aim = (x: number, y: number, yaw: number) => {
     const el = markerRef.current
     const p = planRef.current
-    const s = srcRef.current
-    if (!el || !p || !s) return
-    const pose = nav?.pose
-    if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) {
-      el.style.display = 'none'
-      return
-    }
-    const { x, y } = worldToPlanPx(p as any, pose.x, pose.y, s.scale)
-    el.style.display = ''
-    el.style.left = `${x}px`
-    el.style.top = `${y}px`
+    const s2 = srcRef.current
+    if (!el || !p || !s2) return
+    const px = worldToPlanPx(p as any, x, y, s2.scale)
+    targetRef.current = { x: px.x, y: px.y, yaw: Number.isFinite(yaw) ? yaw : 0 }
     // 로봇은 벽 위로 띄운다 — 바닥에 붙이면 기울인 화면에서 벽에 가린다
     el.style.setProperty('--rz', `${WALL_H * LAYER_STEP + 10}px`)
-    // 화면을 돌려도 마커는 정면을 보게 한다(빌보드) + 로봇 진행 방향은 화살로
-    const yaw = Number(pose.yaw)
-    el.style.setProperty('--yaw', Number.isFinite(yaw) ? `${-yaw}rad` : '0rad')
+  }
+
+  // 1순위: /topic/nav 의 자세. 3Hz 로 오고 스캔과 같은 시점이라 가장 정확하다.
+  useEffect(() => onNavUpdate((nav: any) => {
+    const el = markerRef.current
+    if (!el) return
+    const pose = nav?.pose
+    if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) return
+    navAtRef.current = Date.now()
+    aim(pose.x, pose.y, Number(pose.yaw))
   }), [onNavUpdate])
+
+  // 2순위: /topic/robots 텔레메트리의 location(S15P11E101-745 계약).
+  // nav 노드가 죽어도 로봇은 위치를 계속 보낸다 — 그때 마커가 사라지면
+  // '로봇이 어디 있는지 모른다' 가 아니라 '로봇이 없다' 로 잘못 읽힌다.
+  // nav 가 살아 있으면 건드리지 않는다. 두 소스가 번갈아 들어오면 마커가 떨린다.
+  useEffect(() => {
+    const loc = telemetry?.location
+    if (!loc || !Number.isFinite(Number(loc.x)) || !Number.isFinite(Number(loc.y))) return
+    if (Date.now() - navAtRef.current < NAV_FRESH_MS) return
+    aim(Number(loc.x), Number(loc.y), Number(loc.yaw))
+  }, [telemetry])
+
+  // 두 소스 모두 자세를 주지 못하면 마커를 감춘다 — 없는 위치를 그리지 않는다.
+  useEffect(() => {
+    const el = markerRef.current
+    if (!el) return
+    if (!targetRef.current) { el.style.display = 'none'; shownRef.current = null }
+  }, [plan])
+
+  // 로봇이 꺼져 있으면 마커를 흐린다. 지우지는 않는다 —
+  // 마지막으로 알던 자리는 남겨야 어디서 멈췄는지 알 수 있다.
+  useEffect(() => {
+    const el = markerRef.current
+    if (el) el.classList.toggle('off', robotOnline === false)
+  }, [robotOnline])
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
@@ -185,9 +261,13 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
           />
         ))}
         {/* 로봇 — 벽 위로 띄우고, 화면을 돌려도 정면을 보게 한다 */}
+        {/* 바닥에 눕는 몸체 + 진행 방향 코 + 위에서 늘 보이는 표시등.
+            몸체는 씬과 같은 평면에 있어 도면 위에 '놓인' 것으로 읽히고,
+            표시등은 화면을 돌려도 정면을 보게 둔다(빌보드). */}
         <div ref={markerRef} className="iso-robot" style={{ display: 'none' }}>
+          <i className="iso-robot-body" />
+          <i className="iso-robot-nose" />
           <i className="iso-robot-dot" />
-          <i className="iso-robot-arrow" />
         </div>
       </div>
 
