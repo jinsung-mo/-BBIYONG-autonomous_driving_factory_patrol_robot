@@ -8,7 +8,7 @@ import LogList from '../LogList.tsx'
 export default function EventLog() {
   return (
     <div className="panel" id="pEvents">
-      <h3 className="event-title">이벤트 로그</h3>
+      <h3 className="event-title">이벤트 로그 <span className="k">EVENT LOG</span></h3>
       <LogList variant="elog" simple={true} />
     </div>
   )

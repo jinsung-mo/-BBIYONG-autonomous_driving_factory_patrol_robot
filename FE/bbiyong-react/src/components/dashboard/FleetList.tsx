@@ -18,7 +18,7 @@ const STATUS_TEXT: Record<string, string> = {
   MAPPING: '맵핑 중',
   CHARGING: '충전 중',
   IDLE: '대기',
-  OFFLINE: '오프라인',
+  OFFLINE: 'OFF',
 }
 
 const num = (v: number | null | undefined, unit: string, digits = 0) =>
@@ -54,7 +54,7 @@ export default function FleetList() {
                   {isSel && <i className="tag sel">조회</i>}
                 </span>
                 <span className="fleet-st">
-                  {on ? (STATUS_TEXT[r.status || ''] || r.status || '대기') : '오프라인'}
+                  {on ? (STATUS_TEXT[r.status || ''] || r.status || '대기') : 'OFF'}
                 </span>
                 <span className="fleet-kv mono">
                   {num(r.battery, '%')} · {num(r.commLatencyMs, 'ms')} · {num(r.inferenceFps, 'fps', 1)}

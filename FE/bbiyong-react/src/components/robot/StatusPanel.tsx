@@ -40,14 +40,19 @@ export default function StatusPanel() {
         {enabled ? (
           <>
             <div className="kv"><span>배터리</span><b className="num">{batt == null ? '—' : `${batt} %`}</b></div>
-            <div className="bar"><i style={{ width: `${batt ?? 0}%` }} /></div>
+            {/* 값이 없으면 바를 그리지 않는다(S15P11E101-793). 0% 짜리 빈 바는
+                '배터리가 0' 으로 읽히고, 끝의 마커만 남아 화면에 부스러기가 된다. */}
+            {batt != null && <div className="bar"><i style={{ width: `${batt}%` }} /></div>}
           </>
         ) : (
           <RadialGauge value={batt} label="배터리" caption="BATTERY" />
         )}
         <div className="kv">
           <span>통신 감도</span>
-          <b className={`st ${commOk ? 'ok' : 'warn'}`}>{commOk ? '✓' : '▲'} {comm}</b>
+          {/* 정상일 때 체크 기호를 붙이지 않는다(S15P11E101-793). 값이 곧 상태이고,
+              색으로 이미 말하고 있다 — 기호를 겹치면 v2 문법이 남는다.
+              경고는 눈에 걸려야 하므로 ▲ 는 남긴다. */}
+          <b className={`st ${commOk ? 'ok' : 'warn'}`}>{commOk ? comm : `▲ ${comm}`}</b>
         </div>
         {live?.location && (
           // 좌표는 조작자에게 뜻이 없다 — 구역·랜드마크 이름으로 말한다(S15P11E101-770).
@@ -69,7 +74,7 @@ export default function StatusPanel() {
           </div>
         )}
       </div>
-      <h3 className="event-title">이벤트 로그</h3>
+      <h3 className="event-title">이벤트 로그 <span className="k">EVENT LOG</span></h3>
       <LogList variant="elog" simple={true} />
     </div>
   )
