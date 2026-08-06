@@ -142,7 +142,24 @@ console.log('  출발', `(${from?.left}, ${from?.top})`, '→ 90ms', `(${mid?.le
 console.log('  → 중간 프레임이 있다 :', ok(d(mid, { left: 140, top: 90 }) > 1))
 console.log('  → 결국 목표에 닿는다 :', ok(d(to, { left: 140, top: 90 }) < 1))
 
-console.log('\n[5] 오프라인 상태가 드러나는가')
+console.log('\n[5] 이동 중과 정지가 구분되는가')
+pose(3.0, 4.2, 0); await sleep(2200)
+const glowOf = () => ev(`(()=>{const l=document.querySelector('.iso-car-light')
+  return {moving:document.querySelector('.iso-robot').classList.contains('moving'),
+    glow:getComputedStyle(l).boxShadow.slice(0,40)}})()`)
+const still = await glowOf()
+console.log('  정지 :', JSON.stringify(still))
+console.log('  → 멈춰 있으면 이동 표시가 없다 :', ok(still?.moving === false))
+// 멀리 옮기면 보간이 도는 동안 이동 중이어야 한다
+pose(5.0, 6.0, 0); await sleep(120)
+const run = await glowOf()
+console.log('  이동 :', JSON.stringify(run))
+console.log('  → 가는 동안 이동 표시가 켜진다 :', ok(run?.moving === true))
+console.log('  → 발광이 달라진다 :', ok(String(run?.glow) !== String(still?.glow)), '(정지와 같은 모습이면 알 수 없다)')
+await sleep(2600)
+console.log('  → 도착하면 다시 꺼진다 :', ok((await glowOf())?.moving === false))
+
+console.log('\n[6] 오프라인 상태가 드러나는가')
 be.push('/topic/robots', { type: 'STATE_UPDATE', robotId: 'orinka_01', online: false })
 await sleep(1400)
 c = await car()

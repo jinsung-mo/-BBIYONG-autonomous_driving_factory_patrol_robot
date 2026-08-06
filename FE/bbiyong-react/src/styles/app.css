@@ -3070,3 +3070,18 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .iso-reset.on{
   background:#e6e9ef; color:#1b212b;
 }
+
+/* 이동 중 표시(S15P11E101-750). 정지와 주행이 같은 모습이면 화면만 보고
+   로봇이 도는 중인지 알 수 없다 — 앞등을 한 단 밝히고 옅은 후광을 준다.
+   색을 바꾸지 않고 밝기만 올린다. 색이 바뀌면 '다른 상태' 가 아니라 '다른 로봇' 으로 읽힌다. */
+.iso-robot.moving .iso-car-light{
+  background:linear-gradient(180deg,#ffffff,#b6ffe0);
+  box-shadow:0 0 14px rgba(150,255,210,.95), 0 0 26px rgba(110,240,190,.5);
+}
+.iso-robot.moving .iso-car-roof{filter:brightness(1.08);}
+/* 바닥으로 내리는 기둥도 함께 밝힌다 — 멀리서 '지금 저기서 움직인다' 가 읽힌다 */
+.iso-robot.moving::before{
+  background:linear-gradient(0deg,rgba(120,245,195,.75),rgba(120,245,195,0));
+}
+/* 꺼진 로봇은 움직일 수 없다. off 가 moving 을 이긴다. */
+.iso-robot.off.moving .iso-car-light{box-shadow:none;}
