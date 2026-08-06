@@ -71,7 +71,9 @@ export default function CameraPage() {
       </div>
 
       <div className="cam-stage">
-        <aside className="panel cam-side-panel" aria-label="순찰 로봇 수동 조작 및 이벤트 로그">
+        {/* aside 에서 panel 을 뗀다(S15P11E101-797) — 껍데기가 카드이면 그 안의 두 패널이
+            한 장에 붙어 보인다. 카드는 자식 둘이 각자 갖는다. */}
+        <aside className="cam-side-panel" aria-label="순찰 로봇 수동 조작 및 이벤트 로그">
           <ControlPanel />
           <EventLog />
         </aside>

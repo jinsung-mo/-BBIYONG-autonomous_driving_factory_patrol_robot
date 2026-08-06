@@ -5,6 +5,7 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import KpiRow from './KpiRow.tsx'
 import StatusPanel from './StatusPanel.tsx'
+import EventLog from './EventLog.tsx'
 import MapPanel from './MapPanel.tsx'
 
 // 지도 화면 (시뮬레이션 전용).
@@ -38,8 +39,11 @@ export default function MapPage() {
       </div>
 
       <div className="nav-stage">
+        {/* 카드 두 장(S15P11E101-797). 로봇 상태와 이벤트 로그는 성격이 다른 정보다 —
+            한 장에 있으면 어디까지가 한 덩어리인지 읽히지 않는다. */}
         <aside className="nav-side" aria-label="로봇 상태와 이벤트">
           <StatusPanel />
+          <EventLog />
         </aside>
         <div className={`nav-canvas${mapDown ? ' down' : ''}`}>
           <MapPanel />
