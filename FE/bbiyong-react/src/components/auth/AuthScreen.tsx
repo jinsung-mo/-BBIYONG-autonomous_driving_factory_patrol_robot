@@ -86,13 +86,14 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
     <div className="auth-wrap">
       <div className="auth-card">
         <div className="auth-brand">삐용(BBIYONG)<span> 통합 관제 시스템</span></div>
-        <div className="auth-tabs">
-          <button type="button" className={mode === 'login' ? 'on' : ''} onClick={() => switchMode('login')} disabled={busy}>로그인</button>
-          <button type="button" className={mode === 'signup' ? 'on' : ''} onClick={() => switchMode('signup')} disabled={busy}>회원가입</button>
+        {/* 세그먼트 필(S15P11E101-791). 탭 그룹을 알약 하나로 — 선택만 진하게 채운다. */}
+        <div className="auth-seg" role="tablist" aria-label="로그인 또는 회원가입">
+          <button type="button" role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'on' : ''} onClick={() => switchMode('login')} disabled={busy}>로그인</button>
+          <button type="button" role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'on' : ''} onClick={() => switchMode('signup')} disabled={busy}>회원가입</button>
         </div>
-        <div className="auth-source">
-          <button type="button" className={!live ? 'on' : ''} onClick={() => switchSource('mock')} disabled={busy}>시뮬레이션</button>
-          <button type="button" className={live ? 'on' : ''} onClick={() => switchSource('live')} disabled={busy}>실서버</button>
+        <div className="auth-seg src" role="radiogroup" aria-label="접속 모드">
+          <button type="button" role="radio" aria-checked={!live} className={!live ? 'on' : ''} onClick={() => switchSource('mock')} disabled={busy}>시뮬레이션</button>
+          <button type="button" role="radio" aria-checked={live} className={live ? 'on' : ''} onClick={() => switchSource('live')} disabled={busy}>실서버</button>
         </div>
         <form onSubmit={submit}>
           {mode === 'signup' && (

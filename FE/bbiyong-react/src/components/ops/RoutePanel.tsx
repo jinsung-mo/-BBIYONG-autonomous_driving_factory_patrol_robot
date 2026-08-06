@@ -13,7 +13,7 @@ import {
 //
 // 운영 탭에 둔다. 맵을 만들고(모델링) 그 위에 경로를 그리고 로봇에 내려보내는 흐름이
 // 한 화면에서 이어진다. 관제 화면은 모니터링과 실시간 개입만 맡는다(S15P11E101-475).
-export default function RoutePanel() {
+export default function RoutePanel({ inspection = null }: { inspection?: any } = {}) {
   const { enabled, connected, mapping } = useLive()
   const { accessToken } = useAuth()
 
@@ -79,8 +79,26 @@ export default function RoutePanel() {
   }
   const rename = (i: any, name: any) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, name } : w)))
 
-  const dirty = JSON.stringify(route.map((w) => [w.x, w.y, w.name || '']))
-    !== JSON.stringify(saved.map((w) => [w.x, w.y, w.name || '']))
+  // 지점 방향(heading) 설정 (S15P11E101-790). 로봇이 그 지점에서 바라볼 방향이다 —
+  // 분전반을 '지나가는' 게 아니라 '바라보고' 점검하려면 필요하다.
+  // 화면은 도(0~359, 0°=동쪽 +x · 90°=북쪽 +y)로 다루고 저장은 radians 다.
+  // 비우면(yaw=null) 로봇이 가까운 구조물(벽/분전반)을 자동으로 바라본다(로봇 auto-yaw).
+  const DEG = 180 / Math.PI
+  const headingDeg = (w: any) => (w.yaw == null || !Number.isFinite(Number(w.yaw))
+    ? '' : String(Math.round(((Number(w.yaw) * DEG) % 360 + 360) % 360)))
+  const setHeading = (i: any, degText: string) => setRoute((prev) => prev.map((w, k) => {
+    if (k !== i) return w
+    const t = degText.trim()
+    if (t === '') return { ...w, yaw: null }
+    const deg = Number(t)
+    if (!Number.isFinite(deg)) return w
+    return { ...w, yaw: (((deg % 360) + 360) % 360) / DEG }
+  }))
+  const clearHeading = (i: any) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, yaw: null } : w)))
+
+  // yaw 도 변경 감지에 넣는다 — 방향만 바꾸고 저장을 안 누르면 서버에 안 남는다.
+  const key = (w: any) => [w.x, w.y, w.name || '', w.yaw == null ? 'auto' : Number(w.yaw).toFixed(4)]
+  const dirty = JSON.stringify(route.map(key)) !== JSON.stringify(saved.map(key))
 
   const onSave = async () => {
     if (busy) return
@@ -153,6 +171,7 @@ export default function RoutePanel() {
           route={mapping ? null : route}
           onPick={editLocked ? null : onPick}
           mapping={mapping}
+          inspection={mapping ? null : inspection}
           follow={mapping}
         />
         {mapping && (
@@ -179,6 +198,23 @@ export default function RoutePanel() {
               aria-label={`${i + 1}번 지점 이름`}
             />
             <span className="t mono">{Number(w.x).toFixed(2)}, {Number(w.y).toFixed(2)} m</span>
+            {/* 방향(heading) — 로봇이 이 지점에서 바라볼 각도(S15P11E101-790).
+                비우면 '자동': 로봇이 가까운 구조물(분전반/벽)을 스스로 바라본다. */}
+            <input
+              type="number" min={0} max={359} inputMode="numeric"
+              className="wp-heading" value={headingDeg(w)}
+              onChange={(e) => setHeading(i, e.target.value)}
+              placeholder="자동" disabled={editLocked || busy}
+              title="로봇이 이 지점에서 바라볼 방향(도, 0=동·90=북). 비우면 가까운 분전반/벽을 자동으로 바라봅니다."
+              aria-label={`${i + 1}번 지점 방향(도)`}
+              style={{ width: '58px' }}
+            />
+            <span className="t" style={{ opacity: 0.7, minWidth: '30px' }}>
+              {w.yaw == null ? '자동' : '°'}
+            </span>
+            {w.yaw != null && (
+              <button type="button" className="btn-tonal" onClick={() => clearHeading(i)} disabled={editLocked || busy} aria-label="방향 자동으로" title="방향 자동(가까운 벽 바라보기)" style={{ padding: '4px 8px' }}>자동</button>
+            )}
             <button type="button" className="btn-tonal" onClick={() => move(i, -1)} disabled={editLocked || busy || i === 0} aria-label="위로" style={{ padding: '4px 8px' }}>↑</button>
             <button type="button" className="btn-tonal" onClick={() => move(i, 1)} disabled={editLocked || busy || i === route.length - 1} aria-label="아래로" style={{ padding: '4px 8px' }}>↓</button>
             <button type="button" className="btn-tonal" onClick={() => onDelete(w, i)} disabled={editLocked || busy} aria-label="삭제" style={{ color: '#B4655C', padding: '4px 8px' }}>삭제</button>

@@ -176,7 +176,107 @@ export const LASER_YAW_OFFSET = Number(
  * 확정된 벽과 지금 재고 있는 점이 한 그림으로 읽혀, 어디까지가 사실인지 알 수 없다.
  * 실시간 레이어는 3D 압출 뷰와 운영 탭이 맡는다.
  */
-export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true, overlays = true) {
+
+// AprilTag 점검 지점 그리기 (S15P11E101-787)
+//
+// 한 점검 지점은 두 좌표다 — 태그가 붙은 벽 위(target)와 그것을 보려고 로봇이
+// 서는 자리(viewpoint). 둘을 잇지 않으면 화면에 점이 두 배로 늘어난 것으로만 보인다.
+//
+// 순찰 지점(초록 동그라미 + 번호)과 반드시 달라야 한다. 같은 모양이면 조작자가
+// '로봇이 지나가는 곳' 과 '로봇이 서서 들여다보는 곳' 을 구분하지 못한다.
+//   대기 후보 : 점선 · 반투명    — 아직 아무 효력이 없다
+//   확정 지점 : 실선 · 불투명    — 순찰 목적지다
+//   꺼 둔 지점 : 회색            — 남아 있지만 이번 순찰에서 들르지 않는다
+const INSPECT_WAIT = '#c9a227'
+const INSPECT_DONE = '#e0483f'
+const INSPECT_OFF = '#8b8f9a'
+
+/**
+ * 캔버스가 rot 만큼 회전된 상태에서도 글자를 똑바로 그린다(S15P11E101-795).
+ *
+ * drawNav 는 표시 회전(DISPLAY_ROT, 180도)과 heading-up 회전을 캔버스 변환으로 건 채
+ * 배경·경로·점검 지점을 그린다 — 위치는 그 변환 아래에서 맞게 계산되지만, fillText 는
+ * 그 회전을 그대로 받아 글자 자체가 뒤집혀 버린다("1"이 위아래가 바뀐 모양으로 보임).
+ * 글자를 그릴 때만 그 자리에서 반대로 되돌려 화면 기준으로 똑바로 서게 한다.
+ */
+function drawUprightLabel(g: any, text: string, x: any, y: any, rot: any, fill = '#0b0d11') {
+  g.save()
+  g.translate(x, y)
+  g.rotate(-rot)
+  g.fillStyle = fill
+  g.font = 'bold 11px system-ui, sans-serif'
+  g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.fillText(text, 0, 0.5)
+  g.restore()
+}
+
+function drawInspection(g: any, sx: any, sy: any, view: any, inspect: any, textRot: any = 0) {
+  const items = [
+    ...(inspect.candidates || []).map((c: any) => ({ item: c, id: c.candidateId, done: false })),
+    ...(inspect.points || []).map((p: any) => ({ item: p, id: p.pointId, done: true })),
+  ]
+  if (!items.length) return
+  const R = Math.max(5, view.s * 0.09)
+
+  for (const { item, id, done } of items) {
+    const t = item?.target
+    const v = item?.viewpoint
+    if (!t || !Number.isFinite(Number(t.x)) || !Number.isFinite(Number(t.y))) continue
+    const off = done && item.enabled === false
+    const color = off ? INSPECT_OFF : (done ? INSPECT_DONE : INSPECT_WAIT)
+    const picked = !!inspect.selectedId && inspect.selectedId === id
+    const TX = sx(t.x), TY = sy(t.y)
+
+    g.save()
+    g.globalAlpha = done ? 1 : 0.66      // 대기 후보는 반투명 — 아직 효력이 없다
+
+    // 정차 지점과 태그를 잇는다. 이 선이 없으면 두 점이 남남으로 보인다.
+    if (v && Number.isFinite(Number(v.x)) && Number.isFinite(Number(v.y))) {
+      const VX = sx(v.x), VY = sy(v.y)
+      g.strokeStyle = color; g.lineWidth = 1.5
+      g.setLineDash(done ? [] : [5, 4])
+      g.beginPath(); g.moveTo(VX, VY); g.lineTo(TX, TY); g.stroke()
+      g.setLineDash([])
+
+      // 정차 지점 — yaw 방향 화살촉. 어느 쪽을 보고 서는지가 이 점의 뜻이다.
+      const a = Number(v.yaw) || 0
+      const L = R * 2.0
+      g.fillStyle = color
+      g.beginPath()
+      g.moveTo(VX + Math.cos(a) * L, VY - Math.sin(a) * L)
+      g.lineTo(VX + Math.cos(a + 2.5) * L * 0.62, VY - Math.sin(a + 2.5) * L * 0.62)
+      g.lineTo(VX + Math.cos(a - 2.5) * L * 0.62, VY - Math.sin(a - 2.5) * L * 0.62)
+      g.closePath(); g.fill()
+      // 서는 자리 자체는 작은 테두리 원. 화살촉만 있으면 어디에 서는지 모른다.
+      g.strokeStyle = color; g.lineWidth = 1.5
+      g.beginPath(); g.arc(VX, VY, R * 0.5, 0, Math.PI * 2); g.stroke()
+    }
+
+    // 태그 — 벽 위라 로봇이 갈 수 없는 자리다. 원이 아니라 마름모로 그려
+    // 순찰 지점(동그라미)과 한눈에 갈린다.
+    g.beginPath()
+    g.moveTo(TX, TY - R); g.lineTo(TX + R, TY); g.lineTo(TX, TY + R); g.lineTo(TX - R, TY)
+    g.closePath()
+    g.fillStyle = color; g.fill()
+    if (!done) { g.strokeStyle = color; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.stroke(); g.setLineDash([]) }
+
+    // 고른 것은 테두리를 둘러 화면에서 찾을 수 있게 한다
+    if (picked) {
+      g.globalAlpha = 1
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2
+      g.beginPath(); g.arc(TX, TY, R * 1.9, 0, Math.PI * 2); g.stroke()
+    }
+
+    // 확정 지점은 순서를 쓴다 — 순찰이 도는 차례다
+    if (done && Number.isFinite(Number(item.sequence))) {
+      g.globalAlpha = 1
+      drawUprightLabel(g, String(item.sequence), TX, TY, textRot)
+    }
+    g.restore()
+  }
+}
+
+export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true, overlays = true, inspect: any = null) {
   g.fillStyle = '#15171c'
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
@@ -205,6 +305,9 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     g.rotate(nav.pose.yaw - Math.PI / 2)
     g.translate(-px, -py)
   }
+  // 지금 캔버스에 걸려 있는 총 회전(S15P11E101-795). 글자를 그릴 때 이만큼 되돌려
+  // 똑바로 세운다 — drawUprightLabel 에 넘긴다.
+  const textRot = DISPLAY_ROT + (rotating ? nav.pose.yaw - Math.PI / 2 : 0)
 
   const bg = backgroundOf(nav, showPlan)
   if (bg) {
@@ -270,15 +373,31 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     }
     route.forEach((w: any, i: any) => {
       const X = sx(w.x), Y = sy(w.y)
+      // 방향(heading) 화살표 — 로봇이 이 지점에서 바라볼 방향(S15P11E101-790).
+      // yaw 가 없으면(자동) 그리지 않는다 — 로봇이 가까운 구조물을 스스로 바라본다.
+      // 원보다 먼저 그려 번호가 화살표에 가리지 않게 한다.
+      if (Number.isFinite(Number(w.yaw))) {
+        const a = Number(w.yaw)
+        const L = 22, hx = X + Math.cos(a) * L, hy = Y - Math.sin(a) * L
+        g.strokeStyle = '#3ddc97'; g.lineWidth = 2.5
+        g.beginPath(); g.moveTo(X, Y); g.lineTo(hx, hy); g.stroke()
+        g.fillStyle = '#3ddc97'
+        g.beginPath()
+        g.moveTo(hx, hy)
+        g.lineTo(hx + Math.cos(a + 2.6) * 7, hy - Math.sin(a + 2.6) * 7)
+        g.lineTo(hx + Math.cos(a - 2.6) * 7, hy - Math.sin(a - 2.6) * 7)
+        g.closePath(); g.fill()
+      }
       g.fillStyle = '#3ddc97'
       g.beginPath(); g.arc(X, Y, 9, 0, Math.PI * 2); g.fill()
-      g.fillStyle = '#0b0d11'
-      g.font = 'bold 11px system-ui, sans-serif'
-      g.textAlign = 'center'; g.textBaseline = 'middle'
-      g.fillText(String(i + 1), X, Y + 0.5)
+      // 번호는 뒤집힌 캔버스 회전을 되돌려 똑바로 세운다(S15P11E101-795) — 그냥
+      // fillText 하면 표시 회전(북쪽 뒤집기)을 그대로 받아 숫자가 위아래로 뒤집혀 보인다.
+      drawUprightLabel(g, String(i + 1), X, Y, textRot)
     })
-    g.textAlign = 'start'; g.textBaseline = 'alphabetic'
   }
+
+  // 점검 지점 — 로봇 마커보다 먼저 그린다. 로봇이 지점 위에 서 있어도 로봇이 위다.
+  if (inspect) drawInspection(g, sx, sy, view, inspect, textRot)
 
   // 로봇 마커 (점 + 방향 화살표) — pose 는 TF 미확보 시 없을 수 있다
   if (p) {

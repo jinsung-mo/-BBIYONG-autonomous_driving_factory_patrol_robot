@@ -488,52 +488,123 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   .welcome-scene__path .p-node{ opacity:1; animation:none; }
 }
 
-/* ============ 회원 인증 화면 — Welcome 색감에 맞춘 다크(테마 무관) ============ */
+/* ============ 회원 인증 화면 — v3 플로팅 씬 (S15P11E101-791) ============
+   전에는 이 화면만 다크(#0a0c10 / #12151b / 형광 초록)였다. 처음 화면(Welcome)은
+   이미 v3 밝은 씬이라, 접속 버튼을 누르는 순간 화면이 흑백으로 뒤집혔다.
+   값은 tokens.css(핸드오프 정본)에서만 가져온다 — 손으로 베껴 적지 않는다. */
 .auth-wrap{
-  min-height:100vh; display:flex; align-items:center; justify-content:center; padding:32px 20px;
-  background:#0a0c10;
+  min-height:100vh; display:flex; justify-content:center; padding:32px 20px;
+  font-family:var(--bb-font); color:var(--bb-ink);
+  /* Welcome 과 같은 씬 배경. 두 화면이 이어져야 '같은 시스템' 으로 읽힌다. */
+  background:var(--bb-grad-frame);
+}
+/* 씬 격자 — 카드가 '무엇 위에' 떠 있는지 알려 준다. 평평한 회색이면 카드가 뜬 것이
+   아니라 그냥 상자로 보인다. tokens.css 의 .bb-scene-grid 와 같은 값이다. */
+.auth-wrap::before{
+  content:''; position:fixed; inset:0; pointer-events:none;
   background-image:
-    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(255,255,255,.018) 1px, transparent 1px);
-  background-size:64px 64px; background-position:center;
+    linear-gradient(90deg, rgba(120,128,150,.05) 1px, transparent 1px),
+    linear-gradient(0deg,  rgba(120,128,150,.05) 1px, transparent 1px);
+  background-size:56px 56px;
 }
 .auth-card{
-  width:100%; max-width:360px; background:#12151b; border:1px solid #1f242c; color:#dfe3ea;
-  border-radius:12px; padding:28px 26px; box-shadow:0 24px 70px rgba(0,0,0,.5);
+  position:relative;                      /* 격자 위에 온다 */
+  /* 가운데 정렬을 align-items 가 아니라 margin:auto 로 한다. 회원가입 폼은 화면보다
+     길어질 수 있는데, flex 가운데 정렬은 넘칠 때 위쪽이 잘리고 스크롤로도 닿지 않는다.
+     '상단이 잘리면 잘못 로드된 것처럼 보인다' 는 v3 규칙과도 맞는다. */
+  margin:auto;
+  width:100%; max-width:380px;
+  /* 규칙 03 — 테두리 대신 그림자 하나로 층을 만든다 */
+  background:#fff; border:0; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4);
+  padding:28px 26px; color:var(--bb-ink);
   animation:welcomeIn .5s ease both;
 }
-.auth-brand{font-size:22px; font-weight:800; letter-spacing:-.5px; text-align:center; color:#fff;}
-.auth-brand span{display:block; font-size:11px; font-weight:400; color:#6b7480; letter-spacing:1px; margin-top:4px;}
-.auth-tabs{display:flex; gap:6px; margin:20px 0 16px;}
-.auth-tabs button{flex:1; padding:9px 0; border-radius:7px; border:1px solid #262b34; background:transparent; color:#828b98; font-weight:600;}
-.auth-tabs button.on{background:rgba(61,220,151,.10); color:#3ddc97; border-color:#3ddc97;}
-/* 데이터 소스 선택 — 어느 모드로 로그인하는지가 실시간 연동 가능 여부를 결정한다 */
-.auth-source{display:flex; gap:6px; margin:-6px 0 16px;}
-.auth-source button{flex:1; padding:6px 0; border-radius:6px; border:1px solid #262b34; background:transparent; color:#6b7482; font-size:11.5px; font-weight:600;}
-.auth-source button.on{background:rgba(120,160,255,.10); color:#9dbcff; border-color:#4a6cff;}
-/* Welcome의 '관제 시스템 접속' 버튼과 동일: 평소 중립 다크, hover 시에만 초록빛 */
-.auth-submit{
-  width:100%; margin-top:10px; padding:12px 0; border-radius:6px; border:1px solid #2f3742;
-  background:#161a20; color:#eef1f5; font-weight:600; font-size:14px; letter-spacing:.5px;
-  transition:background .14s ease, border-color .14s ease, color .14s ease;
+.auth-brand{
+  font-size:23px; font-weight:800; letter-spacing:-.8px; text-align:center; color:var(--bb-ink);
 }
-.auth-submit:hover{background:#1d222a; border-color:#3ddc97; color:#3ddc97;}
-.auth-hint{margin-top:16px; text-align:center; font-size:11px; color:#59616e;}
-.auth-back{display:block; margin:12px auto 0; padding:6px 10px; border:none; background:transparent; color:#6b7480; font-size:12px; font-weight:600;}
-.auth-back:hover{color:#dfe3ea;}
-/* 입력 스타일은 .auth-card 하위로만 스코프 → 대시보드 모달(.form-row 공용)에는 영향 없음 */
-.auth-card .form-row label{color:#828b98;}
-.auth-card .form-row input{background:#0e1116; border-color:#262b34; color:#e6e9ef;}
-.auth-card .form-row input::placeholder{color:#59616e;}
-.auth-card .form-row input:focus{border-color:#3ddc97;}
-/* 날짜 입력의 달력 아이콘이 어두운 배경에서 안 보인다 */
-.auth-card .form-row input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.7);}
+.auth-brand span{
+  display:block; margin-top:6px;
+  font-family:var(--bb-font-mono); font-size:12px; font-weight:500;
+  /* muted(#7C8296)는 흰 면에서 3.82:1 이라 기준(4.5)에 못 미친다. body 로 올린다. */
+  letter-spacing:1.6px; color:var(--bb-body);
+}
+
+/* 세그먼트 필 — 탭 그룹을 알약 하나로. 선택은 진한 채움, 나머지는 글자만.
+   흰 카드 위라 알약 바탕은 surface 로 둔다(문서의 회색 씬 위 흰 알약과 같은 대비). */
+.auth-seg{
+  display:flex; gap:2px; padding:3px; margin:20px 0 14px;
+  background:var(--bb-surface); border-radius:var(--bb-r-pill);
+}
+.auth-seg button{
+  flex:1; padding:8px 0; border:0; border-radius:var(--bb-r-pill);
+  background:transparent; color:var(--bb-body);
+  font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+  transition:background var(--bb-dur) var(--bb-ease), color var(--bb-dur) var(--bb-ease);
+}
+.auth-seg button:hover:not(:disabled):not(.on){background:#EAEBF1; color:var(--bb-ink);}
+.auth-seg button.on{background:var(--bb-ink); color:#fff; font-weight:700;}
+/* 데이터 소스 — 같은 문법이되 한 단 낮춘다.
+   탭과 똑같이 진하게 채우면 둘이 나란히 서서 어느 쪽이 탭이고 어느 쪽이 모드인지
+   구분되지 않는다. 선택은 tonal(옅은 브랜드색)로 — 눈에는 띄되 탭을 이기지 않는다.
+   어느 모드로 로그인하는지가 이후 실시간 연동 가능 여부를 정하므로 감출 수는 없다. */
+.auth-seg.src{
+  margin:0 0 18px; padding:0; background:transparent;
+  justify-content:center; gap:4px;
+}
+.auth-seg.src button{flex:0 1 auto; padding:6px 16px; font-size:12px;}
+.auth-seg.src button.on{
+  background:var(--bb-primary-tonal); color:var(--bb-primary-on-tonal); font-weight:700;
+}
+.auth-seg.src button:hover:not(:disabled):not(.on){background:var(--bb-surface);}
+
+/* 제출 — 화면에서 채운 버튼은 이것 하나뿐이다(규칙: 채운 건 하나만). */
+.auth-submit{
+  width:100%; margin-top:14px; padding:12px 0; border:0; border-radius:20px;
+  background:var(--bb-primary); color:#fff;
+  font-family:inherit; font-size:13.5px; font-weight:700; letter-spacing:.2px; cursor:pointer;
+  transition:background var(--bb-dur) var(--bb-ease);
+}
+.auth-submit:hover:not(:disabled){background:var(--bb-primary-hover);}
+.auth-hint{
+  margin-top:16px; text-align:center; font-size:12px; line-height:1.5; color:var(--bb-body);
+}
+.auth-back{
+  display:block; margin:10px auto 0; padding:8px 16px; border:0; border-radius:20px;
+  background:transparent; color:var(--bb-body);
+  font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+}
+.auth-back:hover:not(:disabled){background:var(--bb-surface); color:var(--bb-ink);}
+
+/* 입력 — .form-row/.seg 는 대시보드 모달과 공용이라 반드시 .auth-card 하위로만 건다.
+   여기서 새면 모달 폼까지 같이 바뀐다. */
+.auth-card .form-row{margin-bottom:12px;}
+.auth-card .form-row label{font-size:12px; color:var(--bb-body); font-weight:600;}
+.auth-card .form-row input{
+  padding:10px 12px; font-size:13px; border-radius:var(--bb-r-input);
+  background:#fff; border:1px solid var(--bb-line-strong); color:var(--bb-ink);
+}
+.auth-card .form-row input::placeholder{color:var(--bb-muted);}
+.auth-card .form-row input:focus{border-color:var(--bb-primary); outline:none;}
 /* 성별 선택 — 조작 패널의 .seg 를 인증 카드 톤으로 덮어쓴다 */
-.auth-card .seg.gender{border-color:#262b34; border-radius:8px;}
-.auth-card .seg.gender button{padding:9px 0; background:#0e1116; color:#828b98; font-size:12px; font-weight:600;}
-.auth-card .seg.gender button.on{background:rgba(120,160,255,.14); color:#9dbcff;}
-.auth-card :focus-visible{outline-color:#3ddc97;}
-.auth-card .form-msg.err{background:rgba(255,86,72,.12); color:#ff8079; border-color:rgba(255,86,72,.35);}
+.auth-card .seg.gender{border:0; gap:2px; padding:3px; background:var(--bb-surface); border-radius:var(--bb-r-pill);}
+.auth-card .seg.gender button{
+  padding:8px 0; border:0; border-radius:var(--bb-r-pill);
+  background:transparent; color:var(--bb-body); font-size:12.5px; font-weight:600;
+}
+.auth-card .seg.gender button.on{background:var(--bb-ink); color:#fff; font-weight:700;}
+.auth-card :focus-visible{outline:2px solid var(--bb-primary); outline-offset:2px;}
+/* 알림 — 배경은 팔레트의 tint 를 그대로 쓴다.
+   글자색만 낮춘다: 토큰의 danger-text(#B4655C)는 danger-tint 위에서 3.08:1,
+   warn-text(#96762F)는 warn-tint 위에서 3.50:1 로 둘 다 기준(4.5)에 못 미친다.
+   색상 계열은 그대로 두고 명도만 내렸다 — tokens.css 는 핸드오프 정본이라
+   손대지 않고, 이 화면 안에서만 덮는다. */
+.auth-card .form-msg{font-size:12.5px; border-radius:var(--bb-r-input);}
+.auth-card .form-msg.err{
+  background:var(--bb-danger-tint); color:#8E3F36; border:1px solid #E2BDB7;
+}
+.auth-card .form-msg.warn{
+  background:var(--bb-warn-tint); color:#7A5F1E; border:1px solid #E6D2AE;
+}
 
 /* ============ 폼 (인증 · 모달 공용) ============ */
 .form-row{display:flex; flex-direction:column; gap:5px; margin-bottom:11px;}
@@ -3372,6 +3443,48 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    위치 확인 중 배지(.loc-wait, z-index 6)보다 아래에 둔다 — 위치를 모른다는
    말이 먼저 보여야 한다. 가리는 자리도 다르다(위 가운데 / 오른쪽 아래). */
 .follow-back{left:auto; right:12px; bottom:12px; top:auto; z-index:4;}
+
+/* AprilTag 점검 지점 승인 (S15P11E101-787)
+   지도의 색과 맞춘다 — 대기는 노랑, 확정은 빨강, 꺼 둔 것은 회색.
+   목록에서 본 색이 지도에서 다르면 둘을 잇지 못한다. */
+.insp-head{display:flex; align-items:baseline; gap:8px; margin:14px 0 6px;}
+.insp-head b{font-size:13px;}
+.insp-head .k{font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6E7385;}
+.insp-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;}
+.insp-list li{
+  border:1px solid #E2E4EC; border-radius:8px; padding:8px 10px; background:#FBFBFD;
+  border-left:3px solid transparent;
+}
+.insp-cand{border-left-color:#C9A227;}
+.insp-point{
+  display:flex; align-items:center; gap:8px; border-left-color:#E0483F;
+}
+.insp-point.off{border-left-color:#8B8F9A; opacity:.72;}
+.insp-list li.picked{background:#F1F3FA; border-color:#B9BEd0;}
+.insp-top{display:flex; align-items:center; gap:8px; margin-bottom:4px;}
+.insp-top .k{margin-left:auto;}
+.tag.conf{font-size:10px; font-weight:700; border-radius:4px; padding:2px 6px;
+  color:#3F6A56; border:1px solid rgba(116,169,141,.5); background:rgba(116,169,141,.1);}
+/* 로봇이 자신 없어 하면 색으로도 말한다 — 숫자만 두면 아무도 안 읽는다 */
+.tag.conf.low{color:#8A6D1F; border-color:rgba(201,162,39,.5); background:rgba(201,162,39,.12);}
+.insp-coord{font-size:11px; color:#6E7385; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.insp-warn{font-size:11.5px; color:#8A6D1F; margin-top:4px;}
+.insp-act{display:flex; align-items:center; gap:6px; margin-top:7px;}
+.insp-name{
+  flex:1; min-width:0; padding:5px 8px; font-size:12.5px;
+  border:1px solid #D6D9E3; border-radius:6px; background:#fff;
+}
+.insp-ok{padding:5px 14px; font-size:12.5px;}
+.insp-no{padding:5px 10px; font-size:12.5px; color:#A6524A;}
+.insp-no:hover:not(:disabled){background:rgba(192,122,114,.1);}
+.insp-seq{
+  flex:none; width:20px; height:20px; border-radius:50%; background:#E0483F; color:#fff;
+  font-size:11px; font-weight:700; display:grid; place-items:center;
+}
+.insp-point.off .insp-seq{background:#8B8F9A;}
+.insp-en{display:flex; align-items:center; gap:4px; font-size:11px; color:#6E7385; flex:none;}
+.insp-del{flex:none; color:#A6524A; padding:4px 8px; font-size:12px;}
+.insp-del:hover:not(:disabled){background:rgba(192,122,114,.1);}
 
 /* ============ 지도·카메라 좌측 패널 v3 톤 정리 (S15P11E101-793) ============
    패널은 이미 흰 v3 카드인데 그 안에 v2 테두리 상자가 그대로 남아 있었다.

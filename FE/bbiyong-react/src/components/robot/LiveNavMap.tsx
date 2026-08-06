@@ -21,13 +21,15 @@ import { localized } from '../../live/mappers.ts'
 // follow 를 주면 로봇이 화면 가운데 오도록 따라간다(S15P11E101-775).
 // 조작자가 드래그로 개입하면 따라가기를 멈추고, 버튼으로 되돌린다 —
 // 보고 싶은 곳을 보고 있는데 화면이 제멋대로 끌려가면 그것이 더 답답하다.
-export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false }: {
+// inspection 을 주면 AprilTag 점검 지점을 겹쳐 그린다(S15P11E101-787).
+export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false, inspection = null }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
     zoomFactor?: number,
     planOnly?: boolean,
     mapping?: boolean,
     follow?: boolean,
+    inspection?: { candidates?: any[], points?: any[], selectedId?: string | null } | null,
   }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef<HTMLCanvasElement | null>(null)
@@ -40,6 +42,9 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   // 경로는 자주 바뀌므로 ref 로 읽는다 — 구독을 다시 걸지 않기 위해서다.
   const routeRef = useRef(route)
   routeRef.current = route
+  // 점검 지점도 자주 바뀐다 — 구독을 다시 걸지 않기 위해 ref 로 읽는다(S15P11E101-787)
+  const inspectRef = useRef(inspection)
+  inspectRef.current = inspection
   // 정제 도면이 있으면 기본으로 보여준다(S15P11E101-524). 원본 점유격자로 되돌릴 수도 있어야 한다 —
   // 도면이 실제와 어긋나 보일 때 원본으로 확인할 방법이 없으면 곤란하다.
   // 따라가는 중인가. follow 를 켠 채로 들어오면 켜진 상태로 시작한다.
@@ -62,7 +67,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
     const cv = cvRef.current
     if (!cv || !lastRef.current) return
     const fitted = fitCanvas(cv)
-    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly)
+    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly, inspectRef.current)
   }
 
   useEffect(() => {
@@ -84,7 +89,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       // map 프레임이 아닌 자세는 믿을 수 없다(S15P11E101-773). 그 값으로 화면을 끌면
       // 지도가 엉뚱한 곳으로 밀려나고, 조작자는 그 사실조차 모른다 — 차라리 가만히 둔다.
       if (followingRef.current && localized(nav?.pose)) followPose(viewRef.current, cv, nav!.pose!, 0.5)
-      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly, inspectRef.current)
     }
 
     const off = onNavUpdate(render)
@@ -96,7 +101,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   }, [onNavUpdate])
 
   // 토글·경로 변경 즉시 다시 그린다 (다음 NAV_LIVE 를 기다리면 최대 0.3초 늦다)
-  useEffect(redraw, [headingUp, route])
+  useEffect(redraw, [headingUp, route, inspection])
 
   // 매핑을 시작하면 화면을 처음부터 다시 맞춘다 — 이전 세션의 배율·중심이 남아 있으면
   // 새 지도가 화면 밖에서 그려지기 시작한다.
