@@ -211,6 +211,56 @@ export function releaseExtrudeSource(s: ExtrudeSource | null | undefined) {
 }
 
 /**
+ * map 프레임 미터 좌표 → 압출 씬의 픽셀 좌표 (S15P11E101-789).
+ *
+ * 예전에는 티켓의 표준 변환을 그대로 써서 '셀 좌표' 를 구한 뒤 이미지 축소비를 곱했다.
+ * 그런데 씬의 픽셀 공간은 격자 셀이 아니라 **도면 이미지 픽셀**이다.
+ * BE 계약상 둘은 cellSizePx 배 다르다 —
+ *     2D 도면 : GET /api/maps/active     resolution(m/px) + origin
+ *     3D 격자 : GET /api/maps/active/grid cellResolution(= resolution × cellSizePx) + 같은 origin
+ * loadActivePlan 은 격자 쪽 값을 우선 담으므로(plan.w/h = cols/rows, plan.res = cellResolution)
+ * 그 값으로 구한 좌표는 셀 단위다. 거기에 이미지 축소비를 곱하면 로봇이 딴 셀에 찍힌다.
+ * 실제로 3D 는 우측 벽, 2D 는 중앙에 그려졌다.
+ *
+ * 그래서 어느 쪽 해상도를 쓰는지에 기대지 않는다. 맵 전체 크기(미터)로 나눠 비율을 구하고,
+ * 그 비율에 씬 크기를 곱한다. 2D 는 같은 비율을 캔버스 크기에 곱하므로, 두 뷰가
+ * 같은 월드 좌표를 같은 물리 위치에 그리게 된다 — 이것이 정합의 기준이다.
+ *
+ * @param scene 압출 씬의 픽셀 크기(buildExtrudeSource 가 돌려준 w/h)
+ */
+export function worldToScenePx(
+  plan: { w: number, h: number, res: number, ox: number, oy: number, oyaw?: number },
+  worldX: number, worldY: number,
+  scene: { w: number, h: number },
+) {
+  // 맵 전체 크기(미터). w/h 가 셀이든 픽셀이든 res 와 짝이 맞으므로 곱하면 미터가 된다.
+  const wm = plan.w * plan.res
+  const hm = plan.h * plan.res
+  if (!(wm > 0) || !(hm > 0)) return { x: 0, y: 0 }
+
+  let dx = worldX - plan.ox
+  let dy = worldY - plan.oy
+  // ROS map 규약의 origin 은 회전각을 함께 갖는다. 2D(navMap)가 이미 반영해 그리므로
+  // 여기서 빼면 회전된 맵에서 두 뷰가 어긋난다. yaw 가 0 이면 기존 공식과 완전히 같다.
+  const yaw = Number(plan.oyaw) || 0
+  if (yaw) {
+    const c = Math.cos(-yaw), s = Math.sin(-yaw)
+    const rx = dx * c - dy * s
+    const ry = dx * s + dy * c
+    dx = rx; dy = ry
+  }
+  return {
+    x: (dx / wm) * scene.w,
+    // ROS 맵은 y 축이 위로 자라고 이미지 행 0 은 위다 — 뒤집는다.
+    y: (1 - dy / hm) * scene.h,
+  }
+}
+
+/**
+ * @deprecated S15P11E101-789 — 셀 좌표를 돌려주므로 이미지 픽셀 공간과 맞지 않는다.
+ * 씬에 그릴 때는 worldToScenePx 를 쓴다. 격자 셀 자체가 필요할 때만 남겨 둔다.
+ */
+/**
  * map 프레임 미터 좌표 → 압출 씬의 픽셀 좌표.
  *
  * 티켓의 표준 변환에 originYaw 를 더한 것이다.
