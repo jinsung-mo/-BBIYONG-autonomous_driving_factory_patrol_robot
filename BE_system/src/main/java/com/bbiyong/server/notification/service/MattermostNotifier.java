@@ -163,6 +163,8 @@ public class MattermostNotifier {
                 return "화재 감지";
             case "OVERHEAT":
                 return "과열 감지";
+            case "CAUTION":
+                return "화재 후보 감지";
             case "SYSTEM":
                 return "시스템 이벤트";
             default:
@@ -174,6 +176,7 @@ public class MattermostNotifier {
         return switch (event.getType()) {
             case "FIRE" -> "🚨 화재 발생";
             case "OVERHEAT" -> "⚠️ 과열 감지";
+            case "CAUTION" -> "⚠️ 화재 후보 감지";
             default -> "ℹ️ " + getEventTypeKorean(event.getType());
         };
     }

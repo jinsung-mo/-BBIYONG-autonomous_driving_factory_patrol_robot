@@ -9,7 +9,7 @@ import java.time.Instant;
  * 로봇이 확정한 화재(FIRE)/과열(OVERHEAT) 이벤트를 통일된 형태로 브로드캐스트한다.
  */
 public record AlertMessage(
-        String type,          // FIRE | OVERHEAT
+        String type,          // FIRE | OVERHEAT | CAUTION
         String level,         // CRITICAL | WARNING
         String source,        // ROBOT
         String robotId,
@@ -42,6 +42,15 @@ public record AlertMessage(
                 prefix(p) + "과열 발생",
                 timestampOf(p).toString(),
                 p.getMessageId(), null);
+    }
+
+    public static AlertMessage fromCaution(RobotPacket p) {
+        return new AlertMessage(
+                "CAUTION", "WARNING", sourceOf(p), p.getRobotId(),
+                p.getConfidence(), p.getTemperature(), null, p.getThreshold(), null,
+                locationX(p), locationY(p),
+                prefix(p) + "화재 후보 감지 - 추가 확인 필요",
+                timestampOf(p).toString(), p.getMessageId(), null);
     }
 
     /** 경보 위치 = 이벤트 발생 시점의 로봇 보고 위치. 없으면 null로 보존한다. */

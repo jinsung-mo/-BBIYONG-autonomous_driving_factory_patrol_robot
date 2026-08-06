@@ -4,6 +4,7 @@ import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.dto.H264BinaryFrame;
 import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
 import com.bbiyong.server.wss.event.RobotConnectedEvent;
+import com.bbiyong.server.wss.event.RobotCautionEvent;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
@@ -99,6 +100,11 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                     log.info("Overheat event received via WSS from [{}] for equipment [{}]: temp={}, threshold={}",
                             robotId, packet.getEquipmentId(), packet.getTemperature(), packet.getThreshold());
                     eventPublisher.publishEvent(new RobotOverheatEvent(this, packet));
+                    break;
+                case "EVENT_CAUTION":
+                    log.info("Caution event received via WSS from [{}]: confidence={}, temp={}",
+                            robotId, packet.getConfidence(), packet.getTemperature());
+                    eventPublisher.publishEvent(new RobotCautionEvent(this, packet));
                     break;
                 case "INSPECTION":
                     // 분전반 정상 점검 리포트 (경보 아님) - 설비 최근점검 상태 갱신용

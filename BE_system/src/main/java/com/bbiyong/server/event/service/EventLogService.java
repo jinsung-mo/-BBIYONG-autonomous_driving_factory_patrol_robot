@@ -13,6 +13,7 @@ import com.bbiyong.server.video.dto.VideoResponses;
 import com.bbiyong.server.video.repository.VideoClipRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import com.bbiyong.server.wss.event.RobotFireEvent;
+import com.bbiyong.server.wss.event.RobotCautionEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -194,6 +195,15 @@ public class EventLogService {
             return;
         }
         persist(AlertMessage.fromOverheat(event.getPacket()), null);
+    }
+
+    @Async(AsyncConfig.ALERT_EXECUTOR)
+    @EventListener
+    public void handleCautionEvent(RobotCautionEvent event) {
+        if (event.getPacket() == null) {
+            return;
+        }
+        persist(AlertMessage.fromCaution(event.getPacket()), null);
     }
 
     private void persist(AlertMessage alert, String simulationRecipientUserId) {
