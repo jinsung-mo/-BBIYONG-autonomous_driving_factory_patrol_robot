@@ -38,6 +38,7 @@ from pathlib import Path
 import struct                                  # 🆕 열화상 PNG 인코딩 (build_thermal)
 import sys
 import time
+import traceback
 import zlib                                     # 🆕 열화상 PNG IDAT 압축 — 표준 라이브러리, PIL 등 새 의존성 없음
 
 from mapping_orchestrator import MappingOrchestrator
@@ -1063,6 +1064,26 @@ class Bridge:
             await asyncio.sleep(self.h264_period)
 
     async def receiver(self, ws):
+        """Keep one malformed command from terminating the WebSocket tasks."""
+        async for raw in ws:
+            async def one_message():
+                yield raw
+
+            try:
+                await self._receiver_unchecked(one_message())
+            except Exception as exc:
+                try:
+                    command = json.loads(raw).get("command")
+                except (AttributeError, TypeError, ValueError):
+                    command = None
+                print(
+                    f"[recv] command failed and was skipped: "
+                    f"command={command!r}, error={exc!r}",
+                    flush=True,
+                )
+                traceback.print_exc()
+
+    async def _receiver_unchecked(self, ws):
         """서버 → 로봇 제어 명령 수신."""
         async for raw in ws:
             try:
