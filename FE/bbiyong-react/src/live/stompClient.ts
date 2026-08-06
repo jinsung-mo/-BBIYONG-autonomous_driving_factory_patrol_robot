@@ -15,16 +15,21 @@ let lastError: string | null = null
 let authError = false
 let nextId = 0
 let token: string | null = null
+// CONNECTED 프레임의 session 헤더(STOMP 1.2). 서버가 실어 주면 조종 점유의 owner(sessionId)와
+// 곧바로 대조할 수 있다. Spring simple broker 는 이 헤더를 생략할 수 있으므로 null 을 허용하고,
+// 그때는 LiveContext 가 ACQUIRE 왕복으로 소유 여부를 판단한다(controlOwnership.ts 참고).
+let sessionId: string | null = null
 
 type Entry = { destination: string, handler: (msg: any) => void }
 const registry = new Map<number, Entry>()      // id -> { destination, handler }
 const active = new Map<number, import('@stomp/stompjs').StompSubscription>()
 const stateListeners = new Set<(snap: {
   connected: boolean, lastError: string | null, authError: boolean, hasToken: boolean,
+  sessionId: string | null,
 }) => void>()
 
 function emitState() {
-  const snap = { connected, lastError, authError, hasToken: !!token }
+  const snap = { connected, lastError, authError, hasToken: !!token, sessionId }
   stateListeners.forEach((fn) => fn(snap))
 }
 
@@ -56,13 +61,16 @@ function ensureClient() {
     beforeConnect: () => {
       c.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {}
     },
-    onConnect: () => {
+    onConnect: (frame) => {
       active.clear()
+      // 세션이 바뀌면 이전 sessionId 는 무효다 — 남겨 두면 남의 점유를 내 것으로 오인한다.
+      sessionId = frame?.headers?.session || frame?.headers?.['session-id'] || null
       registry.forEach((entry, id) => subscribeNow(id, entry))
       connected = true; lastError = null; authError = false; emitState()
     },
     onWebSocketClose: () => {
       active.clear()
+      sessionId = null
       if (connected) { connected = false; emitState() }
     },
     onStompError: (frame) => {
@@ -102,7 +110,7 @@ export async function disconnect() {
   if (!client) return
   registry.clear(); active.clear()
   await client.deactivate()
-  connected = false; lastError = null; authError = false; emitState()
+  connected = false; lastError = null; authError = false; sessionId = null; emitState()
 }
 
 // destination 구독. 반환값을 호출하면 해제된다.
@@ -130,6 +138,6 @@ export function publish(destination: any, body: any) {
 
 export function onState(fn: any) {
   stateListeners.add(fn)
-  fn({ connected, lastError, authError, hasToken: !!token })
+  fn({ connected, lastError, authError, hasToken: !!token, sessionId })
   return () => stateListeners.delete(fn)
 }
