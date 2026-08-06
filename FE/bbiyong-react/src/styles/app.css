@@ -3085,3 +3085,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 /* 꺼진 로봇은 움직일 수 없다. off 가 moving 을 이긴다. */
 .iso-robot.off.moving .iso-car-light{box-shadow:none;}
+
+/* 열화상 90도 회전 (S15P11E101-759)
+   ------------------------------------------------------------------
+   센서가 물리적으로 90도 돌아 붙어 있다. 서버는 프레임을 무변환 중계하므로
+   되돌리는 자리는 FE 렌더뿐이다 — 지도 180도 회전(746)과 같은 기조다.
+
+   회전하면 가로와 세로가 바뀐다. 컨테이너 크기를 그대로 쓰면 긴 변이 잘리므로,
+   컨테이너 질의 단위로 가로·세로를 맞바꿔 잡는다(100cqh × 100cqw).
+   HUD 는 형제 요소라 함께 돌지 않는다 — 온도 글자는 정방향으로 남는다. */
+#pThermal .vwrap{container-type:size;}
+#pThermal .vwrap > canvas.thermal-rot{
+  position:absolute; left:50%; top:50%;
+  width:100cqh; height:100cqw;
+  transform-origin:50% 50%;
+  /* 비율은 지킨다. 늘려 채우면 열원 위치가 실제와 어긋나 보인다. */
+  object-fit:contain;
+}

@@ -104,10 +104,13 @@ export default function CameraPage() {
             title={swapped ? undefined : '더블클릭하면 크게 봅니다'}
           >
             <div className={`vwrap${thermalDown ? ' down' : ''}`}>
+              {/* 센서가 90도 돌아 붙어 있어 화면에서 되돌린다(S15P11E101-759).
+                  확대와 같은 요소에 걸리는 변형이라 한 줄에 합친다 — 나누면 인라인이
+                  CSS 를 덮어 둘 중 하나가 사라진다. */}
               <canvas
                 ref={refs.tcam}
-                className="camera-zoom-canvas"
-                style={{ transform: `scale(${swapped ? zoom : 1})` }}
+                className="camera-zoom-canvas thermal-rot"
+                style={{ transform: `translate(-50%, -50%) rotate(90deg) scale(${swapped ? zoom : 1})` }}
               />
               {!thermalDown && (
                 <span className="hud2" style={{ color: status.thermalColor }}>{status.thermalMax}</span>
