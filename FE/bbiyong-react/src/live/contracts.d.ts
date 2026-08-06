@@ -691,6 +691,39 @@ export interface LiveContextValue {
   setDriveMode: (m: 'patrol' | 'manual') => void
   plan: PlanLayer | null
   planError: string | null
+  /** 조종 점유 현재 상태(S15P11E101-778 · 779 / BE MR !344) */
+  ownership: ControlOwnershipView
+  controlOwnership: {
+    acquire: () => void
+    /** 남의 점유를 강제로 빼앗는다 — 호출 전에 확인 절차를 거칠 것 */
+    takeover: () => void
+    /** 내가 소유자일 때만 실제로 발행된다 */
+    release: () => void
+    requestStatus: () => void
+    clearDenied: () => void
+  }
+  /** 내 STOMP sessionId. 서버가 CONNECTED 에 안 실어 주면 ACQUIRE 성공 시 학습된다. null = 아직 모름 */
+  mySessionId: string | null
+}
+
+/** 화면이 그대로 쓸 수 있게 미리 풀어 둔 조종 점유 상태. */
+export interface ControlOwnershipView {
+  /** /topic/control 을 한 번이라도 받았는가 = 서버가 점유 기능을 갖고 있는가 */
+  supported: boolean
+  /** 소유자 STOMP sessionId. 점유 없으면 null */
+  owner: string | null
+  ownerEmail: string | null
+  event: 'ACQUIRED' | 'RELEASED' | 'TAKEN_OVER' | 'EXPIRED' | 'DISCONNECTED' | 'HEARTBEAT' | 'STATUS' | null
+  claim: 'none' | 'pending' | 'owner' | 'denied'
+  denied: { reason: string, ownerEmail: string | null, at: number } | null
+  /** 내가 조종 중이다 */
+  mine: boolean
+  /** 남이 조종 중이다 — 수동 모드 진입을 막는 조건 */
+  otherOwns: boolean
+  /** 지금 기준 잔여 리스(ms) */
+  leftMs: number
+  /** 하트비트가 끊겨 현재 값을 사실로 단언할 수 없다 */
+  stale: boolean
 }
 
 // ---------------------------------------------------------------- 관제센터 신규 API
