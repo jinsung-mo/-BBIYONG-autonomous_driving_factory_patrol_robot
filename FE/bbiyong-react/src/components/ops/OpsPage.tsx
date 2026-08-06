@@ -5,9 +5,11 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { ROBOT_ID } from '../../live/config.ts'
 import Modal from '../ui/Modal.tsx'
+import InspectionPanel from './InspectionPanel.tsx'
 import RoutePanel from './RoutePanel.tsx'
 import SchedulePanel from './SchedulePanel.tsx'
 import KpiRow from '../robot/KpiRow.tsx'
+import { useInspection } from '../../live/inspection.ts'
 import {
   MAPPING_STATUS, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
 } from '../../live/mapping.ts'
@@ -15,6 +17,11 @@ import {
 // 운영 (S15P11E101-475) — 2D 맵 모델링과 저장된 맵 관리. 관리자만 들어온다.
 // 맵 모델링 시작·진행·완료·저장(활성화) 전 과정은 S15P11E101-483.
 export default function OpsPage() {
+  // 점검 지점(S15P11E101-787). 패널과 지도가 같은 값을 봐야 한다 —
+  // 각자 구독하면 승인한 순간 목록과 지도가 잠깐 어긋난다.
+  const inspection = useInspection()
+  // 지도에서 어느 점을 강조할지. 목록에 손을 올린 것만으로 지도에서 찾을 수 있어야 한다.
+  const [inspSel, setInspSel] = useState<string | null>(null)
   const { enabled, connected, control, onNavUpdate, telemetry, mapping, mappingComplete, clearMappingComplete } = useLive()
   const { accessToken, locked } = useAuth()
 
@@ -200,6 +207,19 @@ export default function OpsPage() {
               {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
             </div>
 
+            <InspectionPanel
+              candidates={inspection.candidates}
+              points={inspection.points}
+              onConfirm={inspection.confirm}
+              onReject={inspection.reject}
+              onRename={inspection.rename}
+              onToggle={inspection.setEnabled}
+              onDelete={inspection.remove}
+              onPublish={inspection.publishAll}
+              selectedId={inspSel}
+              onSelect={setInspSel}
+            />
+
             <div className="card-v3">
               <h3 style={{ margin: 0, marginBottom: '12px' }}>저장된 맵 <span className="k">ARCHIVE</span></h3>
               <p className="cfg-help">로봇 <b className="mono">{displayName(ROBOT_ID)}</b> 의 저장 맵 목록입니다.</p>
@@ -263,7 +283,11 @@ export default function OpsPage() {
           </aside>
 
           <div className="nav-canvas">
-            <RoutePanel />
+            <RoutePanel inspection={{
+              candidates: inspection.candidates,
+              points: inspection.points,
+              selectedId: inspSel,
+            }} />
             <SchedulePanel />
           </div>
         </div>

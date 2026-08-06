@@ -13,7 +13,7 @@ import {
 //
 // 운영 탭에 둔다. 맵을 만들고(모델링) 그 위에 경로를 그리고 로봇에 내려보내는 흐름이
 // 한 화면에서 이어진다. 관제 화면은 모니터링과 실시간 개입만 맡는다(S15P11E101-475).
-export default function RoutePanel() {
+export default function RoutePanel({ inspection = null }: { inspection?: any } = {}) {
   const { enabled, connected, mapping } = useLive()
   const { accessToken } = useAuth()
 
@@ -153,6 +153,7 @@ export default function RoutePanel() {
           route={mapping ? null : route}
           onPick={editLocked ? null : onPick}
           mapping={mapping}
+          inspection={mapping ? null : inspection}
           follow={mapping}
         />
         {mapping && (

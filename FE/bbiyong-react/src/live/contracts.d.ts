@@ -1004,3 +1004,65 @@ export interface ZoneLandmark {
   x: number
   y: number
 }
+
+// ---- AprilTag 점검 지점 (S15P11E101-787 / BE 계약 S15P11E101-778) ----
+//
+// 로봇·BE·FE 가 같은 스키마를 나눠 쓴다. 필드를 바꾸려면 먼저 협의해야 한다.
+// 좌표는 전부 미터·map 프레임 — 순찰 지점(Waypoint)과 같은 좌표계다.
+
+/** 태그가 붙은 자리. 벽 위라 로봇이 갈 수 없는 좌표일 수 있다. */
+export interface InspectionTarget {
+  x: number
+  y: number
+  z?: number
+}
+
+/** 태그를 보기 위해 로봇이 서는 자리. yaw 는 바라보는 방향이다. */
+export interface InspectionViewpoint {
+  x: number
+  y: number
+  yaw: number
+}
+
+/** 로봇이 올린 승인 대기 후보. 사람이 승인해야 점검 지점이 된다. */
+export interface InspectionCandidate {
+  schemaVersion: 1
+  kind: 'inspection_candidate'
+  candidateId: string
+  tagId: number
+  confidence: number
+  target: InspectionTarget
+  viewpoint: InspectionViewpoint
+  /** 태그에서 몇 미터 떨어져 서는가 */
+  standOffM: number
+  source: string
+  createdAt?: string
+}
+
+/** 승인이 끝난 점검 지점. sequence 순으로 돈다. */
+export interface InspectionPoint {
+  schemaVersion: 1
+  kind: 'inspection_point'
+  pointId: string
+  tagId: number
+  target: InspectionTarget
+  viewpoint: InspectionViewpoint
+  standOffM: number
+  confidence?: number
+  source?: string
+  name: string
+  sequence: number
+  enabled: boolean
+}
+
+/** /app/control/inspection 으로 보내는 명령. */
+export interface InspectionPointCommand {
+  schemaVersion: 1
+  kind: 'inspection_point_command'
+  command: 'CONFIRM' | 'REJECT' | 'UPDATE' | 'DELETE' | 'PUBLISH'
+  candidateId?: string
+  pointId?: string
+  name?: string
+  sequence?: number
+  enabled?: boolean
+}

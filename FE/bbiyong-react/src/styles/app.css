@@ -3372,3 +3372,45 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    위치 확인 중 배지(.loc-wait, z-index 6)보다 아래에 둔다 — 위치를 모른다는
    말이 먼저 보여야 한다. 가리는 자리도 다르다(위 가운데 / 오른쪽 아래). */
 .follow-back{left:auto; right:12px; bottom:12px; top:auto; z-index:4;}
+
+/* AprilTag 점검 지점 승인 (S15P11E101-787)
+   지도의 색과 맞춘다 — 대기는 노랑, 확정은 빨강, 꺼 둔 것은 회색.
+   목록에서 본 색이 지도에서 다르면 둘을 잇지 못한다. */
+.insp-head{display:flex; align-items:baseline; gap:8px; margin:14px 0 6px;}
+.insp-head b{font-size:13px;}
+.insp-head .k{font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6E7385;}
+.insp-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;}
+.insp-list li{
+  border:1px solid #E2E4EC; border-radius:8px; padding:8px 10px; background:#FBFBFD;
+  border-left:3px solid transparent;
+}
+.insp-cand{border-left-color:#C9A227;}
+.insp-point{
+  display:flex; align-items:center; gap:8px; border-left-color:#E0483F;
+}
+.insp-point.off{border-left-color:#8B8F9A; opacity:.72;}
+.insp-list li.picked{background:#F1F3FA; border-color:#B9BEd0;}
+.insp-top{display:flex; align-items:center; gap:8px; margin-bottom:4px;}
+.insp-top .k{margin-left:auto;}
+.tag.conf{font-size:10px; font-weight:700; border-radius:4px; padding:2px 6px;
+  color:#3F6A56; border:1px solid rgba(116,169,141,.5); background:rgba(116,169,141,.1);}
+/* 로봇이 자신 없어 하면 색으로도 말한다 — 숫자만 두면 아무도 안 읽는다 */
+.tag.conf.low{color:#8A6D1F; border-color:rgba(201,162,39,.5); background:rgba(201,162,39,.12);}
+.insp-coord{font-size:11px; color:#6E7385; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.insp-warn{font-size:11.5px; color:#8A6D1F; margin-top:4px;}
+.insp-act{display:flex; align-items:center; gap:6px; margin-top:7px;}
+.insp-name{
+  flex:1; min-width:0; padding:5px 8px; font-size:12.5px;
+  border:1px solid #D6D9E3; border-radius:6px; background:#fff;
+}
+.insp-ok{padding:5px 14px; font-size:12.5px;}
+.insp-no{padding:5px 10px; font-size:12.5px; color:#A6524A;}
+.insp-no:hover:not(:disabled){background:rgba(192,122,114,.1);}
+.insp-seq{
+  flex:none; width:20px; height:20px; border-radius:50%; background:#E0483F; color:#fff;
+  font-size:11px; font-weight:700; display:grid; place-items:center;
+}
+.insp-point.off .insp-seq{background:#8B8F9A;}
+.insp-en{display:flex; align-items:center; gap:4px; font-size:11px; color:#6E7385; flex:none;}
+.insp-del{flex:none; color:#A6524A; padding:4px 8px; font-size:12px;}
+.insp-del:hover:not(:disabled){background:rgba(192,122,114,.1);}
