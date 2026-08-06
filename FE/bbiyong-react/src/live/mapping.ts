@@ -1,12 +1,15 @@
 import { errMessage, errStatus } from './errors.ts'
 // 2D 맵 모델링(SLAM) 흐름 — S15P11E101-483.
 //
-// 계약 근거와 미확정 지점을 한곳에 모아 둔다. 로봇/BE 가 확정되면 이 파일만 고치면 된다.
+// 실기로 끝까지 도는 것을 확인했다(2026-08-06). 아래는 지금 도는 경로이고,
+// 미확정 항목은 남아 있지 않다 — 계약이 바뀌면 이 파일만 고치면 된다.
 //
-// - START_MAPPING : BE/로봇 릴레이 (RobotControlStompController#operation & be_robot/dev 매핑 오케스트레이션 완료).
-// - 진행 표시    : 텔레메트리 status === 'MAPPING'.
+// - START_MAPPING : BE/로봇 릴레이 (RobotControlStompController#operation).
+// - 진행 표시    : 텔레메트리 status === 'MAPPING'. 그동안 순찰 경로 패널은
+//                  라이브 매핑 화면으로 바뀐다(S15P11E101-763).
 // - 완료 이벤트  : /topic/mapping (EVENT_MAPPING_COMPLETE & FLOORPLAN_READY).
-// - 활성 맵 지정 : PUT /api/maps/{id}/active. BE 자동 활성화 도면(FLOORPLAN)을 신뢰하며 필요시 지정.
+// - 활성 맵 지정 : PUT /api/maps/{id}/active. BE 가 정제 도면(FLOORPLAN)을 자동
+//                  활성화하며, 다른 맵을 쓰려면 이 API 로 지정한다.
 
 import { authedGet, authedSend } from './authApi.ts'
 

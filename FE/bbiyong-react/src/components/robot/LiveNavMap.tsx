@@ -17,12 +17,13 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgr
 // 운영 탭 전용이 되었으므로, 지도 탭에서는 원본 격자로 되돌릴 길을 열어 두지 않는다.
 // mapping 을 주면 라이브 매핑 화면이 된다(S15P11E101-763).
 // 저장 도면 대신 원본 점유격자를 배경으로 쓰고, 지도가 넓어질 때마다 화면을 다시 맞춘다.
-export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false, mapping = false }: {
+export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false, mapping = false, inspection = null }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
     zoomFactor?: number,
     planOnly?: boolean,
     mapping?: boolean,
+    inspection?: { candidates?: any[], points?: any[], selectedId?: string | null } | null,
   }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef<HTMLCanvasElement | null>(null)
@@ -35,6 +36,9 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   // 경로는 자주 바뀌므로 ref 로 읽는다 — 구독을 다시 걸지 않기 위해서다.
   const routeRef = useRef(route)
   routeRef.current = route
+  // 점검 지점도 자주 바뀐다 — 구독을 다시 걸지 않기 위해 ref 로 읽는다(S15P11E101-787)
+  const inspectRef = useRef(inspection)
+  inspectRef.current = inspection
   // 정제 도면이 있으면 기본으로 보여준다(S15P11E101-524). 원본 점유격자로 되돌릴 수도 있어야 한다 —
   // 도면이 실제와 어긋나 보일 때 원본으로 확인할 방법이 없으면 곤란하다.
   const [showPlan, setShowPlan] = useState(true)
@@ -49,7 +53,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
     const cv = cvRef.current
     if (!cv || !lastRef.current) return
     const fitted = fitCanvas(cv)
-    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly)
+    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly, inspectRef.current)
   }
 
   useEffect(() => {
@@ -64,7 +68,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       // 배경(도면 또는 원본) 기준으로 맞춘다 — 도면만 있고 원본이 없을 수도 있다
       const bg = backgroundOf(nav, showPlanRef.current)
       if (bg && (!viewRef.current.init || fitted.resized)) fitView(viewRef.current, cv, bg)
-      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly, inspectRef.current)
     }
 
     const off = onNavUpdate(render)
@@ -76,7 +80,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   }, [onNavUpdate])
 
   // 토글·경로 변경 즉시 다시 그린다 (다음 NAV_LIVE 를 기다리면 최대 0.3초 늦다)
-  useEffect(redraw, [headingUp, route])
+  useEffect(redraw, [headingUp, route, inspection])
 
   // 매핑을 시작하면 화면을 처음부터 다시 맞춘다 — 이전 세션의 배율·중심이 남아 있으면
   // 새 지도가 화면 밖에서 그려지기 시작한다.
