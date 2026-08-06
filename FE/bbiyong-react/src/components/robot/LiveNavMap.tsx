@@ -49,7 +49,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
     const cv = cvRef.current
     if (!cv || !lastRef.current) return
     const fitted = fitCanvas(cv)
-    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current)
+    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly)
   }
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       // 배경(도면 또는 원본) 기준으로 맞춘다 — 도면만 있고 원본이 없을 수도 있다
       const bg = backgroundOf(nav, showPlanRef.current)
       if (bg && (!viewRef.current.init || fitted.resized)) fitView(viewRef.current, cv, bg)
-      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly)
     }
 
     const off = onNavUpdate(render)
