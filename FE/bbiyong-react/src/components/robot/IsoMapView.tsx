@@ -6,6 +6,7 @@ import {
   type ExtrudeSource,
 } from '../../live/isoExtrude.ts'
 import { errMessage } from '../../live/errors.ts'
+import { isMapFrame, localized } from '../../live/mappers.ts'
 import { DISPLAY_ROT } from '../../live/navMap.ts'
 
 // 2D 도면을 압출해 2.5D 로 보여주는 뷰 (S15P11E101-676).
@@ -48,6 +49,8 @@ const SPIN_BASE = -24 + (DISPLAY_ROT * 180) / Math.PI
 
 export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) {
   const { plan, connected, onNavUpdate, robotOnline, telemetry } = useLive()
+  // 텔레메트리가 map 이 아니라고 말하면 그린 것을 거둔다(S15P11E101-773)
+  const unlocalized = !!telemetry?.location && !isMapFrame(telemetry.location)
   const [src, setSrc] = useState<ExtrudeSource | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -180,7 +183,8 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   // nav 가 살아 있으면 건드리지 않는다. 두 소스가 번갈아 들어오면 마커가 떨린다.
   useEffect(() => {
     const loc = telemetry?.location
-    if (!loc || !Number.isFinite(Number(loc.x)) || !Number.isFinite(Number(loc.y))) return
+    // 로컬라이즈되지 않은 좌표는 map 이 아니다 — 도면 위에 그리면 엉뚱한 자리에 찍힌다(773)
+    if (!loc || !localized(loc)) return
     if (Date.now() - navAtRef.current < NAV_FRESH_MS) return
     aim(Number(loc.x), Number(loc.y), Number(loc.yaw))
   }, [telemetry])
@@ -191,6 +195,18 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     if (!el) return
     if (!targetRef.current) { el.style.display = 'none'; shownRef.current = null }
   }, [plan])
+
+  // 위치를 믿을 수 없으면 마커를 아예 지운다(S15P11E101-773).
+  // 흐리게 두지 않는다 — 흐린 마커도 '저기 있다' 로 읽힌다. 모르면 안 그린다.
+  useEffect(() => {
+    const el = markerRef.current
+    if (!el) return
+    if (unlocalized) {
+      targetRef.current = null
+      shownRef.current = null
+      el.style.display = 'none'
+    }
+  }, [unlocalized])
 
   // 로봇이 꺼져 있으면 마커를 흐린다. 지우지는 않는다 —
   // 마지막으로 알던 자리는 남겨야 어디서 멈췄는지 알 수 있다.
@@ -318,6 +334,14 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
         </div>
       </div>
 
+      {/* 위치를 믿을 수 없으면 왜 마커가 없는지 말한다(S15P11E101-773).
+          아무 말 없이 비어 있으면 로봇이 사라진 줄 안다. */}
+      {unlocalized && (
+        <div className="loc-wait" role="status">
+          위치 확인 중
+          <span>로컬라이제이션을 기다리는 중입니다 — 회복되면 로봇이 다시 표시됩니다.</span>
+        </div>
+      )}
       <button
         type="button"
         className={`mapview iso-reset${atFront ? ' on' : ''}`}

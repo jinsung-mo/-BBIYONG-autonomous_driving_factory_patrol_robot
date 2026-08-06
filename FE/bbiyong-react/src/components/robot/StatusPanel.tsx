@@ -2,7 +2,7 @@ import { useSim } from '../../SimContext.ts'
 import { displayName } from '../../live/robotName.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useZones } from '../../live/ZoneContext.tsx'
-import { telemetryToStatus } from '../../live/mappers.ts'
+import { telemetryToStatus, isMapFrame } from '../../live/mappers.ts'
 import LogList from '../LogList.tsx'
 import RadialGauge from './RadialGauge.tsx'
 
@@ -54,12 +54,18 @@ export default function StatusPanel() {
           // 원좌표는 툴팁으로만 남긴다. 정합을 의심할 때 확인할 곳은 있어야 한다.
           <div className="kv">
             <span>위치</span>
-            <b
-              className="zone-label"
-              title={`${live.location.x?.toFixed(2)}, ${live.location.y?.toFixed(2)} m`}
-            >
-              {labelOf(live.location.x, live.location.y)}
-            </b>
+            {/* map 프레임이 아니면 자리를 말하지 않는다(S15P11E101-773).
+                odom 폴백 좌표를 구역 이름으로 옮기면 있지도 않은 구역을 말하게 된다. */}
+            {isMapFrame(live.location)
+              ? (
+                <b
+                  className="zone-label"
+                  title={`${live.location.x?.toFixed(2)}, ${live.location.y?.toFixed(2)} m`}
+                >
+                  {labelOf(live.location.x, live.location.y)}
+                </b>
+              )
+              : <b className="st warn loc-wait-badge">▲ 위치 확인 중</b>}
           </div>
         )}
       </div>
