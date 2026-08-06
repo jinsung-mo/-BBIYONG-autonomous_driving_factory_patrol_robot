@@ -53,10 +53,10 @@ await sleep(5000)
 
 const marker = () => ev(`(()=>{const e=document.querySelector('.iso-robot'); if(!e) return null
   const yawOf=(el)=>{const v=getComputedStyle(el).getPropertyValue('--yaw').trim(); return v?parseFloat(v):null}
-  const body=e.querySelector('.iso-robot-body'), nose=e.querySelector('.iso-robot-nose')
+  const body=e.querySelector('.iso-car'), nose=e.querySelector('.iso-car-light')
   return {left:parseFloat(e.style.left), top:parseFloat(e.style.top), shown:e.style.display!=='none',
     yaw:yawOf(e), off:e.classList.contains('off'),
-    hasBody:!!body, hasNose:!!nose, hasDot:!!e.querySelector('.iso-robot-dot'),
+    hasBody:!!body, hasNose:!!nose, hasDot:!!e.querySelector('.iso-car-shadow'),
     bodyT:body?getComputedStyle(body).transform:null,
     noseT:nose?getComputedStyle(nose).transform:null,
     opacity:getComputedStyle(e).opacity}})()`)
@@ -67,9 +67,10 @@ console.log('\n[1] 마커가 입체로 서 있는가')
 pose(3.0, 4.2, 0)
 await sleep(1400)
 let m = await marker()
-console.log('  구성 :', JSON.stringify({ body: m?.hasBody, nose: m?.hasNose, dot: m?.hasDot }))
-console.log('  → 몸체·코·표시등이 모두 있다 :', ok(!!m?.hasBody && !!m?.hasNose && !!m?.hasDot))
-console.log('  → 벽 위로 띄운다 :', ok(await ev(`parseFloat(document.querySelector('.iso-robot').style.getPropertyValue('--rz'))>0`)))
+// S15P11E101-750 에서 평면 원이 차량형으로 바뀌었다 — 차체·앞등·접지 그림자를 본다.
+console.log('  구성 :', JSON.stringify({ car: m?.hasBody, light: m?.hasNose, shadow: m?.hasDot }))
+console.log('  → 차체·앞등·접지 그림자가 모두 있다 :', ok(!!m?.hasBody && !!m?.hasNose && !!m?.hasDot))
+console.log('  → 벽 위로 띄운다 :', ok(await ev(`parseFloat(document.querySelector('.iso-robot').style.getPropertyValue('--rz'))>0`)), '(바닥에 붙이면 벽 층에 묻힌다)')
 
 console.log('\n[2] 올바른 셀에 오는가 (도면 320x240 · res 0.05 · origin -2.0,-1.5)')
 for (const t of [{ x: 3.0, y: 4.2, px: 100, py: 126 }, { x: 5.0, y: 6.0, px: 140, py: 90 }]) {

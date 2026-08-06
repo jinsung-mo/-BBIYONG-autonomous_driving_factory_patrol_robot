@@ -27,6 +27,16 @@ const LAYER_STEP = 1.15
 // 텔레메트리는 1Hz 라, 3Hz 인 nav 와 섞으면 마커가 앞뒤로 떨린다.
 const NAV_FRESH_MS = 2500
 
+// 차체 높이(S15P11E101-750). 벽(WALL_H * LAYER_STEP ≈ 46px)보다 낮아야 방 안의
+// 물건으로 읽힌다 — 벽보다 크면 로봇이 건물을 밟고 선 것처럼 보인다.
+const CAR_H = 11
+// 판을 쌓아 부피를 만든다. 벽과 같은 방식이라 같은 씬의 물건으로 읽힌다.
+// 위로 갈수록 밝게 — 748 에서 벽에 쓴 것과 같은 폭(좁은 음영)을 지킨다.
+const CAR_LAYERS = Array.from({ length: CAR_H }, (_, k) => ({
+  z: k,
+  color: `hsl(158 32% ${34 + (k / (CAR_H - 1)) * 16}%)`,
+}))
+
 // 표시 회전(S15P11E101-746). SLAM 뷰와 같은 값을 쓴다 — 두 화면이 다른 방향을 보면
 // 조작자가 지도를 옮겨 볼 때마다 방향 감각을 다시 잡아야 한다.
 // 씬 전체를 돌리므로 도면과 로봇 마커가 함께 돈다(마커는 씬 안에 있다).
@@ -129,7 +139,12 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     const px = worldToPlanPx(p as any, x, y, s2.scale)
     targetRef.current = { x: px.x, y: px.y, yaw: Number.isFinite(yaw) ? yaw : 0 }
     // 로봇은 벽 위로 띄운다 — 바닥에 붙이면 기울인 화면에서 벽에 가린다
-    el.style.setProperty('--rz', `${WALL_H * LAYER_STEP + 10}px`)
+    // 차량은 벽 높이 위에 둔다(S15P11E101-745 의 결정을 지킨다).
+    // 750 에서 '바닥에 얹힌 것처럼' 을 문자 그대로 받아 z=2 로 내렸다가, 실제로 띄워
+    // 보니 벽 층에 묻혀 아무것도 보이지 않았다 — 745 가 띄운 이유가 그것이었다.
+    // 대신 차체 아래 접지 그림자와 바닥까지 내리는 기둥으로 '어디에 서 있는지' 를 만든다.
+    el.style.setProperty('--rz', `${WALL_H * LAYER_STEP + 6}px`)
+    el.style.setProperty('--car-h', `${CAR_H}px`)
   }
 
   // 1순위: /topic/nav 의 자세. 3Hz 로 오고 스캔과 같은 시점이라 가장 정확하다.
@@ -270,13 +285,19 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
           />
         ))}
         {/* 로봇 — 벽 위로 띄우고, 화면을 돌려도 정면을 보게 한다 */}
-        {/* 바닥에 눕는 몸체 + 진행 방향 코 + 위에서 늘 보이는 표시등.
-            몸체는 씬과 같은 평면에 있어 도면 위에 '놓인' 것으로 읽히고,
-            표시등은 화면을 돌려도 정면을 보게 둔다(빌보드). */}
+        {/* 차량형 마커(S15P11E101-750). 벽과 같은 방식으로 판을 쌓아 부피를 만든다 —
+            벽만 입체이고 로봇만 납작하면 같은 씬의 물건으로 읽히지 않는다.
+            차체는 yaw 로 돌고, 앞머리의 등이 진행 방향을 알린다.
+            바닥에는 접지 그림자를, 위로는 가는 기둥을 세워 벽 뒤에서도 자리를 잃지 않게 한다. */}
         <div ref={markerRef} className="iso-robot" style={{ display: 'none' }}>
-          <i className="iso-robot-body" />
-          <i className="iso-robot-nose" />
-          <i className="iso-robot-dot" />
+          <i className="iso-car-shadow" />
+          <div className="iso-car">
+            {CAR_LAYERS.map((c) => (
+              <i key={c.z} className="iso-car-plate" style={{ transform: `translateZ(${c.z}px)`, background: c.color }} />
+            ))}
+            <i className="iso-car-roof" />
+            <i className="iso-car-light" />
+          </div>
         </div>
       </div>
 

@@ -1435,42 +1435,58 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   transform:translateZ(var(--rz,48px));
   transform-style:preserve-3d; pointer-events:none;
 }
-/* 로봇 3D 마커 (S15P11E101-745)
+/* 로봇 차량형 마커 (S15P11E101-745 · 750)
    ------------------------------------------------------------------
-   몸체와 코는 도면과 같은 평면에 눕는다. 그래야 씬을 돌릴 때 함께 기울어
-   '도면 위에 놓인 물체' 로 읽히고, yaw 도 바닥 기준으로 맞다.
-   표시등만 빌보드로 두어 어느 각도에서도 위치를 잃지 않게 한다. */
-.iso-robot-body{
-  position:absolute; left:-11px; top:-11px; width:22px; height:22px; border-radius:6px;
-  background:linear-gradient(145deg,#4ff0ad,#25b57c);
-  box-shadow:0 0 0 1px rgba(6,40,28,.55), 0 6px 14px rgba(0,0,0,.45);
+   벽과 같은 방식으로 판을 쌓아 부피를 만든다. 벽만 입체이고 로봇만 납작하면
+   같은 씬의 물건으로 읽히지 않는다.
+
+   차체는 도면과 같은 평면에 눕고 yaw 로 돈다 — 진행 방향이 바닥 기준으로 맞다. */
+.iso-car{
+  position:absolute; left:0; top:0; width:0; height:0;
+  transform-style:preserve-3d;
   transform:rotate(var(--yaw,0rad));
 }
-/* 진행 방향 — 몸체 앞에 붙는 코. 화살표를 따로 띄우지 않고 몸체와 한 덩어리로 둔다 */
-.iso-robot-nose{
-  position:absolute; left:-6px; top:-24px; width:12px; height:13px;
-  background:linear-gradient(180deg,#7dffc8,#3ddc97);
-  clip-path:polygon(50% 0, 100% 100%, 0 100%);
-  transform-origin:50% 24px; transform:rotate(var(--yaw,0rad));
+/* 차체 판 한 장. 앞쪽이 좁은 사다리꼴로 깎아 '앞이 어디인지' 를 형태로 알린다. */
+.iso-car-plate{
+  position:absolute; left:-9px; top:-14px; width:18px; height:28px;
+  border-radius:5px;
+  clip-path:polygon(22% 0, 78% 0, 100% 26%, 100% 100%, 0 100%, 0 26%);
 }
-/* 위에서 늘 보이는 표시등 — 기울인 화면에서 몸체가 납작해져도 자리는 남는다 */
-.iso-robot-dot{
-  position:absolute; left:-5px; top:-5px; width:10px; height:10px; border-radius:50%;
-  background:#eafff6; border:2px solid #06281c;
-  box-shadow:0 0 12px rgba(61,220,151,.85);
+/* 캐노피 — 한 단 안쪽으로 들여 얹는다. 위에서 봐도 차체와 구분된다. */
+.iso-car-roof{
+  position:absolute; left:-6px; top:-8px; width:12px; height:15px;
+  border-radius:4px;
+  background:linear-gradient(180deg,#cfeee0,#8fd3b6);
+  transform:translateZ(var(--car-h,11px));
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset;
 }
-/* 로봇 자리에서 바닥까지 내리는 기둥 — 기울인 화면에서 '어디 위에 있나' 를 알려 준다.
+/* 앞머리 등 — 진행 방향 악센트. 얇고 밝은 띠 하나면 충분하다. */
+.iso-car-light{
+  position:absolute; left:-6px; top:-15px; width:12px; height:3px;
+  border-radius:2px;
+  background:linear-gradient(180deg,#f4fff9,#9df3cd);
+  transform:translateZ(calc(var(--car-h,11px) - 3px));
+  box-shadow:0 0 8px rgba(122,240,190,.85);
+}
+/* 접지 그림자 — 바닥에 눕혀 '얹혀 있다' 를 만든다. 없으면 공중에 뜬 것처럼 보인다. */
+.iso-car-shadow{
+  position:absolute; left:-13px; top:-17px; width:26px; height:34px;
+  border-radius:50%;
+  background:radial-gradient(60% 55% at 50% 50%, rgba(20,30,26,.34), rgba(20,30,26,0) 72%);
+  transform:translateZ(0.5px);
+}
+/* 차체에서 바닥까지 내리는 기둥 — '어디 위에 서 있는지' 를 알려 준다.
    rotateX(90deg) 라야 -y 가 -z 로 간다. 부호를 뒤집으면 기둥이 하늘로 솟는다. */
 .iso-robot::before{
-  content:''; position:absolute; left:-1px; top:calc(var(--rz,48px) * -1); width:2px;
-  height:var(--rz,48px);
-  background:linear-gradient(0deg,rgba(61,220,151,.55),rgba(61,220,151,0));
+  content:''; position:absolute; left:-1px; top:calc(var(--rz,52px) * -1); width:2px;
+  height:var(--rz,52px);
+  background:linear-gradient(0deg,rgba(61,220,151,.5),rgba(61,220,151,0));
   transform:rotateX(90deg); transform-origin:50% 100%;
 }
-/* 로봇이 꺼졌을 때. 지우지 않고 흐린다 — 마지막으로 알던 자리는 남겨야
+/* 로봇이 꺼졌을 때. 지우지 않고 흐린다 — 마지막으로 알던 자리는 남아야
    어디서 멈췄는지 알 수 있다. 색만으로 알리지 않도록 채도도 함께 뺀다. */
-.iso-robot.off{opacity:.42; filter:saturate(.25);}
-.iso-robot.off .iso-robot-dot{box-shadow:none;}
+.iso-robot.off{opacity:.42; filter:saturate(.2);}
+.iso-robot.off .iso-car-light{box-shadow:none;}
 .iso-robot.off::before{background:linear-gradient(0deg,rgba(160,170,180,.4),rgba(160,170,180,0));}
 
 .iso-reset{left:auto; right:10px; top:8px; bottom:auto;}
