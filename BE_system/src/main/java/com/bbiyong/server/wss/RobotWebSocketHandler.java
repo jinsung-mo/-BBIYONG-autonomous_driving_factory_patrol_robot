@@ -8,6 +8,7 @@ import com.bbiyong.server.wss.event.RobotCautionEvent;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
+import com.bbiyong.server.wss.event.RobotInspectionPointEvent;
 import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
@@ -72,6 +73,13 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                 if (sessionManager.register(robotId, session)) {
                     eventPublisher.publishEvent(new RobotConnectedEvent(this, robotId));
                 }
+            }
+
+            // AprilTag 점검 지점 메시지는 type 대신 kind(inspection_*)를 쓴다. 서버는 해석하지 않고
+            // 수신 원문을 /topic/inspection 으로 그대로 relay 한다(nav·mapping 과 동일 raw 중계). (S15P11E101-778)
+            if (packet.getKind() != null && packet.getKind().startsWith("inspection")) {
+                eventPublisher.publishEvent(new RobotInspectionPointEvent(this, robotId, payload));
+                return;
             }
 
             if (packet.getType() == null) {
