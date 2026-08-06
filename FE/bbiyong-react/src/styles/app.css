@@ -3,18 +3,12 @@
 :root{
   --ink:#1c2128; --sub:#68727f; --line:#e3e7ee; --bg:#f2f4f8; --card:#ffffff;
   --red:#e2483d; --redbg:#fdeceb; --blue:#2f6fd0; --bluebg:#eaf1fb; --green:#1f9d6c;
-  --dk-bg:#0b0d11; --dk-panel:#14171d; --dk-panel2:#1a1e26; --dk-line:#262b34;
-  --dk-ink:#e6e9ef; --dk-sub:#8b93a3; --dk-green:#3ddc97; --dk-amber:#f5a623; --dk-red:#ff5648;
-}
-/* 다크 모드: CCTV(라이트 설계) 변수를 어둡게 오버라이드 → 전체 다크 */
-:root[data-theme="dark"]{
-  --ink:#e6e9ef; --sub:#8b93a3; --line:#262b34; --bg:#0b0d11; --card:#14171d;
-  --redbg:#2a1512; --bluebg:#16233a;
-}
-/* 라이트 모드: 로봇(다크 설계) 변수를 밝게 오버라이드 → 전체 라이트 */
-:root[data-theme="light"]{
+  /* `--dk-*` 는 로봇 화면이 다크 설계였을 때 붙은 이름이다. 다크 모드를 걷어내면서
+     (S15P11E101-805) 이름은 그대로 두고 기본값만 라이트 값으로 옮겼다 — 231곳의
+     `var(--dk-*)` 참조를 하나도 건드리지 않기 위해서다.
+     `--dk-green/amber/red` 는 상태색이라 원래 두 테마 공통값이었다. 그대로 둔다. */
   --dk-bg:#f2f4f8; --dk-panel:#ffffff; --dk-panel2:#f5f8fc; --dk-line:#e3e7ee;
-  --dk-ink:#1c2128; --dk-sub:#68727f;
+  --dk-ink:#1c2128; --dk-sub:#68727f; --dk-green:#3ddc97; --dk-amber:#f5a623; --dk-red:#ff5648;
 }
 html,body{height:100%;}
 #root{height:100%;}
@@ -31,12 +25,12 @@ canvas{display:block; width:100%; height:100%;}
    이겨 메뉴가 대시보드 뒤로 숨는다 — 버튼이 안 눌리는 것처럼 보였다.
    50 인 이유: 본문(0)보다는 위, 모달(100)·경보(190~201)보다는 아래여야 한다.
    그것들은 nav 를 덮어야 하는 것들이다. */
-#nav{display:flex; align-items:center; gap:14px; padding:10px 18px; background:#101319; color:#e6e9ef;
+/* 배경은 `#nav.sim-nav` 가 항상 덮는다(Nav.tsx 가 sim-nav 를 조건 없이 붙인다) —
+   여기 있던 `background:#101319` 는 한 번도 적용되지 않는 어두운 값이라 걷어냈다. */
+#nav{display:flex; align-items:center; gap:14px; padding:10px 18px; color:#e6e9ef;
   position:relative; z-index:50;}
 #nav .logo{font-size:16px; font-weight:800; letter-spacing:1px; color:#fff;}
 #nav .logo b{color:#ff6a5f;}
-#nav .theme-btn{padding:6px 12px; border-radius:8px; border:1px solid #3a445a; background:#1a2030; color:#dfe4ec; font-size:12px; margin-right:4px;}
-#nav .theme-btn:hover{background:#232a38;}
 #nav .sp{flex:1;}
 /* 섹션 탭 — 관제 / 운영 / 설정 (S15P11E101-475) */
 .navtabs{display:flex; gap:4px; margin-left:18px;}
@@ -892,13 +886,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #nav.sim-nav::before{
   content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
 }
-:root[data-theme="dark"] #nav.sim-nav{
-  background:
-    radial-gradient(440px 100px at 12% 0%,rgba(64,124,255,.24),transparent 72%),
-    radial-gradient(420px 120px at 92% 30%,rgba(255,126,60,.12),transparent 74%),
-    linear-gradient(100deg,rgba(8,13,24,.96),rgba(7,9,16,.94));
-  border-bottom-color:rgba(255,255,255,.09);
-}
 :root[data-theme="light"] #nav.sim-nav{
   color:#27354a;
   background:
@@ -915,13 +902,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #nav.sim-nav .nav-subtitle{font-size:13px; font-weight:500; letter-spacing:.2px; color:#93a0b5;}
 :root[data-theme="light"] #nav.sim-nav .nav-subtitle{color:#66758c;}
 #nav.sim-nav .navtabs button{border-radius:999px; padding:6px 15px;}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button{color:#8794a9;}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{color:#e7eef9; background:rgba(255,255,255,.06);}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  color:#f4f8ff; border-color:rgba(108,164,255,.38);
-  background:linear-gradient(135deg,rgba(61,129,229,.48),rgba(76,83,194,.34));
-  box-shadow:0 5px 16px rgba(47,111,208,.24),inset 0 1px 0 rgba(255,255,255,.16);
-}
 :root[data-theme="light"] #nav.sim-nav .logo{color:#17243a;}
 :root[data-theme="light"] #nav.sim-nav .navtabs{
   border-color:rgba(75,106,148,.14); background:rgba(255,255,255,.58);
@@ -934,16 +914,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:linear-gradient(135deg,#4b8bea,#356fc9);
   box-shadow:0 5px 15px rgba(47,111,208,.24),inset 0 1px 0 rgba(255,255,255,.30);
 }
-#nav.sim-nav .theme-btn,#nav.sim-nav .navrole,#nav.sim-nav .usermenu-btn{
+#nav.sim-nav .navrole,
+#nav.sim-nav .usermenu-btn{
   border-color:rgba(119,150,193,.22); border-radius:999px;
 }
-:root[data-theme="dark"] #nav.sim-nav .theme-btn,
-:root[data-theme="dark"] #nav.sim-nav .usermenu-btn{background:rgba(255,255,255,.055);}
-:root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn{
   color:#35445b; background:rgba(255,255,255,.62); box-shadow:inset 0 1px 0 #fff;
 }
-:root[data-theme="light"] #nav.sim-nav .theme-btn:hover{background:rgba(255,255,255,.90);}
 :root[data-theme="light"] #nav.sim-nav .navrole,
 :root[data-theme="light"] #nav.sim-nav .clock{color:#637087;}
 :root[data-theme="light"] #nav.sim-nav .usermenu-drop{
@@ -959,13 +936,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root[data-theme="light"] #nav.sim-nav .usermenu-drop button.danger{color:#c84b42;}
 /* 배경은 한 겹의 검정이 아니라 빛이 도는 남색이다. 왼쪽 위에서 푸른빛이,
    오른쪽에서 따뜻한 빛이 들어와 화면에 깊이를 만든다. */
-:root[data-theme="dark"] #pgB.sim-skin{
-  background:
-    radial-gradient(680px 420px at 4% -6%, rgba(64,124,255,.20), transparent 64%),
-    radial-gradient(760px 620px at 103% 34%, rgba(255,126,60,.16), transparent 62%),
-    radial-gradient(900px 520px at 62% 108%, rgba(96,64,220,.12), transparent 66%),
-    linear-gradient(160deg,#0a0e18 0%,#070910 55%,#0a0a10 100%);
-}
 :root[data-theme="light"] #pgB.sim-skin{
   background:
     radial-gradient(720px 460px at 3% -8%, rgba(64,124,255,.18), transparent 64%),
@@ -988,16 +958,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:var(--dk-panel);
   box-shadow:0 18px 40px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03);
 }
-:root[data-theme="dark"] .sim-skin .panel{
-  background:linear-gradient(158deg, rgba(255,255,255,.075) 0%, rgba(255,255,255,.028) 42%, rgba(255,255,255,.014) 100%);
-  border-color:rgba(255,255,255,.10);
-  backdrop-filter:blur(22px) saturate(1.25);
-  box-shadow:0 24px 48px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.10);
-}
 /* 판 위쪽에 1px 흰 선을 그어 '빛이 걸린' 느낌을 주려 했으나, 좌우로 들여쓴 그 선이
    화면에서는 제목 위에 놓인 흰 가로 막대로 보였다. 유리의 가장자리는 테두리선 하나로
    충분하다. (S15P11E101 시뮬 Liquid Glass) */
-:root[data-theme="dark"] .sim-skin .panel{position:relative;}
 :root[data-theme="light"] .sim-skin .panel{
   position:relative;
   background:linear-gradient(150deg,rgba(255,255,255,.84),rgba(255,255,255,.58));
@@ -1006,14 +969,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:0 18px 42px rgba(49,72,108,.11), inset 0 1px 0 #fff;
 }
 /* 유리판 안의 작은 상자들도 같은 규칙을 따른다 — 하나만 불투명하면 붕 떠 보인다 */
-:root[data-theme="dark"] .sim-skin .stat-card,
-:root[data-theme="dark"] .sim-skin .env div,
-:root[data-theme="dark"] .sim-skin .elog li,
-:root[data-theme="dark"] .sim-skin .seg,
-:root[data-theme="dark"] .sim-skin .spdbar,
-:root[data-theme="dark"] .sim-skin .dpad button,
-:root[data-theme="dark"] .sim-skin .gotor select{
-  background:rgba(255,255,255,.045); border-color:rgba(255,255,255,.09);}
 :root[data-theme="light"] .sim-skin .stat-card,
 :root[data-theme="light"] .sim-skin .env div,
 :root[data-theme="light"] .sim-skin .elog li,
@@ -1041,7 +996,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .rgauge circle{fill:none; stroke-linecap:round; stroke-width:10;}
 /* 남은 눈금이 보여야 '얼마나 찼는지'를 알 수 있다 — 배경선이 묻히면 그냥 초승달로 읽힌다 */
 .rgauge-track{stroke:var(--dk-line); opacity:.9;}
-:root[data-theme="dark"] .rgauge-track{stroke:rgba(255,255,255,.10);}
 /* 색은 상태가 정한다(정상 초록 · 주의 호박 · 위험 빨강). 그 계열 안에서만 흐리게→진하게
    옮겨 간다 — 장식을 위해 의미가 없는 색을 섞지 않는다. */
 .rgauge{color:var(--dk-green);}
@@ -1051,7 +1005,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .rg-b{stop-color:currentColor; stop-opacity:1;}
 .rgauge-fill{transition:stroke-dasharray .5s ease;}
 /* 호 안쪽을 은은하게 밝혀 값이 '켜져 있다'는 인상을 준다 */
-:root[data-theme="dark"] .rgauge-fill{filter:drop-shadow(0 0 9px currentColor);}
 :root[data-theme="light"] .sim-skin .rgauge-fill{filter:drop-shadow(0 2px 5px currentColor);}
 :root[data-theme="light"] .sim-skin .rgauge-track{stroke:rgba(47,82,126,.12);}
 .rgauge-mid{position:absolute; top:50%; left:0; right:0; transform:translateY(-58%);
@@ -1128,14 +1081,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .sim-skin .dpad button:active,.sim-skin .dpad button.active{transform:scale(.96);}
 .sim-skin .seg{border-radius:999px; padding:3px; background:var(--dk-panel2); border-color:var(--dk-line);}
 .sim-skin .seg button{border-radius:999px;}
-/* 선택·눌림 표시는 어두운 배경 위에서만 반투명으로 둔다. 라이트 모드에서 그대로 쓰면
-   옅은 파랑 위에 흰 글자가 얹혀 읽히지 않는다 — 밝은 화면은 기존 단색 배경을 유지한다. */
-:root[data-theme="dark"] .sim-skin .dbtn.stop{background:linear-gradient(180deg,rgba(255,86,72,.22),rgba(255,86,72,.10));}
-:root[data-theme="dark"] .sim-skin .dbtn.go{background:linear-gradient(180deg,rgba(61,220,151,.20),rgba(61,220,151,.09));}
-:root[data-theme="dark"] .sim-skin .dpad button:active,
-:root[data-theme="dark"] .sim-skin .dpad button.active{
-  background:rgba(47,111,208,.32); border-color:rgba(120,170,240,.6); color:#dce9fb;}
-:root[data-theme="dark"] .sim-skin .seg button.on{background:rgba(47,111,208,.34); color:#dce9fb;}
 /* 라이트 모드의 긴급 정지·순찰 복귀는 옅은 배경에 옅은 글자라 원래도 흐렸다.
    시뮬레이션 화면에서만 글자를 진하게 내려 읽히게 한다. */
 /* 유리판은 뒤의 배경 블룸까지 비친다 — 바탕이 순백이 아니라 그만큼 어둡다.
@@ -1214,22 +1159,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 rgba(71,106,151,.10),0 8px 22px rgba(54,91,142,.11);
 }
 #nav.sim-nav .navtabs button{transition:background .18s ease,box-shadow .18s ease,color .18s ease;}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  background:linear-gradient(145deg,rgba(115,184,255,.52),rgba(86,99,235,.32));
-  border-color:rgba(189,224,255,.48);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.42),0 5px 14px rgba(32,96,214,.22);
-}
 :root[data-theme="light"] #nav.sim-nav .navtabs button.on{
   background:linear-gradient(145deg,rgba(61,144,255,.92),rgba(73,100,225,.78));
   border-color:rgba(255,255,255,.72);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.64),0 5px 14px rgba(38,93,188,.22);
 }
-#nav.sim-nav .theme-btn,#nav.sim-nav .navrole,#nav.sim-nav .usermenu-btn{
+#nav.sim-nav .navrole,
+#nav.sim-nav .usermenu-btn{
   background:rgba(255,255,255,.075); border-color:rgba(255,255,255,.17);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
   backdrop-filter:blur(18px) saturate(1.35);
 }
-:root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .navrole,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn{
   background:rgba(255,255,255,.58); border-color:rgba(255,255,255,.84);
@@ -1240,13 +1180,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .sim-skin .panel{
   position:relative; isolation:isolate; border-radius:24px;
   transition:border-color .22s ease,box-shadow .22s ease,transform .22s ease;
-}
-:root[data-theme="dark"] .sim-skin .panel{
-  background:
-    linear-gradient(145deg,rgba(255,255,255,.105),rgba(255,255,255,.026) 38%,rgba(89,125,255,.045) 100%);
-  border-color:rgba(222,239,255,.17);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(0,0,0,.16),0 20px 46px rgba(2,7,17,.30);
-  backdrop-filter:blur(38px) saturate(1.5) brightness(1.05);
 }
 :root[data-theme="light"] .sim-skin .panel{
   background:
@@ -1263,16 +1196,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .sim-skin .seg,.sim-skin .spdbar,.sim-skin .dpad button,.sim-skin .gotor select{
   backdrop-filter:blur(16px) saturate(1.28);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.08);
-}
-:root[data-theme="dark"] .sim-skin .stat-card,
-:root[data-theme="dark"] .sim-skin .env div,
-:root[data-theme="dark"] .sim-skin .elog li,
-:root[data-theme="dark"] .sim-skin .seg,
-:root[data-theme="dark"] .sim-skin .spdbar,
-:root[data-theme="dark"] .sim-skin .dpad button,
-:root[data-theme="dark"] .sim-skin .gotor select{
-  background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.028));
-  border-color:rgba(220,238,255,.13);
 }
 :root[data-theme="light"] .sim-skin .stat-card,
 :root[data-theme="light"] .sim-skin .env div,
@@ -1350,10 +1273,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    반투명 판은 뒤 배경을 끌어와 바탕 밝기를 원래 패널과 다르게 만든다. 기존 색을 그대로
    쓰면 대비가 내려앉는다. 측정값 기준으로 이 화면에서만 색을 다시 잡는다.
    (base 대비 — 상태 라벨 5.41→2.92 · 긴급 정지 6.01→4.16 으로 떨어졌던 것을 되돌린다) */
-:root[data-theme="dark"] .sim-skin .kv{color:#c2cad8;}
 :root[data-theme="light"] .sim-skin .kv{color:#4e5866;}
-:root[data-theme="dark"] .sim-skin .dbtn.stop{color:#ffb8b2;}
-:root[data-theme="dark"] .sim-skin .dbtn.go{color:#9df0cc;}
 /* 이벤트 로그의 종류 색은 밝은 화면에서 원래도 읽히지 않았다(초록 1.66:1).
    왼쪽 색띠가 종류를 이미 알려 주므로, 본문은 짙게 내려 글자부터 읽히게 한다. */
 :root[data-theme="light"] .sim-skin .elog li.ok b{color:#0d5c3e;}
@@ -1448,12 +1368,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* ---- 2b. 주변색 적응 ----
    유리가 스스로 흰색을 갖지 않는다. 배경을 거의 무채색 틴트로만 덮고,
    채도를 끌어올려 뒤에 있는 색이 표면으로 올라오게 한다. */
-:root[data-theme="dark"] .sim-skin .panel{
-  background:rgba(255,255,255,.045);
-  border-color:rgba(226,240,255,.16);
-  backdrop-filter:blur(var(--blur)) saturate(var(--sat)) brightness(1.06);
-  box-shadow:0 4px 14px rgba(2,7,17,.22);
-}
 :root[data-theme="light"] .sim-skin .panel,
 :root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel{
   background:rgba(255,255,255,.40);
@@ -1516,7 +1430,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    "밝거나 어두운 환경에 스마트하게 적응한다" — 유리는 뒤 배경을 끌어오므로
    바탕 밝기가 흔들린다. 글자는 그 흔들림 위에서도 읽혀야 한다.
    아래 값은 실제로 칠해지는 색을 재서 4.5:1 이상으로 맞춘 것이다. */
-:root[data-theme="dark"] .sim-skin .panel h3{color:#b9c4d6;}
 :root[data-theme="light"] .sim-skin .panel h3{color:#4a5566;}
 
 /* 굴절 링은 비용이 큰 효과다. 움직임을 줄여 달라는 설정에서는 반사만 끄고
@@ -1530,15 +1443,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    결과가 같으니 유리로 보이지 않는다. 애플 예시가 하나같이 색이 흐르는 벽지를 쓰는
    이유가 이것이다. 색이 겹치며 흐르는 장(場)을 깔아 표면마다 다른 색이 배어 나오게 한다.
    관제 화면이므로 채도는 올리되 밝기는 눌러 둔다 — 영상과 열화상이 주인공이다. */
-:root[data-theme="dark"] :is(#pgB, #pgOps, #pgConfig).sim-skin{
-  background:
-    radial-gradient(ellipse 58% 46% at 12% 6%,  rgba(46,132,255,.40), transparent 62%),
-    radial-gradient(ellipse 48% 44% at 88% 14%, rgba(140,86,255,.30), transparent 60%),
-    radial-gradient(ellipse 62% 52% at 96% 82%, rgba(255,122,66,.26), transparent 62%),
-    radial-gradient(ellipse 54% 46% at 24% 96%, rgba(0,196,180,.22), transparent 62%),
-    radial-gradient(ellipse 40% 34% at 54% 48%, rgba(80,150,255,.14), transparent 66%),
-    linear-gradient(152deg,#050a14 0%,#070c18 46%,#0b0a14 100%);
-}
 :root[data-theme="light"] :is(#pgB, #pgOps, #pgConfig).sim-skin{
   background:
     radial-gradient(ellipse 58% 46% at 12% 6%,  rgba(64,146,255,.34), transparent 62%),
@@ -1551,29 +1455,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 
 /* 유리가 색을 더 많이 빌려 오도록 채도를 한 번 더 올린다.
    흰 틴트를 얇게 유지하는 것이 요령이다 — 두꺼우면 뒤 색이 죽는다. */
-:root[data-theme="dark"] .sim-skin .panel{
-  background:rgba(255,255,255,.045);
-  backdrop-filter:blur(var(--blur)) saturate(2.3) brightness(1.08);
-}
 :root[data-theme="light"] .sim-skin .panel,
 :root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel{
   background:rgba(255,255,255,.40);
   backdrop-filter:blur(var(--blur)) saturate(2.1) brightness(1.06);
 }
 
-/* ---- 글자를 인 유리는 한 단계 조밀하게 ----
-   색이 흐르는 배경을 끌어올수록 표면 밝기가 요동친다. 장식만 보면 좋지만 글자는
-   그 위에서 읽혀야 한다. 색을 하나씩 밝히며 쫓는 대신, 글자를 담은 셀의 유리를
-   조금 더 조밀하게 만든다 — 애플이 "밝거나 어두운 환경에 스마트하게 적응한다"고
-   말한 것이 이 조정이다. 판은 계속 투명하고, 글자 뒤만 안정된다.
-   (다크에서 상태 라벨 4.44 · 로그 본문 4.14 로 내려갔던 것을 되돌린다) */
-:root[data-theme="dark"] .sim-skin .stat-card,
-:root[data-theme="dark"] .sim-skin .env div,
-:root[data-theme="dark"] .sim-skin .elog li{
-  background:linear-gradient(150deg,rgba(10,16,28,.52),rgba(10,14,24,.38));
-  border-color:rgba(210,232,255,.14);
-  backdrop-filter:blur(calc(var(--blur) * .55)) saturate(1.3);
-}
 :root[data-theme="light"] .sim-skin .stat-card,
 :root[data-theme="light"] .sim-skin .env div,
 :root[data-theme="light"] .sim-skin .elog li{
@@ -1581,10 +1468,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-color:rgba(255,255,255,.92);
   backdrop-filter:blur(calc(var(--blur) * .55)) saturate(1.25);
 }
-:root[data-theme="dark"] .sim-skin .kv{color:#ccd4e1;}
-:root[data-theme="dark"] .sim-skin .elog li.ok b{color:#6bf0b6;}
-:root[data-theme="dark"] .sim-skin .elog li.heat b{color:#ffc061;}
-:root[data-theme="dark"] .sim-skin .elog li.fire b{color:#ff9a92;}
 
 /* ---- 라이트 모드에도 색을 돌려준다 ----
    흰 유리를 두껍게 깔면 뒤 색이 죽어 그냥 흰 카드가 된다. 틴트를 얇게 유지하고
@@ -1765,9 +1648,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
      3. 유채색은 상태 전달에만. 제목·본문·라벨은 전부 무채색이다.
      4. 위계는 색이 아니라 크기로. 큰 숫자도 굵게 쓰지 않는다(400).
 
-   다크는 참조 시스템에 없다. 명도만 뒤집고 색상·채도 관계는 그대로 유지해
-   같은 규칙이 어두운 화면에서도 성립하게 했다 — 공장은 20시~08시 무인이라
-   밝은 화면만으로는 야간 근무를 감당하기 어렵다.
+   다크는 참조 시스템에 없었다. 명도만 뒤집은 층을 따로 두었으나, v3 로 새로 만든
+   화면(웰컴·인증)이 테마를 따르지 않아 화면마다 되고 안 되고가 갈렸다 —
+   S15P11E101-805 에서 다크 층을 걷어냈다. 이제 라이트 하나다.
    ══════════════════════════════════════════════════════════════════════════ */
 
 :root{
@@ -1807,36 +1690,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    색상 계열은 그대로 두고 명도만 내려 기준(4.5)을 넘긴다. */
 :root[data-theme="light"] .nav-page .kv b.st.ok{color:#0d6b45;}
 :root[data-theme="light"] .nav-page .kv b.st.warn{color:#8a5300;}
-/* 다크 — 명도만 뒤집는다. 색상·채도 관계는 그대로라 같은 규칙이 성립한다.
-   그림자는 어두운 화면에서 층을 못 만드므로 아주 옅은 테두리로 대신한다 —
-   '테두리를 쓰지 않는다' 는 밝은 배경에서 성립하는 규칙이다. */
-:root[data-theme="dark"]{
-  --nx-bg:#0e1214;
-  --nx-sunken:#141a1d;
-  --nx-elev:#181f23;
-  --nx-surface:#1b2328;
-  --nx-panel:rgba(27,35,40,.92);
-  --nx-side-panel:#1b2328;
-  --nx-side-card:#141a1d;
-  --nx-side-card-shadow:
-    0 0 0 1px rgba(255,255,255,.035),
-    -7px 0 18px rgba(0,0,0,.26),7px 0 18px rgba(0,0,0,.26),
-    0 -7px 18px rgba(0,0,0,.20),0 7px 18px rgba(0,0,0,.20);
-  --nx-event-row-shadow:0 0 0 1px rgba(255,255,255,.03),0 2px 5px rgba(0,0,0,.16),0 7px 18px rgba(0,0,0,.22);
-  --nx-divider:#2b353a;
-  --nx-text:#eef3f3;
-  --nx-muted:#9aa5a7;
-  --nx-faint:#6b7679;
-  --nx-accent:#2ddc4d;
-  --nx-success:#3f9a56;
-  --nx-danger-vivid:#ff6a5e;
-  --nx-danger:#a84d4a;
-  --nx-warning:#b3813f;
-  --nx-neutral:#39454a;
-  --nx-sh-sm:0 1px 2px rgba(0,0,0,.30);
-  --nx-sh-md:0 8px 24px rgba(0,0,0,.42);
-  --nx-sh-lg:0 20px 48px rgba(0,0,0,.55);
-}
 
 /* `.page.on{display:block}` 이 클래스 두 개라 `.nav-page` 하나로는 이기지 못한다.
    그러면 flex 가 적용되지 않아 아래 그리드가 남는 높이를 못 받고 콘텐츠 높이로 눌린다. */
@@ -1954,9 +1807,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   padding:14px 15px 10px; margin-bottom:12px; border-radius:15px;
   background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
 }
-:root[data-theme="dark"] #pgCam #pControl .control-card{
-  background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
-}
 /* 340px 전용 조작 구성: 모드 아래에서 WASD와 세로형 카메라 각도를 나란히 둔다. */
 #pgCam #pControl .ctl{
   display:grid; grid-template-columns:minmax(0,1fr) 62px;
@@ -2011,11 +1861,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   transform:translateY(0) scale(1);
   transition:transform 70ms cubic-bezier(.2,.75,.25,1),box-shadow 70ms ease;
 }
-:root[data-theme="dark"] #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){
-  background:linear-gradient(145deg,#1d252a,#151b1f);
-  border-color:rgba(255,255,255,.08);
-  box-shadow:0 3px 10px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.035);
-}
 /* 화면 클릭과 키보드 입력 모두 같은 물리적 눌림 피드백을 사용한다. */
 #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){
   transform:translateY(3px) scale(.985);
@@ -2034,15 +1879,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @media (prefers-reduced-motion:reduce){
   #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){transition:none;}
   #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){transform:none;}
-}
-:root[data-theme="dark"] #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){
-  background:linear-gradient(145deg,#1d252a,#151b1f);
-  border-color:rgba(255,255,255,.08);
-  color:var(--nx-text);
-  box-shadow:
-    inset 0 5px 9px rgba(0,0,0,.52),
-    inset 0 -1px 0 rgba(255,255,255,.025),
-    0 1px 2px rgba(0,0,0,.12);
 }
 @media (prefers-reduced-motion:reduce){
   #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){transition:none;}
@@ -2100,10 +1936,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border:1px solid rgba(152,170,184,.78);
   box-shadow:0 18px 44px rgba(0,0,0,.44),0 0 0 1px rgba(7,11,16,.64);
 }
-:root[data-theme="dark"] #pgCam .cam-main > .panel.pip{
-  border-color:rgba(168,184,196,.55);
-  box-shadow:0 18px 44px rgba(0,0,0,.58),0 0 0 1px rgba(255,255,255,.035);
-}
 /* 제목이 절대 배치라 흐름에 높이를 주는 것이 vwrap 뿐이다. 비율을 못 박지 않으면
    높이 4px 짜리 띠가 된다 — 화면 비율은 열화상 센서(4:3)에 맞춘다. */
 #pgCam .cam-main > .panel.pip .vwrap{border-radius:0; box-shadow:none; border:0; flex:none; aspect-ratio:4/3;}
@@ -2119,10 +1951,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:var(--nx-elev); border:0; border-radius:var(--nx-r-lg);
   box-shadow:var(--nx-sh-md); padding:20px 22px; backdrop-filter:none;
 }
-:root[data-theme="dark"] .nav-page .panel{
-  /* 어두운 화면에서는 그림자가 층을 못 만든다 — 아주 옅은 테두리로 대신한다 */
-  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.045);
-}
 .nav-page .panel::before,.nav-page .panel::after{display:none;}
 /* 좌측 패널은 지도 위에 떠 있는 인상이라 한 단 더 띄운다 */
 .nav-side > .panel{background:var(--nx-panel); box-shadow:var(--nx-sh-lg);}
@@ -2134,17 +1962,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:var(--nx-sh-lg);
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
-:root[data-theme="dark"] .nav-page :is(#pStatus, .cam-side-panel, .ops-side > .panel, .cfg-side > .panel){
-  box-shadow:var(--nx-sh-lg),inset 0 0 0 1px rgba(255,255,255,.045);
-}
 /* 상태 카드와 조작 카드도 한 단계 내려간 동일 표면으로 맞춘다. */
 .nav-page :is(#pStatus .stat-card,#pControl .control-card){
   background:var(--nx-side-card); background-image:none;
   border:0; border-radius:15px; box-shadow:var(--nx-side-card-shadow);
   backdrop-filter:none; -webkit-backdrop-filter:none;
-}
-:root[data-theme="dark"] .nav-page :is(#pStatus .stat-card,#pControl .control-card){
-  background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
 }
 /* 이벤트 행도 로봇 운영 리포트의 개별 로봇 카드처럼 외곽보다 한 단계 밝은 면이다. */
 .nav-page :is(#pStatus,.cam-side-panel) .elog li{
@@ -2188,12 +2010,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:var(--nx-elev); color:var(--nx-text);
   box-shadow:var(--nx-sh-md);
 }
-#nav.sim-nav .theme-btn,#nav.sim-nav .navrole,#nav.sim-nav .usermenu-btn{
+#nav.sim-nav .navrole,
+#nav.sim-nav .usermenu-btn{
   border:0; border-radius:var(--nx-r-md);
   background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none;
   backdrop-filter:none;
 }
-#nav.sim-nav .theme-btn:hover,#nav.sim-nav .usermenu-btn:hover{background:var(--nx-divider);}
+#nav.sim-nav .usermenu-btn:hover{background:var(--nx-divider);}
 #nav.sim-nav .clock{color:var(--nx-faint);}
 #nav.sim-nav .usermenu-nm{color:var(--nx-text);}
 #nav.sim-nav .usermenu-drop{
@@ -2205,9 +2028,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #nav.sim-nav .usermenu-info b{color:var(--nx-text);}
 #nav.sim-nav .usermenu-info span,#nav.sim-nav .usermenu-caret{color:var(--nx-faint);}
 #nav.sim-nav .usermenu-info{border-bottom-color:var(--nx-divider);}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.06);
-}
 
 /* ── 화면이 넘치지 않게 ─────────────────────────────────────
    지도는 남는 높이를 채우고, 넘치면 지도 안에서 줄인다.
@@ -2221,11 +2041,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-page .stat-card,.nav-page .env div,.nav-page .elog li{
   background:var(--nx-surface); border:0; border-radius:var(--nx-r-md);
   box-shadow:var(--nx-sh-sm); backdrop-filter:none;
-}
-:root[data-theme="dark"] .nav-page .stat-card,
-:root[data-theme="dark"] .nav-page .env div,
-:root[data-theme="dark"] .nav-page .elog li{
-  background:var(--nx-sunken); box-shadow:none;
 }
 .nav-page .kv{color:var(--nx-muted); border-top-color:var(--nx-divider);}
 .nav-page .kv b{color:var(--nx-text);}
@@ -2258,9 +2073,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .nav-page .event-title .event-total b{color:inherit; font-size:11px; font-weight:600;}
 .nav-page .event-title .event-total.hot{background:var(--nx-danger); color:#3d0703;}
-:root[data-theme="dark"] .nav-page .event-title .event-total.hot{
-  background:#7f3d3a; color:#fff0ee;
-}
 /* 지도 판은 캔버스가 주인공이라 안쪽 여백을 줄인다 */
 .nav-canvas .vwrap{background:var(--nx-elev); border:0; border-radius:var(--nx-r-md);}
 .nav-page .maplegend{color:var(--nx-muted); margin-top:12px;}
@@ -2275,11 +2087,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:0 2px 5px rgba(15,23,23,.055),0 12px 28px rgba(15,23,23,.085);
   backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2);
   pointer-events:none; white-space:nowrap;
-}
-:root[data-theme="dark"] #pgMap .vwrap > .maplegend{
-  color:var(--nx-text); background:rgba(24,31,35,.92);
-  border-color:rgba(255,255,255,.07);
-  box-shadow:0 2px 6px rgba(0,0,0,.28),0 14px 32px rgba(0,0,0,.30);
 }
 #pgMap .vwrap > .maplegend span{
   display:inline-flex; align-items:center; gap:8px;
@@ -2326,15 +2133,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   font-family:inherit; font-size:25px; font-weight:500; line-height:1; cursor:pointer;
   transition:transform 80ms ease,box-shadow 80ms ease,opacity 80ms ease;
 }
-:root[data-theme="dark"] :is(#pgMap,#pgCam) .map-control{
-  background:var(--nx-sunken); box-shadow:0 8px 22px rgba(0,0,0,.34);
-}
 :is(#pgMap,#pgCam) .map-control:hover:not(:disabled){transform:translateY(-1px); box-shadow:var(--nx-sh-lg);}
 :is(#pgMap,#pgCam) .map-control:active:not(:disabled){
   transform:translateY(2px); box-shadow:inset 0 3px 7px rgba(15,23,23,.16),0 1px 2px rgba(15,23,23,.06);
-}
-:root[data-theme="dark"] :is(#pgMap,#pgCam) .map-control:active:not(:disabled){
-  box-shadow:inset 0 4px 8px rgba(0,0,0,.48),0 1px 2px rgba(0,0,0,.16);
 }
 :is(#pgMap,#pgCam) .map-control:focus-visible{outline:2px solid var(--nx-accent); outline-offset:3px;}
 :is(#pgMap,#pgCam) .map-control:disabled{cursor:not-allowed; opacity:.42; box-shadow:none;}
@@ -2391,27 +2192,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    그 규칙들이 `:root[data-theme=...] #nav.sim-nav …` 로 잡혀 있어 클래스만으로는
    이기지 못한다. 같은 자리에서 덮어야 탭 색이 navexa 로 바뀐다.
    (덮지 못한 동안 라이트 선택 탭이 파란 알약으로 남아 대비 2.88 이었다) */
-:root[data-theme="light"] #nav.sim-nav .navtabs button,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button{
+:root[data-theme="light"] #nav.sim-nav .navtabs button{
   background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none; border:0;
 }
-:root[data-theme="light"] #nav.sim-nav .navtabs button:hover,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{
+:root[data-theme="light"] #nav.sim-nav .navtabs button:hover{
   background:var(--nx-divider); color:var(--nx-text);
 }
-:root[data-theme="light"] #nav.sim-nav .navtabs button.on,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
+:root[data-theme="light"] #nav.sim-nav .navtabs button.on{
   background:var(--nx-elev); color:var(--nx-text); border:0;
   box-shadow:var(--nx-sh-md);
-}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.07);
 }
 :root[data-theme="light"] #nav.sim-nav .logo{color:var(--nx-text);}
 :root[data-theme="light"] #nav.sim-nav .nav-subtitle,
 :root[data-theme="light"] #nav.sim-nav .clock,
 :root[data-theme="light"] #nav.sim-nav .navrole{color:var(--nx-faint);}
-:root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn{
   background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none; border:0;
 }
@@ -2426,10 +2220,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-page .pillm{background:var(--nx-success); color:#06301a;}
 .nav-page .pillm.emg{background:var(--nx-danger-vivid); color:#3d0703;}
 .nav-page .pillm.man{background:var(--nx-warning); color:#3d2600;}
-/* 다크에서는 파스텔 채움도 밝아 흰 글자가 3.37 이었다. 채움을 한 단 내린다. */
-:root[data-theme="dark"] .nav-page .pillm{background:#2f7541; color:#eafff2;}
-:root[data-theme="dark"] .nav-page .pillm.emg{background:var(--nx-danger); color:#fff0ee;}
-:root[data-theme="dark"] .nav-page .pillm.man{background:var(--nx-warning); color:#fff6e6;}
 
 /* ── 틀을 없앤다 ────────────────────────────────────────────
    참조 디자인에서 지도는 카드 안에 들어 있지 않다. 배경 위에 그대로 놓여 있고,
@@ -2444,8 +2234,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 #pgMap .nav-canvas > .panel::before,#pgMap .nav-canvas > .panel::after,
 #pgCam .panel::before,#pgCam .panel::after{display:none;}
-:root[data-theme="dark"] #pgMap .nav-canvas > .panel,
-:root[data-theme="dark"] #pgCam .cam-main > .panel{box-shadow:none;}
 
 /* 제목은 배경 위에 그대로 얹는다 */
 #pgMap .nav-canvas > .panel > h3,#pgCam .cam-main > .panel:not(.pip) > h3{
@@ -2458,8 +2246,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border:0; border-radius:var(--nx-r-lg); overflow:hidden;
   box-shadow:0 10px 30px rgba(15,23,23,.10);
 }
-:root[data-theme="dark"] #pgMap .nav-canvas .vwrap,
-:root[data-theme="dark"] #pgCam .cam-main .vwrap{box-shadow:0 10px 30px rgba(0,0,0,.42);}
 /* 지도는 배경과 같은 톤이라 살짝 밝혀 바닥과 구분한다 */
 #pgMap .nav-canvas .vwrap{background:var(--nx-elev);}
 
@@ -2489,46 +2275,35 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 탭을 감싸던 흰 알약 띠를 걷는다. 참조에서 탭은 각자 알약일 뿐 공통 틀이 없다 —
    틀이 있으면 상단에 가로로 긴 직사각형이 하나 더 생겨 화면이 층으로 나뉜다.
    :root[data-theme=...] 로 잡힌 옛 유리 규칙이 있어 같은 자리에서 덮어야 이긴다. */
-:root[data-theme="light"] #nav.sim-nav .navtabs,
-:root[data-theme="dark"] #nav.sim-nav .navtabs{
+:root[data-theme="light"] #nav.sim-nav .navtabs{
   position:absolute; left:50%; transform:translateX(-50%);
   gap:10px; margin:0; background:transparent; box-shadow:none; border:0; padding:0;
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
 /* 탭은 각자 알약이다. 고르지 않은 것은 배경에 잠긴 회색, 고른 것만 흰 판으로 올라온다 */
-:root[data-theme="light"] #nav.sim-nav .navtabs button,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button{
+:root[data-theme="light"] #nav.sim-nav .navtabs button{
   height:44px; min-width:84px; padding:0 22px;
   border-radius:var(--nx-r-md); border:0;
   background:var(--nx-sunken); box-shadow:none; color:var(--nx-muted);
   font-size:14px; font-weight:500;
 }
-:root[data-theme="light"] #nav.sim-nav .navtabs button:hover,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{
+:root[data-theme="light"] #nav.sim-nav .navtabs button:hover{
   background:var(--nx-divider); color:var(--nx-text);
 }
 :root[data-theme="light"] #nav.sim-nav .navtabs button.on{
   background:var(--nx-elev); color:var(--nx-text); box-shadow:var(--nx-sh-md);
 }
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  background:var(--nx-elev); color:var(--nx-text);
-  box-shadow:var(--nx-sh-md),inset 0 0 0 1px rgba(255,255,255,.08);
-}
-:root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn,
-#nav.sim-nav .theme-btn,#nav.sim-nav .usermenu-btn,#nav.sim-nav .navrole{
+#nav.sim-nav .usermenu-btn,
+#nav.sim-nav .navrole{
   background:var(--nx-elev); box-shadow:var(--nx-sh-md);
 }
 #nav.sim-nav .navrole{display:none;}
-#nav.sim-nav .theme-btn,
 #nav.sim-nav .usermenu-btn{
   width:44px; height:44px; min-width:44px; padding:0; margin:0;
   display:flex; align-items:center; justify-content:center;
   border:0; border-radius:var(--nx-r-md); color:var(--nx-muted);
 }
-#nav.sim-nav .theme-btn{font-size:0;}
-#nav.sim-nav .theme-btn::before{content:'☾'; font-size:20px; line-height:1;}
-:root[data-theme="dark"] #nav.sim-nav .theme-btn::before{content:'☀'; font-size:19px;}
 #nav.sim-nav .clock{
   height:44px; min-width:72px; padding:0 13px;
   display:flex; align-items:center; justify-content:center;
@@ -2550,25 +2325,18 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   width:15px; height:9px; border:2px solid currentColor; border-bottom:0;
   border-radius:10px 10px 0 0;
 }
-#nav.sim-nav .theme-btn:hover,#nav.sim-nav .usermenu-btn:hover{
+#nav.sim-nav .usermenu-btn:hover{
   background:var(--nx-surface); color:var(--nx-text);
 }
-:root[data-theme="dark"] #nav.sim-nav .theme-btn,
-:root[data-theme="dark"] #nav.sim-nav .clock,
-:root[data-theme="dark"] #nav.sim-nav .usermenu-btn{
-  box-shadow:var(--nx-sh-md),inset 0 0 0 1px rgba(255,255,255,.055);
-}
 /* 이전 테마별 글래스 배경의 우선순위를 이겨 헤더와 본문을 완전히 같은 면으로 만든다. */
-:root[data-theme="light"] #nav.sim-nav,
-:root[data-theme="dark"] #nav.sim-nav{
+:root[data-theme="light"] #nav.sim-nav{
   background:var(--nx-bg); border:0; border-bottom:0; outline:0; box-shadow:none;
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
 
 /* 중앙 탭이 우측 계정 도구와 겹칠 수 있는 폭에서는 문서 흐름으로 돌린다. */
 @media (max-width:1100px){
-  :root[data-theme="light"] #nav.sim-nav .navtabs,
-  :root[data-theme="dark"] #nav.sim-nav .navtabs{
+  :root[data-theme="light"] #nav.sim-nav .navtabs{
     position:static; transform:none; margin-left:18px;
   }
   #nav.sim-nav .navtabs button{min-width:0; padding:0 16px;}
@@ -2591,13 +2359,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   backdrop-filter: blur(16px) saturate(1.28);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 -1px 0 rgba(0,0,0,.08);
   transition: border-color .18s ease, box-shadow .18s ease;
-}
-:root[data-theme="dark"] .sim-skin input,
-:root[data-theme="dark"] .sim-skin select,
-:root[data-theme="dark"] .sim-skin textarea {
-  background: linear-gradient(145deg, rgba(255,255,255,.085), rgba(255,255,255,.028));
-  border: 1px solid rgba(220,238,255,.15);
-  color: var(--dk-ink, #e6e9ef);
 }
 :root[data-theme="light"] .sim-skin input,
 :root[data-theme="light"] .sim-skin select,
@@ -2640,29 +2401,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-radius: var(--r-in, 12px);
   backdrop-filter: blur(18px) saturate(1.35);
   transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
-}
-:root[data-theme="dark"] .sumbar.sim-skin .sumcard,
-:root[data-theme="dark"] .sumbar.sim-skin .sumhot,
-:root[data-theme="dark"] .fleet.sim-skin,
-:root[data-theme="dark"] .sim-skin .route-item,
-:root[data-theme="dark"] .sim-skin .sched-item,
-:root[data-theme="dark"] .sim-skin .health-card,
-:root[data-theme="dark"] .sim-skin .chart-box,
-:root[data-theme="dark"] .sim-skin .equip-card,
-:root[data-theme="dark"] .sim-skin .notify-card,
-:root[data-theme="dark"] .sim-skin .user-item,
-:root[data-theme="dark"] .sim-skin .users-list li,
-:root[data-theme="dark"] .sim-skin .map-list li,
-:root[data-theme="dark"] .sim-skin .sch-list li,
-:root[data-theme="dark"] .sim-skin .sch-new,
-:root[data-theme="dark"] .sim-skin .health-list li,
-:root[data-theme="dark"] .sim-skin .stats-summary,
-:root[data-theme="dark"] .sim-skin .cfg-points li,
-:root[data-theme="dark"] .sim-skin .cfg-note,
-:root[data-theme="dark"] .sim-skin .gotor {
-  background: linear-gradient(145deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
-  border: 1px solid rgba(222,239,255,.16);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.20), 0 8px 24px rgba(2,7,17,.20);
 }
 :root[data-theme="light"] .sumbar.sim-skin .sumcard,
 :root[data-theme="light"] .sumbar.sim-skin .sumhot,
@@ -2713,11 +2451,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-color: #2b3d5b;
   box-shadow: 0 4px 12px rgba(43,61,91,.25);
 }
-:root[data-theme="dark"] .event-page-panel .logfilter button.on {
-  background: #3b5075;
-  color: #ffffff;
-  border-color: #3b5075;
-}
 
 .event-page-panel .logfilter2 {
   display: flex;
@@ -2739,12 +2472,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow: var(--nx-sh-sm, 0 1px 3px rgba(0,0,0,.04));
   outline: none;
   cursor: pointer;
-}
-:root[data-theme="dark"] .event-page-panel .logfilter2 select,
-:root[data-theme="dark"] .event-page-panel .logfilter2 input[type="date"] {
-  background: var(--nx-sunken, #1c242b);
-  border-color: rgba(255,255,255,.12);
-  color: var(--nx-text, #e2e8f0);
 }
 .event-page-panel .logfilter-rb {
   display: inline-flex;
@@ -3175,26 +2902,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #pgMap.v3-theme .elog li.heat b,#pgCam.v3-theme .elog li.heat b{color:#7E6222;}
 #pgMap.v3-theme .elog li.ok b,#pgCam.v3-theme .elog li.ok b{color:#3F6A56;}
 
-/* 지도·카메라의 v3 톤은 밝은 캔버스를 전제한다. 다크 모드에서는 어두운 판 위에
-   잉크색 글자가 얹혀 패널 제목이 1.22:1 까지 떨어졌다 — 그 화면은 원래 톤을 지킨다.
-   무인 시간대에 다크로 보는 사람이 있으므로 밝은 쪽만 바꾼다. */
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme{color:var(--nx-text);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme :is(.panel,.cam-side-panel){
-  background:var(--nx-elev); box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.045);
-}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .panel h3,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .nav-title h2,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .kpi-num{color:var(--nx-text);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .kpi-num .unit,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .kpi-label,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .nav-title .nav-sub{color:var(--nx-muted);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .elog li b,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .logtext{color:var(--nx-text);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .elog li{border-bottom-color:rgba(255,255,255,.08);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .map-control,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .mapview{
-  background:var(--nx-elev); color:var(--nx-text);
-}
 /* 라이트에서 판과 그 안의 카드가 둘 다 흰색이라 층이 구분되지 않았다 —
    안쪽 카드를 한 단 낮춘다. */
 :root[data-theme="light"] :is(#pgMap,#pgCam).v3-theme :is(#pStatus .stat-card,.control-card){
@@ -3203,15 +2910,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* KPI 라벨이 4.36 으로 아슬하게 못 미쳤다 — 한 단계 더 내린다 */
 :is(#pgMap,#pgCam).v3-theme .kpi-label,.page.v3-theme .kpi-label{color:#5F6474;}
 
-/* 뿌리 배경을 v3 캔버스로 올린 것은 밝은 톤 전제다. 다크에서 그대로 두면
-   밝은 바탕에 밝은 글자가 얹혀 제목이 통째로 사라진다(대비 1.0 을 쟀다). */
-:root[data-theme="dark"].v3-page,
-:root[data-theme="dark"].v3-page body,
-:root[data-theme="dark"].v3-page #root{background:var(--nx-bg);}
-/* 이벤트·통계·운영·설정은 밝은 톤 전용 화면이라 다크에서도 제 배경을 지닌다 */
-:root[data-theme="dark"] .page.v3-theme:not(#pgMap):not(#pgCam){
-  background:linear-gradient(158deg,#E9E8F1 0%,#F2F2F7 38%,#F9F9FB 72%,#FFFFFF 100%);
-}
 
 /* 이벤트 로그 — 색 세로선을 걷고 점만 남긴다 (지도·카메라 공통)
    ------------------------------------------------------------------
@@ -3287,19 +2985,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .routemap-note span{font-size:11.5px; font-weight:500; color:rgba(255,255,255,.78);}
 
-/* 3D 압출 뷰 마감 (S15P11E101-748)
-   ------------------------------------------------------------------ */
-/* 다크 모드에서는 배경을 어둡게 되돌린다. 밝은 판을 그대로 두면 어두운 화면에
-   흰 사각형 하나가 뚫린 것처럼 보인다. */
-:root[data-theme="dark"] .iso-stage{
-  background:radial-gradient(120% 90% at 50% 10%, #1b212b 0%, #141920 58%, #0f131a 100%);
-}
-/* 다크에서는 벽이 밝은 회색이라 바닥과 붙는다 — 바닥만 한 단 눌러 층을 만든다 */
-:root[data-theme="dark"] .iso-floor{
-  /* 어두운 화면에서 흰 판은 조명처럼 튄다. '배경과 이어지게' 라는 뜻을 지키려면
-     여기서는 어두운 판이어야 한다(S15P11E101-777). */
-  --iso-floor:#1A1E26;
-}
 
 /* '정면으로' — 지금 정면이면 눌린 상태로 둔다. 눌러도 화면이 안 바뀌는 경우가 있어
    버튼이 스스로 '지금 고정돼 있다' 를 말해야 한다. */
@@ -3324,9 +3009,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .iso-reset.on{
   background:#232733; color:#fff; font-weight:700;
   box-shadow:0 1px 3px rgba(35,39,51,.24);
-}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .iso-reset.on{
-  background:#e6e9ef; color:#1b212b;
 }
 
 /* 이동 중 표시(S15P11E101-750). 정지와 주행이 같은 모습이면 화면만 보고

@@ -10,7 +10,6 @@ export default function useSimulation() {
 
   const [status, setStatus] = useState(() => sim.snapshot())
   const [clock, setClock] = useState('--:--:--')
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light') // 'dark' | 'light'
 
   // 구독 + 루프 시작/정리
   useEffect(() => {
@@ -22,12 +21,8 @@ export default function useSimulation() {
     return () => { unsub(); sim.stop(); clearInterval(clockTimer) }
   }, [sim])
 
-  // 테마를 <html data-theme>에 반영
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('theme', theme)
-  }, [theme])
-  const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
+  // 테마 전환은 걷어냈다(S15P11E101-805). `data-theme="light"` 는 main.tsx 가 첫 페인트
+  // 전에 상수로 붙인다 — 라이트 대비 보정 규칙(`:root[data-theme="light"] …`)이 매칭돼야 한다.
 
   // 키보드 WASD — 로봇 이동 (위/아래 방향키는 카메라 틸트 전용)
   useEffect(() => {
@@ -79,5 +74,5 @@ export default function useSimulation() {
     pushLog: (kind: any, msg: any) => sim.pushLog(kind, msg),
   }), [sim])
 
-  return { status, clock, refs, actions, theme, toggleTheme }
+  return { status, clock, refs, actions }
 }

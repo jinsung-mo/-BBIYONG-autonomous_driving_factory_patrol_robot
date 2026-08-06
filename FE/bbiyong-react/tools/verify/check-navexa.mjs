@@ -74,11 +74,6 @@ const enter = async (mode) => {
     const i=document.querySelectorAll('.auth-card input'); s(i[0],'${e1}'); s(i[1],'${p1}'); document.querySelector('.auth-submit').click()})()`)
   await sleep(4200)
 }
-const theme = () => ev(`document.documentElement.getAttribute('data-theme')`)
-const setTheme = async (w) => {
-  for (let i = 0; i < 3 && (await theme()) !== w; i++) { await ev(`document.querySelector('#nav .theme-btn')?.click()`); await sleep(800) }
-  return theme()
-}
 const tabs = () => ev(`[...document.querySelectorAll('.navtabs button')].map(b=>b.textContent.trim())`)
 const goTab = async (name) => {
   await ev(`[...document.querySelectorAll('.navtabs button')].find(b=>b.textContent.trim()===${JSON.stringify(name)})?.click()`)
@@ -318,8 +313,9 @@ const MAP_T = [['페이지 제목', '.nav-title h2'], ['KPI 숫자', '.kpi-num']
 const CAM_T = [['패널 제목', '#pgCam .panel h3'],
   ['순찰 모드', '#pgCam .seg button.on'], ['각도 라벨', '#pgCam .spdlab span'], ['각도 값', '#pgCam .spdlab b']]
 let bad = 0
-for (const want of ['light', 'dark']) {
-  console.log(`  --- ${await setTheme(want)} ---`)
+// 테마는 라이트 하나다 — 다크 모드는 걷어냈다(S15P11E101-805).
+for (const want of ['light']) {
+  console.log(`  --- ${want} ---`)
   const layers = await ev(`(()=>{const bg=sel=>getComputedStyle(document.querySelector(sel)).backgroundColor
     const mapOuter=bg('#pgMap #pStatus'), mapInner=bg('#pgMap #pStatus .stat-card')
     const camOuter=bg('#pgCam .cam-side-panel'), camInner=bg('#pgCam #pControl .control-card')
@@ -349,7 +345,6 @@ for (const want of ['light', 'dark']) {
   writeFileSync(OUT + `X-cam-${want}.png`, Buffer.from(s2.data, 'base64'))
 }
 console.log('  → 미달 없음 :', ok(bad === 0), `(미달 ${bad}개)`)
-await setTheme('dark')
 
 console.log('\n[4] 안전 조작은 그대로 열려 있는가')
 await goTab('카메라')
@@ -391,8 +386,7 @@ console.log('  → 순찰 모드 방향키 완전 잠금 :', ok(patrolDisabled
 
 await ev(`[...document.querySelectorAll('#pgCam .seg button')].find(b=>b.textContent.includes('수동 모드'))?.click()`)
 await sleep(200)
-for (const want of ['light', 'dark']) {
-  await setTheme(want)
+for (const want of ['light']) {
   const cameraRest = await keySurface('#pgCam #btnTiltUp')
   await press('keyDown', 'ArrowUp', 'ArrowUp', 38); await sleep(120)
   const cameraDown = await keySurface('#pgCam #btnTiltUp')
@@ -407,7 +401,6 @@ for (const want of ['light', 'dark']) {
   console.log(`  → ${want} 색상 고정·물리 눌림 :`, ok(physical(cameraRest, cameraDown) && physical(driveRest, driveDown)))
   console.log(`  → ${want} 카메라·WASD 반응 동일 :`, ok(JSON.stringify(cameraDown) === JSON.stringify(driveDown)))
 }
-await setTheme('dark')
 const tiltBefore = await ev(`document.querySelector('#pgCam .camtilt-val b')?.textContent`)
 await press('keyDown', 'ArrowUp', 'ArrowUp', 38); await sleep(120)
 const arrowRoute = await ev(`(()=>({

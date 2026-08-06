@@ -45,13 +45,6 @@ const enter = async (mode) => {
     const i=document.querySelectorAll('.auth-card input'); s(i[0],'${e1}'); s(i[1],'${p1}'); document.querySelector('.auth-submit').click()})()`)
   await sleep(4200)
 }
-const theme = () => ev(`document.documentElement.getAttribute('data-theme')`)
-const setTheme = async (want) => {
-  for (let i = 0; i < 3 && (await theme()) !== want; i++) {
-    await ev(`document.querySelector('#nav .theme-btn')?.click()`); await sleep(800)
-  }
-  return theme()
-}
 
 await send('Page.enable'); await send('Runtime.enable')
 await enter('mock')
@@ -112,7 +105,7 @@ const grab = async (b) => {
   return buf.length
 }
 console.log('  좌측 판 표본 :', JSON.stringify(boxes?.left), '· 우측 판 표본 :', JSON.stringify(boxes?.right))
-console.log('  (표면색 차이는 G-glass-dark.png 으로 확인 — 좌측은 청색, 우측은 보라 계열)')
+console.log('  (표면색 차이는 G-glass-light.png 으로 확인 — 좌측은 청색, 우측은 보라 계열)')
 
 console.log('\n[4] 모서리 — 안쪽 곡선이 바깥보다 작은가')
 const radii = await ev(`(()=>{const g=(s)=>{const el=document.querySelector(s); if(!el) return null
@@ -166,8 +159,9 @@ const T = [['패널 제목', '#pStatus h3'], ['상태 라벨', '#pStatus .kv spa
   ['지표 값', '#pgMap .kpi-num'], ['로그 본문', '#pStatus .elog li b'], ['게이지 값', '.rgauge-mid b'],
   // 긴급 정지·순찰 복귀 버튼은 패널에서 걷어냈다(S15P11E101-688)
   ['순찰 모드', '.seg button.on']]
-for (const want of ['dark', 'light']) {
-  console.log(`  --- ${await setTheme(want)} ---`)
+// 테마는 라이트 하나다 — 다크 모드는 걷어냈다(S15P11E101-805).
+for (const want of ['light']) {
+  console.log(`  --- ${want} ---`)
   const got = []
   for (const [n, sel] of T) got.push([n, await ev(`(${CONTRAST})('${sel}')`)])
   console.log('   ', got.map(([n, c]) => `${n} ${c}`).join(' · '))
@@ -175,7 +169,6 @@ for (const want of ['dark', 'light']) {
   const s2 = await send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(OUT + `G-glass-${want}.png`, Buffer.from(s2.data, 'base64'))
 }
-await setTheme('dark')
 
 console.log('\n[7] 커서를 따라다니는 원이 없는가')
 // 포인터 좌표를 CSS 변수 하나로 넘겼더니 판마다 그 위치에 원이 하나씩 그려져

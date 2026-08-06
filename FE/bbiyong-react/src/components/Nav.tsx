@@ -18,7 +18,7 @@ import UserMenu from './auth/UserMenu.tsx'
  */
 export default function Nav({ section, onSection }: { section: Section,
             onSection: (s: Section) => void }) {
-  const { clock, theme, toggleTheme } = useSim()
+  const { clock } = useSim()
   const { enabled } = useLive()
   const { user, isAdmin } = useAuth()
 
@@ -56,9 +56,6 @@ export default function Nav({ section, onSection }: { section: Section,
       </div>
       <div className="sp" />
       {user && <span className="navrole">{roleText(user.role)}</span>}
-      <button className="theme-btn" onClick={toggleTheme} aria-label="테마 전환">
-        {theme === 'dark' ? '☀ 라이트 모드' : '🌙 다크 모드'}
-      </button>
       <div className="clock mono">{clock}</div>
       <UserMenu />
     </nav>
