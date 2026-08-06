@@ -24,7 +24,7 @@ const ZOOM_MAX = 3
 const LAYER_STEP = 1.15
 
 export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) {
-  const { plan, connected, onNavUpdate } = useLive()
+  const { plan, connected, onNavUpdate, robotOnline } = useLive()
   const [src, setSrc] = useState<ExtrudeSource | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -37,6 +37,9 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
 
   // 로봇 위치는 자주 바뀐다. 상태로 두면 프레임마다 다시 렌더되므로 DOM 을 직접 옮긴다.
   const markerRef = useRef<HTMLDivElement | null>(null)
+  // 받은 값(목표)과 화면에 그리는 값(현재)을 나눠 둔다 — 사이를 보간한다
+  const targetRef = useRef<{ x: number, y: number, yaw: number } | null>(null)
+  const shownRef = useRef<{ x: number, y: number, yaw: number } | null>(null)
   const planRef = useRef(plan)
   planRef.current = plan
   const srcRef = useRef(src)
@@ -64,7 +67,48 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   // 떠날 때 objectURL 을 푼다
   useEffect(() => () => releaseExtrudeSource(srcRef.current), [])
 
-  // 로봇 위치 — 압출 씬의 픽셀 좌표로 옮긴다
+  // 로봇 위치 — 압출 씬의 픽셀 좌표로 옮긴다 (S15P11E101-745)
+  //
+  // 텔레메트리는 1~3Hz 라, 받은 값을 그대로 찍으면 마커가 초당 한두 번 순간이동한다.
+  // 순찰을 '보고 있다' 는 느낌이 사라지고, 튀는 순간이 이상 동작처럼 읽힌다 —
+  // 받은 값은 목표로 두고 매 프레임 그쪽으로 다가가게 한다.
+  //
+  // yaw 는 -π ~ π 를 오가므로 그냥 섞으면 한 바퀴를 거꾸로 돈다. 짧은 쪽으로 감는다.
+  useEffect(() => {
+    // 마커는 압출 소스가 준비된 뒤에야 그려진다. 마운트 시점에 ref 를 잡아 두면
+    // 그때는 아직 null 이라 루프가 시작조차 못 한다 — 매 프레임 다시 찾는다.
+    let raf = 0
+    const step = () => {
+      const el = markerRef.current
+      const t = targetRef.current
+      const c = shownRef.current
+      if (el && t) {
+        if (!c) {
+          shownRef.current = { ...t }
+        } else {
+          const k = 0.18
+          c.x += (t.x - c.x) * k
+          c.y += (t.y - c.y) * k
+          // 각도 차이를 -π ~ π 로 접은 뒤 섞는다
+          let d = t.yaw - c.yaw
+          while (d > Math.PI) d -= Math.PI * 2
+          while (d < -Math.PI) d += Math.PI * 2
+          c.yaw += d * k
+        }
+        const v = shownRef.current
+        if (v) {
+          el.style.display = ''
+          el.style.left = `${v.x}px`
+          el.style.top = `${v.y}px`
+          el.style.setProperty('--yaw', `${-v.yaw}rad`)
+        }
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
   useEffect(() => onNavUpdate((nav: any) => {
     const el = markerRef.current
     const p = planRef.current
@@ -72,19 +116,24 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     if (!el || !p || !s) return
     const pose = nav?.pose
     if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) {
+      targetRef.current = null
+      shownRef.current = null
       el.style.display = 'none'
       return
     }
     const { x, y } = worldToPlanPx(p as any, pose.x, pose.y, s.scale)
-    el.style.display = ''
-    el.style.left = `${x}px`
-    el.style.top = `${y}px`
+    const yaw = Number(pose.yaw)
+    targetRef.current = { x, y, yaw: Number.isFinite(yaw) ? yaw : 0 }
     // 로봇은 벽 위로 띄운다 — 바닥에 붙이면 기울인 화면에서 벽에 가린다
     el.style.setProperty('--rz', `${WALL_H * LAYER_STEP + 10}px`)
-    // 화면을 돌려도 마커는 정면을 보게 한다(빌보드) + 로봇 진행 방향은 화살로
-    const yaw = Number(pose.yaw)
-    el.style.setProperty('--yaw', Number.isFinite(yaw) ? `${-yaw}rad` : '0rad')
   }), [onNavUpdate])
+
+  // 로봇이 꺼져 있으면 마커를 흐린다. 지우지는 않는다 —
+  // 마지막으로 알던 자리는 남겨야 어디서 멈췄는지 알 수 있다.
+  useEffect(() => {
+    const el = markerRef.current
+    if (el) el.classList.toggle('off', robotOnline === false)
+  }, [robotOnline])
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
@@ -180,9 +229,13 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
           />
         ))}
         {/* 로봇 — 벽 위로 띄우고, 화면을 돌려도 정면을 보게 한다 */}
+        {/* 바닥에 눕는 몸체 + 진행 방향 코 + 위에서 늘 보이는 표시등.
+            몸체는 씬과 같은 평면에 있어 도면 위에 '놓인' 것으로 읽히고,
+            표시등은 화면을 돌려도 정면을 보게 둔다(빌보드). */}
         <div ref={markerRef} className="iso-robot" style={{ display: 'none' }}>
+          <i className="iso-robot-body" />
+          <i className="iso-robot-nose" />
           <i className="iso-robot-dot" />
-          <i className="iso-robot-arrow" />
         </div>
       </div>
 
