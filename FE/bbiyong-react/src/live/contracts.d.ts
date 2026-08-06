@@ -100,6 +100,8 @@ export interface RobotTelemetry {
 export interface AlertMessage {
   /** 저장 완료된 이벤트 이력 식별자. 있으면 즉시 상세·영상을 조회할 수 있다. */
   eventId?: number
+  /** 로봇 재전송 멱등 키. 화면 식별자는 저장된 eventId를 계속 사용한다. */
+  messageId?: string
   type: 'FIRE' | 'OVERHEAT'
   level?: EventLevel
   source?: string
