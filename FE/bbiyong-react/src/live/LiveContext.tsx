@@ -16,6 +16,10 @@ import { activateMap, isMappingComplete, isMappingStatus, phaseOf, fetchMapStatu
 import { TILT_COMMAND } from './cameraTilt.ts'
 import { isFloorplanReady, loadActivePlan, releasePlan } from './floorplan.ts'
 import { authedGet, refreshAccessToken } from './authApi.ts'
+import {
+  DENY, EMPTY_OWNERSHIP, OWNERSHIP_DEST, OWNERSHIP_KEEPALIVE_MS, OWNERSHIP_QUEUE,
+  isMine, isOwnedByOther, isStale, leftMsNow, ownershipTopic, parseControlPayload,
+} from './controlOwnership.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { REASON, STOMP_AUTH_GRACE_MS } from '../auth/sessionPolicy.ts'
 
@@ -45,7 +49,7 @@ const ROBOT_POLL_MS = 15000
 let alertUid = 0
 
 export function LiveProvider({ children }: any) {
-  const { accessToken, logout } = useAuth()
+  const { accessToken, logout, user, canOperate } = useAuth()
   // 주행 상한은 설정 탭에서 바뀔 수 있다 — ref 로 들고 control 의 정체성은 고정한다
   const { settings } = useSettings()
   const vMaxRef = useRef(settings.vMax)
@@ -81,6 +85,54 @@ export function LiveProvider({ children }: any) {
   // 키보드 주행을 발행하는 LiveSimBridge 도 이 값을 봐야 해서 연동 레이어로 올린다 —
   // 순찰 모드에서는 WASD 가 DRIVE 를 보내면 안 된다.
   const [driveMode, setDriveMode] = useState<'patrol' | 'manual'>('patrol')
+
+  // ---- 조종 점유(S15P11E101-778 · 779 / BE MR !344) ----
+  // 서버가 로봇 1대의 조종권을 리스로 관리한다. 여기서는 그 상태를 그대로 들고 있다가
+  // 화면이 "누가 조종 중인지"를 보여주고 수동 모드 진입을 막을 수 있게 한다.
+  const [ownership, setOwnership] = useState(EMPTY_OWNERSHIP)
+  const ownershipRef = useRef(EMPTY_OWNERSHIP)
+  const applyOwnership = useCallback((next: typeof EMPTY_OWNERSHIP) => {
+    ownershipRef.current = next
+    setOwnership(next)
+  }, [])
+  // 내 STOMP sessionId. CONNECTED 프레임의 session 헤더로 받거나(서버가 실어 줄 때),
+  // 내 ACQUIRE 가 성공한 순간의 owner 값으로 학습한다.
+  const [mySessionId, setMySessionId] = useState<string | null>(null)
+  const mySessionIdRef = useRef<string | null>(null)
+  mySessionIdRef.current = mySessionId
+  const myEmail = user?.email ?? null
+  const myEmailRef = useRef<string | null>(myEmail)
+  myEmailRef.current = myEmail
+  // 카운트다운·무수신 판정을 다시 그리기 위한 틱. 점유가 있을 때만 돈다.
+  const [ownershipTick, setOwnershipTick] = useState(0)
+
+  /**
+   * /app/control/ownership 발행.
+   *
+   * ACQUIRE·TAKEOVER 는 claim 을 'pending' 으로 올린다 — 곧이어 도착하는 ACQUIRED
+   * 브로드캐스트의 owner 가 곧 내 sessionId 라는 사실을 그때 학습하기 위해서다.
+   */
+  // 내 획득 요청이 나간 시각. 뒤이어 오는 ACQUIRED/TAKEN_OVER 방송이 '내 것'인지 가르는 근거다.
+  const claimSentAt = useRef(0)
+  // 내가 낸 탈취 요청 시각. 서버는 탈취 순간 이전 소유자에게 TAKEN_OVER_BY_OTHER 를 보내는데,
+  // 그 통지가 계정 단위라 탈취를 건 사람에게도 되돌아온다 — 그것을 내 패배로 읽으면 안 된다.
+  const takeoverSentAt = useRef(0)
+  // sessionId 를 학습한 시각. 방금 배운 것을 뒤집는 거부가 오면 되돌리는 데 쓴다.
+  const learnedAt = useRef(0)
+  const sendOwnership = useCallback((command: 'ACQUIRE' | 'TAKEOVER' | 'RELEASE' | 'STATUS') => {
+    if (!publish(OWNERSHIP_DEST, { robot_id: ROBOT_ID, command })) return false
+    if (command === 'ACQUIRE' || command === 'TAKEOVER') {
+      if (command === 'TAKEOVER') takeoverSentAt.current = Date.now()
+      const cur = ownershipRef.current
+      // 이미 내 것이면 이것은 '갱신'이다. 갱신까지 요청 시각으로 찍으면, 그 직후 남이
+      // 가져간 ACQUIRED 방송을 내 성공으로 오독한다 — 실제로 이 실수를 검증에서 봤다.
+      if (cur.claim !== 'owner') {
+        claimSentAt.current = Date.now()
+        applyOwnership({ ...cur, claim: 'pending', denied: null })
+      }
+    }
+    return true
+  }, [applyOwnership])
 
   // 영상 프레임은 초당 수십 장이 들어올 수 있어 React state로 올리지 않는다.
   // ref에 최신 프레임만 두고, 캔버스를 그리는 쪽이 리스너로 직접 받아간다.
@@ -148,14 +200,20 @@ export function LiveProvider({ children }: any) {
       setVideoSeen({ FRONT: false, THERMAL: false })
       navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null }
       emitNav()
+      applyOwnership(EMPTY_OWNERSHIP); setMySessionId(null)
       disconnect()
       return undefined
     }
 
-    const offState = onState(({ connected: c, lastError: e, authError: a }: {
-      connected: boolean, lastError: string | null, authError: boolean,
+    const offState = onState(({ connected: c, lastError: e, authError: a, sessionId: sid }: {
+      connected: boolean, lastError: string | null, authError: boolean, hasToken: boolean,
+      sessionId: string | null,
     }) => {
       setConnected(c); setLastError(e); setAuthError(!!a)
+      // 서버가 CONNECTED 에 session 을 실어 주면 그게 정답이다. 안 실어 주면 null 이 오고,
+      // 그때는 ACQUIRE 왕복으로 학습한 값을 유지한다(덮어써서 지우면 안 된다).
+      if (sid) setMySessionId(sid)
+      else if (!c) setMySessionId(null)   // 세션이 끊기면 학습값도 무효
     })
 
     const robotStateMap = new Map<string, string>()
@@ -283,6 +341,97 @@ export function LiveProvider({ children }: any) {
       emitNav()
     })
 
+    // ---- 조종 점유 상태 방송 (BE MR !344) ----
+    // 점유가 있을 때만 서버가 500ms 하트비트를 보낸다. 비어 있으면 아무것도 오지 않으므로
+    // "한동안 조용하다" 는 곧 "비었다" 가 아니다 — 아래 STATUS 재조회가 그 공백을 메운다.
+    const offOwnership = subscribe(ownershipTopic(ROBOT_ID), (raw: any) => {
+      const m = parseControlPayload(raw)
+      if (!m) return
+      const owner: string | null = m.owner ?? null
+      const prev = ownershipRef.current
+      const learned = mySessionIdRef.current
+      let claim = prev.claim
+      let denied = prev.denied
+
+      // 내 요청이 나간 직후 도착한 획득 알림인가. 서버는 거부를 방송하지 않고 개인 큐로만
+      // 알리므로, ACQUIRED·TAKEN_OVER 방송이 왔다는 것 자체가 "누군가 성공했다"는 뜻이다.
+      const justAsked = claimSentAt.current > 0 && Date.now() - claimSentAt.current < 3000
+      const gotIt = !!owner && (m.event === 'ACQUIRED' || m.event === 'TAKEN_OVER') && justAsked
+        && (!m.ownerEmail || !myEmailRef.current || m.ownerEmail === myEmailRef.current)
+
+      if (!owner) {
+        // 점유가 비었다 — 내 소유도, 거부 상태도 더는 유효하지 않다
+        if (claim === 'owner' || claim === 'denied') claim = 'none'
+        denied = null
+      } else if (gotIt) {
+        // 서버가 CONNECTED 에 session 헤더를 주지 않을 때 내 sessionId 를 아는 유일한 경로.
+        // 거부 통지(계정 단위)가 먼저 도착해 claim 이 denied 로 내려갔더라도 여기서 되돌린다 —
+        // 강제 탈취를 건 사람에게도 이전 소유자용 통지가 함께 오기 때문이다.
+        mySessionIdRef.current = owner
+        setMySessionId(owner)
+        learnedAt.current = Date.now()
+        claim = 'owner'; denied = null
+        claimSentAt.current = 0
+      } else if (learned) {
+        if (owner === learned) { claim = 'owner'; denied = null }
+        else if (claim !== 'pending') claim = 'none'
+      } else if (m.event === 'ACQUIRED' || m.event === 'TAKEN_OVER') {
+        // 내 요청이 아닌데 리스가 새로 넘어갔다 = 내가 들고 있었다면 잃은 것이다.
+        // sessionId 를 아직 모르는 상태에서도 이 한 줄이 소유권 착각을 막는다.
+        if (claim === 'owner') claim = 'none'
+      }
+
+      applyOwnership({
+        supported: true,
+        owner,
+        ownerEmail: m.ownerEmail ?? null,
+        event: m.event ?? null,
+        leftMs: Number(m.leftMs) || 0,
+        receivedAt: Date.now(),
+        claim,
+        denied,
+      })
+    })
+
+    // ---- 개인 큐: 내 명령이 왜 버려졌는지 ----
+    // Spring 의 user destination 은 계정 단위라, 같은 계정으로 연 다른 탭의 거부도 여기로 온다.
+    // 내가 소유자로 확인된 상태에서 온 OWNED_BY_OTHER 는 남의 것이므로 무시한다 —
+    // 그러지 않으면 조종 중인 탭이 관전 탭 때문에 스스로 조종을 놓는다.
+    const offDenied = subscribe(OWNERSHIP_QUEUE, (raw: any) => {
+      const m = parseControlPayload(raw)
+      if (!m || m.type !== 'CONTROL_DENIED') return
+      const prev = ownershipRef.current
+      const reason = String(m.reason || '')
+      const mySid = mySessionIdRef.current
+      // 방금 학습한 sessionId 를 곧바로 부정하는 거부가 왔다 = 잘못 배웠다.
+      //
+      // 두 사람이 거의 동시에 ACQUIRE 를 보내면, 진 쪽도 3초 안에 이긴 쪽의 ACQUIRED 방송을
+      // 받으므로 남의 sessionId 를 자기 것으로 배울 수 있다. 그 직후 도착하는 내 거부가
+      // 유일한 정정 신호다 — 여기서 배운 것을 물리지 않으면 진 쪽이 조종자 행세를 한다.
+      if (reason === DENY.OWNED_BY_OTHER && mySid && Date.now() - learnedAt.current < 1500) {
+        mySessionIdRef.current = null
+        setMySessionId(null)
+        learnedAt.current = 0
+        applyOwnership({
+          ...prev, supported: true, claim: 'denied',
+          denied: { reason, ownerEmail: m.ownerEmail ?? null, at: Date.now() },
+        })
+        return
+      }
+      // 지금 리스가 내 것이라고 서버가 말하고 있으면, 이 거부는 같은 계정의 다른 탭 것이다
+      if (mySid && m.owner && m.owner === mySid) return
+      // 방금 내가 탈취를 걸었다 — 이전 소유자에게 가는 통지가 나에게도 되돌아온 것뿐이다
+      if (reason === DENY.TAKEN_OVER_BY_OTHER && Date.now() - takeoverSentAt.current < 3000) return
+      // 내가 소유자로 확인된 상태에서 온 '남이 잡고 있다' 는 내 것이 아니다
+      if (reason !== DENY.TAKEN_OVER_BY_OTHER && isMine(prev, mySid)) return
+      applyOwnership({
+        ...prev,
+        supported: true,
+        claim: 'denied',
+        denied: { reason, ownerEmail: m.ownerEmail ?? null, at: Date.now() },
+      })
+    })
+
     const flush = setInterval(() => {
       if (telemetryRef.current) setTelemetry(telemetryRef.current)
     }, TELEMETRY_FLUSH_MS)
@@ -293,10 +442,11 @@ export function LiveProvider({ children }: any) {
 
     return () => {
       clearInterval(flush)
-      offRobots(); offAlerts(); offMapping(); offVideo(); offNav(); offState()
+      offRobots(); offAlerts(); offMapping(); offVideo(); offNav()
+      offOwnership(); offDenied(); offState()
       disconnect()
     }
-  }, [canConnect, emitNav])
+  }, [canConnect, emitNav, applyOwnership])
 
   // 로봇 가동 여부는 서버가 판정한다 — 텔레메트리가 끊긴 지 일정 시간이 지나면 OFFLINE
   // (RobotService). 관제는 그 결과를 GET /api/robots 로 받아온다(가이드 · S15P11E101-510).
@@ -489,6 +639,104 @@ export function LiveProvider({ children }: any) {
 
   const clearMappingComplete = useCallback(() => setMappingComplete(null), [])
 
+  // ---- 조종 점유: 파생 상태 · 수명주기 ----
+
+  // 점유가 살아 있는 동안에만 돈다. 카운트다운과 무수신 판정을 다시 계산하는 용도다.
+  useEffect(() => {
+    if (!ownership.supported || !ownership.owner) return undefined
+    const id = setInterval(() => setOwnershipTick((n) => (n + 1) % 100000), 250)
+    return () => clearInterval(id)
+  }, [ownership.supported, ownership.owner])
+
+  const ownershipView = useMemo(() => {
+    const now = Date.now()
+    const mine = isMine(ownership, mySessionId)
+    // 리스 2초 + 하트비트 500ms 를 넘겨 갱신이 끊기면 지금 값을 사실로 단언하지 않는다.
+    const stale = isStale(ownership, now)
+    return {
+      supported: ownership.supported,
+      owner: ownership.owner,
+      ownerEmail: ownership.ownerEmail,
+      event: ownership.event,
+      claim: ownership.claim,
+      denied: ownership.denied,
+      mine,
+      otherOwns: isOwnedByOther(ownership, mySessionId),
+      leftMs: leftMsNow(ownership, now),
+      stale,
+    }
+    // ownershipTick 은 시간이 흘렀다는 사실만 전달한다(값 자체는 쓰지 않는다)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownership, mySessionId, ownershipTick])
+
+  // 붙자마자 현재 점유를 한 번 물어본다. 점유가 비어 있으면 서버는 아무것도 보내지 않으므로
+  // 이 요청이 없으면 "비었다" 를 영영 알 수 없다. 구독 프레임이 먼저 나가도록 살짝 미룬다.
+  const liveConnected = enabled && connected
+  useEffect(() => {
+    if (!liveConnected) return undefined
+    const id = setTimeout(() => sendOwnership('STATUS'), 200)
+    return () => clearTimeout(id)
+  }, [liveConnected, sendOwnership])
+
+  // 갱신이 끊겨 "확인 중" 으로 내려갔으면 다시 물어본다(전환 시 1회).
+  useEffect(() => {
+    if (!liveConnected || !ownershipView.stale) return
+    sendOwnership('STATUS')
+  }, [liveConnected, ownershipView.stale, sendOwnership])
+
+  // 남이 잡고 있거나 내 요청이 거부됐으면 수동 모드에 머무를 수 없다 — 즉시 순찰로 내린다.
+  // (TAKEN_OVER_BY_OTHER 로 조이스틱을 잠그는 경로가 바로 이것이다)
+  useEffect(() => {
+    if (driveMode !== 'manual') return
+    // 내 요청이 아직 왕복 중(pending)이면 판단을 미룬다 — 강제 탈취 직후 서버 응답이
+    // 오기 전에 "남이 잡고 있다" 로 읽어 스스로 순찰로 튕겨 나가는 것을 막는다.
+    if (ownershipView.claim === 'pending') return
+    if (ownershipView.claim === 'denied' || ownershipView.otherOwns) setDriveMode('patrol')
+  }, [driveMode, ownershipView.claim, ownershipView.otherOwns])
+
+  // 수동 모드에 있는 동안 점유를 잡고 유지한다.
+  //
+  // 서버 리스는 2초이고 제어 명령이 올 때마다 갱신된다. 조작자가 잠시 키를 놓으면
+  // 리스가 만료돼 남이 끼어들 수 있으므로, 수동 모드인 동안은 700ms 마다 ACQUIRE 를 보내
+  // 리스를 살려 둔다(내 것이면 서버는 RENEWED 로 처리하고 방송조차 하지 않는다).
+  //
+  // 정리 시 RELEASE 는 '내가 소유자일 때만' 보낸다 — 관전만 하던 탭이 남의 조종을
+  // 끊어 버리는 사고를 막는다.
+  //
+  // canOperate 를 조건에 넣는 이유: 700ms 갱신은 사람이 자리를 비워도 계속 돌아 사실상
+  // 무기한 점유가 된다. 유휴 조작 잠금(S15P11E101-653)이 걸리면 그 사람은 이미 조작할 수
+  // 없는 상태이므로, 그때는 점유도 함께 놓아 다른 사람이 들어올 수 있게 한다.
+  const holdOwnership = liveConnected && driveMode === 'manual' && canOperate
+  useEffect(() => {
+    if (!holdOwnership) return undefined
+    sendOwnership('ACQUIRE')
+    const id = setInterval(() => {
+      if (ownershipRef.current.claim === 'denied') return
+      sendOwnership('ACQUIRE')
+    }, OWNERSHIP_KEEPALIVE_MS)
+    return () => {
+      clearInterval(id)
+      if (isMine(ownershipRef.current, mySessionIdRef.current)) sendOwnership('RELEASE')
+    }
+  }, [holdOwnership, sendOwnership])
+
+  // 조작 권한이 사라졌는데(유휴 잠금·권한 회수) 화면만 수동 모드로 남아 있으면 거짓말이다.
+  // 위 effect 가 이미 점유를 놓았으므로 토글도 순찰로 되돌린다.
+  useEffect(() => {
+    if (!canOperate && driveMode === 'manual') setDriveMode('patrol')
+  }, [canOperate, driveMode])
+
+  const controlOwnership = useMemo(() => ({
+    acquire: () => sendOwnership('ACQUIRE'),
+    // 파괴적 동작 — 호출하는 쪽(ControlPanel)이 확인 절차를 거친 뒤에만 부른다
+    takeover: () => sendOwnership('TAKEOVER'),
+    release: () => {
+      if (isMine(ownershipRef.current, mySessionIdRef.current)) sendOwnership('RELEASE')
+    },
+    requestStatus: () => sendOwnership('STATUS'),
+    clearDenied: () => applyOwnership({ ...ownershipRef.current, denied: null }),
+  }), [sendOwnership, applyOwnership])
+
   const value = useMemo(() => ({
     enabled, connected, lastError, authError, hasToken: !!accessToken,
     dataSource, setDataSource, toggleDataSource,
@@ -500,10 +748,12 @@ export function LiveProvider({ children }: any) {
     resetMappingView,
     driveMode, setDriveMode,
     plan, planError,
+    ownership: ownershipView, controlOwnership, mySessionId,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
       videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline,
-      mappingPhase, resetMappingView, driveMode, setDriveMode, plan, planError])
+      mappingPhase, resetMappingView, driveMode, setDriveMode, plan, planError,
+      ownershipView, controlOwnership, mySessionId])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }
