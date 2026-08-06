@@ -21,6 +21,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -196,6 +197,11 @@ public class EventLogService {
     }
 
     private void persist(AlertMessage alert, String simulationRecipientUserId) {
+        String messageId = normalizeMessageId(alert);
+        if (messageId != null && eventLogRepository.findByMessageId(messageId).isPresent()) {
+            log.info("Suppressing duplicate {} alert with messageId={}", alert.type(), messageId);
+            return;
+        }
         DeduplicationAttempt deduplication = acquireDeduplication(alert);
         if (deduplication.duplicate()) {
             log.info("Suppressing duplicate {} alert for robot {} within {} seconds",
@@ -208,6 +214,7 @@ public class EventLogService {
         logEntry.setLevel(alert.level());
         logEntry.setMessage(alert.message());
         logEntry.setRobotId(alert.robotId());
+        logEntry.setMessageId(normalizeMessageId(alert));
         logEntry.setConfidence(alert.confidence());
         logEntry.setTemperature(alert.temperature());
         logEntry.setEquipmentId(alert.equipmentId());
@@ -220,7 +227,15 @@ public class EventLogService {
 
         EventLog savedEvent;
         try {
-            savedEvent = eventLogRepository.save(logEntry);
+            savedEvent = hasMessageId(alert) ? eventLogRepository.saveAndFlush(logEntry) : eventLogRepository.save(logEntry);
+        } catch (DataIntegrityViolationException duplicateMessageId) {
+            if (hasMessageId(alert)) {
+                log.info("Suppressing concurrently persisted {} alert with messageId={}", alert.type(), alert.messageId());
+                rollbackDeduplication(deduplication);
+                return;
+            }
+            rollbackDeduplication(deduplication);
+            throw duplicateMessageId;
         } catch (RuntimeException e) {
             rollbackDeduplication(deduplication);
             throw e;
@@ -236,6 +251,10 @@ public class EventLogService {
     }
 
     private DeduplicationAttempt acquireDeduplication(AlertMessage alert) {
+        // message_id가 있는 새 로봇은 DB unique 제약이 재시작·다중 인스턴스까지 보장한다.
+        if (hasMessageId(alert)) {
+            return DeduplicationAttempt.notApplied();
+        }
         if (!"ROBOT".equals(alert.source()) || alert.robotId() == null || alert.robotId().isBlank()) {
             return DeduplicationAttempt.notApplied();
         }
@@ -258,6 +277,14 @@ public class EventLogService {
         if (!attempt.duplicate() && attempt.key() != null) {
             recentRobotAlerts.remove(attempt.key(), attempt.receivedAt());
         }
+    }
+
+    private boolean hasMessageId(AlertMessage alert) {
+        return alert.messageId() != null && !alert.messageId().isBlank();
+    }
+
+    private String normalizeMessageId(AlertMessage alert) {
+        return hasMessageId(alert) ? alert.messageId().trim() : null;
     }
 
     private record DeduplicationAttempt(String key, Instant receivedAt, boolean duplicate) {

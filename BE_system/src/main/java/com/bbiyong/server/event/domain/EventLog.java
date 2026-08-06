@@ -23,6 +23,10 @@ public class EventLog {
 
     private String robotId;
 
+    /** 로봇이 재전송해도 변하지 않는 이벤트 멱등 키. 기존 이력은 null이다. */
+    @Column(unique = true, length = 64)
+    private String messageId;
+
     private String equipmentId; // OVERHEAT 전용 — 과열이 감지된 설비 식별자
 
     private Double x;

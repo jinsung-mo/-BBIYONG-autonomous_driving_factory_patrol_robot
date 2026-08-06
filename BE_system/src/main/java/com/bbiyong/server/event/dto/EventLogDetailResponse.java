@@ -23,6 +23,7 @@ public class EventLogDetailResponse {
     private String type;
     private String level;
     private String robotId;
+    private String messageId;
     private String equipmentId;
     private Double x;
     private Double y;
@@ -40,6 +41,7 @@ public class EventLogDetailResponse {
                 .type(event.getType())
                 .level(event.getLevel())
                 .robotId(event.getRobotId())
+                .messageId(event.getMessageId())
                 .equipmentId(event.getEquipmentId())
                 .x(event.getX())
                 .y(event.getY())

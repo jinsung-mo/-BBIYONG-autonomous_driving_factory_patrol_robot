@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AlertMessageTests {
 
     @Test
-    void fireUsesRobotTimestampSimpleMessageAndTemporaryZeroCoordinates() {
+    void fireUsesRobotTimestampSimpleMessageAndNullCoordinatesWhenLocationIsAbsent() {
         RobotPacket packet = new RobotPacket();
         packet.setRobotId("orinka_01");
         packet.setConfidence(0.95);
@@ -20,8 +20,8 @@ class AlertMessageTests {
         AlertMessage alert = AlertMessage.fromFire(packet);
 
         assertThat(alert.message()).isEqualTo("화재 발생");
-        assertThat(alert.x()).isZero();
-        assertThat(alert.y()).isZero();
+        assertThat(alert.x()).isNull();
+        assertThat(alert.y()).isNull();
         assertThat(alert.timestamp()).isEqualTo(Instant.ofEpochSecond(1785806400L).toString());
     }
 

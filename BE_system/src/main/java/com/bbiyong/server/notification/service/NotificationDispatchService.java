@@ -43,7 +43,9 @@ public class NotificationDispatchService {
         Instant now = Instant.now();
         for (NotificationSetting setting : settings) {
             if (!notificationService.shouldNotify(setting, event.getLevel())) continue;
-            String dedupeKey = event.getType() + ":" + nullToEmpty(event.getRobotId()) + ":" + nullToEmpty(event.getEquipmentId());
+            String dedupeKey = event.getMessageId() != null && !event.getMessageId().isBlank()
+                    ? "message:" + event.getMessageId()
+                    : event.getType() + ":" + nullToEmpty(event.getRobotId()) + ":" + nullToEmpty(event.getEquipmentId());
             if (!event.isSimulated() && deliveryRepository.existsByRecipientUserIdAndDedupeKeyAndCreatedAtAfter(
                     setting.getUserId(), dedupeKey, now.minus(1, ChronoUnit.MINUTES))) continue;
             NotificationDelivery delivery = new NotificationDelivery();

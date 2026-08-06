@@ -13,6 +13,10 @@ public class RobotPacket {
     @JsonProperty("robot_id")
     private String robotId;
 
+    /** 로봇이 재전송에도 유지하는 위험 이벤트 식별자. */
+    @JsonProperty("message_id")
+    private String messageId;
+
     private Location location;
     private Double battery;
     // 로봇이 보고하는 상위 FSM 상태 (명령 mode(autonomy/manual/disabled)와는 별개 축)
