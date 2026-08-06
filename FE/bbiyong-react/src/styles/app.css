@@ -3157,3 +3157,14 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .zone-del:hover:not(:disabled){background:rgba(192,122,114,.1);}
 /* 위치 라벨 — 구역 이름은 문장처럼 읽히므로 숫자용 mono 를 쓰지 않는다 */
 .zone-label{font-family:'Gothic A1','Malgun Gothic',system-ui,sans-serif; font-weight:600;}
+
+/* 맵 목록 종류 구분 (S15P11E101-774) */
+.maplist-head{display:flex; align-items:center; gap:8px; margin-top:10px;}
+.maplist-head .k{font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6E7385;}
+.maplist-head .btn-text{margin-left:auto; padding:4px 10px; font-size:12px;}
+.map-list li.raw{opacity:.82;}
+.map-list li.empty{justify-content:flex-start;}
+.tag.kind{font-size:10px; font-weight:700; border-radius:4px; padding:2px 6px;}
+.tag.kind.plan{color:#3F6A56; border-color:rgba(116,169,141,.5); background:rgba(116,169,141,.1);}
+.tag.kind.raw{color:#5A6072; border-color:#D6D9E3; background:#F4F5F8;}
+.map-list .t.src{color:#6E7385;}

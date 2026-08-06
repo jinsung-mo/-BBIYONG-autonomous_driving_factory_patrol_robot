@@ -27,6 +27,8 @@ export default function OpsPage() {
   const [confirming, setConfirming] = useState(false)
   const [requested, setRequested] = useState(false)   // START_MAPPING 발행 후 로봇 반응 대기
   const [saving, setSaving] = useState(false)
+  // 기본은 도면만. 원본은 눌러야 나온다(S15P11E101-774).
+  const [showRaw, setShowRaw] = useState(false)
   const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)                // { kind: ok|warn|err, text }
 
   // 언마운트 뒤 setState 를 막는다 — 저장 흐름은 최대 12초까지 폴링한다
@@ -45,6 +47,18 @@ export default function OpsPage() {
   }, [enabled, accessToken])
 
   useEffect(() => { loadMaps() }, [loadMaps])
+
+  // kind 가 없는 옛 레코드는 원본으로 본다 — 도면이라고 단정하면 목록에 섞여 들어온다.
+  const isPlan = (m: any) => String(m?.kind || '').toUpperCase() === 'FLOORPLAN'
+  const sourceNameOf = (m: any) => {
+    const src = m?.sourceMapId
+    if (!src) return null
+    const hit = maps.find((x: any) => mapIdOf(x) === src)
+    return hit ? (mapNameOf(hit) || src) : src
+  }
+  const planCount = maps.filter(isPlan).length
+  const rawCount = maps.length - planCount
+  const shownMaps = showRaw ? maps : maps.filter(isPlan)
 
   // 진행 단계. 완료 이벤트 > 로봇이 보고하는 MAPPING > 발행 직후 대기 순으로 우선한다.
   //
@@ -199,18 +213,45 @@ export default function OpsPage() {
                   {!mapsErr && maps.length === 0 && !loading && (
                     <div className="cfg-note">저장된 맵이 없습니다. 위에서 현재 맵을 저장하면 여기에 쌓입니다.</div>
                   )}
+                  {/* 매핑 한 번에 원본(RAW)과 도면(FLOORPLAN)이 두 건씩 쌓인다(S15P11E101-774).
+                      쓰는 것은 도면이므로 기본은 도면만 보이고, 원본은 눌러서 꺼낸다 —
+                      목록이 두 배로 길어지면 무엇을 고를지가 아니라 무엇을 거를지부터 하게 된다. */}
+                  <div className="maplist-head">
+                    <span className="k mono">도면 {planCount}건{rawCount ? ` · 원본 ${rawCount}건` : ''}</span>
+                    {rawCount > 0 && (
+                      <button
+                        type="button" id="btnToggleRaw" className="btn-text"
+                        onClick={() => setShowRaw((v) => !v)}
+                        aria-pressed={showRaw}
+                      >
+                        {showRaw ? '원본 숨기기' : '원본 보기'}
+                      </button>
+                    )}
+                  </div>
                   <ul className="map-list">
-                    {maps.map((m, i) => (
-                      <li key={mapIdOf(m) ?? i}>
+                    {shownMaps.map((m, i) => (
+                      <li key={mapIdOf(m) ?? i} className={isPlan(m) ? 'plan' : 'raw'}>
                         <b>{mapNameOf(m) || mapIdOf(m)}</b>
+                        {/* 종류를 뱃지로 못 박는다. 글자 사이에 섞어 두면 훑을 때 안 보인다. */}
+                        <span className={`tag kind ${isPlan(m) ? 'plan' : 'raw'}`}>
+                          {isPlan(m) ? '도면' : '원본'}
+                        </span>
                         <span className="t mono">
-                          {m.kind ? `${m.kind === 'FLOORPLAN' ? '도면' : '원본'} · ` : ''}
                           {m.widthPx && m.heightPx ? `${m.widthPx}×${m.heightPx}` : ''}
                           {m.resolution ? ` · ${m.resolution} m/px` : ''}
                         </span>
+                        {/* 같은 매핑 세션의 원본이 목록에 있으면 어느 것에서 나왔는지 알려 준다 */}
+                        {isPlan(m) && sourceNameOf(m) && (
+                          <span className="t mono src">원본 {sourceNameOf(m)}</span>
+                        )}
                         {mapIdOf(m) === activeId && <span className="tag">활성</span>}
                       </li>
                     ))}
+                    {!shownMaps.length && (
+                      <li className="empty">
+                        <span className="t">도면이 없습니다. 원본만 있다면 ‘원본 보기’로 확인하세요.</span>
+                      </li>
+                    )}
                   </ul>
                   <div className="cfg-note">
                     <b>이 맵 사용</b>을 누르면 저장 명령(SAVE_MAP)을 전송합니다.
