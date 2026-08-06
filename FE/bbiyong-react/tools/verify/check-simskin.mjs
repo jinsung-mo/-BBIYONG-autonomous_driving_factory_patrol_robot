@@ -134,7 +134,7 @@ console.log('\n[3] 지표 - 화면 위 KPI 행')
 const env = await ev(`[...document.querySelectorAll('#pgMap .kpis .kpi')].map(d=>
   d.querySelector('.kpi-label').textContent+'='+d.querySelector('.kpi-num').textContent)`)
 console.log('  KPI :', (env || []).join(' / '))
-console.log('  → 세 칸 :', ok((env || []).length === 3))
+console.log('  → 네 칸 :', ok((env || []).length === 4))
 console.log('  → 경보 이벤트 포함 :', ok((env || []).some((e) => e.startsWith('경보 이벤트'))))
 console.log('  → 최고 온도 포함 :', ok((env || []).some((e) => e.startsWith('최고 온도'))))
 // 평소에 붉은 배지가 상주하면 정작 경보가 났을 때 눈에 들어오지 않는다
@@ -208,16 +208,18 @@ console.log('  → 화면 안에 들어온다 :', ok(fits === true))
 console.log('  → 값이 잘리지 않음 :', ok(!overflow))
 await send('Emulation.clearDeviceMetricsOverride'); await sleep(500)
 
-console.log('\n[7] 실서버 화면은 그대로인가')
+console.log('\n[7] 실서버 화면도 같은 규격인가')
 await enter('live')
-console.log('  #pgB class :', await ev(`document.querySelector('#pgB')?.className`))
-console.log('  → sim-skin 없음 :', ok(!(await ev(`document.querySelector('#pgB')?.classList.contains('sim-skin')`))))
-console.log('  → 게이지 없음 :', ok(!(await ev(`!!document.querySelector('.rgauge')`))))
-console.log('  → 배터리 막대 유지 :', ok(await ev(`!!document.querySelector('#pStatus .bar')`)))
-console.log('  → 요약 띠 유지 :', ok(await ev(`!!document.querySelector('#pSummary')`)))
-const radius = await ev(`getComputedStyle(document.querySelector('#pStatus')).borderRadius`)
+// 관제는 지도·카메라 두 화면으로 나뉘었다(S15P11E101-688). #pgB 는 더 이상 없다.
+console.log('  화면 :', await ev(`[...document.querySelectorAll('.page.on')].map(e=>e.id).join(' / ')`))
+console.log('  → 지도 화면이 뜬다 :', ok(await ev(`!!document.querySelector('#pgMap')`)))
+console.log('  → 게이지 없음 :', ok(!(await ev(`!!document.querySelector('#pgMap .rgauge')`))), '(실서버는 막대로 본다)')
+console.log('  → 배터리 막대 유지 :', ok(await ev(`!!document.querySelector('#pgMap #pStatus .bar')`)))
+// S15P11E101-757 에서 실서버 화면도 v3 톤으로 통일했다. '시뮬 스킨이 새지 않는다' 는
+// 전제가 사라졌으므로, 이제 잴 것은 두 화면이 같은 카드 규격을 쓰는가다.
+const radius = await ev(`getComputedStyle(document.querySelector('#pgMap #pStatus')).borderRadius`)
 console.log('  패널 모서리 :', radius)
-console.log('  → 기존 값(12px) :', ok(radius === '12px'), '(시뮬 스킨의 18px 가 새지 않는다)')
+console.log('  → v3 카드 규격(16px) :', ok(radius === '16px'), '(화면마다 다른 층이 생기지 않는다)')
 
 console.log('\n콘솔 에러:', errs.length ? errs.slice(0, 4) : '없음')
 ws.close(); chrome.kill(); await be.close(); process.exit(0)

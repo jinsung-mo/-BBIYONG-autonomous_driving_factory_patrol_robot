@@ -122,10 +122,11 @@ const radii = await ev(`(()=>{const g=(s)=>{const el=document.querySelector(s); 
 console.log('  판 :', JSON.stringify(radii?.panel))
 const outer = radii?.panel?.r ?? 0
 console.log('  바깥', outer, '· 안쪽 : stat-card', radii?.card?.r, '· log', radii?.log?.r)
-// S15P11E101-691 부터 판마다 제 반경을 갖는다. 고정 토큰을 요구하지 않고,
-// 안쪽이 바깥보다 작다는 것만 지킨다 — 그래야 두 곡선이 부딪히지 않는다.
+// S15P11E101-691 부터 판마다 제 반경을 갖고, 757 부터 로그 행은 모서리 없이 구분선만 쓴다.
+// 반경이 0 인 것은 '모서리를 안 쓴다' 는 뜻이라 어길 규칙이 없다 — 가진 것만 잰다.
+const inner = [radii?.card?.r, radii?.log?.r].filter((v) => Number(v) > 0)
 console.log('  → 안쪽이 바깥보다 작다 :',
-  ok([radii?.card?.r, radii?.log?.r].every((v) => v > 0 && v < outer)),
+  ok(inner.length > 0 && inner.every((v) => v < outer)),
   '(같거나 크면 두 곡선이 부딪혀 눈에 거슬린다)')
 
 console.log('\n[5] 콘텐츠는 유리로 덮지 않는다')
@@ -196,8 +197,10 @@ console.log('  → sim-skin 없음 :', ok(!(await ev(`document.querySelector('#p
 const liveR = await ev(`getComputedStyle(document.querySelector('#pStatus')).borderTopLeftRadius`)
 const liveF = await ev(`(()=>{const s=getComputedStyle(document.querySelector('#pStatus')); return s.backdropFilter||s.webkitBackdropFilter})()`)
 const liveRim = await ev(`(()=>{const b=getComputedStyle(document.querySelector('#pStatus'),'::before'); return String(b.backdropFilter||b.webkitBackdropFilter||'none')})()`)
+// S15P11E101-757 에서 실서버 화면도 v3 톤으로 통일했다. 유리가 새지 않는지는 여전히
+// 봐야 하지만, 반경은 이제 v3 카드 규격(16px)이 맞다.
 console.log('  패널 모서리 :', liveR, '· backdrop-filter :', liveF, '· 링 :', liveRim)
-console.log('  → 기존 그대로(12px · none) :', ok(liveR === '12px' && liveF === 'none'))
+console.log('  → v3 카드 규격 · 유리 없음 :', ok(liveR === '16px' && (!liveF || liveF === 'none')))
 console.log('  → 굴절 링이 새지 않음 :', ok(liveRim === 'none'))
 
 console.log('\n콘솔 에러:', errs.length ? errs.slice(0, 4) : '없음')
