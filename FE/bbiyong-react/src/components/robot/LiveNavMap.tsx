@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
-import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgroundOf } from '../../live/navMap.ts'
+import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgroundOf, followPose } from '../../live/navMap.ts'
 
 // live 모드의 2D 맵 캔버스 — 로봇이 보내는 실제 SLAM 맵/스캔/자세를 그린다.
 // 렌더 로직은 navMap.js(로봇팀 nav.html 포팅)에 있고, 여기서는 캔버스 수명주기만 다룬다.
@@ -17,12 +17,16 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgr
 // 운영 탭 전용이 되었으므로, 지도 탭에서는 원본 격자로 되돌릴 길을 열어 두지 않는다.
 // mapping 을 주면 라이브 매핑 화면이 된다(S15P11E101-763).
 // 저장 도면 대신 원본 점유격자를 배경으로 쓰고, 지도가 넓어질 때마다 화면을 다시 맞춘다.
-export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false, mapping = false }: {
+// follow 를 주면 로봇이 화면 가운데 오도록 따라간다(S15P11E101-775).
+// 조작자가 드래그로 개입하면 따라가기를 멈추고, 버튼으로 되돌린다 —
+// 보고 싶은 곳을 보고 있는데 화면이 제멋대로 끌려가면 그것이 더 답답하다.
+export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
     zoomFactor?: number,
     planOnly?: boolean,
     mapping?: boolean,
+    follow?: boolean,
   }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef<HTMLCanvasElement | null>(null)
@@ -37,6 +41,14 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   routeRef.current = route
   // 정제 도면이 있으면 기본으로 보여준다(S15P11E101-524). 원본 점유격자로 되돌릴 수도 있어야 한다 —
   // 도면이 실제와 어긋나 보일 때 원본으로 확인할 방법이 없으면 곤란하다.
+  // 따라가는 중인가. follow 를 켠 채로 들어오면 켜진 상태로 시작한다.
+  const [following, setFollowing] = useState(follow)
+  const followingRef = useRef(follow)
+  followingRef.current = following && follow
+  useEffect(() => { setFollowing(follow) }, [follow])
+  // 드래그로 화면을 미는 중
+  const panRef = useRef<{ x: number, y: number } | null>(null)
+
   const [showPlan, setShowPlan] = useState(true)
   const showPlanRef = useRef(true)
   // 매핑 중에는 토글과 무관하게 원본 격자를 쓴다. 저장 도면을 깔아 두면 지금 그리는
@@ -64,6 +76,11 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       // 배경(도면 또는 원본) 기준으로 맞춘다 — 도면만 있고 원본이 없을 수도 있다
       const bg = backgroundOf(nav, showPlanRef.current)
       if (bg && (!viewRef.current.init || fitted.resized)) fitView(viewRef.current, cv, bg)
+      // 지도가 넓어져 다시 맞춘 뒤에도 로봇을 가운데로 되돌린다(S15P11E101-775).
+      // refit 만 하면 새로 발견한 구역 쪽으로 화면이 끌려가 로봇이 가장자리로 밀린다.
+      // 자세는 3Hz 로 온다. 한 프레임에 조금씩 따라가면 로봇이 화면 가장자리를 맴돈다 —
+      // 눈에 띄게 흔들리지 않으면서 따라잡는 값이 이 정도다.
+      if (followingRef.current && nav?.pose) followPose(viewRef.current, cv, nav.pose, 0.5)
       drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly)
     }
 
@@ -142,6 +159,26 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       <canvas
         ref={cvRef}
         onClick={onPick ? onClick : undefined}
+        onPointerDown={(e) => {
+          // 조작자가 화면을 밀기 시작하면 따라가기를 멈춘다 — 보려는 곳을 보게 둔다
+          panRef.current = { x: e.clientX, y: e.clientY }
+          ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+          if (followingRef.current) setFollowing(false)
+        }}
+        onPointerMove={(e) => {
+          const p = panRef.current
+          if (!p) return
+          const cv = cvRef.current
+          if (!cv) return
+          const r = cv.getBoundingClientRect()
+          // 표시 크기와 내부 해상도가 다를 수 있다 — 비율로 환산해 민다
+          viewRef.current.x += (e.clientX - p.x) * (cv.width / r.width)
+          viewRef.current.y += (e.clientY - p.y) * (cv.height / r.height)
+          panRef.current = { x: e.clientX, y: e.clientY }
+          redraw()
+        }}
+        onPointerUp={(e) => { panRef.current = null; (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) }}
+        onPointerCancel={() => { panRef.current = null }}
         className="map-zoom-canvas"
         style={{
           cursor: onPick ? 'crosshair' : undefined,
@@ -166,6 +203,15 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
           title={showPlan ? '원본 점유격자로 보기' : '정제 도면으로 보기'}
         >
           {showPlan ? `도면${plan.kind === 'FLOORPLAN' ? '' : ' (원본)'}` : '원본 격자'}
+        </button>
+      )}
+      {follow && !following && (
+        <button
+          type="button" className="mapview follow-back" id="btnFollowRobot"
+          onClick={() => setFollowing(true)}
+          title="로봇을 다시 화면 가운데로"
+        >
+          로봇 따라가기
         </button>
       )}
       {!connected && <span className="hud">연결 대기</span>}

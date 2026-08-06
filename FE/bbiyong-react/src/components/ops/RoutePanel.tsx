@@ -153,6 +153,7 @@ export default function RoutePanel() {
           route={mapping ? null : route}
           onPick={editLocked ? null : onPick}
           mapping={mapping}
+          follow={mapping}
         />
         {mapping && (
           <div className="routemap-note" role="status">
