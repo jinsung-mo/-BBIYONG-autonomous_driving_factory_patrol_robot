@@ -84,7 +84,25 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
 
   return (
     <div className="auth-wrap">
-      <div className="auth-card">
+      {/* 씬: 순찰 경로 2줄 + 마커 2개. 유리 밑을 관통시켜야 유리가 유리로 보인다 —
+          격자·색 얼룩은 .auth-wrap::before/::after(순수 CSS)로 이미 깔려 있다.
+          이 SVG 와 마커만 마크업이 필요하다(경로선·아이콘이라 CSS 배경만으론 못 그린다). */}
+      <svg className="auth-scene__path" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <path d="M-60 250 L260 250 L260 662 L1500 662" fill="none" stroke="#96C2A9" strokeWidth="2" />
+        <path d="M1010 662 L1010 300 L1340 300" fill="none" stroke="#D9AFA9" strokeWidth="2" strokeDasharray="5 6" />
+        <circle cx="260" cy="250" r="4" fill="#96C2A9" />
+        <circle cx="260" cy="662" r="4" fill="#96C2A9" />
+        <circle cx="1010" cy="662" r="4" fill="#D9AFA9" />
+      </svg>
+      <div className="auth-marker auth-marker--edge" aria-hidden="true">
+        <i style={{ background: 'var(--bb-ok-tint)', boxShadow: 'inset 0 0 0 2px var(--bb-ok)' }} />
+      </div>
+      <div className="auth-marker auth-marker--warn" aria-hidden="true">
+        <i style={{ background: 'var(--bb-warn-tint)', boxShadow: 'inset 0 0 0 2px var(--bb-warn)' }} />
+      </div>
+
+      {/* 1단 유리 패널. tokens.css 의 .bb-glass 를 그대로 물린다(radius 만 auth-glass 가 덮음). */}
+      <div className={`auth-glass bb-glass${mode === 'signup' ? ' is-signup' : ''}`}>
         <div className="auth-brand">삐용(BBIYONG)<span> 통합 관제 시스템</span></div>
         {/* 세그먼트 필(S15P11E101-791). 탭 그룹을 알약 하나로 — 선택만 진하게 채운다. */}
         <div className="auth-seg" role="tablist" aria-label="로그인 또는 회원가입">
@@ -96,94 +114,107 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
           <button type="button" role="radio" aria-checked={live} className={live ? 'on' : ''} onClick={() => switchSource('live')} disabled={busy}>실서버</button>
         </div>
         <form onSubmit={submit}>
-          {mode === 'signup' && (
-            <div className="form-row">
-              <label htmlFor="su-name">이름</label>
-              <input id="su-name" value={form.name} onChange={set('name')} placeholder="관리자 이름" autoComplete="name" disabled={busy} />
+          <div className="fields">
+            {/* 2단 · 왼쪽 카드 — 계정 정보. 로그인 모드에서는 이 카드만 남는다. */}
+            <div className="col">
+              <div className="col__h">계정 정보</div>
+              <div className="form-row">
+                <label htmlFor="au-email">이메일</label>
+                {/* placeholder 는 예시여야 한다(S15P11E101-802). 전에는 실제 데모 계정
+                    주소(safety@bbiyong.io)를 썼는데, 도메인이 실재하는 것처럼 읽혀
+                    값인지 안내인지 구분되지 않았다. example.com 은 예약 도메인이라
+                    실재할 수 없고, 그래서 '예시' 라는 신호가 선다.
+                    가입 화면은 형식보다 '무엇을 넣어야 하는지' 가 먼저다. */}
+                <input
+                  id="au-email" type="email" value={form.email} onChange={set('email')}
+                  placeholder={mode === 'signup' ? '업무용 이메일 주소' : 'name@example.com'}
+                  autoComplete="username" disabled={busy}
+                />
+              </div>
+              <div className="form-row">
+                <label htmlFor="au-pw">비밀번호</label>
+                <input id="au-pw" type="password" value={form.password} onChange={set('password')} placeholder={mode === 'signup' ? '영문·숫자·특수문자 포함 8자 이상' : '비밀번호'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} disabled={busy} />
+              </div>
+              {mode === 'signup' && (
+                <div className="form-row">
+                  <label htmlFor="su-pw2">비밀번호 확인</label>
+                  <input id="su-pw2" type="password" value={form.password2} onChange={set('password2')} placeholder="비밀번호 확인" autoComplete="new-password" disabled={busy} />
+                </div>
+              )}
             </div>
-          )}
-          <div className="form-row">
-            <label htmlFor="au-email">이메일</label>
-            {/* placeholder 는 예시여야 한다(S15P11E101-802). 전에는 실제 데모 계정
-                주소(safety@bbiyong.io)를 썼는데, 도메인이 실재하는 것처럼 읽혀
-                값인지 안내인지 구분되지 않았다. example.com 은 예약 도메인이라
-                실재할 수 없고, 그래서 '예시' 라는 신호가 선다.
-                가입 화면은 형식보다 '무엇을 넣어야 하는지' 가 먼저다. */}
-            <input
-              id="au-email" type="email" value={form.email} onChange={set('email')}
-              placeholder={mode === 'signup' ? '업무용 이메일 주소' : 'name@example.com'}
-              autoComplete="username" disabled={busy}
-            />
-          </div>
-          <div className="form-row">
-            <label htmlFor="au-pw">비밀번호</label>
-            <input id="au-pw" type="password" value={form.password} onChange={set('password')} placeholder={mode === 'signup' ? '영문·숫자·특수문자 포함 8자 이상' : '비밀번호'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} disabled={busy} />
-          </div>
-          {mode === 'signup' && (
-            <>
-              <div className="form-row">
-                <label htmlFor="su-pw2">비밀번호 확인</label>
-                <input id="su-pw2" type="password" value={form.password2} onChange={set('password2')} placeholder="비밀번호 확인" autoComplete="new-password" disabled={busy} />
-              </div>
-              <div className="form-row">
-                <label htmlFor="su-phone">휴대전화번호</label>
-                <input id="su-phone" type="tel" inputMode="numeric" value={form.phone} onChange={setPhone} placeholder="010-0000-0000" autoComplete="tel" disabled={busy} />
-              </div>
-              <div className="form-row">
-                <label htmlFor="su-birth">생년월일</label>
-                <input id="su-birth" type="date" value={form.birth} onChange={set('birth')} min={MIN_BIRTH_ISO} max={todayISO()} autoComplete="bday" disabled={busy} />
-              </div>
-              <div className="form-row">
-                <label id="su-gender-label">성별</label>
-                <div className="seg gender" role="radiogroup" aria-labelledby="su-gender-label">
-                  {GENDERS.map((g) => (
-                    <button
-                      key={g.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.gender === g.value}
-                      className={form.gender === g.value ? 'on' : ''}
-                      onClick={() => setForm((f) => ({ ...f, gender: g.value }))}
-                      disabled={busy}
-                    >
-                      {g.label}
-                    </button>
-                  ))}
+
+            {/* 2단 · 오른쪽 카드 — 개인 정보. 회원가입 전용, 카드째로 사라진다. */}
+            {mode === 'signup' && (
+              <div className="col">
+                <div className="col__h">개인 정보</div>
+                <div className="form-row">
+                  <label htmlFor="su-name">이름</label>
+                  <input id="su-name" value={form.name} onChange={set('name')} placeholder="관리자 이름" autoComplete="name" disabled={busy} />
+                </div>
+                <div className="form-row">
+                  <label htmlFor="su-phone">휴대전화번호</label>
+                  <input id="su-phone" type="tel" inputMode="numeric" value={form.phone} onChange={setPhone} placeholder="010-0000-0000" autoComplete="tel" disabled={busy} />
+                </div>
+                <div className="form-row">
+                  <label htmlFor="su-birth">생년월일</label>
+                  <input id="su-birth" type="date" value={form.birth} onChange={set('birth')} min={MIN_BIRTH_ISO} max={todayISO()} autoComplete="bday" disabled={busy} />
+                </div>
+                <div className="form-row">
+                  <label id="su-gender-label">성별</label>
+                  <div className="seg gender" role="radiogroup" aria-labelledby="su-gender-label">
+                    {GENDERS.map((g) => (
+                      <button
+                        key={g.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={form.gender === g.value}
+                        className={form.gender === g.value ? 'on' : ''}
+                        onClick={() => setForm((f) => ({ ...f, gender: g.value }))}
+                        disabled={busy}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </>
-          )}
-          {/* 자동 로그아웃 사유. 입력 오류(err)와 구분해서 보여준다(S15P11E101-508) */}
-          {!err && logoutReason && REASON_TEXT[logoutReason] && (
-            <div className="form-msg warn" id="logoutReason">{REASON_TEXT[logoutReason]}</div>
-          )}
-          {err && <div className="form-msg err">{err}</div>}
-          <button type="submit" className="auth-submit" disabled={busy}>
-            {busy ? '처리 중…' : mode === 'login' ? '로그인' : '회원가입'}
-          </button>
+            )}
+          </div>
+
+          {/* 카드 밖 · 유리 위. 메시지와 제출은 어느 묶음에도 속하지 않는다(폼 전체에 대한 것). */}
+          <div className="auth-foot">
+            {/* 자동 로그아웃 사유. 입력 오류(err)와 구분해서 보여준다(S15P11E101-508) */}
+            {!err && logoutReason && REASON_TEXT[logoutReason] && (
+              <div className="form-msg warn" id="logoutReason">{REASON_TEXT[logoutReason]}</div>
+            )}
+            {err && <div className="form-msg err">{err}</div>}
+            <button type="submit" className="auth-submit" disabled={busy}>
+              {busy ? '처리 중…' : mode === 'login' ? '로그인' : '회원가입'}
+            </button>
+            {/* 안내문은 모드까지 봐야 한다(S15P11E101-802). 전에는 live 여부로만 갈려서
+                시뮬레이션 모드에서 회원가입 탭을 열면 데모 계정의 이메일과 비밀번호가
+                그대로 보였다 — 가입 화면에 남의 자격증명이 떠 있는 셈이다. */}
+            <div className="auth-hint">
+              {mode === 'signup'
+                ? '가입한 계정으로 바로 로그인할 수 있습니다.'
+                : (live
+                  ? (
+                    <>
+                      {/* 두 줄로 나눈다(S15P11E101-803). 한 줄이면 좁은 폭에서 어색하게
+                          끊기고, '무엇을 하는 화면인가' 와 '없으면 어떻게 하나' 는
+                          성격이 다른 문장이라 붙여 둘 이유가 없다. */}
+                      실서버 계정으로 로그인합니다.
+                      <br />
+                      계정이 없으면 회원가입 후 이용하세요.
+                    </>
+                  )
+                  : '데모 계정 — safety@bbiyong.io / bbiyong')}
+            </div>
+            {onBack && (
+              <button type="button" className="auth-back" onClick={() => { reset(); onBack() }} disabled={busy}>← 처음으로</button>
+            )}
+          </div>
         </form>
-        {/* 안내문은 모드까지 봐야 한다(S15P11E101-802). 전에는 live 여부로만 갈려서
-            시뮬레이션 모드에서 회원가입 탭을 열면 데모 계정의 이메일과 비밀번호가
-            그대로 보였다 — 가입 화면에 남의 자격증명이 떠 있는 셈이다. */}
-        <div className="auth-hint">
-          {mode === 'signup'
-            ? '가입한 계정으로 바로 로그인할 수 있습니다.'
-            : (live
-              ? (
-                <>
-                  {/* 두 줄로 나눈다(S15P11E101-803). 한 줄이면 좁은 폭에서 어색하게
-                      끊기고, '무엇을 하는 화면인가' 와 '없으면 어떻게 하나' 는
-                      성격이 다른 문장이라 붙여 둘 이유가 없다. */}
-                  실서버 계정으로 로그인합니다.
-                  <br />
-                  계정이 없으면 회원가입 후 이용하세요.
-                </>
-              )
-              : '데모 계정 — safety@bbiyong.io / bbiyong')}
-        </div>
-        {onBack && (
-          <button type="button" className="auth-back" onClick={() => { reset(); onBack() }} disabled={busy}>← 처음으로</button>
-        )}
       </div>
     </div>
   )

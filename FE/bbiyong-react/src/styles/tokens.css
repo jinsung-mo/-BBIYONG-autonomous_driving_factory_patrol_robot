@@ -93,12 +93,28 @@
   --bb-ease: ease;
 }
 
-/* ── Glass: 밝은 씬 위에서만 사용. 어두운 영상 위엔 불투명 흰색. ── */
+/* ── Glass: 밝은 씬 위에서만 사용. 어두운 영상 위엔 불투명 흰색. ──
+   🔴 전제: **유리 뒤에 흐려질 것이 있어야 한다.**
+   `backdrop-filter: blur()` 는 뒤를 흐리는 필터일 뿐이다. 뒤가 균일한 흰색이면
+   흐려도 흰색이라 유리를 켜든 끄든 픽셀이 거의 같다. 레퍼런스에서 유리가 유리로
+   보이는 건 블러 때문이 아니라 **뒤에 흐려질 만한 대비(3D 씬)가 있기 때문**이다.
+   이 클래스를 쓰려면 뒤에 경로·마커·격자 같은 내용을 먼저 깔아라.
+
+   [보완 2026-08-07] 핸드오프 원본에는 테두리도 엣지 하이라이트도 없었다.
+   그 상태로는 흰 배경 위에서 계층이 그림자와 radius 로만 읽혀 사실상 사라진다
+   (로그인 화면에서 실제로 확인됨). 레퍼런스 이미지의 유리 패널에는 좌상단에
+   밝은 모서리 선이 뚜렷한데, 그게 토큰으로 옮겨지지 않았다. 셋을 더한다:
+     ① 옅은 틴트  — 순백이 아니라 아래로 갈수록 surface 쪽으로 내려가는 그라디언트.
+                    안쪽 카드(순백)와 명도차를 만들어 준다
+     ② 테두리    — 배경과 무관하게 경계가 생긴다. `.bb-panel` 이 이미 쓰는 문법이다
+     ③ 상단 inset — 위에서 빛이 드는 씬의 조명 방향과 일치시킨다 */
 .bb-glass {
-  background: rgba(255,255,255,.68);
+  background: linear-gradient(150deg, rgba(255,255,255,.72) 0%, rgba(244,245,248,.60) 100%);
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  box-shadow: 0 18px 46px rgba(35,39,51,.07);
+  border: 1px solid rgba(255,255,255,.72);
+  box-shadow: 0 18px 46px rgba(35,39,51,.07),
+              inset 0 1px 0 rgba(255,255,255,.92);
   border-radius: var(--bb-r-card);
 }
 
@@ -120,6 +136,35 @@
   border: 1px solid rgba(255,255,255,.9);
   border-radius: var(--bb-r-ctrl);
 }
+
+/* ── 계층: 유리 안에 들어앉는 카드 ─────────────────────────────
+   레퍼런스의 좌측 패널이 이 문법이다 — 반투명 유리 컨테이너 안에
+   더 불투명한 카드가 항목으로 들어앉고, 그 안에 더 옅은 표가 온다.
+   유리와 카드를 **형제로** 놓으면 이 위계가 생기지 않는다.
+   [사용자 지적 2026-08-07]
+
+   세 가지가 동시에 성립해야 층이 읽힌다. 하나만 어겨도 계층이 뒤집힌다.
+   ① 안쪽은 불투명 — 반투명 위에 반투명을 겹치면 뒤가 두 번 비쳐 글자가 흔들린다
+   ② 안쪽 그림자가 더 약하다 — 유리는 sh 46px 이고 안쪽은 sh-2(18px).
+      안쪽이 더 세면 카드가 유리 위로 떠올라 "패널 안의 항목"이 아니게 된다
+   ③ 안쪽 radius 가 더 작다 — 같으면 두 모서리가 겹쳐 한 덩어리로 보인다 */
+.bb-glass > .bb-card {
+  background: #fff;                       /* ① 유리 위에서는 반드시 불투명 */
+  box-shadow: var(--bb-sh-2);             /* ② 바깥(46px)보다 약하게 */
+  border-radius: var(--bb-r-card);        /* ③ 바깥 r-panel(22)보다 작게 */
+}
+/* 3단째. 카드 안에서는 그림자를 빼고 면의 밝기 차이로만 구분한다 —
+   그림자를 세 번 겹치면 화면이 지저분해진다. */
+.bb-glass > .bb-card > .bb-subsurface,
+.bb-card > .bb-subsurface {
+  box-shadow: none;
+  border-radius: var(--bb-r-tile);        /* r-card(16)보다 작게 */
+}
+
+/* 🔴 유리 위에 유리를 겹치지 마라. 규칙 ①의 반대 사례를 명시해 둔다 —
+   .bb-glass 안에 또 .bb-glass 를 넣으면 backdrop-filter 가 중첩되어
+   블러가 두 번 걸리고, 뒤 배경이 두 번 비쳐 대비가 예측 불가능해진다. */
+.bb-glass .bb-glass { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
 
 /* ── Scene grid ─────────────────────────────── */
 .bb-scene-grid {

@@ -541,11 +541,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   .welcome-scene__path .p-node{ opacity:1; animation:none; }
 }
 
-/* ============ 회원 인증 화면 — v3 플로팅 씬 (S15P11E101-791) ============
-   전에는 이 화면만 다크(#0a0c10 / #12151b / 형광 초록)였다. 처음 화면(Welcome)은
-   이미 v3 밝은 씬이라, 접속 버튼을 누르는 순간 화면이 흑백으로 뒤집혔다.
+/* ============ 회원 인증 화면 — 유리 쉘 (S15P11E101-807) ============
+   전에는 이 화면만 다크(#0a0c10 / #12151b / 형광 초록)였다(-791 에서 밝은 씬으로 전환).
+   이번 변경은 그 위에 계층을 하나 더한다 — 불투명 카드 한 장이 아니라
+   반투명 유리 패널(.auth-glass = .bb-glass) 안에 불투명 카드(.col = .bb-card)가
+   항목으로 들어앉는 2단 구조다. 확정 시안: docs/design/mockups/login-v5-C1-유리쉘.html
+     1단 유리 패널  — 화면이라는 그릇. 뒤 씬(경로·마커·얼룩)이 비친다
+     2단 불투명 카드 — 그 안에 들어앉는 "항목"(필드 묶음: 계정 정보 / 개인 정보)
+     3단 서브 표면  — 카드 안에서 면 밝기로만 구분(입력·성별 세그먼트)
    값은 tokens.css(핸드오프 정본)에서만 가져온다 — 손으로 베껴 적지 않는다. */
 .auth-wrap{
+  position:relative;
   min-height:100vh; display:flex; justify-content:center; padding:32px 20px;
   font-family:var(--bb-font); color:var(--bb-ink);
   /* Welcome 과 같은 씬 배경. 두 화면이 이어져야 '같은 시스템' 으로 읽힌다. */
@@ -560,18 +566,64 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
     linear-gradient(0deg,  rgba(120,128,150,.05) 1px, transparent 1px);
   background-size:56px 56px;
 }
-.auth-card{
-  position:relative;                      /* 격자 위에 온다 */
-  /* 가운데 정렬을 align-items 가 아니라 margin:auto 로 한다. 회원가입 폼은 화면보다
-     길어질 수 있는데, flex 가운데 정렬은 넘칠 때 위쪽이 잘리고 스크롤로도 닿지 않는다.
-     '상단이 잘리면 잘못 로드된 것처럼 보인다' 는 v3 규칙과도 맞는다. */
-  margin:auto;
-  width:100%; max-width:380px;
-  /* 규칙 03 — 테두리 대신 그림자 하나로 층을 만든다 */
-  background:#fff; border:0; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4);
-  padding:28px 26px; color:var(--bb-ink);
-  animation:welcomeIn .5s ease both;
+/* 색 얼룩 — 유리가 빨아들일 색. 경계가 없어 글자 뒤를 지나도 가독성을 깎지 않는다.
+   🔴 유리가 화면에서 안 보이던 원인은 유리가 아니라 씬이었다 — backdrop-filter: blur()
+   는 뒤를 흐리는 필터일 뿐인데, 뒤가 격자뿐이면 흐려도 흰색이라 유리를 켜든 끄든
+   픽셀이 거의 같다. 얼룩은 블러에 뭉개지지 않고 saturate(1.4)를 타서 유리 면 전체에
+   옅은 색조를 남긴다 — 유리를 유리로 보이게 하는 건 블러가 아니라 뒤에 흐려질 것이다.
+   좌하 정상(ok)·우상 위험(warn) 두 점만, 유리(폭 432/756)를 확실히 물도록 잡는다.
+   ⚠️ 알파를 여기서 더 올리지 마라. .10 을 넘기면 유리 위 힌트 문구(--bb-body) 대비가 흔들린다. */
+.auth-wrap::after{
+  content:''; position:fixed; inset:0; pointer-events:none;
+  background:
+    radial-gradient(340px 300px at calc(50% - 150px) 72%, rgba(111,164,135,.10), transparent 70%),
+    radial-gradient(300px 280px at calc(50% + 210px) 24%, rgba(201,162,106,.09), transparent 70%);
 }
+/* 순찰 경로 2줄(정상·위험) + 마커 2개. 유리 밑을 관통시켜야 비친다 — v4-A(카드 뒤로
+   가려짐)와 반대로 쪼개지 않은 한 장짜리 SVG 를 쓴다. slice 로 x=720 을 화면 중앙에
+   고정해 유리(중앙 정렬)와 경로의 좌우 관계를 어떤 폭에서도 유지한다. */
+.auth-scene__path{position:fixed; inset:0; width:100%; height:100%; opacity:.6; pointer-events:none;}
+.auth-marker{position:fixed; width:54px; height:54px; border-radius:var(--bb-r-scene);
+  background:#fff; box-shadow:var(--bb-sh-3); pointer-events:none;
+  display:flex; align-items:center; justify-content:center;}
+.auth-marker i{width:20px; height:20px; border-radius:6px; display:block;}
+/* 🔴 유리 왼쪽 모서리를 물고 있는 마커(정상, y=662/900=73.5%). 유리를 끄면 통째로
+   또렷해지고, 켜면 안쪽 절반만 뿌옇게 밀린다 — on/off 비교에서 가장 크게 갈리는 지점.
+   회원가입(756)에서는 마커가 통째로 유리 밑에 들어가 흐린 덩어리가 된다. 그것도 증거다. */
+.auth-marker--edge{left:calc(50% - 216px - 27px); top:calc(73.5% - 27px);}
+/* 대조군(위험). 로그인 폭에서는 유리 밖이라 또렷하다 — 같은 마커가 유리에 걸친
+   쪽만 뿌옇다는 대비를 옆에서 보여 준다. 위험 분기 꼭짓점(1010,300) 위. */
+.auth-marker--warn{right:calc(50% - 290px - 27px); top:calc(33.3% - 27px);}
+
+/* ── 1단: 유리 패널 ─────────────────────────────────────────────
+   tokens.css 의 .bb-glass 를 그대로 물린다. 여기서 덮는 건 radius 하나뿐이다 —
+   .bb-glass 기본값은 r-card(16)인데 그 안에 같은 16짜리 카드가 들어오면 두 모서리가
+   겹쳐 한 덩어리로 보인다. 그래서 바깥만 r-panel(22)로 올린다.
+   폭: 로그인 432 = 계정 정보 380(기준안 C 계승) + 유리 좌우 패딩(26×2), 회원가입 756.
+   🔴 폭 전환은 max-width 하나만 애니메이트한다 — 내용(2열 배치·필드 표시)은 즉시
+   바뀐다. 함께 움직이면 필드가 흘러다녀 어지럽다. */
+.auth-glass{
+  position:relative;                      /* 격자 위에 온다 */
+  margin:auto;
+  width:100%; max-width:432px;
+  border-radius:var(--bb-r-panel);
+  padding:26px 26px 22px;
+  animation:welcomeIn .5s ease both;
+  transition:max-width calc(var(--bb-dur) * 3) var(--bb-ease);
+}
+.auth-glass.is-signup{max-width:756px;}
+@media (prefers-reduced-motion: reduce){ .auth-glass{transition:none;} }
+
+/* ── 2단: 유리 안에 들어앉는 불투명 카드 ────────────────────────
+   tokens.css 의 `.bb-glass > .bb-card` 는 직계 자식 셀렉터라 여기서는 안 먹는다 —
+   구조가 .auth-glass > form > .fields > .col 로 두 단 깊기 때문이다. 값은 정본과
+   똑같은 세 값(불투명 #fff · 그림자 sh-2 · radius r-card)을 후손 셀렉터로 다시 건다. */
+.auth-glass .col{
+  background:#fff; box-shadow:var(--bb-sh-2); border-radius:var(--bb-r-card);
+  padding:14px 18px 18px; min-width:0;    /* 2열 그리드에서 date 입력이 열을 밀지 않도록 */
+  align-self:start;
+}
+
 .auth-brand{
   font-size:23px; font-weight:800; letter-spacing:-.8px; text-align:center; color:var(--bb-ink);
 }
@@ -583,9 +635,10 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 
 /* 세그먼트 필 — 탭 그룹을 알약 하나로. 선택은 진한 채움, 나머지는 글자만.
-   흰 카드 위라 알약 바탕은 surface 로 둔다(문서의 회색 씬 위 흰 알약과 같은 대비). */
+   유리 위라 알약 바탕은 surface(불투명)로 둔다 — 반투명 트랙을 얹으면 계층 규칙 위반이고
+   뒤 격자가 알약 안에서 끊겨 보인다. */
 .auth-seg{
-  display:flex; gap:2px; padding:3px; margin:20px 0 14px;
+  display:flex; gap:2px; padding:3px; margin:20px auto 14px; max-width:380px;
   background:var(--bb-surface); border-radius:var(--bb-r-pill);
 }
 .auth-seg button{
@@ -601,7 +654,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    구분되지 않는다. 선택은 tonal(옅은 브랜드색)로 — 눈에는 띄되 탭을 이기지 않는다.
    어느 모드로 로그인하는지가 이후 실시간 연동 가능 여부를 정하므로 감출 수는 없다. */
 .auth-seg.src{
-  margin:0 0 18px; padding:0; background:transparent;
+  margin:0 auto 18px; padding:0; background:transparent;
   justify-content:center; gap:4px;
 }
 .auth-seg.src button{flex:0 1 auto; padding:6px 16px; font-size:12px;}
@@ -610,7 +663,28 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .auth-seg.src button:hover:not(:disabled):not(.on){background:var(--bb-surface);}
 
-/* 제출 — 화면에서 채운 버튼은 이것 하나뿐이다(규칙: 채운 건 하나만). */
+/* ── 2열 배치 ───────────────────────────────────────────────────
+   열을 나누는 기준은 논리적 묶음이다.
+     왼쪽 · 계정 정보 : 이메일 → 비밀번호 → 비밀번호 확인(가입만)
+     오른쪽 · 개인 정보(가입만): 이름 → 휴대전화번호 → 생년월일 → 성별
+   비밀번호/확인은 반드시 세로 인접 — 값을 눈으로 대조하는 쌍이라 열을 가로지르면 안 된다.
+   3칸 대 4칸 불균형은 억지로 맞추지 않는다 — 카드가 각자의 묶음을 면으로 보여 주므로
+   길이가 다른 게 '다른 묶음'으로 더 확실히 읽힌다. */
+.fields{display:grid; grid-template-columns:1fr; gap:14px 26px; align-items:start;}
+.auth-glass.is-signup .fields{grid-template-columns:1fr 1fr;}
+
+/* 열 제목 — 로그인 모드에서는 묶음이 하나뿐이라 숨긴다. 카드 면 자체가 이미
+   묶음을 보여 주므로, 제목은 회원가입(묶음 둘)에서만 이름표 역할을 한다. */
+.col__h{
+  display:none; margin-bottom:14px;
+  font-family:var(--bb-font-mono); font-size:var(--bb-fs-caption); font-weight:600;
+  letter-spacing:1.2px; color:var(--bb-muted-2);
+}
+.auth-glass.is-signup .col__h{display:block;}
+
+/* 제출 — 화면에서 채운 버튼은 이것 하나뿐이다(규칙: 채운 건 하나만).
+   유리가 756px 로 넓어져도 제출 버튼은 380px 로 묶는다. */
+.auth-foot{max-width:380px; margin:14px auto 0;}
 .auth-submit{
   width:100%; margin-top:14px; padding:12px 0; border:0; border-radius:20px;
   background:var(--bb-primary); color:#fff;
@@ -628,35 +702,52 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .auth-back:hover:not(:disabled){background:var(--bb-surface); color:var(--bb-ink);}
 
-/* 입력 — .form-row/.seg 는 대시보드 모달과 공용이라 반드시 .auth-card 하위로만 건다.
+/* 입력 — .form-row/.seg 는 대시보드 모달과 공용이라 반드시 .auth-glass 하위로만 건다.
    여기서 새면 모달 폼까지 같이 바뀐다. */
-.auth-card .form-row{margin-bottom:12px;}
-.auth-card .form-row label{font-size:12px; color:var(--bb-body); font-weight:600;}
-.auth-card .form-row input{
-  padding:10px 12px; font-size:13px; border-radius:var(--bb-r-input);
+.auth-glass .form-row{margin-bottom:12px;}
+.auth-glass .form-row:last-child{margin-bottom:0;}
+.auth-glass .form-row label{font-size:12px; color:var(--bb-body); font-weight:600;}
+.auth-glass .form-row input{
+  width:100%; padding:10px 12px; font-size:13px; border-radius:var(--bb-r-input);
   background:#fff; border:1px solid var(--bb-line-strong); color:var(--bb-ink);
 }
-.auth-card .form-row input::placeholder{color:var(--bb-muted);}
-.auth-card .form-row input:focus{border-color:var(--bb-primary); outline:none;}
+.auth-glass .form-row input::placeholder{color:var(--bb-muted);}
+.auth-glass .form-row input:focus{border-color:var(--bb-primary); outline:none;}
+/* date 입력은 브라우저 기본 폭이 내용에 맞춰 잡혀 좁은 열에서 혼자 좁게 앉는다. */
+.auth-glass input[type=date]{min-width:0;}
 /* 성별 선택 — 조작 패널의 .seg 를 인증 카드 톤으로 덮어쓴다 */
-.auth-card .seg.gender{border:0; gap:2px; padding:3px; background:var(--bb-surface); border-radius:var(--bb-r-pill);}
-.auth-card .seg.gender button{
+.auth-glass .seg.gender{border:0; gap:2px; padding:3px; background:var(--bb-surface); border-radius:var(--bb-r-pill);}
+.auth-glass .seg.gender button{
   padding:8px 0; border:0; border-radius:var(--bb-r-pill);
   background:transparent; color:var(--bb-body); font-size:12.5px; font-weight:600;
 }
-.auth-card .seg.gender button.on{background:var(--bb-ink); color:#fff; font-weight:700;}
-.auth-card :focus-visible{outline:2px solid var(--bb-primary); outline-offset:2px;}
-/* 알림 — 배경은 팔레트의 tint 를 그대로 쓴다.
-   글자색만 낮춘다: 토큰의 danger-text(#B4655C)는 danger-tint 위에서 3.08:1,
-   warn-text(#96762F)는 warn-tint 위에서 3.50:1 로 둘 다 기준(4.5)에 못 미친다.
-   색상 계열은 그대로 두고 명도만 내렸다 — tokens.css 는 핸드오프 정본이라
-   손대지 않고, 이 화면 안에서만 덮는다. */
-.auth-card .form-msg{font-size:12.5px; border-radius:var(--bb-r-input);}
-.auth-card .form-msg.err{
+.auth-glass .seg.gender button.on{background:var(--bb-ink); color:#fff; font-weight:700;}
+.auth-glass :focus-visible{outline:2px solid var(--bb-primary); outline-offset:2px;}
+/* 메시지 — 2열일 때 어느 카드에도 놓지 않는다. 폼 전체에 대한 것이지 한 묶음에
+   대한 것이 아니므로 카드 밖, 유리 위 전폭(.auth-foot 안)에 둔다.
+   배경은 팔레트의 tint 를 그대로 쓴다. 글자색만 낮춘다: 토큰의 danger-text(#B4655C)는
+   danger-tint 위에서 3.08:1, warn-text(#96762F)는 warn-tint 위에서 3.50:1 로 둘 다
+   기준(4.5)에 못 미친다. 색상 계열은 그대로 두고 명도만 내렸다 — tokens.css 는
+   핸드오프 정본이라 손대지 않고, 이 화면 안에서만 덮는다. */
+.auth-glass .form-msg{font-size:12.5px; border-radius:var(--bb-r-input);}
+.auth-glass .form-msg.err{
   background:var(--bb-danger-tint); color:#8E3F36; border:1px solid #E2BDB7;
 }
-.auth-card .form-msg.warn{
+.auth-glass .form-msg.warn{
   background:var(--bb-warn-tint); color:#7A5F1E; border:1px solid #E6D2AE;
+}
+
+/* ── 반응형 ─────────────────────────────────────────────────────
+   820px = 유리 756 + 좌우 여백. 그 아래는 열이 좁아져 답답해지므로 1열로 접는다.
+   접히면 카드 두 장이 세로로 쌓인다 — 묶음마다 카드가 하나씩이라 자연스럽다. */
+@media (max-width:820px){
+  .auth-glass.is-signup{max-width:432px;}
+  .auth-glass.is-signup .fields{grid-template-columns:1fr;}
+}
+@media (max-width:620px){
+  .auth-glass{padding:18px 14px;}
+  .auth-glass .col{padding:14px;}
+  .auth-scene__path,.auth-marker{display:none;}
 }
 
 /* ============ 폼 (인증 · 모달 공용) ============ */
