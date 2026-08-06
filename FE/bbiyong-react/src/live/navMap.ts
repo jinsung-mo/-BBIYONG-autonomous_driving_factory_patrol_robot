@@ -191,7 +191,26 @@ const INSPECT_WAIT = '#c9a227'
 const INSPECT_DONE = '#e0483f'
 const INSPECT_OFF = '#8b8f9a'
 
-function drawInspection(g: any, sx: any, sy: any, view: any, inspect: any) {
+/**
+ * 캔버스가 rot 만큼 회전된 상태에서도 글자를 똑바로 그린다(S15P11E101-795).
+ *
+ * drawNav 는 표시 회전(DISPLAY_ROT, 180도)과 heading-up 회전을 캔버스 변환으로 건 채
+ * 배경·경로·점검 지점을 그린다 — 위치는 그 변환 아래에서 맞게 계산되지만, fillText 는
+ * 그 회전을 그대로 받아 글자 자체가 뒤집혀 버린다("1"이 위아래가 바뀐 모양으로 보임).
+ * 글자를 그릴 때만 그 자리에서 반대로 되돌려 화면 기준으로 똑바로 서게 한다.
+ */
+function drawUprightLabel(g: any, text: string, x: any, y: any, rot: any, fill = '#0b0d11') {
+  g.save()
+  g.translate(x, y)
+  g.rotate(-rot)
+  g.fillStyle = fill
+  g.font = 'bold 11px system-ui, sans-serif'
+  g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.fillText(text, 0, 0.5)
+  g.restore()
+}
+
+function drawInspection(g: any, sx: any, sy: any, view: any, inspect: any, textRot: any = 0) {
   const items = [
     ...(inspect.candidates || []).map((c: any) => ({ item: c, id: c.candidateId, done: false })),
     ...(inspect.points || []).map((p: any) => ({ item: p, id: p.pointId, done: true })),
@@ -251,11 +270,7 @@ function drawInspection(g: any, sx: any, sy: any, view: any, inspect: any) {
     // 확정 지점은 순서를 쓴다 — 순찰이 도는 차례다
     if (done && Number.isFinite(Number(item.sequence))) {
       g.globalAlpha = 1
-      g.fillStyle = '#0b0d11'
-      g.font = 'bold 10px system-ui, sans-serif'
-      g.textAlign = 'center'; g.textBaseline = 'middle'
-      g.fillText(String(item.sequence), TX, TY + 0.5)
-      g.textAlign = 'start'; g.textBaseline = 'alphabetic'
+      drawUprightLabel(g, String(item.sequence), TX, TY, textRot)
     }
     g.restore()
   }
@@ -290,6 +305,9 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     g.rotate(nav.pose.yaw - Math.PI / 2)
     g.translate(-px, -py)
   }
+  // 지금 캔버스에 걸려 있는 총 회전(S15P11E101-795). 글자를 그릴 때 이만큼 되돌려
+  // 똑바로 세운다 — drawUprightLabel 에 넘긴다.
+  const textRot = DISPLAY_ROT + (rotating ? nav.pose.yaw - Math.PI / 2 : 0)
 
   const bg = backgroundOf(nav, showPlan)
   if (bg) {
@@ -372,16 +390,14 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
       }
       g.fillStyle = '#3ddc97'
       g.beginPath(); g.arc(X, Y, 9, 0, Math.PI * 2); g.fill()
-      g.fillStyle = '#0b0d11'
-      g.font = 'bold 11px system-ui, sans-serif'
-      g.textAlign = 'center'; g.textBaseline = 'middle'
-      g.fillText(String(i + 1), X, Y + 0.5)
+      // 번호는 뒤집힌 캔버스 회전을 되돌려 똑바로 세운다(S15P11E101-795) — 그냥
+      // fillText 하면 표시 회전(북쪽 뒤집기)을 그대로 받아 숫자가 위아래로 뒤집혀 보인다.
+      drawUprightLabel(g, String(i + 1), X, Y, textRot)
     })
-    g.textAlign = 'start'; g.textBaseline = 'alphabetic'
   }
 
   // 점검 지점 — 로봇 마커보다 먼저 그린다. 로봇이 지점 위에 서 있어도 로봇이 위다.
-  if (inspect) drawInspection(g, sx, sy, view, inspect)
+  if (inspect) drawInspection(g, sx, sy, view, inspect, textRot)
 
   // 로봇 마커 (점 + 방향 화살표) — pose 는 TF 미확보 시 없을 수 있다
   if (p) {
