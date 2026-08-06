@@ -331,7 +331,23 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
             <li key={log.id} className={`logrow ${log.kind}`}>
               <i className={`logdot c-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'sub'}`} />
               <span className="logtime">{log.time}</span>
-              <span className={`logtext t-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'}`}>{log.msg}</span>
+              {/* 간략 목록에서도 상세를 열 수 있어야 한다(S15P11E101-765).
+                  지도·카메라를 보다가 무슨 일인지 확인하려고 이벤트 탭까지 옮겨 가면,
+                  그 사이에 화면에서 눈을 뗀다 — 보던 자리에서 바로 열리게 한다.
+                  eventId 가 없는 줄(저장 전 실시간 수신분)은 열 상세가 없으므로 글자로 둔다. */}
+              {log.eventId != null
+                ? (
+                  <button
+                    type="button"
+                    className={`logopen logtext t-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'}`}
+                    title="상세와 영상 보기"
+                    onClick={() => setDetailId(log.eventId)}
+                    style={{ background: 'transparent', border: 0, textAlign: 'left', cursor: 'pointer', padding: 0 }}
+                  >
+                    {log.msg}
+                  </button>
+                )
+                : <span className={`logtext t-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'}`}>{log.msg}</span>}
             </li>
           ))}
         </ul>
