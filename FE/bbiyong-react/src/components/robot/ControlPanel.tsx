@@ -57,9 +57,6 @@ export default function ControlPanel() {
   // 뷰어는 조작할 수 없다 — 버튼을 숨기지 않고 회색으로 남겨 '권한 없음'이 드러나게 한다.
   // 잠금(S15P11E101-653)도 같은 자리에 얹는다. canOperate = 권한 있음 && 잠기지 않음.
   const ctlOff = (enabled && !connected) || driveDown || !canOperate
-  // 안전 예외: 긴급 정지는 권한과 무관하게 로그인만 하면 누구나 즉시 누를 수 있어야 한다.
-  // 잠금에도 열어 둔다 — 무인 시간대에 화재가 났는데 비밀번호부터 치게 만들 수는 없다.
-  const estopOff = (enabled && !connected) || driveDown
 
   // E-STOP 체결 여부 — live는 텔레메트리가, mock은 시뮬 상태가 정답이다.
   // 텔레메트리가 아직 없으면(estop === undefined) 체결로 오해하지 않도록 명시적으로 검사한다.
@@ -136,39 +133,17 @@ export default function ControlPanel() {
     return true
   }
 
-  const onEmergencyStop = () => {
-    if (liveReady) { control.estop(); if (!warnIfOffline()) setCtlMsg(null) }
-    else actions.emergencyStop()
-  }
-  const onReturnPatrol = () => {
-    // 순찰 복귀도 SET_MODE autonomy 를 보내므로 '순찰 모드'를 고른 것과 같다 — 토글도 함께 맞춘다
-    setSeg('patrol')
-    if (!liveReady) { actions.returnPatrol(); return }
-    control.setMode('autonomy')
-    if (warnIfOffline()) return
-    setCtlMsg(null)
-    // 로봇이 SET_MODE 를 아직 처리하지 않으면(cloud_bridge.translate_command 가 noop 으로 버린다)
-    // E-STOP 이 풀리지 않는다. 화면 토글만 '순찰'로 바뀐 채 실제로는 체결 상태로 남아 조작자를 속인다.
-    // 잠시 기다렸다가 그대로면 사실대로 알린다 — 해제되면 아래 effect 가 이 안내를 지운다.
-    if (estopEngaged) {
-      clearTimeout(resumeTimer.current)
-      resumeTimer.current = setTimeout(() => {
-        if (latest.current.estopEngaged) {
-          setCtlMsg({ kind: 'err', text: '로봇이 순찰 복귀를 처리하지 않았습니다 — E-STOP 이 여전히 체결 상태입니다.' })
-        }
-      }, RESUME_WAIT_MS)
-    }
-  }
   const onSetSeg = (man: any) => {
     setSeg(man ? 'manual' : 'patrol')
     if (liveReady) { control.setMode(man ? 'manual' : 'autonomy'); warnIfOffline() }
     else actions.setSeg(man)
   }
+
   // ---- 단축키 ----
   // 리스너는 enabled/connected 가 바뀔 때만 다시 걸고, 그때그때의 상태·핸들러는 ref로 읽는다
   // (핸들러가 매 렌더 새로 만들어지므로 의존성에 넣으면 리스너를 계속 재등록하게 된다).
   const latest = useRef<any>(null)
-  latest.current = { estopEngaged, seg, ctlOff, onEmergencyStop, onReturnPatrol, onSetSeg }
+  latest.current = { estopEngaged, seg, ctlOff, onSetSeg }
 
   // E-STOP 이 실제로 풀리면 경고를 지운다 — 해결된 안내가 남아 있으면 다음 판단을 흐린다.
   useEffect(() => {
@@ -179,16 +154,11 @@ export default function ControlPanel() {
   useEffect(() => () => clearTimeout(resumeTimer.current), [])
 
   useEffect(() => {
-    // 게이트는 버튼과 같은 규칙을 쓴다(S15P11E101-595).
-    // 긴급 정지는 estopOff(권한 무관 안전 예외), 나머지는 ctlOff 다.
-    // 예전에는 리스너 전체를 ctlOff 로 막아, 버튼은 눌리는데 Shift 만 죽는 뷰어가 생겼다.
-    if (estopOff) return undefined
-
-    // Shift 단독 탭만 단축키로 인정한다. keydown 시점에 실행하면 Shift+A 같은
-    // 조합키를 누르는 순간에도 긴급 정지가 나가버리므로, 사이에 다른 키가 없었을 때만 keyup에서 실행한다.
-    let shiftAlone = false
-    // 글자를 입력하는 요소에서만 막는다. select 는 Shift 로 글자가 들어가지 않으므로
-    // 지점 이동 드롭다운을 건드렸다는 이유로 긴급 정지가 죽어서는 안 된다(S15P11E101-595).
+    // 남은 단축키는 Space(순찰 ↔ 수동) 하나다. 긴급 정지·순찰 복귀 단축키는
+    // S15P11E101-735 에서 없앴고, 되살리지 않는다 — 버튼도 함께 지운 의도된 사양이다.
+    //
+    // 글자를 입력하는 요소에서만 막는다. select 는 Space 로 글자가 들어가지 않으므로
+    // 드롭다운을 건드렸다는 이유로 모드 전환이 죽어서는 안 된다(S15P11E101-595).
     const isTyping = (el: any) => {
       if (!el) return false
       if (el.isContentEditable) return true
@@ -202,8 +172,6 @@ export default function ControlPanel() {
     const CAMERA_KEYS = /^arrow(up|down)$/
 
     const onDown = (e: any) => {
-      if (e.key === 'Shift') return
-      shiftAlone = false
       // 주행 키는 모드를 건드리지 않는다(S15P11E101-513). 실제 주행 발행은
       // live 는 LiveSimBridge, mock 은 useSimulation 의 키 리스너가 맡는다.
       if (DRIVE_KEYS.test(e.key.toLowerCase()) || CAMERA_KEYS.test(e.key.toLowerCase())) return
@@ -217,21 +185,9 @@ export default function ControlPanel() {
       // 순찰 ↔ 수동 토글
       latest.current.onSetSeg(latest.current.seg !== 'manual')
     }
-    const onUp = (e: any) => {
-      if (e.key === 'Shift') return
-    }
-    // 창을 벗어나면 keyup 을 못 받는다 — 눌린 채로 굳지 않게 함께 푼다
-    const onBlur = () => { shiftAlone = false }
-
     window.addEventListener('keydown', onDown)
-    window.addEventListener('keyup', onUp)
-    window.addEventListener('blur', onBlur)
-    return () => {
-      window.removeEventListener('keydown', onDown)
-      window.removeEventListener('keyup', onUp)
-      window.removeEventListener('blur', onBlur)
-    }
-  }, [estopOff])
+    return () => window.removeEventListener('keydown', onDown)
+  }, [])
 
   return (
     <div className="panel" id="pControl">

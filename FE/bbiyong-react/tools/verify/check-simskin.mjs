@@ -147,9 +147,12 @@ const before = await ev(`document.querySelector('#pStatus .kv b.st')?.textConten
 await shiftTap(); await sleep(900)
 const after = await ev(`document.querySelector('#pStatus .kv b.st')?.textContent?.trim()`)
 console.log('  E-STOP :', before, '→', after)
-console.log('  → 긴급 정지 동작 :', ok(/체결/.test(String(after))))
+// S15P11E101-735 · 762 — 긴급 정지 수단은 의도적으로 전부 제거했다(버튼 688, 단축키 735).
+// 그러니 여기서 잴 것은 '나가는가' 가 아니라 '없는 상태가 지켜지는가' 다.
+// 되살리면 이 단언이 실패해 알려 준다 — 지금까지는 지워진 채 아무도 지키지 않았다.
+console.log('  → Shift 로 정지되지 않는다 :', ok(!/체결/.test(String(after))))
 await shiftTap(); await sleep(900)
-console.log('  → 순찰 복귀 동작 :', ok(/해제/.test(String(await ev(`document.querySelector('#pStatus .kv b.st')?.textContent`)))))
+console.log('  → Shift 로 복귀되지도 않는다 :', ok(!/체결/.test(String(await ev(`document.querySelector('#pStatus .kv b.st')?.textContent`)))))
 await ev(`[...document.querySelectorAll('.seg button')][1]?.click()`); await sleep(600)
 console.log('  → 수동 모드 전환 :', ok(await ev(`[...document.querySelectorAll('.seg button')][1]?.classList.contains('on')`)))
 await ev(`[...document.querySelectorAll('.seg button')][0]?.click()`); await sleep(500)

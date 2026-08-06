@@ -87,8 +87,11 @@ console.log('  → ✕ 로 닫아도 점멸 유지 :', ok(await flashing()), '(�
 console.log('  → 확인 띠는 남아 있다 :', ok(await ackBar()), '(닫아버려 확인할 곳이 없어지면 안 된다)')
 
 console.log('\n[4] 점멸이 조작을 막지 않는가')
-// 긴급 정지 버튼이 없어졌으니 다른 조작으로 잰다. 여기(live)는 화면이 하나라 그대로 잡힌다.
-const hit = await ev(`(()=>{const b=[...document.querySelectorAll('.seg button')][0]; if(!b) return 'no-button'
+// 조작 패널은 카메라 화면에 있다(S15P11E101-688). 다른 탭에 있으면 그 화면이 숨겨져 있어
+// 좌표가 0,0 으로 잡히고, 엉뚱하게 상단바를 재게 된다 — 먼저 그 화면을 띄운다.
+await ev(`[...document.querySelectorAll('#nav .navtabs button')].find(b=>b.textContent.trim()==='카메라')?.click()`)
+await sleep(900)
+const hit = await ev(`(()=>{const b=[...document.querySelectorAll('#pgCam .seg button')][0]; if(!b) return 'no-button'
   const r=b.getBoundingClientRect(); const el=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2)
   return el===b||b.contains(el) ? 'button' : (el?.className||el?.tagName||'?')})()`)
 console.log('  모드 버튼 자리에서 잡히는 요소 :', hit)
@@ -96,9 +99,15 @@ console.log('  → 클릭이 통과한다 :', ok(hit === 'button'), '(pointer-ev
 const st0 = be.sends.length
 await shiftTap(); await sleep(900)
 const stop = be.sends.slice(st0).find((s) => JSON.stringify(s).includes('EMERGENCY') || JSON.stringify(s).includes('STOP'))
-console.log('  → 긴급 정지 발행 :', ok(!!stop), stop ? '' : '(경보 중에 정지가 안 나가면 치명적이다)')
-await ev(`(()=>{const li=[...document.querySelectorAll('#pStatus .elog li')].find(x=>x.querySelector('.logopen'))
-  li?.querySelector('.logopen')?.click()})()`); await sleep(1500)
+// S15P11E101-735 · 762 — 긴급 정지 수단은 의도적으로 전부 제거했다(버튼 688, 단축키 735).
+// 그러니 여기서 잴 것은 '나가는가' 가 아니라 '없는 상태가 지켜지는가' 다.
+// 되살리면 이 단언이 실패해 알려 준다 — 지금까지는 지워진 채 아무도 지키지 않았다.
+console.log('  → 정지 명령이 나가지 않는다 :', ok(!stop), '(경보 중에도 세울 수단을 두지 않기로 했다)')
+// 상세를 여는 버튼은 이벤트 화면의 로그에만 있다. 지도·카메라의 로그는 곁눈으로 보는
+// 것이라 simple 로 줄여 두었기 때문이다(S15P11E101-751) — 상세는 그 화면에서 연다.
+await ev(`[...document.querySelectorAll('#nav .navtabs button')].find(b=>b.textContent.trim()==='이벤트')?.click()`)
+await sleep(1000)
+await ev(`document.querySelector('#pgEvents .logopen')?.click()`); await sleep(1500)
 console.log('  → 이벤트 상세 열림 :', ok(await ev(`!!document.querySelector('.evd-head')`)))
 await ev(`[...document.querySelectorAll('.modal button, [role=dialog] button')].find(b=>b.textContent.trim()==='닫기')?.click()`); await sleep(700)
 
