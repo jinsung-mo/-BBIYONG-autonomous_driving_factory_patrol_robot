@@ -18,7 +18,8 @@ import java.util.List;
  * @param originX        ROS map 좌표계 origin (원본 승계, nullable)
  * @param originY        ROS map 좌표계 origin (원본 승계, nullable)
  * @param originYaw      ROS map 좌표계 origin yaw (원본 승계, nullable)
- * @param cells          row 별 '0'/'1' 문자열(위→아래). '1' = 벽
+ * @param cells          row 별 셀 값 문자열(위→아래). '0'=자유, '1'=벽, '2'=장애물.
+ *                       '2'(장애물)는 FLOORPLAN 에만 나타나며, RAW 는 '0'/'1' 만 사용한다. (S15P11E101-776)
  */
 public record MapGridResponse(
         String mapId,

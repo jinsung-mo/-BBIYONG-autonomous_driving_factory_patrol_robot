@@ -52,6 +52,10 @@ class FloorPlanRendererTests {
         return (img.getRGB(x, y) & 0xFFFFFF) == 0x000000;
     }
 
+    private boolean isObstacleGray(BufferedImage img, int x, int y) {
+        return (img.getRGB(x, y) & 0xFFFFFF) == 0x808080;   // S15P11E101-776 장애물 색
+    }
+
     /** 원본 픽셀 좌표를 rawToOut 아핀으로 도면 픽셀로 변환. */
     private int[] toOut(double[] t, double x, double y) {
         return new int[]{
@@ -69,13 +73,14 @@ class FloorPlanRendererTests {
         // 축 정렬 합성 맵 → deskew 각도는 0 근처
         assertThat(Math.abs(r.deskewDegrees())).isLessThan(3.0);
 
-        // 방 내부(장애물에서 떨어진 지점)는 흰색
+        // 방 내부(장애물에서 떨어진 지점)는 흰색(벽/장애물 아님)
         int[] interior = toOut(t, 18, 20);
         assertThat(isBlack(out, interior[0], interior[1])).isFalse();
+        assertThat(isObstacleGray(out, interior[0], interior[1])).isFalse();
 
-        // 내부 장애물 중심은 검정
+        // 내부 장애물 중심은 중회색(벽과 구분, S15P11E101-776)
         int[] pillar = toOut(t, 29, 20);
-        assertThat(isBlack(out, pillar[0], pillar[1])).isTrue();
+        assertThat(isObstacleGray(out, pillar[0], pillar[1])).isTrue();
 
         // 벽 프레임 위치는 검정(경계 밴드)
         int[] wallTop = toOut(t, 30, 7);
