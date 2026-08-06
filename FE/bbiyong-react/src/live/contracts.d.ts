@@ -935,3 +935,32 @@ export interface BatteryEstimate {
   /** 추정에 쓴 이력 구간(분) */
   basisMinutes?: number
 }
+
+// ---------------------------------------------------------------- 구역 (S15P11E101-770)
+
+/**
+ * GET /api/zones — 축 정렬 사각형. 좌표는 map 프레임 미터다.
+ * 서버가 x1<=x2, y1<=y2 로 정규화해 준다.
+ *
+ * 지금은 mapId 에 매여 있지 않다(글로벌). 새 매핑으로 좌표계가 크게 달라지면
+ * 기존 구역이 어긋날 수 있고, 그때는 seed-grid?replace=true 로 다시 만든다.
+ * mapId 바인딩은 BE 후속 과제다(2026-08-06 협의).
+ */
+export interface Zone {
+  id: string
+  name: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  createdAt?: string
+}
+
+/** 라벨에 붙일 랜드마크 후보(설비·순찰 지점). 좌표는 map 프레임 미터. */
+export interface ZoneLandmark {
+  type: 'EQUIPMENT' | 'WAYPOINT'
+  id: string
+  name: string
+  x: number
+  y: number
+}

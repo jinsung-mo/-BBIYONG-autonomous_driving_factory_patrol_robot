@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext.tsx'
 import { LiveProvider, useLive } from './live/LiveContext.tsx'
 import type { Section } from './live/contracts.d.ts'
 import LiveSimBridge from './live/LiveSimBridge.tsx'
+import { ZoneProvider } from './live/ZoneContext.tsx'
 import { FleetProvider } from './live/FleetContext.tsx'
 import WelcomeScreen from './components/auth/WelcomeScreen.tsx'
 import AuthScreen from './components/auth/AuthScreen.tsx'
@@ -72,6 +73,8 @@ function Dashboard() {
         <LiveProvider>
           {/* 편성 전체 상태(대시보드 집계)를 한 번 받아 나눠 쓴다(S15P11E101-591) */}
           <FleetProvider>
+            {/* 구역 목록·랜드마크를 한 번만 받아 화면들이 나눠 쓴다(S15P11E101-770) */}
+            <ZoneProvider>
             {/* live 모드일 때 실서버 위치·영상 프레임을 캔버스 렌더러로 밀어 넣는다 */}
             <LiveSimBridge />
             {/* 이벤트 로그가 기록되는 동안 세션을 유지한다(S15P11E101-508) */}
@@ -80,6 +83,7 @@ function Dashboard() {
             {/* 화재/과열 발생 팝업 알림 — 어느 탭에 있든 항상 최상단에 떠 있음 */}
             <EventAlert />
             <Sections active={active} isAdmin={isAdmin} />
+            </ZoneProvider>
           </FleetProvider>
         </LiveProvider>
       </SettingsProvider>

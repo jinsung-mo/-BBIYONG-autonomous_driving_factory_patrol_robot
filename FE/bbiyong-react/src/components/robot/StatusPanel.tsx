@@ -1,6 +1,7 @@
 import { useSim } from '../../SimContext.ts'
 import { displayName } from '../../live/robotName.ts'
 import { useLive } from '../../live/LiveContext.tsx'
+import { useZones } from '../../live/ZoneContext.tsx'
 import { telemetryToStatus } from '../../live/mappers.ts'
 import LogList from '../LogList.tsx'
 import RadialGauge from './RadialGauge.tsx'
@@ -11,6 +12,7 @@ import RadialGauge from './RadialGauge.tsx'
 export default function StatusPanel() {
   const { status } = useSim()
   const { enabled, connected, telemetry, robotId } = useLive()
+  const { labelOf } = useZones()
 
   const live = enabled ? telemetryToStatus(telemetry) : null
   // 연결이 끊겼을 때만 '연결 대기'로 말한다. 연결돼 있는데 status 만 없는 경우는 매퍼의 '대기'를 쓴다.
@@ -48,10 +50,17 @@ export default function StatusPanel() {
           <b className={`st ${commOk ? 'ok' : 'warn'}`}>{commOk ? '✓' : '▲'} {comm}</b>
         </div>
         {live?.location && (
-          // 미터 단위 원시 좌표 — 지도 격자 변환과 무관하게 서버 값 그대로 확인할 수 있도록 노출
-          <div className="kv"><span>위치</span><b className="num">
-            {live.location.x?.toFixed(2)}, {live.location.y?.toFixed(2)} m
-          </b></div>
+          // 좌표는 조작자에게 뜻이 없다 — 구역·랜드마크 이름으로 말한다(S15P11E101-770).
+          // 원좌표는 툴팁으로만 남긴다. 정합을 의심할 때 확인할 곳은 있어야 한다.
+          <div className="kv">
+            <span>위치</span>
+            <b
+              className="zone-label"
+              title={`${live.location.x?.toFixed(2)}, ${live.location.y?.toFixed(2)} m`}
+            >
+              {labelOf(live.location.x, live.location.y)}
+            </b>
+          </div>
         )}
       </div>
       <h3 className="event-title">이벤트 로그</h3>
