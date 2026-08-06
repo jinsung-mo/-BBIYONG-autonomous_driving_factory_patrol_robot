@@ -83,6 +83,35 @@ const probe = `(()=>{
         const st=getComputedStyle(e); const L1=lum(st.color), L2=lum(opaque(e))
         out[pr[0]]=Math.round(((Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05))*100)/100}
       return out})(),
+    hero: (()=>{const h=page&&page.querySelector('.nav-hero'); if(!h) return null
+      const s=getComputedStyle(h); const k=page.querySelector('.kpis')
+      const ks=k?getComputedStyle(k):null
+      const r=(e)=>{const b=e.getBoundingClientRect(); return [Math.round(b.left),Math.round(b.width)]}
+      const b1=page.querySelector('.kpi-badge')
+      return {heroDisplay:s.display, heroCols:s.gridTemplateColumns, heroAlign:s.alignItems,
+        kpis:ks?{display:ks.display, cols:ks.gridTemplateColumns, gap:ks.columnGap}:null,
+        kpisBox:k?r(k):null, titleBox:r(page.querySelector('.nav-title')),
+        badge:b1?(()=>{const bs=getComputedStyle(b1); return {w:bs.width,h:bs.height,radius:bs.borderTopLeftRadius,text:(b1.textContent||'').trim()}})():null}})(),
+    ops: (()=>{if(page?.id!=='pgOps') return null
+      const t=(sel)=>{const e=page.querySelector(sel); if(!e) return null
+        const b=e.getBoundingClientRect(); return {top:Math.round(b.top),left:Math.round(b.left),h:Math.round(b.height)}}
+      const st=page.querySelector('.nav-stage')
+      return {stage:getComputedStyle(st).alignItems, side:t('.nav-side'), sideCard:t('.nav-side .card-v3'),
+        canvas:t('.nav-canvas'), route:t('.nav-canvas .card-v3'),
+        routeMargin:(()=>{const e=page.querySelector('.nav-canvas .card-v3'); return e?getComputedStyle(e).marginTop:null})()}})(),
+    log: (()=>{const row=page&&(page.querySelector('.elog li')||page.querySelector('.logrow')); if(!row) return null
+      const px=(v)=>Math.round(parseFloat(v)||0)
+      const rs=getComputedStyle(row)
+      const dot=row.querySelector('i,.logdot')
+      const t=row.querySelector('.t,.logtime')
+      const b=row.querySelector('b,.logtext')
+      const act=row.querySelector('button')
+      const one=(e)=>{if(!e) return null; const c=getComputedStyle(e)
+        return {size:px(c.fontSize), weight:c.fontWeight, color:c.color, font:c.fontFamily.split(',')[0],
+          w:px(c.width), h:px(c.height), radius:px(c.borderTopLeftRadius), bg:c.backgroundColor}}
+      return {rowCls:row.className, pad:rs.padding, gap:rs.columnGap, display:rs.display, align:rs.alignItems,
+        borderBottom:rs.borderBottomWidth+' '+rs.borderBottomColor, bg:rs.backgroundColor,
+        dot:one(dot), time:one(t), text:one(b), act:act?{cls:act.className, opacity:getComputedStyle(act).opacity}:null}})(),
     btns: q('button').slice(0,40).map(b=>{const s=getComputedStyle(b)
       return {t:(b.textContent||'').trim().slice(0,10), cls:b.className.slice(0,26), bg:s.backgroundColor, r:px(s.borderTopLeftRadius)}}),
   }})()`
@@ -92,7 +121,7 @@ const goTab = async (label) => {
   await sleep(1200)
 }
 
-for (const tab of ['이벤트', '통계', '운영', '설정']) {
+for (const tab of ['지도', '카메라', '이벤트', '통계', '운영', '설정']) {
   await goTab(tab)
   const r = await ev(probe)
   console.log(`\n===== ${tab} =====`)
@@ -103,6 +132,9 @@ for (const tab of ['이벤트', '통계', '운영', '설정']) {
   console.log('  폰트 :', JSON.stringify(r?.fonts))
   console.log('  mono :', r?.monoCount, '개 · KPI', JSON.stringify(r?.kpi), '라벨', JSON.stringify(r?.kpiLabel))
   const c=r?.contrast||{}
+  if (r?.ops) console.log('  운영 배치 :', JSON.stringify(r.ops))
+  if (r?.log) console.log('  로그 :', JSON.stringify(r.log))
+  console.log('  히어로 :', JSON.stringify(r?.hero))
   console.log('  대비 :', Object.entries(c).map(([k,v])=>k+' '+v).join(' · '))
   const bad=Object.entries(c).filter(([,v])=>v<4.5)
   console.log('  → 4.5 미달 :', bad.length?bad.map(([k,v])=>k+' '+v).join(', '):'없음')
