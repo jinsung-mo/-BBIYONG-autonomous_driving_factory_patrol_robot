@@ -107,8 +107,9 @@ export function backgroundOf(nav: any, showPlan = true) {
 // (yaw - 90°) 만큼 돌아가 있으므로, 클릭 지점을 같은 축에서 반대로 돌린 뒤 환산한다.
 export function canvasToWorld(view: any, nav: any, headingUp: any, px: any, py: any, cv: any = null) {
   let x = px, y = py
-  // 표시 회전을 먼저 되돌린다(S15P11E101-746). 화면에서 찍은 자리를 그리기 전 좌표로
-  // 옮겨야 한다 — 안 그러면 조작자가 찍은 곳과 로봇이 가는 곳이 정반대가 된다.
+  // 표시 회전을 먼저 되돌린다(현재 0 — S15P11E101-796). 화면에서 찍은 자리를 그리기 전
+  // 좌표로 옮겨야 한다 — 안 그러면 조작자가 찍은 곳과 로봇이 가는 곳이 정반대가 된다.
+  // DISPLAY_ROT 가 다시 0이 아니게 되어도 이 계산은 그대로 맞는다.
   if (cv) {
     const mx = cv.width / 2, my = cv.height / 2
     const a = -DISPLAY_ROT
@@ -149,10 +150,15 @@ export function insideMap(m: any, x: any, y: any) {
 // 맵 + 궤적 + 스캔 + 로봇 — nav.html 그대로
 //
 /**
- * 지도 표시 회전(S15P11E101-746). 순수하게 보여 주는 각도이고 데이터는 건드리지 않는다.
+ * 지도 표시 회전. 순수하게 보여 주는 각도이고 데이터는 건드리지 않는다.
  * SLAM·도면·로봇이 이 하나를 같이 써야 서로 어긋나지 않는다.
+ *
+ * S15P11E101-746 에서 180도(Math.PI)로 걸었으나, 실측 결과 북쪽이 여전히
+ * 뒤집혀 보여 그 보정 방향 자체가 틀렸던 것으로 판명됐다(S15P11E101-796).
+ * 0으로 되돌린다 — 원본 데이터(격자·origin·resolution·pose)가 이미 올바른
+ * 방향이라는 뜻이고, 여기서 추가로 돌릴 필요가 없다.
  */
-export const DISPLAY_ROT = Math.PI
+export const DISPLAY_ROT = 0
 
 /**
  * 라이다가 로봇 앞을 보지 않고 돌아 붙어 있는 만큼(S15P11E101-763).
@@ -194,10 +200,12 @@ const INSPECT_OFF = '#8b8f9a'
 /**
  * 캔버스가 rot 만큼 회전된 상태에서도 글자를 똑바로 그린다(S15P11E101-795).
  *
- * drawNav 는 표시 회전(DISPLAY_ROT, 180도)과 heading-up 회전을 캔버스 변환으로 건 채
- * 배경·경로·점검 지점을 그린다 — 위치는 그 변환 아래에서 맞게 계산되지만, fillText 는
- * 그 회전을 그대로 받아 글자 자체가 뒤집혀 버린다("1"이 위아래가 바뀐 모양으로 보임).
- * 글자를 그릴 때만 그 자리에서 반대로 되돌려 화면 기준으로 똑바로 서게 한다.
+ * drawNav 는 표시 회전(DISPLAY_ROT, 현재 0 — S15P11E101-796)과 heading-up 회전을
+ * 캔버스 변환으로 건 채 배경·경로·점검 지점을 그린다 — 위치는 그 변환 아래에서 맞게
+ * 계산되지만, fillText 는 그 회전을 그대로 받아 글자 자체가 뒤집힌다.
+ * DISPLAY_ROT 는 0이라도 heading-up(진행방향 위) 모드에서는 여전히 회전이 걸리므로,
+ * 이 되돌림은 그 경우를 위해 남겨 둔다 — 글자를 그릴 때만 반대로 돌려 화면 기준으로
+ * 똑바로 서게 한다.
  */
 function drawUprightLabel(g: any, text: string, x: any, y: any, rot: any, fill = '#0b0d11') {
   g.save()
@@ -281,12 +289,9 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
 
-  // 표시 회전(S15P11E101-746). 화면에 나오는 지도가 실제와 180도 뒤집혀 있었다.
-  // 데이터(격자·origin·resolution·pose)는 방향 중립이고 BE 는 원문을 그대로 중계하므로,
-  // 돌리는 자리는 여기 렌더뿐이다.
-  //
-  // 캔버스 변환으로 건다 — 배경·스캔·로봇·경로가 모두 이 변환 아래에서 그려지므로
-  // 함께 돈다. 지도만 돌리면 로봇이 어긋난다.
+  // 표시 회전(현재 0 — S15P11E101-796). DISPLAY_ROT 가 0이 아니게 되면 이 변환이
+  // 배경·스캔·로봇·경로를 통째로 돌린다(지도만 돌리면 로봇이 어긋나므로 한 곳에서 건다).
+  // heading-up(진행방향 위) 회전은 이 변환과 별개로 아래에서 추가된다.
   g.save()
   g.translate(cv.width / 2, cv.height / 2)
   g.rotate(DISPLAY_ROT)
@@ -376,7 +381,9 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
       // 방향(heading) 화살표 — 로봇이 이 지점에서 바라볼 방향(S15P11E101-790).
       // yaw 가 없으면(자동) 그리지 않는다 — 로봇이 가까운 구조물을 스스로 바라본다.
       // 원보다 먼저 그려 번호가 화살표에 가리지 않게 한다.
-      if (Number.isFinite(Number(w.yaw))) {
+      // Number(null) === 0 이라 '자동'(null)이 명시적 0도(동쪽)로 오인돼 그려지던 버그(S15P11E101-797).
+      // null·undefined 는 반드시 먼저 걸러야 한다.
+      if (w.yaw != null && Number.isFinite(Number(w.yaw))) {
         const a = Number(w.yaw)
         const L = 22, hx = X + Math.cos(a) * L, hy = Y - Math.sin(a) * L
         g.strokeStyle = '#3ddc97'; g.lineWidth = 2.5

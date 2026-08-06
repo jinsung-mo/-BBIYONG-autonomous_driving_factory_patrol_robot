@@ -64,7 +64,7 @@ export default function KpiRow() {
         label="경보 이벤트" tone={alarmCount > 0 ? 'bad' : 'none'}
       />
       <Kpi
-        value={robotOnline ? '온라인' : '오프라인'}
+        value={robotOnline ? 'ON' : 'OFF'}
         label="로봇 상태" tone={robotTone}
       />
     </div>

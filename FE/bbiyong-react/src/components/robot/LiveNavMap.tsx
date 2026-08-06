@@ -22,9 +22,14 @@ import { localized } from '../../live/mappers.ts'
 // 조작자가 드래그로 개입하면 따라가기를 멈추고, 버튼으로 되돌린다 —
 // 보고 싶은 곳을 보고 있는데 화면이 제멋대로 끌려가면 그것이 더 답답하다.
 // inspection 을 주면 AprilTag 점검 지점을 겹쳐 그린다(S15P11E101-787).
-export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false, inspection = null }: {
+// onSetHeading 을 주면 지점을 눌러 바깥으로 드래그해 방향(heading)을 직접 정할 수 있다(S15P11E101-797).
+// '자동'(yaw 없음)이던 지점도 전부 오른쪽(동쪽)으로 그려지는 버그가 있었는데(같은 티켓에서
+// 별도로 고쳤다), 그것과 별개로 방향을 처음부터 직접 정할 방법이 없었다 — 목록의 숫자 입력은
+// 도(degree)를 외워 타이핑해야 해서 지도 위에서 바로 가리키는 편이 훨씬 직관적이다.
+export default function LiveNavMap({ route = null, onPick = null, onSetHeading = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false, inspection = null }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
+    onSetHeading?: ((index: number, yawRadians: number) => void) | null,
     zoomFactor?: number,
     planOnly?: boolean,
     mapping?: boolean,
@@ -62,12 +67,29 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   showPlanRef.current = mapping ? false : (planOnly ? true : showPlan)
   const pickRef = useRef(onPick)
   pickRef.current = onPick
+  const setHeadingRef = useRef(onSetHeading)
+  setHeadingRef.current = onSetHeading
+
+  // 방향 드래그 중 상태(S15P11E101-797). index/x/y 는 드래그를 시작한 지점(고정된 회전축).
+  const headingDragRef = useRef<{ index: number, x: number, y: number } | null>(null)
+  // 드래그 중 실시간으로 보여줄 방향 — 실제 route 는 손을 떼야(onPointerUp) 갱신한다.
+  const headingPreviewRef = useRef<{ index: number, yaw: number } | null>(null)
+  // 드래그를 마친 포인터업 뒤에는 같은 자리에서 click 이 한 번 더 온다 — 그 한 번만 무시한다.
+  const suppressClickRef = useRef(false)
+
+  // 드래그 중이면 미리보기 방향을 반영한 경로를 그린다 — 실제 route(prop)는 아직 그대로다.
+  const routeForDraw = () => {
+    const rte = routeRef.current
+    const preview = headingPreviewRef.current
+    if (!rte || !preview) return rte
+    return rte.map((w, i) => (i === preview.index ? { ...w, yaw: preview.yaw } : w))
+  }
 
   const redraw = () => {
     const cv = cvRef.current
     if (!cv || !lastRef.current) return
     const fitted = fitCanvas(cv)
-    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly, inspectRef.current)
+    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeForDraw(), showPlanRef.current, !planOnly, inspectRef.current)
   }
 
   useEffect(() => {
@@ -89,7 +111,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       // map 프레임이 아닌 자세는 믿을 수 없다(S15P11E101-773). 그 값으로 화면을 끌면
       // 지도가 엉뚱한 곳으로 밀려나고, 조작자는 그 사실조차 모른다 — 차라리 가만히 둔다.
       if (followingRef.current && localized(nav?.pose)) followPose(viewRef.current, cv, nav!.pose!, 0.5)
-      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeRef.current, showPlanRef.current, !planOnly, inspectRef.current)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeForDraw(), showPlanRef.current, !planOnly, inspectRef.current)
     }
 
     const off = onNavUpdate(render)
@@ -146,6 +168,9 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
 
   // 지도 클릭 → map 프레임 미터. 맵 밖은 로봇이 갈 수 없는 좌표라 받지 않는다.
   const onClick = (e: any) => {
+    // 방향 드래그를 막 마친 자리에서 브라우저가 이어서 보내는 click 하나는 무시한다 —
+    // 안 그러면 방향을 정한 자리에 순찰 지점이 하나 더 찍힌다(S15P11E101-797).
+    if (suppressClickRef.current) { suppressClickRef.current = false; return }
     const pick = pickRef.current
     const nav = lastRef.current
     const cv = cvRef.current
@@ -162,21 +187,67 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
     pick({ x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) })
   }
 
+  // 캔버스 픽셀(내부 해상도 기준)로 환산한 클라이언트 좌표 → map 프레임 미터.
+  const clientToWorld = (cv: HTMLCanvasElement, clientX: number, clientY: number) => {
+    const r = cv.getBoundingClientRect()
+    const px = (clientX - r.left) * (cv.width / r.width)
+    const py = (clientY - r.top) * (cv.height / r.height)
+    return canvasToWorld(viewRef.current, lastRef.current, headingUpRef.current, px, py, cv)
+  }
+
+  // 이 클라이언트 좌표에서 가장 가까운 순찰 지점(히트 반경 안)의 인덱스. 없으면 -1.
+  // canvasToWorld 로 화면→월드를 이미 되돌린 뒤라 회전(북향 고정/heading-up) 과 무관하게 맞는다.
+  const nearestRouteIndex = (cv: HTMLCanvasElement, clientX: number, clientY: number) => {
+    const rte = routeRef.current
+    if (!rte || !rte.length) return -1
+    const { x, y } = clientToWorld(cv, clientX, clientY)
+    // 화면에 그려진 지점 반지름(9px, drawNav 와 맞춤)에 손가락 여유를 더해 미터로 환산.
+    const hitMeters = 16 / Math.max(1, viewRef.current.s)
+    let best = -1, bestDist = hitMeters
+    rte.forEach((w, i) => {
+      const d = Math.hypot(Number(w.x) - x, Number(w.y) - y)
+      if (d <= bestDist) { bestDist = d; best = i }
+    })
+    return best
+  }
+
   return (
     <>
       <canvas
         ref={cvRef}
         onClick={onPick ? onClick : undefined}
         onPointerDown={(e) => {
+          // 방향을 설정할 수 있는 화면에서, 순찰 지점 위(히트 반경 안)를 눌렀으면
+          // 패닝이 아니라 방향 드래그를 시작한다(S15P11E101-797).
+          const cv = cvRef.current
+          if (setHeadingRef.current && cv) {
+            const idx = nearestRouteIndex(cv, e.clientX, e.clientY)
+            if (idx >= 0) {
+              const w = routeRef.current![idx]
+              headingDragRef.current = { index: idx, x: Number(w.x), y: Number(w.y) }
+              ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+              return
+            }
+          }
           // 조작자가 화면을 밀기 시작하면 따라가기를 멈춘다 — 보려는 곳을 보게 둔다
           panRef.current = { x: e.clientX, y: e.clientY }
           ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
           if (followingRef.current) setFollowing(false)
         }}
         onPointerMove={(e) => {
+          const hd = headingDragRef.current
+          const cv = cvRef.current
+          if (hd && cv) {
+            const { x, y } = clientToWorld(cv, e.clientX, e.clientY)
+            const dx = x - hd.x, dy = y - hd.y
+            // 뗀 자리 바로 근처에서는 각도가 튄다 — 최소 거리를 넘어야 방향으로 인정한다.
+            if (Math.hypot(dx, dy) < 0.08) return
+            headingPreviewRef.current = { index: hd.index, yaw: Math.atan2(dy, dx) }
+            redraw()
+            return
+          }
           const p = panRef.current
           if (!p) return
-          const cv = cvRef.current
           if (!cv) return
           const r = cv.getBoundingClientRect()
           // 표시 크기와 내부 해상도가 다를 수 있다 — 비율로 환산해 민다
@@ -185,8 +256,30 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
           panRef.current = { x: e.clientX, y: e.clientY }
           redraw()
         }}
-        onPointerUp={(e) => { panRef.current = null; (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) }}
-        onPointerCancel={() => { panRef.current = null }}
+        onPointerUp={(e) => {
+          const hd = headingDragRef.current
+          if (hd) {
+            const preview = headingPreviewRef.current
+            headingDragRef.current = null
+            headingPreviewRef.current = null
+            try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* 이미 놓임 */ }
+            // 실제로 방향을 그려 본 드래그만 반영한다 — 누르고 그대로 뗐다면(미리보기 없음)
+            // 아무것도 바꾸지 않는다(클릭으로 오인해 되돌리는 게 아니라 처음부터 값이 없었던 것).
+            if (preview) {
+              setHeadingRef.current?.(preview.index, preview.yaw)
+              suppressClickRef.current = true
+            }
+            redraw()
+            return
+          }
+          panRef.current = null
+          ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+        }}
+        onPointerCancel={() => {
+          panRef.current = null
+          headingDragRef.current = null
+          headingPreviewRef.current = null
+        }}
         className="map-zoom-canvas"
         style={{
           cursor: onPick ? 'crosshair' : undefined,

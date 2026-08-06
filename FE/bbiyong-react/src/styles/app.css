@@ -3486,6 +3486,129 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .insp-del{flex:none; color:#A6524A; padding:4px 8px; font-size:12px;}
 .insp-del:hover:not(:disabled){background:rgba(192,122,114,.1);}
 
+/* ============ 지도·카메라 좌측 패널 v3 톤 정리 (S15P11E101-793) ============
+   패널은 이미 흰 v3 카드인데 그 안에 v2 테두리 상자가 그대로 남아 있었다.
+   '테두리 대신 그림자 하나로 층을 만든다' 는 규칙에서 상자 안의 상자는 층이
+   두 겹이라는 뜻이 되어, 무엇이 떠 있는 것인지 알 수 없게 만든다.
+   밝은 화면에만 건다 — 다크 모드는 어두운 판을 전제한 원래 톤을 지킨다. */
+/* 특이도 주의: #pgCam #pControl .control-card(id 2개) 가 이미 있어서, id 하나짜리
+   선택자로는 이 상자를 못 지운다. 같은 수의 id 로 맞춘다. */
+:root[data-theme="light"] #pgMap #pStatus.panel .stat-card,
+:root[data-theme="light"] #pgCam #pControl.panel .control-card{
+  background:transparent; border:0; border-radius:0; padding:0; margin-bottom:6px;
+  /* 테두리만 지우면 그림자가 남아 상자 윤곽이 그대로 보인다 — 둘 다 걷어야 한다 */
+  box-shadow:none;
+}
+/* 로봇 이름 줄 — 상자가 사라졌으니 구분선 한 줄로 나눈다 */
+:root[data-theme="light"] #pgMap.v3-theme .stat-card .rid{
+  padding-bottom:10px; border-bottom:1px solid var(--bb-line); margin-bottom:2px;
+  font-size:13.5px; font-weight:700; color:var(--bb-ink);
+}
+/* 상태 — 점 + 글자, 배경 칠 없음(공유 문서의 공통 규칙).
+   알약으로 채우면 화면에서 가장 강한 면이 되어, 정작 중요한 KPI 를 이긴다. */
+:root[data-theme="light"] #pgMap.v3-theme .pillm,
+:root[data-theme="light"] #pgCam.v3-theme .pillm{
+  display:inline-flex; align-items:center; gap:6px;
+  background:transparent; border:0; padding:0; border-radius:0;
+  font-size:12px; font-weight:700; color:var(--bb-body);
+}
+:root[data-theme="light"] #pgMap.v3-theme .pillm::before,
+:root[data-theme="light"] #pgCam.v3-theme .pillm::before{
+  content:''; width:6px; height:6px; border-radius:50%; background:var(--bb-ok);
+}
+:root[data-theme="light"] #pgMap.v3-theme .pillm.man::before{background:var(--bb-warn);}
+:root[data-theme="light"] #pgMap.v3-theme .pillm.emg::before{background:var(--bb-danger);}
+
+/* 배터리 — 2px 바 + 삼각 마커. 두꺼운 회색 막대는 v2 문법이고,
+   면적이 커서 옆의 숫자보다 먼저 눈에 들어온다. */
+:root[data-theme="light"] #pgMap.v3-theme .bar{
+  height:2px; background:var(--bb-line); border:0; border-radius:0; overflow:visible;
+  margin:2px 0 10px; position:relative;
+}
+:root[data-theme="light"] #pgMap.v3-theme .bar i{
+  height:2px; border-radius:0; background:var(--bb-ok); position:relative; display:block;
+}
+:root[data-theme="light"] #pgMap.v3-theme .bar i::after{
+  content:''; position:absolute; right:-4px; top:2px;
+  border-left:4px solid transparent; border-right:4px solid transparent;
+  border-top:6px solid var(--bb-ok);
+}
+:root[data-theme="light"] #pgMap.v3-theme .kv{
+  border:0; padding:8px 0; font-size:12.5px; color:var(--bb-body);
+}
+
+/* 수동 조작 — 키캡·방향키를 흰 원 + 그림자로. 회색 원은 눌린 것처럼 보여
+   '지금 이 키가 켜져 있다' 는 표시와 헷갈린다. */
+:root[data-theme="light"] #pgCam.v3-theme .dpad button,
+:root[data-theme="light"] #pgCam.v3-theme .kcap{
+  background:#fff; border:0; color:var(--bb-ink);
+  box-shadow:0 1px 3px rgba(35,39,51,.14);
+}
+:root[data-theme="light"] #pgCam.v3-theme .dpad button:hover:not(:disabled){
+  background:var(--bb-surface);
+}
+:root[data-theme="light"] #pgCam.v3-theme .dpad button:disabled{
+  background:var(--bb-surface); color:var(--bb-faint); box-shadow:none;
+}
+/* Space 배지 — 알약이되 채우지 않는다. 단축키 안내는 조작이 아니다. */
+:root[data-theme="light"] #pgCam.v3-theme .seg .kbd,
+:root[data-theme="light"] #pgCam.v3-theme .kbd{
+  background:transparent; border:1px solid var(--bb-line-strong); color:var(--bb-body);
+  border-radius:var(--bb-r-pill); font-size:11px; padding:1px 7px;
+}
+
+/* 이벤트 로그 — 심각도는 점 하나로만 말한다.
+   점과 글자 양쪽을 칠하면 목록 전체가 알록달록해져, 정작 어느 줄이 심각한지
+   훑어서 알 수 없다. 본문은 잉크색으로 되돌린다. */
+:root[data-theme="light"] #pgMap.v3-theme .elog .logtext,
+:root[data-theme="light"] #pgCam.v3-theme .elog .logtext,
+:root[data-theme="light"] #pgMap.v3-theme .elog li b,
+:root[data-theme="light"] #pgCam.v3-theme .elog li b{
+  color:var(--bb-ink); font-weight:600; font-size:12.5px;
+}
+:root[data-theme="light"] #pgMap.v3-theme .elog .logtime,
+:root[data-theme="light"] #pgCam.v3-theme .elog .logtime,
+:root[data-theme="light"] #pgMap.v3-theme .elog li .t,
+:root[data-theme="light"] #pgCam.v3-theme .elog li .t{
+  font-family:var(--bb-font-mono); font-size:12px; color:var(--bb-body);
+}
+/* 스크롤 막대 — 목록 옆에 굵은 회색 띠가 서 있으면 그것도 하나의 면이 된다 */
+:root[data-theme="light"] #pgMap.v3-theme .elog,
+:root[data-theme="light"] #pgCam.v3-theme .elog{
+  scrollbar-width:thin; scrollbar-color:var(--bb-line-strong) transparent;
+}
+:root[data-theme="light"] #pgMap.v3-theme .elog::-webkit-scrollbar,
+:root[data-theme="light"] #pgCam.v3-theme .elog::-webkit-scrollbar{width:6px;}
+:root[data-theme="light"] #pgMap.v3-theme .elog::-webkit-scrollbar-thumb,
+:root[data-theme="light"] #pgCam.v3-theme .elog::-webkit-scrollbar-thumb{
+  background:var(--bb-line-strong); border-radius:999px;
+}
+:root[data-theme="light"] #pgMap.v3-theme .elog::-webkit-scrollbar-track,
+:root[data-theme="light"] #pgCam.v3-theme .elog::-webkit-scrollbar-track{background:transparent;}
+/* 로그 제목의 mono 부제 — 다른 v3 카드 제목과 같은 문법 */
+:root[data-theme="light"] #pgMap.v3-theme .event-title .k,
+:root[data-theme="light"] #pgCam.v3-theme .event-title .k{
+  /* muted(#7C8296)는 흰 면에서 3.82:1 이라 기준에 못 미친다. 11px 도 하한 미달이다. */
+  font-family:var(--bb-font-mono); font-size:12px; font-weight:500;
+  color:var(--bb-body); background:transparent; padding:0;
+}
+/* 패널 제목의 mono 부제도 같은 이유로 올린다 */
+:root[data-theme="light"] #pgMap #pStatus.panel h3 .k,
+:root[data-theme="light"] #pgCam #pControl.panel h3 .k{
+  font-size:12px; color:var(--bb-body);
+}
+/* 조작 패널의 작은 글자들 — 단축키 배지·카메라 각도 안내·요청 버튼이 9~11px 이었다.
+   v3 의 하한은 12px 다. 이보다 작으면 무인 시간대에 멀리서 읽히지 않는다. */
+:root[data-theme="light"] #pgCam #pControl.panel :is(.kbd,.tilt-label,.tilt-range,.tilt-apply),
+:root[data-theme="light"] #pgCam #pControl.panel kbd,
+:root[data-theme="light"] #pgCam #pControl.panel .ctl-right small,
+:root[data-theme="light"] #pgCam #pControl.panel .ctl-right span,
+:root[data-theme="light"] #pgCam #pControl.panel .ctl-right button,
+:root[data-theme="light"] #pgCam #camTilt .camtilt-range,
+:root[data-theme="light"] #pgCam #camTilt .camtilt-val i{
+  font-size:12px;
+}
+
 /* ============ 좌측 사이드를 카드 두 장으로 (S15P11E101-797) ============
    성격이 다른 두 정보가 한 장에 있으면 어디까지가 한 덩어리인지 읽히지 않는다.
    카드 사이는 24px — v3 의 '카드 사이 최소 여백' 이다. */
@@ -3564,3 +3687,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 /* 여백은 gap 이 준다 — margin 까지 더하면 24px 규칙이 어긋난다 */
 #pgCam.v3-theme .cam-side-panel > .panel + .panel{margin-top:0;}
+
+/* 이벤트 로그 (S15P11E101-797)
+   카드 자체는 다른 카드와 똑같이 그림자로 떠 있다 — 층이 하나만 어긋나면
+   그 카드만 화면에 눌러붙은 것처럼 보인다.
+   대신 안쪽 목록과 행에는 그림자를 두지 않는다. 카드 안에서 또 뜨는 면이
+   생기면 층이 두 겹이 되어, 무엇이 떠 있는 것인지 알 수 없게 된다. */
+#pgMap.v3-theme #pEvents .elog,
+#pgCam.v3-theme #pEvents .elog,
+#pgMap.v3-theme #pEvents .elog li,
+#pgCam.v3-theme #pEvents .elog li{box-shadow:none;}

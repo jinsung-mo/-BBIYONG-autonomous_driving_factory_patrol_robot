@@ -69,8 +69,18 @@ for (const [tab,pg,first] of [['지도','#pgMap','#pStatus'],['카메라','#pgCa
   console.log('  → 카드가 두 장이다 :', ok(c.kids.length===2))
   console.log('  → 사이 여백이 24px 이다 :', ok(c.gap==='24px'))
   console.log('  → 껍데기는 카드가 아니다 :', ok(/rgba\(0, 0, 0, 0\)/.test(c.wrapBg) && c.wrapSh==='none'))
-  console.log('  → 두 장 모두 흰 면·16px·테두리0·그림자 :',
+  console.log('  → 두 장 모두 흰 면·16px·테두리 0·그림자 :',
     ok(c.kids.every(k=>k.bg==='rgb(255, 255, 255)' && k.r==='16px' && k.bw==='0px' && k.sh)))
+  // 카드는 뜨되 그 안에서 또 뜨는 면은 없어야 한다 — 층이 두 겹이 되면 안 된다
+  const inner = await ev(`(()=>{const el=document.querySelector('${pg} #pEvents .elog')
+    const li=document.querySelector('${pg} #pEvents .elog li')
+    return JSON.stringify({list:el?getComputedStyle(el).boxShadow:null,
+      row:li?getComputedStyle(li).boxShadow:null,
+      sub:!!document.querySelector('${pg} #pEvents .event-title .k')})})()`)
+  const inn = JSON.parse(inner)
+  console.log('  로그 안쪽 :', inner)
+  console.log('  → 목록·행에는 그림자가 없다 :', ok(inn.list==='none' && inn.row==='none'))
+  console.log('  → 제목에 EVENT LOG 부제가 없다 :', ok(inn.sub===false))
 
   const scroll = await ev(`(()=>{const a=document.querySelector('${pg} ${first}')
     const e=document.querySelector('${pg} #pEvents')

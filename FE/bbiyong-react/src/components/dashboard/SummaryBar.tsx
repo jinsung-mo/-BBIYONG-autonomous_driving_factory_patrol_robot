@@ -34,7 +34,7 @@ export default function SummaryBar() {
         <b className="num">{count(s?.activeRobots)}<i>/ {count(s?.totalRobots)}</i></b>
       </div>
       <div className="sumcard">
-        <span>온라인</span>
+        <span>ON</span>
         <b className="num">{count(s?.onlineRobots)}<i>대</i></b>
       </div>
       <div className="sumcard">
