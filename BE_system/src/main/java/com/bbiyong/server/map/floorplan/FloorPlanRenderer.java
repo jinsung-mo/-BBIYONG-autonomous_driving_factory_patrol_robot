@@ -64,6 +64,12 @@ import static org.bytedeco.opencv.global.opencv_imgproc.warpAffine;
 @Component
 public final class FloorPlanRenderer {
 
+    // 도면 인코딩 색상: 벽=검정, 내부 장애물=중회색, 배경=흰색. FE 표시색과 무관한 데이터 계약이며
+    // MapGridService 가 이 명도대로 벽(1)/장애물(2)/자유(0)를 분류한다. (S15P11E101-776)
+    private static final int BG_RGB = 0xFFFFFF;
+    private static final int WALL_RGB = 0x000000;
+    private static final int OBSTACLE_RGB = 0x808080;
+
     private final int scale;
     private final int freeThreshold;
     private final int wallThreshold;
@@ -278,15 +284,15 @@ public final class FloorPlanRenderer {
         obst.release();
         occHi.release();
 
-        // 6) 렌더: 흰 배경 / 검은 벽·장애물
+        // 6) 렌더: 흰 배경 / 검은 벽 / 중회색 장애물. 장애물을 벽 뒤에 칠해 벽이 우선(경계 겹침 시).
         BufferedImage out = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < H; y++) {
             for (int x = 0; x < W; x++) {
-                out.setRGB(x, y, 0xFFFFFF);
+                out.setRGB(x, y, BG_RGB);
             }
         }
-        paint(out, wall, 0x000000);
-        paint(out, obstOut, 0x000000);
+        paint(out, obstOut, OBSTACLE_RGB);
+        paint(out, wall, WALL_RGB);
         wall.release();
         obstOut.release();
         solid.release();
@@ -304,7 +310,7 @@ public final class FloorPlanRenderer {
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                out.setRGB(x, y, 0xFFFFFF);
+                out.setRGB(x, y, BG_RGB);
             }
         }
         return new Result(out, 0.0, new double[]{1, 0, 0, 0, 1, 0});

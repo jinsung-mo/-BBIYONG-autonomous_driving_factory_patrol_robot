@@ -46,6 +46,22 @@ class MapGridServiceTests {
         return baos.toByteArray();
     }
 
+    /** 좌 1/3 검정(벽), 중 1/3 중회색(장애물), 우 1/3 흰색(자유)인 30x10 PNG. */
+    private static byte[] wallObstacleFreePng() throws Exception {
+        BufferedImage img = new BufferedImage(30, 10, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 30, 10);
+        g.setColor(Color.BLACK);
+        g.fillRect(0, 0, 10, 10);
+        g.setColor(new Color(0x80, 0x80, 0x80));
+        g.fillRect(10, 0, 10, 10);
+        g.dispose();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", baos);
+        return baos.toByteArray();
+    }
+
     private MapArtifact artifact(String id) {
         MapArtifact a = new MapArtifact();
         a.setId(id);
@@ -78,6 +94,38 @@ class MapGridServiceTests {
         assertThat(grid.cellResolution()).isEqualTo(0.1);
         assertThat(grid.originX()).isEqualTo(-1.0);
         assertThat(grid.kind()).isEqualTo("FLOORPLAN");
+    }
+
+    @Test
+    @DisplayName("FLOORPLAN 은 벽(1)/장애물(2)/자유(0) 3값으로 분류한다")
+    void classifiesWallObstacleFreeForFloorplan() throws Exception {
+        MapArtifact a = artifact("map-woc");
+        when(repository.findById("map-woc")).thenReturn(Optional.of(a));
+        when(storageService.load(a.getFilePath())).thenReturn(new ByteArrayResource(wallObstacleFreePng()));
+
+        // 30x10, maxCells=30 → cellSizePx=1, cols=30. 좌10 벽·중10 장애물·우10 자유
+        MapGridResponse grid = service.getGrid("map-woc", 30, null);
+
+        assertThat(grid.cols()).isEqualTo(30);
+        assertThat(grid.cells()).allSatisfy(row ->
+                assertThat(row).isEqualTo("111111111122222222220000000000"));
+    }
+
+    @Test
+    @DisplayName("RAW 는 회색을 장애물이 아닌 자유로 두고 이진(0/1)을 유지한다")
+    void rawKeepsBinaryAndTreatsGrayAsFree() throws Exception {
+        MapArtifact a = artifact("map-raw");
+        a.setKind("RAW");
+        when(repository.findById("map-raw")).thenReturn(Optional.of(a));
+        when(storageService.load(a.getFilePath())).thenReturn(new ByteArrayResource(wallObstacleFreePng()));
+
+        MapGridResponse grid = service.getGrid("map-raw", 30, null);
+
+        // 회색(128)은 기본 임계 128 미만이 아니므로 자유('0'), '2' 는 나오지 않는다
+        assertThat(grid.cells()).allSatisfy(row -> {
+            assertThat(row).doesNotContain("2");
+            assertThat(row).isEqualTo("111111111100000000000000000000");
+        });
     }
 
     @Test
