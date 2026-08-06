@@ -198,16 +198,25 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     else if (e.key === '-') { setZoom((z) => Math.max(ZOOM_MIN, z / 1.15)); e.preventDefault() }
   }
   const reset = useCallback(() => { setTilt(58); setSpin(SPIN_BASE); setZoom(1) }, [])
+  // 지금 정면 각도인가. 눌러도 화면이 이미 정면이면 아무것도 안 바뀌어 '먹었는지'
+  // 알 수 없었다 — 버튼이 지금 상태를 말하게 한다(S15P11E101-748).
+  const atFront = Math.abs(tilt - 58) < 0.5
+    && Math.abs(((spin - SPIN_BASE) % 360 + 540) % 360 - 180) < 0.5
+    && Math.abs(zoom - 1) < 0.01
 
-  // 층. 위로 갈수록 밝게 — 빛이 위에서 온다.
+  // 층. 위로 갈수록 밝게 — 빛이 위에서 온다(S15P11E101-748).
+  //
+  // 이전에는 하늘색(215 22%)에 아래 18% → 위 52% 로 명도차가 34 였다. 기둥 하나에
+  // 그만큼 차이가 나면 벽이 아니라 발광체처럼 보이고, 채도까지 있어 도면 위에서 튄다.
+  // 채도를 거의 빼고 폭을 절반 이하로 좁힌다 — 음영은 '있다' 만 알리면 된다.
   const layers = useMemo(() => Array.from({ length: WALL_H }, (_, k) => {
     const t = k / (WALL_H - 1)
     return {
       z: k * LAYER_STEP,
-      // 바닥은 어둡고 꼭대기는 밝다. 꼭대기 한 층만 확실히 밝혀 윗면처럼 읽히게 한다.
+      // 꼭대기 한 층만 조금 더 밝혀 윗면으로 읽히게 한다. 그 차이도 크지 않다.
       color: k === WALL_H - 1
-        ? 'hsl(215 26% 74%)'
-        : `hsl(215 22% ${18 + t * 34}%)`,
+        ? 'hsl(214 10% 76%)'
+        : `hsl(214 8% ${56 + t * 14}%)`,
     }
   }), [])
 
@@ -271,7 +280,13 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
         </div>
       </div>
 
-      <button type="button" className="mapview iso-reset" onClick={reset} title="보는 각도 초기화">
+      <button
+        type="button"
+        className={`mapview iso-reset${atFront ? ' on' : ''}`}
+        onClick={reset}
+        aria-pressed={atFront}
+        title={atFront ? '정면 각도입니다' : '보는 각도 초기화'}
+      >
         정면으로
       </button>
     </div>
