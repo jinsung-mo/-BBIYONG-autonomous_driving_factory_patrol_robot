@@ -15,11 +15,14 @@ import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgr
  */
 // planOnly 를 주면 정제 도면만 그린다(S15P11E101-744). 실시간 SLAM 점유격자는
 // 운영 탭 전용이 되었으므로, 지도 탭에서는 원본 격자로 되돌릴 길을 열어 두지 않는다.
-export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false }: {
+// mapping 을 주면 라이브 매핑 화면이 된다(S15P11E101-763).
+// 저장 도면 대신 원본 점유격자를 배경으로 쓰고, 지도가 넓어질 때마다 화면을 다시 맞춘다.
+export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1, planOnly = false, mapping = false }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
     zoomFactor?: number,
     planOnly?: boolean,
+    mapping?: boolean,
   }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef<HTMLCanvasElement | null>(null)
@@ -36,7 +39,9 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
   // 도면이 실제와 어긋나 보일 때 원본으로 확인할 방법이 없으면 곤란하다.
   const [showPlan, setShowPlan] = useState(true)
   const showPlanRef = useRef(true)
-  showPlanRef.current = planOnly ? true : showPlan
+  // 매핑 중에는 토글과 무관하게 원본 격자를 쓴다. 저장 도면을 깔아 두면 지금 그리는
+  // 지도가 그 아래 가려, 진행이 멈춘 것인지 도면이 덮은 것인지 구분되지 않는다.
+  showPlanRef.current = mapping ? false : (planOnly ? true : showPlan)
   const pickRef = useRef(onPick)
   pickRef.current = onPick
 
@@ -72,6 +77,38 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
 
   // 토글·경로 변경 즉시 다시 그린다 (다음 NAV_LIVE 를 기다리면 최대 0.3초 늦다)
   useEffect(redraw, [headingUp, route])
+
+  // 매핑을 시작하면 화면을 처음부터 다시 맞춘다 — 이전 세션의 배율·중심이 남아 있으면
+  // 새 지도가 화면 밖에서 그려지기 시작한다.
+  useEffect(() => {
+    viewRef.current = makeView()
+    redraw()
+  }, [mapping])
+
+  // 지도 경계가 바뀌면 다시 맞춘다(S15P11E101-763).
+  // SLAM 은 돌면서 지도를 넓힌다. 처음 맞춘 배율 그대로 두면 새로 발견한 구역이
+  // 캔버스 밖으로 잘려 나가고, 조작자는 매핑이 멈춘 줄 안다.
+  const boundsRef = useRef('')
+  useEffect(() => {
+    if (!mapping) return undefined
+    let raf = 0
+    const tick = () => {
+      const cv = cvRef.current
+      const nav = lastRef.current
+      const bg = nav && backgroundOf(nav, showPlanRef.current)
+      if (cv && bg) {
+        const key = [bg.w, bg.h, bg.ox, bg.oy, bg.res].join('/')
+        if (key !== boundsRef.current) {
+          boundsRef.current = key
+          fitView(viewRef.current, cv, bg)
+          redraw()
+        }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [mapping])
 
   // 도면 ↔ 원본 전환, 새 도면 도착 — 크기·원점이 다를 수 있어 화면을 다시 맞춘다
   useEffect(() => {
@@ -120,7 +157,7 @@ export default function LiveNavMap({ route = null, onPick = null, zoomFactor = 1
       >
         {headingUp ? '진행 방향 위' : '북향 고정'}
       </button>
-      {plan && !planOnly && (
+      {plan && !planOnly && !mapping && (
         <button
           type="button"
           className="mapview mapkind"

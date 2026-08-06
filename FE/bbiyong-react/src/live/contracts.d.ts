@@ -100,6 +100,8 @@ export interface RobotTelemetry {
 export interface AlertMessage {
   /** 저장 완료된 이벤트 이력 식별자. 있으면 즉시 상세·영상을 조회할 수 있다. */
   eventId?: number
+  /** 로봇 재전송 멱등 키. 화면 식별자는 저장된 eventId를 계속 사용한다. */
+  messageId?: string
   type: 'FIRE' | 'OVERHEAT'
   level?: EventLevel
   source?: string
@@ -671,8 +673,10 @@ export interface LiveContextValue {
   clearMappingComplete: () => void
   /** 매핑 진행 단계(S15P11E101-744). null 이면 아직 판단할 근거가 없다는 뜻이다. */
   mappingPhase: MappingPhase | null
-  /** mappingPhase === 'MAPPING' 을 미리 풀어 둔 값 */
+  /** mappingPhase === 'MAPPING' 을 미리 풀어 둔 값 (텔레메트리 status 보조 판정 포함) */
   mapping: boolean
+  /** 새 매핑 진입 시 이전 세션의 map·pose·scan·trail 을 지운다(S15P11E101-763). plan 은 남긴다. */
+  resetMappingView: () => void
   /** 서버가 판정한 로봇 가동 여부. null = 아직 모름 */
   robotOnline: boolean | null
   /** 사용자가 고른 제어 모드 */

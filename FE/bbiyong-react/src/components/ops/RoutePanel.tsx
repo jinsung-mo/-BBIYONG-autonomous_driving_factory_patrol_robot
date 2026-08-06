@@ -14,7 +14,7 @@ import {
 // 운영 탭에 둔다. 맵을 만들고(모델링) 그 위에 경로를 그리고 로봇에 내려보내는 흐름이
 // 한 화면에서 이어진다. 관제 화면은 모니터링과 실시간 개입만 맡는다(S15P11E101-475).
 export default function RoutePanel() {
-  const { enabled, connected } = useLive()
+  const { enabled, connected, mapping } = useLive()
   const { accessToken } = useAuth()
 
   const [route, setRoute] = useState<import('../../live/contracts.d.ts').Waypoint[]>([])      // 화면에서 편집 중인 목록
@@ -128,6 +128,11 @@ export default function RoutePanel() {
   }
 
   const offline = !enabled || !connected
+  // 매핑 중에는 경로를 건드리지 못하게 잠근다(S15P11E101-763).
+  // 지금 그리는 지도는 옛 지도와 좌표가 다르다 — 그 위에 옛 지점을 얹으면 엉뚱한 자리를
+  // 가리키고, 그대로 순찰을 시작하면 로봇이 없는 길로 간다.
+  // 서버에 저장된 경로는 지우지 않는다. 매핑이 끝나고 다시 판단할 자산이다.
+  const editLocked = offline || mapping
 
   return (
     <div className="card-v3" id="pgRoute">
@@ -143,7 +148,18 @@ export default function RoutePanel() {
       )}
 
       <div className="vwrap routemap">
-        <LiveNavMap route={route} onPick={offline ? null : onPick} />
+        {/* 매핑 중에는 옛 지점 오버레이를 걷고 원본 격자만 보여 준다 */}
+        <LiveNavMap
+          route={mapping ? null : route}
+          onPick={editLocked ? null : onPick}
+          mapping={mapping}
+        />
+        {mapping && (
+          <div className="routemap-note" role="status">
+            지도를 새로 그리는 중입니다 — 기존 순찰 지점은 잠시 숨겼습니다.
+            <span>저장된 경로는 지워지지 않습니다. 매핑이 끝나면 다시 보입니다.</span>
+          </div>
+        )}
       </div>
 
       {msg && <div className={`form-msg ${msg.kind}`} id="routeMsg">{msg.text}</div>}
@@ -158,27 +174,27 @@ export default function RoutePanel() {
             <span className="tag">{i + 1}</span>
             <input
               value={w.name || ''} onChange={(e) => rename(i, e.target.value)}
-              placeholder={`지점 ${i + 1}`} disabled={offline || busy}
+              placeholder={`지점 ${i + 1}`} disabled={editLocked || busy}
               aria-label={`${i + 1}번 지점 이름`}
             />
             <span className="t mono">{Number(w.x).toFixed(2)}, {Number(w.y).toFixed(2)} m</span>
-            <button type="button" className="btn-tonal" onClick={() => move(i, -1)} disabled={offline || busy || i === 0} aria-label="위로" style={{ padding: '4px 8px' }}>↑</button>
-            <button type="button" className="btn-tonal" onClick={() => move(i, 1)} disabled={offline || busy || i === route.length - 1} aria-label="아래로" style={{ padding: '4px 8px' }}>↓</button>
-            <button type="button" className="btn-tonal" onClick={() => onDelete(w, i)} disabled={offline || busy} aria-label="삭제" style={{ color: '#B4655C', padding: '4px 8px' }}>삭제</button>
+            <button type="button" className="btn-tonal" onClick={() => move(i, -1)} disabled={editLocked || busy || i === 0} aria-label="위로" style={{ padding: '4px 8px' }}>↑</button>
+            <button type="button" className="btn-tonal" onClick={() => move(i, 1)} disabled={editLocked || busy || i === route.length - 1} aria-label="아래로" style={{ padding: '4px 8px' }}>↓</button>
+            <button type="button" className="btn-tonal" onClick={() => onDelete(w, i)} disabled={editLocked || busy} aria-label="삭제" style={{ color: '#B4655C', padding: '4px 8px' }}>삭제</button>
           </li>
         ))}
       </ul>
 
       <div className="gotor">
-        <button type="button" className="btn-text" onClick={load} disabled={offline || busy}>다시 불러오기</button>
-        <button type="button" id="btnSaveRoute" className="btn-tonal" onClick={onSave} disabled={offline || busy || !route.length || !dirty}>
+        <button type="button" className="btn-text" onClick={load} disabled={editLocked || busy}>다시 불러오기</button>
+        <button type="button" id="btnSaveRoute" className="btn-tonal" onClick={onSave} disabled={editLocked || busy || !route.length || !dirty}>
           경로 저장{dirty ? ' *' : ''}
         </button>
-        <button type="button" id="btnApplyRoute" className="btn-tonal" onClick={onApply} disabled={offline || busy || !route.length}>
+        <button type="button" id="btnApplyRoute" className="btn-tonal" onClick={onApply} disabled={editLocked || busy || !route.length}>
           경로 적용
         </button>
         {/* 시작은 눈에 띄게 둔다 — 로봇이 실제로 움직이기 시작하는 버튼이다 */}
-        <button type="button" id="btnStartPatrol" className="btn-filled" onClick={onStart} disabled={offline || busy || !route.length}>
+        <button type="button" id="btnStartPatrol" className="btn-filled" onClick={onStart} disabled={editLocked || busy || !route.length}>
           순찰 시작
         </button>
       </div>
