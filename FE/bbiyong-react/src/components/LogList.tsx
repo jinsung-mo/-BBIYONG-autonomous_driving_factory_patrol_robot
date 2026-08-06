@@ -119,6 +119,9 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
       <ul className={variant}>
         {status.logs.map((log: any) => (
           <li key={log.id} className={log.kind}>
+            {/* 시뮬 로그도 실서버와 같은 행 구성을 쓴다(S15P11E101-797) —
+                한쪽만 점이 없으면 같은 화면이 두 모양으로 보인다. */}
+            <i className="logdot" />
             <span className="t mono">{log.time}</span>
             <b>{log.msg}</b>
           </li>

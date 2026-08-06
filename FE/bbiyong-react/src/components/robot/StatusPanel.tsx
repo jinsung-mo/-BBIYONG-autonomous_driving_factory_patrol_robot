@@ -3,7 +3,6 @@ import { displayName } from '../../live/robotName.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useZones } from '../../live/ZoneContext.tsx'
 import { telemetryToStatus, isMapFrame } from '../../live/mappers.ts'
-import LogList from '../LogList.tsx'
 import RadialGauge from './RadialGauge.tsx'
 
 // 순찰 로봇 상태 + 환경 + 이벤트 로그
@@ -69,8 +68,6 @@ export default function StatusPanel() {
           </div>
         )}
       </div>
-      <h3 className="event-title">이벤트 로그</h3>
-      <LogList variant="elog" simple={true} />
     </div>
   )
 }
