@@ -1594,15 +1594,18 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background-size:100% 100%; background-repeat:no-repeat;
 }
 .iso-floor{
-  /* 바닥은 도면 그대로. 밝은 배경 위에서는 어둡게 누를 이유가 없다 —
-     오히려 살짝 밝혀 벽 기둥이 그 위에 서는 것으로 읽히게 한다. */
-  filter:brightness(1.02) contrast(.96);
+  /* 바닥은 흰 판 한 장이다(S15P11E101-777). 도면 그림을 깔면 벽 그림자와
+     미탐색 얼룩이 기둥과 뒤섞여, 어디가 실제 벽인지 눈이 한 번 더 헤맨다.
+     배경과 같은 흰색이라 가장자리가 어디서 끝나는지도 신경 쓰이지 않는다. */
+  background:var(--iso-floor, #fff);
   box-shadow:none;
   /* 축소하면 바닥이 뷰포트에서 뚝 잘려 종이처럼 보였다(S15P11E101-748).
      가장자리를 투명으로 흘려 배경과 이어 붙인다 — 어디서 끝나는지 눈이 찾지 않는다. */
   -webkit-mask-image:radial-gradient(120% 120% at 50% 50%, #000 62%, transparent 100%);
   mask-image:radial-gradient(120% 120% at 50% 50%, #000 62%, transparent 100%);
 }
+/* 장애물(S15P11E101-777). 벽보다 낮고 주황이라 '치울 수 있는 것' 으로 읽힌다. */
+.iso-obst{opacity:.96;}
 .iso-wall{
   -webkit-mask-size:100% 100%; mask-size:100% 100%;
   -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
@@ -3221,7 +3224,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:radial-gradient(120% 90% at 50% 10%, #1b212b 0%, #141920 58%, #0f131a 100%);
 }
 /* 다크에서는 벽이 밝은 회색이라 바닥과 붙는다 — 바닥만 한 단 눌러 층을 만든다 */
-:root[data-theme="dark"] .iso-floor{filter:brightness(.72) contrast(1.02);}
+:root[data-theme="dark"] .iso-floor{
+  /* 어두운 화면에서 흰 판은 조명처럼 튄다. '배경과 이어지게' 라는 뜻을 지키려면
+     여기서는 어두운 판이어야 한다(S15P11E101-777). */
+  --iso-floor:#1A1E26;
+}
 
 /* '정면으로' — 지금 정면이면 눌린 상태로 둔다. 눌러도 화면이 안 바뀌는 경우가 있어
    버튼이 스스로 '지금 고정돼 있다' 를 말해야 한다. */
