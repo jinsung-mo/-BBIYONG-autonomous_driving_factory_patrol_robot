@@ -38,8 +38,9 @@ public class StompWebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // Topic prefixes for broadcasting to Web Observation Dashboard
-        registry.enableSimpleBroker("/topic");
+        // Topic prefixes for broadcasting to Web Observation Dashboard.
+        // /queue 는 사용자 개인 목적지(/user/queue/control — 제어 거부 사유 통지)용으로만 쓴다.
+        registry.enableSimpleBroker("/topic", "/queue");
         // Application prefix for incoming messages from Web Observation Dashboard
         registry.setApplicationDestinationPrefixes("/app");
     }
