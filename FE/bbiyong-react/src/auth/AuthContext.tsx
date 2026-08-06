@@ -25,6 +25,16 @@ const AuthContext = createContext<import('../live/contracts.d.ts').AuthContextVa
  * Provider 밖에서 부르면 던지므로 호출부는 null 을 다룰 필요가 없다 —
  * 반환 타입을 non-null 로 좁혀 매번 옵셔널 체이닝을 쓰지 않게 한다(S15P11E101-570).
  */
+// 로그인하면 지도에서 시작한다(S15P11E101-803).
+// App 은 sessionStorage 의 마지막 화면을 복원한다. 새로고침 때 보던 화면을 지키려는
+// 것인데, 새로 접속한 사람에게까지 앞사람의 마지막 화면(설정)을 보여 줄 이유는 없다.
+// 관제의 첫 화면은 지도다 — 로봇이 어디 있는지가 먼저다.
+// 토큰 갱신에는 걸지 않는다. 갱신은 로그인이 아니라서, 거기 걸면 작업 중에
+// 화면이 제멋대로 지도로 튄다.
+const startAtMap = () => {
+  try { sessionStorage.setItem('section', 'live') } catch { /* 저장소가 막힌 환경 */ }
+}
+
 export function useAuth(): import('../live/contracts.d.ts').AuthContextValue {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within <AuthProvider>')
@@ -63,6 +73,7 @@ function restoreUser(): SessionState {
   const s = getSession()
   const hasSession = !!(saved?.accessToken && saved.user) || !!s
   const empty = { user: null, accessToken: null, refreshToken: null, expiresAt: null }
+
   if (!hasSession) return { ...empty, reason: null }
 
   // refresh 토큰이 있으면 access 가 만료됐어도 세션은 살아 있다 — 곧 갱신 타이머가 살려낸다.
@@ -118,7 +129,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
       if (!u || u.password !== password) throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
       setSession(u.email)
       setLogoutReason(null); unlockState()
-      setState({ user: publicUser(u), accessToken: null, refreshToken: null, expiresAt: null, reason: null })
+      startAtMap(); setState({ user: publicUser(u), accessToken: null, refreshToken: null, expiresAt: null, reason: null })
       return
     }
     const res = await loginRequest(email.trim().toLowerCase(), password)
@@ -128,7 +139,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     const rt = res.refreshToken ?? null
     setAuth({ accessToken: res.accessToken, user: nu, refreshToken: rt, expiresAt: exp, expiresIn: res.expiresIn ?? null })
     setLogoutReason(null); unlockState()
-    setState({ user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp, reason: null })
+    startAtMap(); setState({ user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp, reason: null })
   }
 
   // 휴대전화번호·생년월일·성별은 S15P11E101-493 에서 추가됐다.
@@ -145,7 +156,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
       const u = addUser({ email, password, name, phone: tel, birth, gender })
       setSession(u.email)
       setLogoutReason(null); unlockState()
-      setState({ user: publicUser(u), accessToken: null, refreshToken: null, expiresAt: null, reason: null })
+      startAtMap(); setState({ user: publicUser(u), accessToken: null, refreshToken: null, expiresAt: null, reason: null })
       return
     }
     await signupRequest({ email: email.trim().toLowerCase(), password, name, phone: tel, birth, gender })
@@ -156,7 +167,7 @@ export function AuthProvider({ children }: { children?: import('react').ReactNod
     const rt = res?.refreshToken ?? null
     setAuth({ accessToken: res.accessToken, user: nu, refreshToken: rt, expiresAt: exp, expiresIn: res?.expiresIn ?? null })
     setLogoutReason(null); unlockState()
-    setState({ user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp, reason: null })
+    startAtMap(); setState({ user: nu, accessToken: res.accessToken, refreshToken: rt, expiresAt: exp, reason: null })
   }
 
   // 잠금 해제 — 저장소와 화면 상태를 함께 되돌린다. 활동 시각도 지금으로 밀어
