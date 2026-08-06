@@ -151,7 +151,13 @@ export const LASER_YAW_OFFSET = Number(
 // 끄면 북향(+y 위) 고정 — ROS map 프레임 그대로다.
 // route: 순찰 경로(S15P11E101-514). [{x, y, name}] 순서대로 선으로 잇고 번호를 붙인다.
 // showPlan: 정제 도면(S15P11E101-524)을 원본 점유격자 대신 배경으로 쓴다.
-export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true) {
+/**
+ * overlays=false 면 도면만 그린다(S15P11E101-749).
+ * 평면 뷰는 '완성된 도면' 을 보는 화면이다. 그 위에 실시간 스캔점과 궤적을 얹으면
+ * 확정된 벽과 지금 재고 있는 점이 한 그림으로 읽혀, 어디까지가 사실인지 알 수 없다.
+ * 실시간 레이어는 3D 압출 뷰와 운영 탭이 맡는다.
+ */
+export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true, overlays = true) {
   g.fillStyle = '#15171c'
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
@@ -201,6 +207,13 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     } else {
       g.drawImage(bg.img, sx(bg.ox), sy(bg.oy + bg.h * bg.res), wpx, hpx)
     }
+  }
+
+  // 도면만 보는 화면이면 여기서 끝낸다. 나침반은 아래에서 화면 좌표계에 따로 그린다.
+  if (!overlays) {
+    g.restore()
+    drawCompass(g, cv, DISPLAY_ROT)
+    return
   }
 
   const p = nav.pose
