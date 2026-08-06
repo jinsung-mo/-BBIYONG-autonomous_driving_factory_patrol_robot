@@ -1,5 +1,6 @@
 import { useSettings, DEFAULT_SETTINGS } from '../../settings/SettingsContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
+import ZonePanel from './ZonePanel.tsx'
 import EquipmentPanel from './EquipmentPanel.tsx'
 import NotifyPanel from './NotifyPanel.tsx'
 import UsersPanel from './UsersPanel.tsx'
@@ -33,7 +34,8 @@ export default function ConfigPage() {
           </aside>
 
           <div className="nav-canvas">
-            <EquipmentPanel />
+            <ZonePanel />
+              <EquipmentPanel />
             <UsersPanel />
           </div>
         </div>

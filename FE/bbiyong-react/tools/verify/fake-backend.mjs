@@ -219,6 +219,7 @@ export function startFakeBackend(port = 8099) {
   let statsOverheat = null
   let statsWeekly = null
   let statsBattery = null
+  let zones = []
 
   function push(destination, payload) {
     let n = 0
@@ -624,6 +625,73 @@ export function startFakeBackend(port = 8099) {
         totalPages: Math.ceil(all.length / size),
       }))
       return
+    }
+    // 구역 — S15P11E101-770. BE 계약(2026-08-06) 그대로.
+    if (req.url.split('?')[0] === '/api/zones/resolve') {
+      restCalls.push({ url: req.url, method: req.method })
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ x: 0, y: 0, zoneId: null, zoneName: null, nearest: null, label: '(0.00, 0.00) m' }))
+      return
+    }
+    if (req.url.split('?')[0] === '/api/zones/seed-grid' && req.method === 'POST') {
+      restCalls.push({ url: req.url, method: req.method })
+      const q = new URL(req.url, 'http://x').searchParams
+      if (zones.length && q.get('replace') !== 'true') {
+        res.writeHead(409, { ...CORS, 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ message: '이미 구역이 있습니다.' }))
+        return
+      }
+      const rows = Number(q.get('rows') || 3)
+      const cols = Number(q.get('cols') || 3)
+      zones = []
+      // 활성 도면 경계를 3x3 으로 자른다. A1 = 지도 좌상단.
+      const x0 = -2.0
+      const y0 = -1.5
+      const w = 16.0
+      const h = 12.0
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          zones.push({
+            id: `z-${r}-${c}`,
+            name: `구역 ${String.fromCharCode(65 + c)}${r + 1}`,
+            x1: x0 + (w / cols) * c, y1: y0 + (h / rows) * (rows - 1 - r),
+            x2: x0 + (w / cols) * (c + 1), y2: y0 + (h / rows) * (rows - r),
+            createdAt: '2026-08-06T07:00:00Z',
+          })
+        }
+      }
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(zones))
+      return
+    }
+    if (req.url.split('?')[0].startsWith('/api/zones')) {
+      restCalls.push({ url: req.url, method: req.method })
+      const id = req.url.split('?')[0].replace('/api/zones', '').replace('/', '')
+      if (req.method === 'GET') {
+        res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(zones))
+        return
+      }
+      if (req.method === 'DELETE' && id) {
+        zones = zones.filter((z) => z.id !== id)
+        res.writeHead(204, CORS); res.end(); return
+      }
+      if ((req.method === 'PUT' || req.method === 'POST')) {
+        let raw = ''
+        req.on('data', (d) => { raw += d })
+        req.on('end', () => {
+          let body = {}
+          try { body = JSON.parse(raw || '{}') } catch { /* 빈 본문 */ }
+          if (req.method === 'PUT' && id) {
+            zones = zones.map((z) => (z.id === id ? { ...z, ...body, id } : z))
+          } else {
+            zones.push({ ...body, id: `z-new-${zones.length}` })
+          }
+          res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(zones.find((z) => z.id === id) || zones[zones.length - 1]))
+        })
+        return
+      }
     }
     // 통계 지표 3종 — S15P11E101-768. BE 계약(2026-08-06 확인) 그대로 흉내낸다.
     if (req.url.split('?')[0] === '/api/stats/overheat-equipment') {
@@ -1118,6 +1186,8 @@ export function startFakeBackend(port = 8099) {
       setStatsOverheat: (v) => { statsOverheat = v },
       setStatsWeekly: (v) => { statsWeekly = v },
       setStatsBattery: (v) => { statsBattery = v },
+      zones: () => zones,
+      setZones: (v) => { zones = v },
       mappingPhase: () => mappingPhase,
       setMappingPhase: (phase, { push: doPush = true } = {}) => {
         mappingPhase = phase
