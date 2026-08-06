@@ -6,8 +6,12 @@ import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Controller;
 
+import java.security.Principal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -23,6 +27,13 @@ import java.util.Set;
  *   <li>/app/control/camera → CAMERA_TILT(tilt) — 전면 카메라 상하 절대각(degrees), 가동범위로 클램프</li>
  * </ul>
  * 순찰 복귀는 별도 명령이 아니라 SET_MODE mode=autonomy 로 처리한다(로봇 프로토콜에 RESUME 없음).
+ *
+ * <p><b>인가</b>: CONNECT 시 {@link StompAuthChannelInterceptor} 가 붙여 준 principal 을 매 명령마다
+ * 확인해 {@code ROLE_ADMIN} 이 아닌 사용자의 명령은 드롭한다. FE 의 canOperate 는 화면 잠금일 뿐
+ * 우회 가능하므로, 서버가 실제 게이트다.
+ *
+ * <p><b>점유</b>: 인가를 통과해도 {@link ControlOwnershipService} 의 리스를 얻어야 로봇에 중계된다.
+ * 동시 조종 시 두 사람의 DRIVE 가 번갈아 도달해 생기던 지터를 막는다.
  */
 @Slf4j
 @Controller
@@ -31,8 +42,12 @@ public class RobotControlStompController {
     private static final String DEFAULT_ROBOT_ID = "orinka_01";
     private static final Set<String> VALID_MODES = Set.of("autonomy", "manual", "disabled");
 
+    /** 로봇 제어가 허용되는 권한. 그 외(ROLE_USER 등)는 조회만 가능하다. */
+    private static final Set<String> CONTROL_AUTHORITIES = Set.of("ROLE_ADMIN");
+
     private final RobotWebSocketSessionManager sessionManager;
     private final MappingStatusService mappingStatusService;
+    private final ControlOwnershipService ownershipService;
 
     /** 전면 카메라 tilt 가동 범위(절대각, degrees). FE 는 동일 범위로 버튼 잠금/현재각을 표시한다. */
     private final double tiltMin;
@@ -41,16 +56,21 @@ public class RobotControlStompController {
     public RobotControlStompController(
             RobotWebSocketSessionManager sessionManager,
             MappingStatusService mappingStatusService,
+            ControlOwnershipService ownershipService,
             @Value("${bbiyong.camera.tilt-min:-30.0}") double tiltMin,
             @Value("${bbiyong.camera.tilt-max:45.0}") double tiltMax) {
         this.sessionManager = sessionManager;
         this.mappingStatusService = mappingStatusService;
+        this.ownershipService = ownershipService;
         this.tiltMin = tiltMin;
         this.tiltMax = tiltMax;
     }
 
     @MessageMapping("/control/drive")
-    public void drive(ControlCommand cmd) {
+    public void drive(ControlCommand cmd, Principal principal, SimpMessageHeaderAccessor accessor) {
+        if (!gate(cmd, principal, accessor, false)) {
+            return;
+        }
         double linear = cmd.getLinear() != null ? cmd.getLinear() : 0.0;
         double angular = cmd.getAngular() != null ? cmd.getAngular() : 0.0;
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -61,7 +81,10 @@ public class RobotControlStompController {
     }
 
     @MessageMapping("/control/mode")
-    public void mode(ControlCommand cmd) {
+    public void mode(ControlCommand cmd, Principal principal, SimpMessageHeaderAccessor accessor) {
+        if (!gate(cmd, principal, accessor, false)) {
+            return;
+        }
         String mode = cmd.getMode();
         if (mode == null || !VALID_MODES.contains(mode)) {
             drop(cmd, "유효하지 않은 mode: " + mode);
@@ -73,8 +96,43 @@ public class RobotControlStompController {
         relay(cmd, payload);
     }
 
+    /**
+     * 조종 점유 자체를 다루는 명령. {@code command} 는 ACQUIRE | TAKEOVER | RELEASE | STATUS.
+     *
+     * <p>TAKEOVER 는 타인의 유효 리스를 강제로 빼앗는다(stuck-key 로 리스가 안 풀리는 상황 대비).
+     * 빼앗는 순간 DRIVE(0,0) 정지 프레임이 1회 발행된다.
+     */
+    @MessageMapping("/control/ownership")
+    public void ownership(ControlCommand cmd, Principal principal, SimpMessageHeaderAccessor accessor) {
+        String robotId = resolveRobotId(cmd);
+        String sessionId = accessor != null ? accessor.getSessionId() : null;
+        if (!hasControlAuthority(principal)) {
+            log.warn("조종 점유 요청 거부(권한 없음): user[{}] robot[{}]", nameOf(principal), robotId);
+            ownershipService.notifyDenied(nameOf(principal), robotId, "FORBIDDEN_ROLE");
+            return;
+        }
+        String command = cmd.getCommand();
+        if ("RELEASE".equalsIgnoreCase(command)) {
+            ownershipService.release(robotId, sessionId);
+            return;
+        }
+        if ("STATUS".equalsIgnoreCase(command)) {
+            ownershipService.broadcast(robotId, "STATUS");
+            return;
+        }
+        boolean takeover = "TAKEOVER".equalsIgnoreCase(command);
+        ControlOwnershipService.Decision decision =
+                ownershipService.claim(robotId, sessionId, nameOf(principal), takeover);
+        if (decision == ControlOwnershipService.Decision.DENIED) {
+            ownershipService.notifyDenied(nameOf(principal), robotId, "OWNED_BY_OTHER");
+        }
+    }
+
     @MessageMapping("/control/operation")
-    public void operation(ControlCommand cmd) {
+    public void operation(ControlCommand cmd, Principal principal, SimpMessageHeaderAccessor accessor) {
+        if (!gate(cmd, principal, accessor, false)) {
+            return;
+        }
         String command = cmd.getCommand();
         if ("START_MAPPING".equalsIgnoreCase(command)) {
             // 로봇에게 "자율주행하며 2D 맵 생성 시작"을 요청. 실제 SLAM/자율주행은 로봇 측에서 수행.
@@ -123,7 +181,10 @@ public class RobotControlStompController {
     }
 
     @MessageMapping("/control/camera")
-    public void camera(ControlCommand cmd) {
+    public void camera(ControlCommand cmd, Principal principal, SimpMessageHeaderAccessor accessor) {
+        if (!gate(cmd, principal, accessor, false)) {
+            return;
+        }
         // 전면 카메라 상하 각도(절대각, degrees). 로봇 프로토콜: CAMERA_TILT{tilt}.
         if (cmd.getTilt() == null) {
             drop(cmd, "CAMERA_TILT 는 tilt(절대각 degrees) 가 필요합니다.");
@@ -134,6 +195,49 @@ public class RobotControlStompController {
         payload.put("command", "CAMERA_TILT");
         payload.put("tilt", clamped);
         relay(cmd, payload);
+    }
+
+    /**
+     * 제어 명령 1건에 대한 인가 + 점유 관문. 통과해야만 로봇으로 중계된다.
+     *
+     * <ol>
+     *   <li>principal 이 없거나 {@code ROLE_ADMIN} 이 아니면 드롭 → FORBIDDEN_ROLE 통지</li>
+     *   <li>타인이 점유 중이면 드롭 → OWNED_BY_OTHER 통지 (내 것이면 리스 갱신)</li>
+     * </ol>
+     */
+    private boolean gate(ControlCommand cmd, Principal principal, SimpMessageHeaderAccessor accessor,
+                         boolean takeover) {
+        String robotId = resolveRobotId(cmd);
+        if (!hasControlAuthority(principal)) {
+            log.warn("제어 명령 거부(권한 없음): user[{}] robot[{}] command[{}]",
+                    nameOf(principal), robotId, cmd.getCommand());
+            ownershipService.notifyDenied(nameOf(principal), robotId, "FORBIDDEN_ROLE");
+            return false;
+        }
+        String sessionId = accessor != null ? accessor.getSessionId() : null;
+        ControlOwnershipService.Decision decision =
+                ownershipService.claim(robotId, sessionId, nameOf(principal), takeover);
+        if (decision == ControlOwnershipService.Decision.DENIED) {
+            log.debug("제어 명령 거부(타인 점유 중): user[{}] robot[{}] command[{}]",
+                    nameOf(principal), robotId, cmd.getCommand());
+            ownershipService.notifyDenied(nameOf(principal), robotId, "OWNED_BY_OTHER");
+            return false;
+        }
+        return true;
+    }
+
+    /** principal 이 로봇 제어 권한을 갖는지. STOMP CONNECT 시 부여된 authority 를 그대로 본다. */
+    private boolean hasControlAuthority(Principal principal) {
+        if (!(principal instanceof Authentication authentication)) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(CONTROL_AUTHORITIES::contains);
+    }
+
+    private String nameOf(Principal principal) {
+        return principal != null ? principal.getName() : null;
     }
 
     private void relay(ControlCommand cmd, Map<String, Object> payload) {
