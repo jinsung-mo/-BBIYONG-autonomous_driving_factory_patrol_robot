@@ -37,6 +37,7 @@ public class EventLoggingTests {
         firePacket.setType("EVENT_FIRE");
         firePacket.setConfidence(0.95);
         firePacket.setTemperature(65.0);
+        firePacket.setMessageId("fire-message-001");
         firePacket.setTimestamp(1785806400L);
         
         RobotPacket.Location fireLoc = new RobotPacket.Location();
@@ -75,6 +76,7 @@ public class EventLoggingTests {
                 .orElse(null);
         assertThat(fireLog).isNotNull();
         assertThat(fireLog.getRobotId()).isEqualTo("orinka_01");
+        assertThat(fireLog.getMessageId()).isEqualTo("fire-message-001");
         assertThat(fireLog.getConfidence()).isEqualTo(0.95);
         assertThat(fireLog.getTemperature()).isEqualTo(65.0);
         assertThat(fireLog.getStatus()).isEqualTo("UNRESOLVED");
@@ -106,6 +108,26 @@ public class EventLoggingTests {
         assertThat(overheatLog.getEquipmentId()).isEqualTo("panel_01");
         assertThat(overheatLog.getThreshold()).isEqualTo(55.0);
         assertThat(overheatLog.getMessage()).isEqualTo("과열 발생");
+    }
+
+    @Test
+    public void sameMessageIdIsPersistedOnlyOnce() {
+        eventLogRepository.deleteAll();
+
+        RobotPacket packet = new RobotPacket();
+        packet.setRobotId("orinka_01");
+        packet.setType("EVENT_FIRE");
+        packet.setMessageId("fire-retry-001");
+        packet.setConfidence(0.80);
+        packet.setTemperature(70.0);
+        packet.setTimestamp(1785806500L);
+
+        eventPublisher.publishEvent(new RobotFireEvent(this, packet));
+        eventPublisher.publishEvent(new RobotFireEvent(this, packet));
+
+        List<EventLog> logs = awaitLogs(1);
+        assertThat(logs).hasSize(1);
+        assertThat(logs.get(0).getMessageId()).isEqualTo("fire-retry-001");
     }
 
     /** 비동기 경보 영속화가 기대 건수에 도달할 때까지 폴링(최대 5초). */

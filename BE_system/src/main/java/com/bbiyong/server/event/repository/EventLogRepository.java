@@ -10,11 +10,14 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface EventLogRepository extends JpaRepository<EventLog, Long>, JpaSpecificationExecutor<EventLog> {
 
     Page<EventLog> findByType(String type, Pageable pageable);
+
+    Optional<EventLog> findByMessageId(String messageId);
 
     /**
      * 특정 시각 이후의 모든 이벤트 조회 (대시보드 통계용)
