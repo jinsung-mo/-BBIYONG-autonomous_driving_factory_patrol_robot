@@ -104,7 +104,16 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
           )}
           <div className="form-row">
             <label htmlFor="au-email">이메일</label>
-            <input id="au-email" type="email" value={form.email} onChange={set('email')} placeholder="safety@bbiyong.io" autoComplete="username" disabled={busy} />
+            {/* placeholder 는 예시여야 한다(S15P11E101-802). 전에는 실제 데모 계정
+                주소(safety@bbiyong.io)를 썼는데, 도메인이 실재하는 것처럼 읽혀
+                값인지 안내인지 구분되지 않았다. example.com 은 예약 도메인이라
+                실재할 수 없고, 그래서 '예시' 라는 신호가 선다.
+                가입 화면은 형식보다 '무엇을 넣어야 하는지' 가 먼저다. */}
+            <input
+              id="au-email" type="email" value={form.email} onChange={set('email')}
+              placeholder={mode === 'signup' ? '업무용 이메일 주소' : 'name@example.com'}
+              autoComplete="username" disabled={busy}
+            />
           </div>
           <div className="form-row">
             <label htmlFor="au-pw">비밀번호</label>
@@ -153,10 +162,15 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
             {busy ? '처리 중…' : mode === 'login' ? '로그인' : '회원가입'}
           </button>
         </form>
+        {/* 안내문은 모드까지 봐야 한다(S15P11E101-802). 전에는 live 여부로만 갈려서
+            시뮬레이션 모드에서 회원가입 탭을 열면 데모 계정의 이메일과 비밀번호가
+            그대로 보였다 — 가입 화면에 남의 자격증명이 떠 있는 셈이다. */}
         <div className="auth-hint">
-          {live
-            ? '실서버 계정으로 로그인합니다 — 없으면 회원가입 후 이용하세요.'
-            : '데모 계정 — safety@bbiyong.io / bbiyong'}
+          {mode === 'signup'
+            ? '가입한 계정으로 바로 로그인할 수 있습니다.'
+            : (live
+              ? '실서버 계정으로 로그인합니다 — 없으면 회원가입 후 이용하세요.'
+              : '데모 계정 — safety@bbiyong.io / bbiyong')}
         </div>
         {onBack && (
           <button type="button" className="auth-back" onClick={() => { reset(); onBack() }} disabled={busy}>← 처음으로</button>
