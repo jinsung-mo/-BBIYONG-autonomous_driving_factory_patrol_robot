@@ -105,6 +105,23 @@ export function LiveProvider({ children }: any) {
     })
   }, [])
 
+  // 새 매핑에 들어갈 때 이전 세션의 화면을 지운다(S15P11E101-763).
+  //
+  // 지우지 않으면 지난번 지도·궤적 위에 새 스캔이 겹쳐 쌓인다. 조작자는 그것을
+  // '지금 그리고 있는 구역' 으로 읽고, 실제로는 없는 벽을 있다고 믿게 된다.
+  //
+  // 저장된 도면(plan)은 건드리지 않는다 — 매핑이 끝나면 다시 써야 하는 자산이다.
+  // 지금 배경으로 쓰지 않을 뿐이고, 그 판단은 그리는 쪽에서 한다.
+  const resetMappingView = useCallback(() => {
+    const n = navRef.current
+    n.map = null
+    n.mapCanvas = null
+    n.pose = null
+    n.scan = null
+    n.trail = []
+    emitNav()
+  }, [emitNav])
+
   const setDataSource = useCallback((value: 'live' | 'mock') => {
     saveDataSource(value)
     setDataSourceState(value)
@@ -317,6 +334,17 @@ export function LiveProvider({ children }: any) {
     return () => { alive = false }
   }, [canConnect, accessToken])
 
+  // 매핑에 '들어가는 순간' 에만 화면을 지운다. 매핑 중 매 갱신마다 지우면
+  // 방금 받은 스냅샷까지 함께 날아가 지도가 영영 채워지지 않는다.
+  const wasMappingRef = useRef(false)
+  useEffect(() => {
+    // 전용 신호(S15P11E101-747)가 우선이고, 없으면 텔레메트리 상태를 본다.
+    const now = mappingPhase === PHASE_MAPPING
+      || (mappingPhase == null && telemetry?.status === 'MAPPING')
+    if (now && !wasMappingRef.current) resetMappingView()
+    wasMappingRef.current = now
+  }, [mappingPhase, telemetry?.status, resetMappingView])
+
   // 활성 도면을 받아 온다(S15P11E101-524). 로그인 직후 한 번, 그리고 FLOORPLAN_READY 마다.
   // 이미지는 blob 으로 받아 objectURL 로 들고 있으므로 교체할 때 이전 것을 반드시 풀어야 한다.
   useEffect(() => {
@@ -468,13 +496,14 @@ export function LiveProvider({ children }: any) {
     onVideoFrame, onNavUpdate, videoSeen, control, robotId: ROBOT_ID,
     speed, setSpeed,
     mappingComplete, clearMappingComplete, robotOnline,
-    mappingPhase, mapping: mappingPhase === PHASE_MAPPING,
+    mappingPhase, mapping: mappingPhase === PHASE_MAPPING || (mappingPhase == null && telemetry?.status === 'MAPPING'),
+    resetMappingView,
     driveMode, setDriveMode,
     plan, planError,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
       videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline,
-      mappingPhase, driveMode, setDriveMode, plan, planError])
+      mappingPhase, resetMappingView, driveMode, setDriveMode, plan, planError])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
 }

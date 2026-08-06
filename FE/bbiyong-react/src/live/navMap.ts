@@ -135,6 +135,18 @@ export function insideMap(m: any, x: any, y: any) {
  */
 export const DISPLAY_ROT = Math.PI
 
+/**
+ * 라이다가 로봇 앞을 보지 않고 돌아 붙어 있는 만큼(S15P11E101-763).
+ * TF 실측이 약 -175.7도였다 — 앞뒤가 거의 뒤집힌 셈이라, 이 값을 빼먹으면
+ * 스캔이 벽 반대편에 찍혀 지도와 어긋난다.
+ *
+ * 원래는 로봇이 TF 로 알려 줄 값이고 FE 가 알 일이 아니다. 지금은 그 경로가 없어
+ * 여기에 둔다 — 장비를 다시 달면 이 상수 하나만 고치면 된다.
+ */
+export const LASER_YAW_OFFSET = Number(
+  (import.meta as any).env?.VITE_LASER_YAW_OFFSET ?? -3.066,
+)
+
 // headingUp: 로봇 진행 방향이 항상 위를 향하도록 화면을 돌린다(주행 시 방향 감각 유지).
 // 끄면 북향(+y 위) 고정 — ROS map 프레임 그대로다.
 // route: 순찰 경로(S15P11E101-514). [{x, y, name}] 순서대로 선으로 잇고 번호를 붙인다.
@@ -210,7 +222,7 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     for (let i = 0; i < s.ranges.length; i++) {
       const r = s.ranges[i]
       if (!r) continue
-      const a = p.yaw + s.angle_min + i * s.angle_inc
+      const a = p.yaw + LASER_YAW_OFFSET + s.angle_min + i * s.angle_inc
       g.fillRect(sx(p.x + r * Math.cos(a)) - 1, sy(p.y + r * Math.sin(a)) - 1, 2, 2)
     }
   }

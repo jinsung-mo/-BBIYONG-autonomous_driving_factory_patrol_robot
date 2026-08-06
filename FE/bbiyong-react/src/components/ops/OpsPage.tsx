@@ -14,7 +14,7 @@ import {
 // 운영 (S15P11E101-475) — 2D 맵 모델링과 저장된 맵 관리. 관리자만 들어온다.
 // 맵 모델링 시작·진행·완료·저장(활성화) 전 과정은 S15P11E101-483.
 export default function OpsPage() {
-  const { enabled, connected, control, onNavUpdate, telemetry, mappingComplete, clearMappingComplete } = useLive()
+  const { enabled, connected, control, onNavUpdate, telemetry, mapping, mappingComplete, clearMappingComplete } = useLive()
   const { accessToken, locked } = useAuth()
 
   const [nav, setNav] = useState<import('../../live/contracts.d.ts').DecodedMap | null>(null)
@@ -46,7 +46,11 @@ export default function OpsPage() {
   useEffect(() => { loadMaps() }, [loadMaps])
 
   // 진행 단계. 완료 이벤트 > 로봇이 보고하는 MAPPING > 발행 직후 대기 순으로 우선한다.
-  const running = telemetry?.status === MAPPING_STATUS
+  //
+  // '요청함' 과 '실제로 매핑 중' 을 끝까지 구분한다(S15P11E101-763). START_MAPPING 은
+  // 발행만 하고 응답이 없어, 로봇이 거부해도 FE 는 모른다 — 요청만으로 라이브 지도를
+  // 열면 영영 채워지지 않는 빈 화면이 남는다. 라이브 화면은 mapping 이 true 일 때만 연다.
+  const running = mapping || telemetry?.status === MAPPING_STATUS
   const phase = mappingComplete ? 'complete' : (running ? 'running' : (requested ? 'requested' : 'idle'))
 
   // 로봇이 매핑에 들어갔거나 끝났으면 '대기 중' 딱지는 역할이 끝났다
