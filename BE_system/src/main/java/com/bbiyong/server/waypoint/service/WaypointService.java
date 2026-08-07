@@ -127,6 +127,8 @@ public class WaypointService {
      * 경로 저장과 순찰 시작을 한 번에 하려면 {@link #startPatrol(String)} 를 사용한다.
      * yaw 는 ROS 월드프레임 <b>radians</b> 이며 별도 변환 없이 그대로 전달한다.
      *
+     * yaw 미지정(null) 웨이포인트는 null 그대로 보내 로봇의 자동 방향 계산에 맡긴다.
+     *
      * <p>로봇 미연결 시에도 200(경고 로그) — 저장은 이미 되어 있으므로 재연결 후 재하달 가능.
      */
     @Transactional(readOnly = true)
@@ -192,10 +194,18 @@ public class WaypointService {
         return v;
     }
 
-    /** yaw 는 선택값 — 미지정 시 0.0(로봇과 동일), 지정 시 유한수여야 한다. */
+    /**
+     * yaw 는 선택값 — 지정 시 유한수여야 한다.
+     *
+     * <p>미지정(null)은 그대로 null 로 보존해 로봇에 전달한다. 로봇의
+     * patrol_route.py 가 null yaw 를 "가장 가까운 구조물을 바라보도록 자동
+     * 계산"으로 해석하기 때문이다({@code _resolve_yaw}/{@code _nearest_structure_yaw}).
+     * 과거에는 여기서 0.0 으로 강제해, FE 에서 방향을 비워 자동 계산을 의도해도
+     * 실제로는 항상 맵 +X 를 보게 되는 버그였다(2026-08-07 확인).
+     */
     private Double normalizeYaw(Double yaw) {
         if (yaw == null) {
-            return 0.0;
+            return null;
         }
         return requireFinite(yaw, "yaw");
     }

@@ -142,14 +142,17 @@ class WaypointServiceTests {
     }
 
     @Test
-    void replaceNormalizesNullYawToZeroAndTruncatesName() {
+    void replacePreservesNullYawForRobotAutoHeadingAndTruncatesName() {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         String longName = "n".repeat(WaypointService.MAX_NAME_LEN + 50);
 
         List<WaypointResponses.Item> out = service.replace("orinka_01", List.of(
                 new WaypointRequest(1.0, 1.0, null, longName, null)));
 
-        assertThat(out.get(0).yaw()).isEqualTo(0.0);
+        // (2026-08-07) null must stay null, not be forced to 0.0: the robot's
+        // patrol_route.py interprets null yaw as "face the nearest structure"
+        // and would silently always face map +X if this were normalized away.
+        assertThat(out.get(0).yaw()).isNull();
         assertThat(out.get(0).name()).hasSize(WaypointService.MAX_NAME_LEN);
     }
 
