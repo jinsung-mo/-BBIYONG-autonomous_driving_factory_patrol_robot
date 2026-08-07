@@ -4,9 +4,11 @@ import com.bbiyong.server.stomp.dto.InspectionCommand;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Controller;
+import tools.jackson.databind.ObjectMapper;
 
 import java.security.Principal;
 import java.util.LinkedHashMap;
@@ -39,10 +41,19 @@ public class InspectionStompController {
     private static final Set<String> CONTROL_AUTHORITIES = Set.of("ROLE_ADMIN");
     private static final int MAX_NAME_LEN = 128;
 
-    private final RobotWebSocketSessionManager sessionManager;
+    /** 웹 대시보드 점검 지점 토픽 — 로봇 업링크 relay(RobotEventListener)와 같은 토픽을 쓴다. */
+    static final String INSPECTION_TOPIC = "/topic/inspection";
 
-    public InspectionStompController(RobotWebSocketSessionManager sessionManager) {
+    private final RobotWebSocketSessionManager sessionManager;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final ObjectMapper objectMapper;
+
+    public InspectionStompController(RobotWebSocketSessionManager sessionManager,
+                                     SimpMessagingTemplate messagingTemplate,
+                                     ObjectMapper objectMapper) {
         this.sessionManager = sessionManager;
+        this.messagingTemplate = messagingTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @MessageMapping("/control/inspection")
@@ -82,6 +93,14 @@ public class InspectionStompController {
                 payload.put("pointId", cmd.getPointId());
                 if (command.equals("UPDATE")) {
                     putNameIfPresent(payload, cmd.getName());
+                    // '순찰 제외' 토글과 순서 변경도 UPDATE 로 온다 — 빠뜨리면 로봇에
+                    // 이름만 전달되고 토글이 조용히 무시된다.
+                    if (cmd.getEnabled() != null) {
+                        payload.put("enabled", cmd.getEnabled());
+                    }
+                    if (cmd.getSequence() != null) {
+                        payload.put("sequence", cmd.getSequence());
+                    }
                 }
             }
             default -> {
@@ -101,6 +120,24 @@ public class InspectionStompController {
         boolean delivered = sessionManager.sendCommand(robotId, payload);
         if (!delivered) {
             log.warn("Inspection command not delivered (robot [{}] offline): {}", robotId, payload);
+        }
+        echoToWeb(payload);
+    }
+
+    /**
+     * 검증을 통과한 명령을 웹 토픽에도 그대로 되쏜다.
+     *
+     * <p>점검 지점 상태는 서버가 저장하지 않는 relay 구조라, 승인(CONFIRM) 결과가 다른
+     * 접속자·다른 탭에 보이려면 로봇이 확정 목록을 되올려 줄 때까지 기다려야 했다.
+     * 모든 클라이언트는 후보를 이미 {@code /topic/inspection} 으로 받아 갖고 있으므로,
+     * 명령만 되쏘면 각자 같은 전이(후보→확정 등)를 로컬에서 재현할 수 있다.
+     * 로봇이 오프라인이어도 되쏜다 — 로봇이 재접속해 스냅샷을 올리면 그 값으로 다시 맞는다.
+     */
+    private void echoToWeb(Map<String, Object> payload) {
+        try {
+            messagingTemplate.convertAndSend(INSPECTION_TOPIC, objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.error("Inspection command echo 실패: {}", payload, e);
         }
     }
 

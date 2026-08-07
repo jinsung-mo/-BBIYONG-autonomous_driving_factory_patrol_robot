@@ -26,4 +26,10 @@ public class InspectionCommand {
 
     /** CONFIRM/UPDATE 시 지점 이름(선택, 최대 128자) */
     private String name;
+
+    /** UPDATE 시 순찰 포함 여부(선택). FE 의 '순찰 제외' 토글이 이 필드로 온다. */
+    private Boolean enabled;
+
+    /** UPDATE 시 순찰 순서(선택). */
+    private Integer sequence;
 }

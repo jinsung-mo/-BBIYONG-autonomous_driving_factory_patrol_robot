@@ -4,7 +4,9 @@ import com.bbiyong.server.scheduler.domain.PatrolSchedule;
 import com.bbiyong.server.scheduler.dto.PatrolScheduleRequest;
 import com.bbiyong.server.scheduler.dto.PatrolScheduleResponse;
 import com.bbiyong.server.scheduler.repository.PatrolScheduleRepository;
+import com.bbiyong.server.sync.ResourceChangedEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
@@ -23,12 +25,15 @@ public class PatrolScheduleService {
 
     private final PatrolScheduleRepository scheduleRepository;
     private final PatrolSchedulerService schedulerService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PatrolScheduleService(
             PatrolScheduleRepository scheduleRepository,
-            PatrolSchedulerService schedulerService) {
+            PatrolSchedulerService schedulerService,
+            ApplicationEventPublisher eventPublisher) {
         this.scheduleRepository = scheduleRepository;
         this.schedulerService = schedulerService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -84,6 +89,8 @@ public class PatrolScheduleService {
             schedulerService.scheduleTask(saved);
         }
 
+        // 다른 접속자의 스케줄 목록도 같이 갱신되도록 알린다(/topic/sync).
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-schedules", saved.getRobotId()));
         return PatrolScheduleResponse.from(saved);
     }
 
@@ -117,6 +124,7 @@ public class PatrolScheduleService {
             }
         }
 
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-schedules", saved.getRobotId()));
         return PatrolScheduleResponse.from(saved);
     }
 
@@ -131,6 +139,7 @@ public class PatrolScheduleService {
         schedulerService.cancelTask(scheduleId);
         scheduleRepository.delete(schedule);
         log.info("순찰 스케줄 삭제: scheduleId={}, name={}", scheduleId, schedule.getName());
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-schedules", schedule.getRobotId()));
     }
 
     /**

@@ -1,11 +1,13 @@
 package com.bbiyong.server.waypoint.service;
 
+import com.bbiyong.server.sync.ResourceChangedEvent;
 import com.bbiyong.server.waypoint.domain.Waypoint;
 import com.bbiyong.server.waypoint.dto.WaypointRequest;
 import com.bbiyong.server.waypoint.dto.WaypointResponses;
 import com.bbiyong.server.waypoint.repository.WaypointRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,10 +36,13 @@ public class WaypointService {
 
     private final WaypointRepository repository;
     private final RobotWebSocketSessionManager sessionManager;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public WaypointService(WaypointRepository repository, RobotWebSocketSessionManager sessionManager) {
+    public WaypointService(WaypointRepository repository, RobotWebSocketSessionManager sessionManager,
+                           ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.sessionManager = sessionManager;
+        this.eventPublisher = eventPublisher;
     }
 
     /** 순찰 지점 1개 추가(지도 클릭). seq 미지정 시 맨 뒤로. */
@@ -58,7 +63,10 @@ public class WaypointService {
         w.setYaw(normalizeYaw(req.yaw()));
         w.setSeq(seq);
         w.setCreatedAt(Instant.now());
-        return WaypointResponses.Item.of(repository.save(w));
+        WaypointResponses.Item item = WaypointResponses.Item.of(repository.save(w));
+        // 다른 접속자 화면도 같은 경로를 봐야 한다 — 커밋 후 /topic/sync 로 재조회를 알린다.
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-route", rid));
+        return item;
     }
 
     @Transactional(readOnly = true)
@@ -82,6 +90,8 @@ public class WaypointService {
         String rid = resolveRobotId(robotId);
         repository.deleteByRobotId(rid);
         if (reqs == null || reqs.isEmpty()) {
+            // 빈 교체도 '전부 삭제' 라는 변경이다 — 다른 접속자 화면에서도 지워져야 한다.
+            eventPublisher.publishEvent(new ResourceChangedEvent("patrol-route", rid));
             return List.of();
         }
         if (reqs.size() > MAX_WAYPOINTS) {
@@ -108,15 +118,18 @@ public class WaypointService {
             w.setCreatedAt(now);
             saved.add(repository.save(w));
         }
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-route", rid));
         return WaypointResponses.items(saved);
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "순찰 지점을 찾을 수 없습니다: " + id);
-        }
+        // robotId 를 이벤트에 실어야 하므로 존재 확인을 조회로 한다.
+        Waypoint w = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "순찰 지점을 찾을 수 없습니다: " + id));
         repository.deleteById(id);
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-route", w.getRobotId()));
     }
 
     /**
@@ -126,6 +139,8 @@ public class WaypointService {
      * 실제 순찰은 저장된 경로가 있는 상태에서 {@code SET_MODE mode=autonomy} 를 받아야 시작된다.
      * 경로 저장과 순찰 시작을 한 번에 하려면 {@link #startPatrol(String)} 를 사용한다.
      * yaw 는 ROS 월드프레임 <b>radians</b> 이며 별도 변환 없이 그대로 전달한다.
+     *
+     * yaw 미지정(null) 웨이포인트는 null 그대로 보내 로봇의 자동 방향 계산에 맡긴다.
      *
      * <p>로봇 미연결 시에도 200(경고 로그) — 저장은 이미 되어 있으므로 재연결 후 재하달 가능.
      */
@@ -192,10 +207,18 @@ public class WaypointService {
         return v;
     }
 
-    /** yaw 는 선택값 — 미지정 시 0.0(로봇과 동일), 지정 시 유한수여야 한다. */
+    /**
+     * yaw 는 선택값 — 지정 시 유한수여야 한다.
+     *
+     * <p>미지정(null)은 그대로 null 로 보존해 로봇에 전달한다. 로봇의
+     * patrol_route.py 가 null yaw 를 "가장 가까운 구조물을 바라보도록 자동
+     * 계산"으로 해석하기 때문이다({@code _resolve_yaw}/{@code _nearest_structure_yaw}).
+     * 과거에는 여기서 0.0 으로 강제해, FE 에서 방향을 비워 자동 계산을 의도해도
+     * 실제로는 항상 맵 +X 를 보게 되는 버그였다(2026-08-07 확인).
+     */
     private Double normalizeYaw(Double yaw) {
         if (yaw == null) {
-            return 0.0;
+            return null;
         }
         return requireFinite(yaw, "yaw");
     }

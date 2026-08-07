@@ -4,8 +4,10 @@ import com.bbiyong.server.stomp.dto.InspectionCommand;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import tools.jackson.databind.ObjectMapper;
 
 import java.security.Principal;
 import java.util.List;
@@ -13,6 +15,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -25,7 +28,9 @@ import static org.mockito.Mockito.when;
 class InspectionStompControllerTests {
 
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
-    private final InspectionStompController controller = new InspectionStompController(sessionManager);
+    private final SimpMessagingTemplate messagingTemplate = mock(SimpMessagingTemplate.class);
+    private final InspectionStompController controller =
+            new InspectionStompController(sessionManager, messagingTemplate, new ObjectMapper());
 
     private static Principal admin() {
         return new UsernamePasswordAuthenticationToken(
@@ -92,9 +97,58 @@ class InspectionStompControllerTests {
     }
 
     @Test
+    void updateRelaysEnabledAndSequence() {
+        when(sessionManager.sendCommand(any(), any())).thenReturn(true);
+        InspectionCommand c = cmd("UPDATE");
+        c.setPointId("pt-1");
+        c.setEnabled(false);
+        c.setSequence(3);
+
+        controller.inspection(c, admin());
+
+        Map<String, Object> p = capture();
+        assertThat(p).containsEntry("command", "UPDATE")
+                .containsEntry("pointId", "pt-1")
+                .containsEntry("enabled", false)
+                .containsEntry("sequence", 3);
+    }
+
+    // --- 웹 echo — 다른 접속자·탭이 로봇 회신 없이도 같은 전이를 재현한다 ---
+
+    @Test
+    void validCommandIsEchoedToInspectionTopic() {
+        when(sessionManager.sendCommand(any(), any())).thenReturn(true);
+        InspectionCommand c = cmd("CONFIRM");
+        c.setCandidateId("cand-1");
+
+        controller.inspection(c, admin());
+
+        ArgumentCaptor<String> echo = ArgumentCaptor.forClass(String.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/inspection"), echo.capture());
+        assertThat(echo.getValue())
+                .contains("\"inspection_point_command\"")
+                .contains("\"CONFIRM\"")
+                .contains("\"cand-1\"");
+    }
+
+    @Test
+    void echoHappensEvenWhenRobotOffline() {
+        when(sessionManager.sendCommand(any(), any())).thenReturn(false);
+        InspectionCommand c = cmd("REJECT");
+        c.setCandidateId("cand-2");
+
+        controller.inspection(c, admin());
+
+        // 로봇이 꺼져 있어도 웹 화면들은 먼저 맞춰 둔다 — 로봇 재접속 스냅샷이 최종 진실.
+        verify(messagingTemplate).convertAndSend(eq("/topic/inspection"), anyString());
+    }
+
+    @Test
     void confirmWithoutCandidateIsDropped() {
         controller.inspection(cmd("CONFIRM"), admin()); // candidateId 없음
         verify(sessionManager, never()).sendCommand(any(), any());
+        // 검증에서 떨어진 명령은 echo 도 하지 않는다 — 화면 전이가 로봇 계약보다 앞서면 안 된다.
+        verify(messagingTemplate, never()).convertAndSend(anyString(), anyString());
     }
 
     @Test

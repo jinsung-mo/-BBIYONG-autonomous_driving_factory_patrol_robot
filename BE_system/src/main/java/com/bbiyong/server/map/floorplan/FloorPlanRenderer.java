@@ -264,8 +264,16 @@ public final class FloorPlanRenderer {
         bitwise_and(occHi, inner, obst);
         Mat k7 = getStructuringElement(MORPH_ELLIPSE, new Size(7, 7));
         morphologyEx(obst, obst, MORPH_CLOSE, k7);
-        morphologyEx(obst, obst, MORPH_OPEN, k7);
         k7.release();
+        // OPEN erases anything thinner than its kernel. A 7x7 kernel here
+        // (same size as CLOSE) deleted a real, sparsely-scanned obstacle limb
+        // on a re-mapped run (2026-08-07) -- the limb's SLAM occupancy was
+        // thin enough to vanish, opening a visible gap in the rendered
+        // obstacle. obstacleMinArea already backstops small noise blobs, so
+        // OPEN only needs to clear single/few-pixel speckle, not real limbs.
+        Mat k3 = getStructuringElement(MORPH_ELLIPSE, new Size(3, 3));
+        morphologyEx(obst, obst, MORPH_OPEN, k3);
+        k3.release();
         MatVector oc = new MatVector();
         findContours(obst, oc, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
         for (long i = 0; i < oc.size(); i++) {
