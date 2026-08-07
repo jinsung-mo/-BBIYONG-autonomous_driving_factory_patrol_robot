@@ -607,6 +607,57 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .auth-card .form-msg.warn{
   background:var(--bb-warn-tint); color:#7A5F1E; border:1px solid #E6D2AE;
 }
+.auth-card .form-msg.ok{
+  background:rgba(31,157,108,.10); color:#1F7A54; border:1px solid #B7E0CD;
+}
+
+/* 아이디/비밀번호 찾기 화면 제목 — 탭 자리에 들어가므로 여백을 탭과 맞춘다. */
+.auth-title{
+  margin:20px 0 14px; text-align:center;
+  font-size:14px; font-weight:800; color:var(--bb-ink);
+}
+
+/* 비밀번호 정책 실시간 체크리스트 (S15P11E101). 항목 4개를 한 줄로 흘리되,
+   충족한 항목은 primary, 미충족은 muted 로 — 무엇이 남았는지 색으로 즉시 읽힌다. */
+.pw-checks{
+  display:flex; flex-wrap:wrap; gap:4px 12px; margin:6px 0 0; padding:0; list-style:none;
+}
+.pw-checks li{
+  font-size:11.5px; font-weight:600; color:var(--bb-muted);
+  display:inline-flex; align-items:center; gap:3px;
+}
+.pw-checks li.ok{color:var(--bb-primary);}
+.pw-checks li span{font-size:11px; width:11px; text-align:center;}
+
+/* 짧은 인라인 안내(일치 여부·인증 상태). form-msg 보다 가벼운 한 줄. */
+.field-hint{font-size:11.5px; font-weight:600; margin-top:5px;}
+.field-hint.ok{color:#1F7A54;}
+.field-hint.miss{color:#8E3F36;}
+
+/* 입력 + 버튼을 한 줄에(이메일 인증코드·재설정 코드 전송). */
+.inline-field{display:flex; gap:6px; align-items:stretch;}
+.inline-field input{flex:1; min-width:0;}
+.inline-btn{
+  flex:0 0 auto; padding:0 12px; border:1px solid var(--bb-primary);
+  border-radius:var(--bb-r-input); background:var(--bb-primary); color:#fff;
+  font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
+}
+.inline-btn:hover:not(:disabled){background:var(--bb-primary-hover); border-color:var(--bb-primary-hover);}
+.inline-btn:disabled{opacity:.5; cursor:default;}
+.inline-btn.full{width:100%; padding:10px 0;}
+.inline-btn.ghost{background:transparent; color:var(--bb-primary);}
+.inline-btn.ghost:hover:not(:disabled){background:var(--bb-surface);}
+
+/* 아이디/비밀번호 찾기 링크 — 글자 버튼(밑줄 링크처럼). 채운 버튼과 구분한다. */
+.auth-links{
+  display:flex; justify-content:center; align-items:center; gap:10px; margin-top:14px;
+}
+.auth-links button{
+  border:0; background:transparent; color:var(--bb-body);
+  font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; padding:4px 2px;
+}
+.auth-links button:hover:not(:disabled){color:var(--bb-primary); text-decoration:underline;}
+.auth-links span{color:var(--bb-muted); font-size:11px;}
 
 /* ============ 폼 (인증 · 모달 공용) ============ */
 .form-row{display:flex; flex-direction:column; gap:5px; margin-bottom:11px;}
