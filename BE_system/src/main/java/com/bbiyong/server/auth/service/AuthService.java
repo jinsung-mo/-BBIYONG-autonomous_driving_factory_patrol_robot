@@ -2,9 +2,12 @@ package com.bbiyong.server.auth.service;
 
 import com.bbiyong.server.auth.domain.Role;
 import com.bbiyong.server.auth.domain.User;
+import com.bbiyong.server.auth.dto.FindIdRequest;
+import com.bbiyong.server.auth.dto.FindIdResponse;
 import com.bbiyong.server.auth.dto.LoginRequest;
 import com.bbiyong.server.auth.dto.LoginResponse;
 import com.bbiyong.server.auth.dto.RefreshResponse;
+import com.bbiyong.server.auth.dto.ResetPasswordRequest;
 import com.bbiyong.server.auth.dto.SignupRequest;
 import com.bbiyong.server.auth.dto.SignupResponse;
 import com.bbiyong.server.auth.jwt.JwtTokenProvider;
@@ -20,8 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -35,20 +37,27 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final EmailVerificationService emailVerificationService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtTokenProvider jwtTokenProvider) {
+                       JwtTokenProvider jwtTokenProvider,
+                       EmailVerificationService emailVerificationService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.emailVerificationService = emailVerificationService;
     }
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
-        validatePassword(request.password());
+        PasswordPolicy.validate(request.password());
         String gender = normalizeGender(request.gender());
         validateBirthDate(request.birthDate());
+
+        // 이메일 소유 확인이 끝난 주소만 가입을 허용한다(send-code → verify-code 선행).
+        emailVerificationService.requireVerified(
+                EmailVerificationService.Purpose.SIGNUP, request.email());
 
         if (userRepository.existsByEmail(request.email())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 존재하는 이메일입니다.");
@@ -65,31 +74,90 @@ public class AuthService {
         user.setCreatedAt(Instant.now());
         userRepository.save(user);
 
+        // 인증 상태는 1회용 — 가입 성공과 함께 소모한다.
+        emailVerificationService.consumeVerified(
+                EmailVerificationService.Purpose.SIGNUP, request.email());
+
         return new SignupResponse("SUCCESS", user.getEmail(), user.getName());
     }
 
     /**
-     * 비밀번호 정책: 8자 이상 + 영문·숫자·특수문자 각 1자 이상.
-     * 미충족 시 부족한 항목을 구체적으로 안내한다.
+     * 회원가입 이메일 인증코드를 발송한다. 이미 가입된 이메일이면 409 로 미리 알린다
+     * (인증 절차를 끝까지 밟은 뒤 가입 단계에서야 중복을 알게 되는 헛수고를 막는다).
      */
-    private void validatePassword(String password) {
-        List<String> missing = new ArrayList<>();
-        if (password.length() < 8) {
-            missing.add("8자 이상");
+    public void sendSignupCode(String email) {
+        if (userRepository.existsByEmail(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 존재하는 이메일입니다.");
         }
-        if (!password.matches(".*[A-Za-z].*")) {
-            missing.add("영문");
+        emailVerificationService.sendCode(EmailVerificationService.Purpose.SIGNUP, email);
+    }
+
+    /** 회원가입 이메일 인증코드를 검증한다(성공 시 해당 이메일이 '인증됨'으로 표시된다). */
+    public void verifySignupCode(String email, String code) {
+        emailVerificationService.verifyCode(EmailVerificationService.Purpose.SIGNUP, email, code);
+    }
+
+    /**
+     * 아이디(이메일) 찾기. 이름+생년월일로 후보를 좁히고 휴대전화번호는 숫자만 비교한다.
+     * 매칭되는 계정이 없으면 404. 성공 시 이메일을 마스킹해 반환한다(개인정보 최소 노출).
+     */
+    @Transactional(readOnly = true)
+    public FindIdResponse findEmail(FindIdRequest request) {
+        String inputDigits = digitsOnly(request.phoneNumber());
+        Optional<User> match = userRepository
+                .findByNameAndBirthDate(request.name().trim(), request.birthDate()).stream()
+                .filter(u -> digitsOnly(u.getPhoneNumber()).equals(inputDigits))
+                .findFirst();
+        User user = match.orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND, "일치하는 계정을 찾을 수 없습니다. 입력한 정보를 확인하세요."));
+        return new FindIdResponse(maskEmail(user.getEmail()));
+    }
+
+    /**
+     * 비밀번호 재설정 인증코드를 발송한다. 가입되지 않은 이메일이면 코드를 보내지 않되,
+     * 계정 존재 여부가 드러나지 않도록 예외 없이 동일하게 처리한다(계정 열거 방지).
+     */
+    public void sendPasswordResetCode(String email) {
+        if (userRepository.findByEmail(email).isPresent()) {
+            emailVerificationService.sendCode(EmailVerificationService.Purpose.PASSWORD_RESET, email);
         }
-        if (!password.matches(".*\\d.*")) {
-            missing.add("숫자");
+    }
+
+    /**
+     * 비밀번호를 재설정한다. 인증코드 검증 → 새 비밀번호 정책 검증 → 해시 교체 순서로 처리한다.
+     * 코드가 유효하면 send 단계에서 계정이 존재했음이 보장되지만, 그 사이 삭제됐을 수 있어 재확인한다.
+     */
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        // 새 비밀번호 정책을 먼저 본다 — 약한 비밀번호 때문에 유효한 코드가 소모(1회용)되면
+        // 사용자가 코드를 다시 받아야 하는 헛수고가 생긴다. 코드 검증은 그 뒤에 한다.
+        PasswordPolicy.validate(request.newPassword());
+        emailVerificationService.verifyCode(
+                EmailVerificationService.Purpose.PASSWORD_RESET, request.email(), request.code());
+
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "일치하는 계정을 찾을 수 없습니다."));
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+        emailVerificationService.consumeVerified(
+                EmailVerificationService.Purpose.PASSWORD_RESET, request.email());
+    }
+
+    private static String digitsOnly(String value) {
+        return value == null ? "" : value.replaceAll("\\D", "");
+    }
+
+    /** 이메일 로컬파트 앞 2자만 남기고 마스킹한다(1자면 1자만). 예: kim.test@x.com → ki***@x.com */
+    private static String maskEmail(String email) {
+        int at = email.indexOf('@');
+        if (at <= 0) {
+            return "***";
         }
-        if (!password.matches(".*[^A-Za-z0-9\\s].*")) {
-            missing.add("특수문자");
-        }
-        if (!missing.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "비밀번호에 다음을 포함하세요: " + String.join(", ", missing));
-        }
+        String local = email.substring(0, at);
+        String domain = email.substring(at);
+        int keep = local.length() <= 2 ? 1 : 2;
+        return local.substring(0, keep) + "***" + domain;
     }
 
     private String normalizeGender(String gender) {

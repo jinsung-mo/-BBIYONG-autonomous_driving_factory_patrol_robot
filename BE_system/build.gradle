@@ -43,6 +43,10 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
+	// 이메일 인증코드 발송(SMTP) — 회원가입 이메일 인증 · 비밀번호 재설정 코드 발송에 사용.
+	// 자격증명(BBIYONG_MAIL_USERNAME/PASSWORD) 미주입 시 개발모드로 동작(코드를 로그에 출력).
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+
 	// API 문서 자동화 (SpringDoc OpenAPI 3.0)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
 
