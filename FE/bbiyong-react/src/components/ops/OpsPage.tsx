@@ -8,6 +8,9 @@ import Modal from '../ui/Modal.tsx'
 import InspectionPanel from './InspectionPanel.tsx'
 import RoutePanel from './RoutePanel.tsx'
 import SchedulePanel from './SchedulePanel.tsx'
+// 분전반 임계온도 관리(S15P11E101-836). 설정탭에 있던 설비 현황을 운영탭으로 옮기고
+// 임계온도 편집을 붙였다 — 삐용봇이 분전반을 탐지하면 여기서 과열 기준을 정한다.
+import EquipmentPanel from '../config/EquipmentPanel.tsx'
 import KpiRow from '../robot/KpiRow.tsx'
 import { useInspection } from '../../live/inspection.ts'
 import { useResourceSync } from '../../live/sync.ts'
@@ -28,15 +31,15 @@ export default function OpsPage() {
   const { accessToken, locked } = useAuth()
 
   const [nav, setNav] = useState<import('../../live/contracts.d.ts').DecodedMap | null>(null)
-  const [name, setName] = useState('')
   const [maps, setMaps] = useState<import('../../live/contracts.d.ts').MapSummary[]>([])
   const [mapsErr, setMapsErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const [confirming, setConfirming] = useState(false)
   const [requested, setRequested] = useState(false)   // START_MAPPING 발행 후 로봇 반응 대기
-  const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)                // { kind: ok|warn|err, text }
+  // 매핑 완료를 이미 저장했는지. 완료 이벤트가 재렌더로 여러 번 읽혀도 SAVE_MAP 을 한 번만 보낸다.
+  const savedRef = useRef(false)
 
   // 저장 맵 이미지 미리보기 팝업(S15P11E101-791). 제목이나 '맵 보기' 를 눌러 크게 본다.
   const [preview, setPreview] = useState<{ url: string, name: string } | null>(null)
@@ -103,12 +106,24 @@ export default function OpsPage() {
   // 로봇이 매핑에 들어갔거나 끝났으면 '대기 중' 딱지는 역할이 끝났다
   useEffect(() => { if (running || mappingComplete) setRequested(false) }, [running, mappingComplete])
 
-  // 완료 이벤트는 로봇이 붙인 맵 이름을 함께 보낸다(EVENT_MAPPING_COMPLETE { robot_id, name }).
-  // 비어 있을 때만 채운다 — 사용자가 입력하던 이름을 덮어쓰지 않는다.
+  // 매핑 완료 시 자동 저장(S15P11E101-836).
+  //
+  // 예전에는 이름을 입력하고 '이 맵 사용' 을 눌러야 저장됐다. 그 수동 단계를 없앤다 —
+  // 완료 이벤트(EVENT_MAPPING_COMPLETE { robot_id, name })가 오면 로봇이 붙인 이름으로,
+  // 없으면 시각 기반 기본 이름으로 곧장 SAVE_MAP 을 보낸다. 서버가 정제 도면(FLOORPLAN)을
+  // 만들어 활성 맵으로 지정하면 지도에 자동으로 반영된다.
   useEffect(() => {
-    const suggested = mappingComplete?.name
-    if (suggested) setName((prev) => (prev.trim() ? prev : suggested))
-  }, [mappingComplete])
+    if (!mappingComplete) { savedRef.current = false; return }  // 다음 매핑을 위해 리셋
+    if (savedRef.current) return
+    savedRef.current = true
+    const suggested = (mappingComplete.name || '').trim()
+    const mapName = suggested
+      || `map_${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`
+    setMsg({ kind: 'ok', text: `매핑 완료 — '${mapName}' 이름으로 자동 저장합니다. 서버가 정제 도면(FLOORPLAN)을 만들어 활성 맵으로 지정하면 지도에 반영됩니다.` })
+    control.saveMap(mapName)
+    clearMappingComplete()
+    setTimeout(loadMaps, 1000)
+  }, [mappingComplete, control, clearMappingComplete, loadMaps])
 
   const onStart = () => {
     setConfirming(false)
@@ -125,20 +140,6 @@ export default function OpsPage() {
     control.stopMapping()
     setRequested(false)
     setMsg({ kind: 'warn', text: '매핑 중단을 요청했습니다. 로봇이 멈추면 진행 표시가 사라집니다.' })
-  }
-
-  // 'SAVE_MAP 발행 → 로봇 업로드 대기 → 활성 맵 지정' 한 흐름.
-  // SAVE_MAP 은 STOMP 라 응답이 없으므로 이름으로 목록에서 되찾아 id 를 얻는다.
-  const onSave = async () => {
-    const n = name.trim()
-    if (!n || saving) return
-    setSaving(true)
-    setMsg({ kind: 'ok', text: `'${n}' 저장 명령(SAVE_MAP)을 보냈습니다. 서버가 정제 도면(FLOORPLAN)을 활성화하면 지도에 자동으로 반영됩니다.` })
-    control.saveMap(n)
-    setName('')
-    clearMappingComplete()
-    setSaving(false)
-    setTimeout(loadMaps, 1000)
   }
 
   const area = nav ? (nav.w * nav.res * nav.h * nav.res).toFixed(1) : null
@@ -199,7 +200,7 @@ export default function OpsPage() {
               )}
               {phase === 'complete' && (
                 <div className="mapstat done" id="mapPhase">
-                  <i /> <b>매핑 완료 — 이 맵을 사용할까요?</b> 아래에 이름을 입력하고 <b>이 맵 사용</b>을 누르면 저장 후 활성 맵으로 지정합니다.
+                  <i /> <b>매핑 완료 — 자동으로 저장합니다.</b> 서버가 정제 도면(FLOORPLAN)을 만들어 활성 맵으로 지정하면 지도에 반영됩니다.
                 </div>
               )}
 
@@ -216,19 +217,6 @@ export default function OpsPage() {
                 </div>
               )}
 
-              <div className="gotor">
-                <input
-                  id="mapName" value={name} onChange={(e) => setName(e.target.value)}
-                  placeholder="저장할 맵 이름 (예: factory_01)"
-                  disabled={offline || saving}
-                />
-                <button
-                  type="button" id="btnUseMap" className="btn-filled" onClick={onSave}
-                  disabled={offline || saving || !name.trim() || !nav}
-                >
-                  {saving ? '저장 중…' : '이 맵 사용'}
-                </button>
-              </div>
               {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
             </div>
 
@@ -249,6 +237,9 @@ export default function OpsPage() {
               selectedId={inspSel}
               onSelect={setInspSel}
             />
+
+            {/* 분전반 임계온도(S15P11E101-836). 삐용봇이 탐지한 분전반의 과열 기준을 여기서 정한다. */}
+            <EquipmentPanel />
 
             <div className="card-v3">
               <h3 style={{ margin: 0, marginBottom: '12px' }}>저장된 맵 <span className="k">ARCHIVE</span></h3>

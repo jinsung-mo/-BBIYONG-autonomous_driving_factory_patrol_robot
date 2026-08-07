@@ -1,12 +1,11 @@
 import { useSettings, DEFAULT_SETTINGS } from '../../settings/SettingsContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
-import ZonePanel from './ZonePanel.tsx'
-import EquipmentPanel from './EquipmentPanel.tsx'
 import NotifyPanel from './NotifyPanel.tsx'
 import UsersPanel from './UsersPanel.tsx'
 import KpiRow from '../robot/KpiRow.tsx'
 
 // 설정 (S15P11E101-685: 속도 상한, 열화상 임계온도, 시연 경보, 순찰 지점 설정 항목 삭제)
+// (S15P11E101-836: 구역·설비 현황 제거 — 설비(분전반) 임계온도 관리는 운영탭으로 이동)
 export default function ConfigPage() {
   const { reset } = useSettings()
   const { locked } = useAuth()
@@ -16,7 +15,7 @@ export default function ConfigPage() {
       <div className="nav-hero">
         <div className="nav-title">
           <h2>시스템 설정</h2>
-          <span className="nav-sub">NOTIFICATIONS · USERS · EQUIPMENT</span>
+          <span className="nav-sub">NOTIFICATIONS · USERS</span>
         </div>
         <KpiRow />
       </div>
@@ -34,8 +33,6 @@ export default function ConfigPage() {
           </aside>
 
           <div className="nav-canvas">
-            <ZonePanel />
-              <EquipmentPanel />
             <UsersPanel />
           </div>
         </div>
