@@ -235,7 +235,12 @@ export default function OpsPage() {
             <InspectionPanel
               candidates={inspection.candidates}
               points={inspection.points}
-              onConfirm={inspection.confirm}
+              onConfirm={(candidateId, cname) => {
+                inspection.confirm(candidateId, cname)
+                // 승인한 순간 그 지점을 지도에서 짚어 준다 — 후보가 확정 지점(번호 있는
+                // 마름모)으로 바뀌므로, 같은 좌표의 확정 점 id(pt-<candidateId>)를 고른다.
+                setInspSel(`pt-${candidateId}`)
+              }}
               onReject={inspection.reject}
               onRename={inspection.rename}
               onToggle={inspection.setEnabled}
