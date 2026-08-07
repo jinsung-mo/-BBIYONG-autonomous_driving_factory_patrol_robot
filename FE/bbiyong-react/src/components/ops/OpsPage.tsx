@@ -10,6 +10,7 @@ import RoutePanel from './RoutePanel.tsx'
 import SchedulePanel from './SchedulePanel.tsx'
 import KpiRow from '../robot/KpiRow.tsx'
 import { useInspection } from '../../live/inspection.ts'
+import { useResourceSync } from '../../live/sync.ts'
 import {
   MAPPING_STATUS, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
   loadMapImageUrl, releaseMapImageUrl,
@@ -73,6 +74,10 @@ export default function OpsPage() {
   }, [enabled, accessToken])
 
   useEffect(() => { loadMaps() }, [loadMaps])
+
+  // 다른 접속자가 매핑을 저장하거나 서버가 도면을 만들면 목록이 바뀐다 —
+  // /topic/sync 알림으로 새로고침 없이 따라간다.
+  useResourceSync('maps', loadMaps)
 
   // kind 가 없는 옛 레코드는 원본으로 본다 — 도면이라고 단정하면 목록에 섞여 들어온다.
   const isPlan = (m: any) => String(m?.kind || '').toUpperCase() === 'FLOORPLAN'

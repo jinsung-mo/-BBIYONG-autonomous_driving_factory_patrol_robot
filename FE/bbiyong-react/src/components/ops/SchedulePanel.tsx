@@ -8,6 +8,7 @@ import {
   fetchSchedules, lastRunText, updateSchedule,
 } from '../../live/schedules.ts'
 import Modal from '../ui/Modal.tsx'
+import { useResourceSync } from '../../live/sync.ts'
 
 type Schedule = import('../../live/contracts.d.ts').PatrolSchedule
 
@@ -48,6 +49,10 @@ export default function SchedulePanel() {
   }, [enabled, accessToken])
 
   useEffect(() => { load() }, [load])
+
+  // 다른 접속자가 스케줄을 바꾸면 새로고침 없이 따라간다(/topic/sync).
+  // 진행 중 안내문은 지우지 않는다 — 남의 변경이 내 결과 메시지를 걷어가면 헷갈린다.
+  useResourceSync('patrol-schedules', () => load({ keepMsg: true }))
 
   const cronProb = cronProblem(cron)
   const cronDesc = cronText(cron)
