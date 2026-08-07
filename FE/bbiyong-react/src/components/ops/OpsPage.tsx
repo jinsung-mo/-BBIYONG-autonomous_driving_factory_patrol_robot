@@ -10,9 +10,10 @@ import RoutePanel from './RoutePanel.tsx'
 import SchedulePanel from './SchedulePanel.tsx'
 import KpiRow from '../robot/KpiRow.tsx'
 import { useInspection } from '../../live/inspection.ts'
+import { useResourceSync } from '../../live/sync.ts'
 import {
   MAPPING_STATUS, activeMapIdOf, fetchMaps, mapIdOf, mapNameOf,
-  activateMap, loadMapImageUrl, releaseMapImageUrl, NotImplementedError,
+  loadMapImageUrl, releaseMapImageUrl,
 } from '../../live/mapping.ts'
 
 // 운영 (S15P11E101-475) — 2D 맵 모델링과 저장된 맵 관리. 관리자만 들어온다.
@@ -35,15 +36,11 @@ export default function OpsPage() {
   const [confirming, setConfirming] = useState(false)
   const [requested, setRequested] = useState(false)   // START_MAPPING 발행 후 로봇 반응 대기
   const [saving, setSaving] = useState(false)
-  // 기본은 도면만. 원본은 눌러야 나온다(S15P11E101-774).
-  const [showRaw, setShowRaw] = useState(false)
   const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)                // { kind: ok|warn|err, text }
 
-  // 저장 맵 이미지 미리보기 팝업(S15P11E101-791). 제목을 눌러 도면 그림을 크게 본다.
+  // 저장 맵 이미지 미리보기 팝업(S15P11E101-791). 제목이나 '맵 보기' 를 눌러 크게 본다.
   const [preview, setPreview] = useState<{ url: string, name: string } | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
-  // 목록에서 활성화(이 맵 사용) 중인 맵 id
-  const [activatingId, setActivatingId] = useState<string | null>(null)
 
   // 언마운트 뒤 setState 를 막는다 — 저장 흐름은 최대 12초까지 폴링한다
   const alive = useRef(true)
@@ -65,25 +62,6 @@ export default function OpsPage() {
   }
   const closePreview = () => setPreview((prev) => { releaseMapImageUrl(prev?.url); return null })
 
-  // 목록의 '이 맵 사용' — 저장된 맵을 활성 맵으로 지정(PUT /api/maps/{id}/active).
-  // 완료 직후의 '이 맵 사용'(SAVE_MAP 발행)과 달리, 이미 저장된 맵을 다시 활성화하는 것이다.
-  const onActivate = async (m: any) => {
-    const id = mapIdOf(m)
-    if (!id || activatingId) return
-    setActivatingId(id); setMsg(null)
-    try {
-      await activateMap(id, accessToken)
-      if (!alive.current) return
-      setMsg({ kind: 'ok', text: `'${mapNameOf(m) || id}' 을(를) 활성 맵으로 지정했습니다.` })
-      await loadMaps()
-    } catch (e) {
-      if (!alive.current) return
-      setMsg(e instanceof NotImplementedError
-        ? { kind: 'warn', text: '이 서버 버전은 맵 활성화 API를 아직 제공하지 않습니다.' }
-        : { kind: 'err', text: `활성화하지 못했습니다 — ${errMessage(e)}` })
-    } finally { if (alive.current) setActivatingId(null) }
-  }
-
   // 실시간 맵 진행 상황 — /topic/nav 의 MAP 스냅샷을 그대로 본다
   useEffect(() => onNavUpdate((n: any) => setNav(n?.map ? { ...n.map } : null)), [onNavUpdate])
 
@@ -97,6 +75,10 @@ export default function OpsPage() {
 
   useEffect(() => { loadMaps() }, [loadMaps])
 
+  // 다른 접속자가 매핑을 저장하거나 서버가 도면을 만들면 목록이 바뀐다 —
+  // /topic/sync 알림으로 새로고침 없이 따라간다.
+  useResourceSync('maps', loadMaps)
+
   // kind 가 없는 옛 레코드는 원본으로 본다 — 도면이라고 단정하면 목록에 섞여 들어온다.
   const isPlan = (m: any) => String(m?.kind || '').toUpperCase() === 'FLOORPLAN'
   const sourceNameOf = (m: any) => {
@@ -106,8 +88,9 @@ export default function OpsPage() {
     return hit ? (mapNameOf(hit) || src) : src
   }
   const planCount = maps.filter(isPlan).length
-  const rawCount = maps.length - planCount
-  const shownMaps = showRaw ? maps : maps.filter(isPlan)
+  // 목록은 도면(FLOORPLAN)만 보여 준다. 원본(RAW)은 도면 생성 재료일 뿐 사람이 볼 일이
+  // 없어 노출을 접었다 — '원본 보기' 토글과 원본 행 표기를 함께 걷어냈다(2026-08-07 결정).
+  const shownMaps = maps.filter(isPlan)
 
   // 진행 단계. 완료 이벤트 > 로봇이 보고하는 MAPPING > 발행 직후 대기 순으로 우선한다.
   //
@@ -275,24 +258,14 @@ export default function OpsPage() {
                   {!mapsErr && maps.length === 0 && !loading && (
                     <div className="cfg-note">저장된 맵이 없습니다. 위에서 현재 맵을 저장하면 여기에 쌓입니다.</div>
                   )}
-                  {/* 매핑 한 번에 원본(RAW)과 도면(FLOORPLAN)이 두 건씩 쌓인다(S15P11E101-774).
-                      쓰는 것은 도면이므로 기본은 도면만 보이고, 원본은 눌러서 꺼낸다 —
-                      목록이 두 배로 길어지면 무엇을 고를지가 아니라 무엇을 거를지부터 하게 된다. */}
+                  {/* 저장된 맵은 과거 기록을 '보는' 용도다(2026-08-07 결정). 예전의 '이 맵 사용'
+                      (재활성화)은 걷어냈다 — 활성 맵은 매핑 완료 시 서버가 자동 지정한다. */}
                   <div className="maplist-head">
-                    <span className="k mono">도면 {planCount}건{rawCount ? ` · 원본 ${rawCount}건` : ''}</span>
-                    {rawCount > 0 && (
-                      <button
-                        type="button" id="btnToggleRaw" className="btn-text"
-                        onClick={() => setShowRaw((v) => !v)}
-                        aria-pressed={showRaw}
-                      >
-                        {showRaw ? '원본 숨기기' : '원본 보기'}
-                      </button>
-                    )}
+                    <span className="k mono">도면 {planCount}건</span>
                   </div>
                   <ul className="map-list">
                     {shownMaps.map((m, i) => (
-                      <li key={mapIdOf(m) ?? i} className={isPlan(m) ? 'plan' : 'raw'}>
+                      <li key={mapIdOf(m) ?? i} className="plan">
                         {/* 제목을 누르면 도면 이미지를 팝업으로 크게 본다(S15P11E101-791) */}
                         <button
                           type="button" className="btn-text maptitle"
@@ -302,42 +275,35 @@ export default function OpsPage() {
                         >
                           {mapNameOf(m) || mapIdOf(m)}
                         </button>
-                        {/* 종류를 뱃지로 못 박는다. 글자 사이에 섞어 두면 훑을 때 안 보인다. */}
-                        <span className={`tag kind ${isPlan(m) ? 'plan' : 'raw'}`}>
-                          {isPlan(m) ? '도면' : '원본'}
-                        </span>
                         <span className="t mono">
                           {m.widthPx && m.heightPx ? `${m.widthPx}×${m.heightPx}` : ''}
                           {m.resolution ? ` · ${m.resolution} m/px` : ''}
                         </span>
-                        {/* 같은 매핑 세션의 원본이 목록에 있으면 어느 것에서 나왔는지 알려 준다 */}
-                        {isPlan(m) && sourceNameOf(m) && (
+                        {/* 같은 매핑 세션의 원본에서 나왔음을 알려 준다 */}
+                        {sourceNameOf(m) && (
                           <span className="t mono src">원본 {sourceNameOf(m)}</span>
                         )}
-                        {mapIdOf(m) === activeId
-                          ? <span className="tag">활성</span>
-                          : (
-                            <button
-                              type="button" className="btn-tonal"
-                              onClick={() => onActivate(m)}
-                              disabled={offline || !!activatingId}
-                              title="이 맵을 활성 맵으로 지정합니다"
-                              style={{ padding: '4px 8px', marginLeft: 'auto' }}
-                            >
-                              {activatingId === mapIdOf(m) ? '적용 중…' : '이 맵 사용'}
-                            </button>
-                          )}
+                        {mapIdOf(m) === activeId && <span className="tag">활성</span>}
+                        <button
+                          type="button" className="btn-tonal"
+                          onClick={() => openPreview(m)}
+                          disabled={previewBusy || !m.imageUrl}
+                          title="이 맵의 도면 이미지를 크게 봅니다"
+                          style={{ padding: '4px 8px', marginLeft: 'auto' }}
+                        >
+                          맵 보기
+                        </button>
                       </li>
                     ))}
                     {!shownMaps.length && (
                       <li className="empty">
-                        <span className="t">도면이 없습니다. 원본만 있다면 ‘원본 보기’로 확인하세요.</span>
+                        <span className="t">저장된 도면이 없습니다. 매핑을 마치면 여기에 쌓입니다.</span>
                       </li>
                     )}
                   </ul>
                   <div className="cfg-note">
-                    제목을 누르면 도면 이미지를 크게 볼 수 있고, <b>이 맵 사용</b>을 누르면 그 맵을 활성 맵으로 지정합니다.
-                    매핑을 새로 마치면 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 생성해 자동으로 활성화합니다.
+                    제목이나 <b>맵 보기</b>를 누르면 과거 도면 이미지를 크게 볼 수 있습니다.
+                    활성 맵은 매핑을 새로 마칠 때 서버가 정제 도면(<b className="mono">FLOORPLAN</b>)을 생성해 자동으로 지정합니다.
                   </div>
                 </>
               )}

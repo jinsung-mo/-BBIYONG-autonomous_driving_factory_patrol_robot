@@ -8,6 +8,7 @@ import {
   addWaypoint, applyWaypoints, deleteWaypoint, listWaypoints, replaceWaypoints,
   startPatrol, startPatrolMessage, wpLabel,
 } from '../../live/waypoints.ts'
+import { useResourceSync } from '../../live/sync.ts'
 
 // 순찰 경로 (S15P11E101-514) — 2D 지도를 클릭해 순찰 지점을 찍고, 순서를 정해 로봇에 하달한다.
 //
@@ -104,6 +105,24 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
   // yaw 도 변경 감지에 넣는다 — 방향만 바꾸고 저장을 안 누르면 서버에 안 남는다.
   const key = (w: any) => [w.x, w.y, w.name || '', w.yaw == null ? 'auto' : Number(w.yaw).toFixed(4)]
   const dirty = JSON.stringify(route.map(key)) !== JSON.stringify(saved.map(key))
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+
+  // 다른 접속자가 경로를 바꾸면 서버가 /topic/sync 로 알린다 — 새로고침 없이 따라간다.
+  // 내가 고치는 중(dirty)이면 편집본은 두고 서버본(saved)만 갱신한다. 남의 변경이
+  // 입력 중인 목록을 갈아치우면 찍던 지점을 잃는다 — '경로 저장 *' 표시가 충돌을 알린다.
+  const refresh = useCallback(async () => {
+    if (!enabled || !accessToken) return
+    try {
+      const rows = await listWaypoints(accessToken)
+      if (!alive.current) return
+      setSaved(rows)
+      setRoute((prev) => (dirtyRef.current ? prev : rows))
+    } catch {
+      // 사용자가 시작한 동작이 아니다 — 다음 알림이나 '다시 불러오기' 가 길이다
+    }
+  }, [enabled, accessToken])
+  useResourceSync('patrol-route', refresh)
 
   const onSave = async () => {
     if (busy) return
