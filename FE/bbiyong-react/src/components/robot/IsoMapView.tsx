@@ -413,7 +413,8 @@ export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor
         {points.map((p) => {
           const t = p?.target
           if (!t || !Number.isFinite(Number(t.x)) || !Number.isFinite(Number(t.y))) return null
-          const px = worldToPlanPx(plan as any, Number(t.x), Number(t.y), src.scale)
+          // 로봇 마커(aim)와 같은 변환을 쓴다(S15P11E101-789) — 다른 식을 쓰면 핀만 딴 자리에 선다.
+          const px = worldToScenePx(plan as any, Number(t.x), Number(t.y), { w: src.w, h: src.h })
           return (
             <div
               key={p.pointId}
