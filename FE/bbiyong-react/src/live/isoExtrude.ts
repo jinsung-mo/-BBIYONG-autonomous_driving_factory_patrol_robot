@@ -24,6 +24,17 @@ const OBSTACLE_LO = 96
 const OBSTACLE_HI = 200
 
 /**
+ * 벽에서 이 거리(px) 안의 '장애물' 판정은 잡음으로 보고 버린다 (2026-08-07).
+ *
+ * 서버 도면은 0(벽)/128(장애물)/255(자유) 세 값뿐이지만, 여기서 캔버스로 축소할 때
+ * (drawImage 보간) 벽과 바닥의 경계 픽셀이 그 사이 회색으로 뭉개진다 — 96~200 띠에
+ * 걸려 장애물로 오분류되고, 벽이란 벽마다 밑동에 장애물 색 띠가 둘러진다.
+ * BE(FloorPlanRenderer)는 실제 장애물을 벽 밴드에서 obstacleInset(고해상 12px,
+ * 여기 축소 후에도 4px 이상) 안쪽에만 두므로, 이 필터는 진짜 장애물을 건드리지 않는다.
+ */
+const OBSTACLE_WALL_GAP = 2
+
+/**
  * 벽을 몇 픽셀 깎을지 (S15P11E101-777).
  *
  * 도면의 벽은 실제보다 두껍게 그려져 있어 기둥이 방을 잡아먹는다. 양쪽에서 이만큼
@@ -84,6 +95,33 @@ function thinWalls(wall: Uint8Array, w: number, h: number) {
     }
   }
   return out
+}
+
+/**
+ * 아무 픽셀에서 '가장 가까운 벽까지의 맨해튼 거리'. distanceToEdge 와 같은 두 번
+ * 훑기지만 방향이 반대다 — 벽이 0 이고 멀어질수록 커진다. 벽 밑동 잡음 필터에 쓴다.
+ */
+function distanceToWall(wall: Uint8Array, w: number, h: number) {
+  const INF = w + h
+  const d = new Int32Array(w * h)
+  for (let i = 0; i < d.length; i++) d[i] = wall[i] ? 0 : INF
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      if (!d[i]) continue
+      if (y > 0 && d[i - w] + 1 < d[i]) d[i] = d[i - w] + 1
+      if (x > 0 && d[i - 1] + 1 < d[i]) d[i] = d[i - 1] + 1
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x
+      if (!d[i]) continue
+      if (y < h - 1 && d[i + w] + 1 < d[i]) d[i] = d[i + w] + 1
+      if (x < w - 1 && d[i + 1] + 1 < d[i]) d[i] = d[i + 1] + 1
+    }
+  }
+  return d
 }
 
 /** 층 수 기본값. 저사양에서는 이 값부터 줄인다 — 픽셀 수보다 층 수가 비용에 더 민감하다. */
@@ -165,6 +203,16 @@ export async function buildExtrudeSource(img: HTMLImageElement): Promise<Extrude
     if (lum < OBSTACLE_LO) wall[p] = 1
     else if (lum < OBSTACLE_HI) { obst[p] = 1; obstacles++ }
   }
+
+  // 벽 밑동의 안티앨리어싱 회색(축소 보간 산물)이 장애물로 오분류되는 잡음을 걷어낸다.
+  // 왜 생기고 왜 안전한지는 OBSTACLE_WALL_GAP 주석 참고.
+  if (obstacles) {
+    const dWall = distanceToWall(wall, w, h)
+    for (let p = 0; p < n; p++) {
+      if (obst[p] && dWall[p] <= OBSTACLE_WALL_GAP) { obst[p] = 0; obstacles-- }
+    }
+  }
+
   let rawWalls = 0
   for (let p = 0; p < n; p++) if (wall[p]) rawWalls++
 

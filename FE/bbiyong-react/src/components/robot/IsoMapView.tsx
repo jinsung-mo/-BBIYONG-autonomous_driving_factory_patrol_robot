@@ -28,13 +28,16 @@ const PAN_STEP = 48
 /** 이보다 멀리는 못 간다 — 지도를 잃어버리고 빈 화면만 남는 일을 막는다. */
 const PAN_MAX = 1200
 
-/** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다. */
-const LAYER_STEP = 1.15
+/** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다.
+    1.15 → 0.77 (2026-08-07): 벽(≈46px)이 방을 압도해 내부가 안 보인다는 피드백으로
+    총 높이를 2/3(≈31px)로 낮췄다. 층 수(WALL_H)를 줄이는 대신 간격을 좁혀,
+    옆면 음영 계단이 오히려 부드러워진다. */
+const LAYER_STEP = 0.77
 // nav 자세가 이 시간 안에 들어왔다면 텔레메트리로 덮지 않는다.
 // 텔레메트리는 1Hz 라, 3Hz 인 nav 와 섞으면 마커가 앞뒤로 떨린다.
 const NAV_FRESH_MS = 2500
 
-// 차체 높이(S15P11E101-750). 벽(WALL_H * LAYER_STEP ≈ 46px)보다 낮아야 방 안의
+// 차체 높이(S15P11E101-750). 벽(WALL_H * LAYER_STEP ≈ 31px)보다 낮아야 방 안의
 // 물건으로 읽힌다 — 벽보다 크면 로봇이 건물을 밟고 선 것처럼 보인다.
 // 목표까지 이보다 멀면 아직 가는 중이다. 보간 잔차(1px 미만)와 갈리는 값이다.
 const MOVING_PX = 1.2
@@ -168,12 +171,12 @@ export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor
     // 맵 전체 대비 비율로 옮겨야 2D 와 같은 자리에 찍힌다.
     const px = worldToScenePx(p as any, x, y, { w: s2.w, h: s2.h })
     targetRef.current = { x: px.x, y: px.y, yaw: Number.isFinite(yaw) ? yaw : 0 }
-    // 로봇은 벽 위로 띄운다 — 바닥에 붙이면 기울인 화면에서 벽에 가린다
-    // 차량은 벽 높이 위에 둔다(S15P11E101-745 의 결정을 지킨다).
-    // 750 에서 '바닥에 얹힌 것처럼' 을 문자 그대로 받아 z=2 로 내렸다가, 실제로 띄워
-    // 보니 벽 층에 묻혀 아무것도 보이지 않았다 — 745 가 띄운 이유가 그것이었다.
-    // 대신 차체 아래 접지 그림자와 바닥까지 내리는 기둥으로 '어디에 서 있는지' 를 만든다.
-    el.style.setProperty('--rz', `${WALL_H * LAYER_STEP + 6}px`)
+    // 로봇은 바닥에 붙인다(2026-08-07). 745 는 '벽에 가린다' 는 이유로 벽 위에 띄웠지만,
+    // 그 결과가 '로봇이 공중에 둥둥 떠 있다' 는 더 큰 오독을 만들었다 — 순찰 로봇은
+    // 바닥을 달리는 물건이다. 벽 뒤에 가릴 때를 위해 차체에서 벽보다 높이 솟는
+    // 광선 기둥(.iso-robot::before)을 세워 자리를 잃지 않게 한다. 벽도 2/3 로 낮아져
+    // (≈31px) 가림 자체가 줄었다. z=2 는 바닥 판·벽 0층과의 z-fighting 을 피하는 여유다.
+    el.style.setProperty('--rz', '2px')
     el.style.setProperty('--car-h', `${CAR_H}px`)
   }
 
@@ -304,8 +307,10 @@ export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor
     }
   }), [])
 
-  // 장애물 층. 벽의 절반 높이에 주황 계열 — 낮고 색이 달라 '치울 수 있는 것' 으로 읽힌다.
+  // 장애물 층. 벽의 절반 높이, 청회색 — 낮고 색이 달라 '치울 수 있는 것' 으로 읽힌다.
   // 명도 폭은 벽과 같게 좁힌다(748). 한 물건 안에서 명도가 크게 벌어지면 발광체처럼 보인다.
+  // 주황 → 청회색(2026-08-07): 주황은 분전반 표식(호박색)과 같은 계열로 읽혀,
+  // 벽 옆 장애물이 분전반으로 오인됐다. 2D 지도 범례의 장애물색(#59637a)과 계열을 맞춘다.
   const obstacleLayers = useMemo(() => {
     const n = Math.max(2, Math.round(WALL_H * 0.45))
     return Array.from({ length: n }, (_, k) => ({
@@ -313,7 +318,7 @@ export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor
       t: k / (n - 1),
     })).map((l) => ({
       z: l.z,
-      color: `hsl(28 52% ${52 + l.t * 14}%)`,
+      color: `hsl(222 14% ${44 + l.t * 14}%)`,
     }))
   }, [])
 
@@ -369,7 +374,7 @@ export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor
             }}
           />
         ))}
-        {/* 장애물 — 벽보다 낮고 주황(S15P11E101-777). 벽은 건물이라 못 치우지만
+        {/* 장애물 — 벽보다 낮고 청회색(S15P11E101-777). 벽은 건물이라 못 치우지만
             장애물은 사람이 치울 수 있는 것이다. 같은 색이면 그 구분이 사라진다. */}
         {src.obstacleUrl && obstacleLayers.map((l) => (
           <div
@@ -383,11 +388,12 @@ export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor
             }}
           />
         ))}
-        {/* 로봇 — 벽 위로 띄우고, 화면을 돌려도 정면을 보게 한다 */}
+        {/* 로봇 — 바닥에 붙인다(2026-08-07, 공중 부양 오독 수정). */}
         {/* 차량형 마커(S15P11E101-750). 벽과 같은 방식으로 판을 쌓아 부피를 만든다 —
             벽만 입체이고 로봇만 납작하면 같은 씬의 물건으로 읽히지 않는다.
             차체는 yaw 로 돌고, 앞머리의 등이 진행 방향을 알린다.
-            바닥에는 접지 그림자를, 위로는 가는 기둥을 세워 벽 뒤에서도 자리를 잃지 않게 한다. */}
+            바닥에는 접지 그림자를, 위로는 벽보다 높이 솟는 광선 기둥을 세워
+            벽 뒤에 가려도 자리를 잃지 않게 한다. */}
         <div ref={markerRef} className="iso-robot" style={{ display: 'none' }}>
           <i className="iso-car-shadow" />
           <div className="iso-car">

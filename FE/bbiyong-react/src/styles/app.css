@@ -1695,10 +1695,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   pointer-events:none;
 }
 
-/* 로봇 — 벽 위로 띄운다. 바닥에 붙이면 기울인 화면에서 벽에 가린다. */
+/* 로봇 — 바닥에 붙인다(2026-08-07). 벽 위에 띄우니 '공중에 둥둥 떠 있다' 로 읽혔다 —
+   순찰 로봇은 바닥을 달리는 물건이다. 벽 뒤에 가릴 때는 ::before 광선 기둥이
+   벽 위로 솟아 자리를 알린다. */
 .iso-robot{
   position:absolute; left:0; top:0; width:0; height:0;
-  transform:translateZ(var(--rz,48px));
+  transform:translateZ(var(--rz,2px));
   transform-style:preserve-3d; pointer-events:none;
 }
 /* 로봇 차량형 마커 (S15P11E101-745 · 750)
@@ -1741,19 +1743,21 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:radial-gradient(60% 55% at 50% 50%, rgba(20,30,26,.34), rgba(20,30,26,0) 72%);
   transform:translateZ(0.5px);
 }
-/* 차체에서 바닥까지 내리는 기둥 — '어디 위에 서 있는지' 를 알려 준다.
-   rotateX(90deg) 라야 -y 가 -z 로 간다. 부호를 뒤집으면 기둥이 하늘로 솟는다. */
+/* 차체에서 위로 솟는 광선 기둥 — 로봇이 바닥에 붙은 뒤(2026-08-07)에도 벽 뒤에
+   가리면 자리를 잃는다. 벽(≈31px)보다 높은 38px 로 솟아 '지금 저기 있다' 를 남긴다.
+   rotateX(90deg) + origin 50% 0 이라야 +y 가 +z(위)로 선다. 예전에는 공중의 차체에서
+   바닥까지 '내리는' 기둥이었다 — 방향만 뒤집은 같은 장치다. */
 .iso-robot::before{
-  content:''; position:absolute; left:-1px; top:calc(var(--rz,52px) * -1); width:2px;
-  height:var(--rz,52px);
-  background:linear-gradient(0deg,rgba(61,220,151,.5),rgba(61,220,151,0));
-  transform:rotateX(90deg); transform-origin:50% 100%;
+  content:''; position:absolute; left:-1px; top:0; width:2px;
+  height:38px;
+  background:linear-gradient(0deg,rgba(61,220,151,0),rgba(61,220,151,.5));
+  transform:rotateX(90deg); transform-origin:50% 0;
 }
 /* 로봇이 꺼졌을 때. 지우지 않고 흐린다 — 마지막으로 알던 자리는 남아야
    어디서 멈췄는지 알 수 있다. 색만으로 알리지 않도록 채도도 함께 뺀다. */
 .iso-robot.off{opacity:.42; filter:saturate(.2);}
 .iso-robot.off .iso-car-light{box-shadow:none;}
-.iso-robot.off::before{background:linear-gradient(0deg,rgba(160,170,180,.4),rgba(160,170,180,0));}
+.iso-robot.off::before{background:linear-gradient(0deg,rgba(160,170,180,0),rgba(160,170,180,.4));}
 
 /* 확정 점검 지점 핀 (S15P11E101-787)
    ------------------------------------------------------------------
@@ -3399,7 +3403,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .iso-robot.moving .iso-car-roof{filter:brightness(1.08);}
 /* 바닥으로 내리는 기둥도 함께 밝힌다 — 멀리서 '지금 저기서 움직인다' 가 읽힌다 */
 .iso-robot.moving::before{
-  background:linear-gradient(0deg,rgba(120,245,195,.75),rgba(120,245,195,0));
+  background:linear-gradient(0deg,rgba(120,245,195,0),rgba(120,245,195,.75));
 }
 /* 꺼진 로봇은 움직일 수 없다. off 가 moving 을 이긴다. */
 .iso-robot.off.moving .iso-car-light{box-shadow:none;}
