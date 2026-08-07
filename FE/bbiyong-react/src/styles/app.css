@@ -1740,6 +1740,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   transform:translateZ(calc(var(--car-h,11px) - 3px));
   box-shadow:0 0 8px rgba(122,240,190,.85);
 }
+/* 전방 지시선(S15P11E101-835) — 2D 지도 마커의 노란 실선과 같은 뜻·같은 색(#f0c98a)으로,
+   차체 앞으로 뻗어 진행 방향을 분명히 한다. 바닥면(z≈0)에 눕혀 씬 기울기를 함께 받고,
+   .iso-car 의 rotate(--yaw) 를 상속해 실제 로봇 방향을 실시간으로 가리킨다. */
+.iso-car-dir{
+  position:absolute; left:-1.5px; top:-40px; width:3px; height:26px;
+  border-radius:2px;
+  background:linear-gradient(0deg, rgba(240,201,138,0), #f0c98a 60%, #f0c98a);
+  box-shadow:0 0 6px rgba(240,201,138,.7);
+}
 /* 접지 그림자 — 바닥에 눕혀 '얹혀 있다' 를 만든다. 없으면 공중에 뜬 것처럼 보인다. */
 .iso-car-shadow{
   position:absolute; left:-13px; top:-17px; width:26px; height:34px;
@@ -1761,6 +1770,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    어디서 멈췄는지 알 수 있다. 색만으로 알리지 않도록 채도도 함께 뺀다. */
 .iso-robot.off{opacity:.42; filter:saturate(.2);}
 .iso-robot.off .iso-car-light{box-shadow:none;}
+.iso-robot.off .iso-car-dir{box-shadow:none;}
 .iso-robot.off::before{background:linear-gradient(0deg,rgba(160,170,180,0),rgba(160,170,180,.4));}
 
 /* 확정 점검 지점 핀 (S15P11E101-787)
