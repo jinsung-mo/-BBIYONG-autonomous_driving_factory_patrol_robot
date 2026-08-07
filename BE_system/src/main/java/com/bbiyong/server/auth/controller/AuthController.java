@@ -1,9 +1,15 @@
 package com.bbiyong.server.auth.controller;
 
+import com.bbiyong.server.auth.dto.EmailCodeRequest;
+import com.bbiyong.server.auth.dto.EmailVerifyRequest;
+import com.bbiyong.server.auth.dto.FindIdRequest;
+import com.bbiyong.server.auth.dto.FindIdResponse;
 import com.bbiyong.server.auth.dto.LoginRequest;
 import com.bbiyong.server.auth.dto.LoginResponse;
+import com.bbiyong.server.auth.dto.MessageResponse;
 import com.bbiyong.server.auth.dto.RefreshRequest;
 import com.bbiyong.server.auth.dto.RefreshResponse;
+import com.bbiyong.server.auth.dto.ResetPasswordRequest;
 import com.bbiyong.server.auth.dto.SignupRequest;
 import com.bbiyong.server.auth.dto.SignupResponse;
 import com.bbiyong.server.auth.service.AuthService;
@@ -109,5 +115,64 @@ public class AuthController {
 	@PostMapping("/refresh")
 	public ResponseEntity<RefreshResponse> refresh(@Valid @RequestBody RefreshRequest request) {
 		return ResponseEntity.ok(authService.refresh(request.refreshToken()));
+	}
+
+	@Operation(
+			summary = "회원가입 이메일 인증코드 발송",
+			description = """
+					가입하려는 이메일로 6자리 인증코드를 발송합니다(유효 5분).
+					- 이미 가입된 이메일이면 409 Conflict
+					- SMTP 자격증명 미설정 시 개발모드: 코드가 서버 로그에 출력됩니다.
+					"""
+	)
+	@PostMapping("/email/send-code")
+	public ResponseEntity<MessageResponse> sendSignupCode(@Valid @RequestBody EmailCodeRequest request) {
+		authService.sendSignupCode(request.email());
+		return ResponseEntity.ok(MessageResponse.ok("인증코드를 발송했습니다. 메일함을 확인하세요."));
+	}
+
+	@Operation(
+			summary = "회원가입 이메일 인증코드 검증",
+			description = "발송된 인증코드를 검증합니다. 성공하면 해당 이메일로 30분 내 회원가입이 가능합니다."
+	)
+	@PostMapping("/email/verify-code")
+	public ResponseEntity<MessageResponse> verifySignupCode(@Valid @RequestBody EmailVerifyRequest request) {
+		authService.verifySignupCode(request.email(), request.code());
+		return ResponseEntity.ok(MessageResponse.ok("이메일 인증이 완료되었습니다."));
+	}
+
+	@Operation(
+			summary = "아이디(이메일) 찾기",
+			description = """
+					이름·휴대전화번호·생년월일이 모두 일치하는 계정의 이메일을 마스킹해 반환합니다
+					(예: ki***@gmail.com). 일치 계정이 없으면 404.
+					"""
+	)
+	@PostMapping("/find-id")
+	public ResponseEntity<FindIdResponse> findId(@Valid @RequestBody FindIdRequest request) {
+		return ResponseEntity.ok(authService.findEmail(request));
+	}
+
+	@Operation(
+			summary = "비밀번호 재설정 인증코드 발송",
+			description = """
+					가입된 이메일로 재설정 인증코드를 발송합니다(유효 5분).
+					계정 존재 여부를 노출하지 않기 위해, 가입되지 않은 이메일이어도 동일하게 200 을 반환합니다.
+					"""
+	)
+	@PostMapping("/password/send-reset-code")
+	public ResponseEntity<MessageResponse> sendResetCode(@Valid @RequestBody EmailCodeRequest request) {
+		authService.sendPasswordResetCode(request.email());
+		return ResponseEntity.ok(MessageResponse.ok("가입된 이메일이라면 인증코드를 발송했습니다. 메일함을 확인하세요."));
+	}
+
+	@Operation(
+			summary = "비밀번호 재설정",
+			description = "인증코드와 새 비밀번호(정책: 8자 이상·영문·숫자·특수문자)를 제출해 비밀번호를 변경합니다."
+	)
+	@PostMapping("/password/reset")
+	public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+		authService.resetPassword(request);
+		return ResponseEntity.ok(MessageResponse.ok("비밀번호가 변경되었습니다. 새 비밀번호로 로그인하세요."));
 	}
 }

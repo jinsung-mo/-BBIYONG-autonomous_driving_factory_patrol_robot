@@ -18,8 +18,11 @@ public record SignupRequest(
 		@NotBlank @Email String email,
 		@NotBlank String password,
 		@NotBlank String name,
-		@NotBlank @Pattern(regexp = "^010-\\d{4}-\\d{4}$",
-				message = "휴대전화번호는 010-0000-0000 형식이어야 합니다.") String phoneNumber,
+		// FE 는 숫자만 보낸다(하이픈은 화면 표기용). 하이픈 표기도 함께 허용해 양쪽 계약을 포용한다.
+		//  - 숫자형: 010 + 7~8자리 (010-XXX-XXXX / 010-XXXX-XXXX 둘 다 정규화하면 10~11자리)
+		//  - 표기형: 010-XXX-XXXX 또는 010-XXXX-XXXX
+		@NotBlank @Pattern(regexp = "^(010\\d{7,8}|010-\\d{3,4}-\\d{4})$",
+				message = "휴대전화번호 형식이 올바르지 않습니다. (예: 01012345678 또는 010-1234-5678)") String phoneNumber,
 		@NotNull(message = "생년월일은 필수입니다.") LocalDate birthDate,
 		@NotBlank String gender
 ) {
