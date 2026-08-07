@@ -1755,6 +1755,39 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .iso-robot.off .iso-car-light{box-shadow:none;}
 .iso-robot.off::before{background:linear-gradient(0deg,rgba(160,170,180,.4),rgba(160,170,180,0));}
 
+/* 확정 점검 지점 핀 (S15P11E101-787)
+   ------------------------------------------------------------------
+   운영 탭에서 승인한 AprilTag 지점을 벽 위에 세운다. 2D 지도의 마름모 태그(#e0483f)와
+   같은 색으로 맞춰 두 화면이 같은 것을 가리킴을 알린다. --rz 로 벽 위에 띄우고,
+   --face(씬 회전의 역)로 배지를 화면 쪽으로 돌려 번호를 정면으로 읽게 한다. */
+.iso-insp{
+  position:absolute; left:0; top:0; width:0; height:0;
+  transform:translateZ(var(--rz,58px));
+  transform-style:preserve-3d; pointer-events:none;
+}
+/* 번호 배지 — 씬 회전을 상쇄해 어느 각도에서 봐도 정면. 순찰 차례를 흰 숫자로. */
+.iso-insp-pin{
+  position:absolute; left:0; top:0; margin:-11px 0 0 -11px;
+  width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:#e0483f; border:1.5px solid #fff;
+  box-shadow:0 3px 8px rgba(0,0,0,.34);
+  transform:var(--face);
+}
+.iso-insp-pin b{ color:#fff; font-weight:800; font-size:11px; line-height:1; }
+/* 배지에서 바닥까지 내리는 기둥 — 로봇 기둥과 같은 방식(rotateX 90deg)으로
+   '어느 자리 위에 있는지' 를 알린다. */
+.iso-insp-drop{
+  position:absolute; left:-1px; top:calc(var(--rz,58px) * -1); width:2px;
+  height:var(--rz,58px);
+  background:linear-gradient(0deg,rgba(224,72,63,.55),rgba(224,72,63,0));
+  transform:rotateX(90deg); transform-origin:50% 100%;
+}
+/* 순찰에서 뺀 지점 — 지우지 않고 흐린다. 색만으로 알리지 않도록 회색으로 바꾼다. */
+.iso-insp.off{ opacity:.5; }
+.iso-insp.off .iso-insp-pin{ background:#8b8f9a; }
+.iso-insp.off .iso-insp-drop{ background:linear-gradient(0deg,rgba(139,143,154,.5),rgba(139,143,154,0)); }
+
 .iso-reset{left:auto; right:10px; top:8px; bottom:auto;}
 /* 방향 전환·도면 종류 버튼과 겹치지 않게 — 그 둘은 좌하단·우하단이다 */
 .iso-stage .mapview{z-index:2;}
@@ -2318,6 +2351,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-bottom:11px solid #e45b4f;
 }
 #pgMap .maplegend .legend-mark.obstacle{background:#59637a;}
+#pgMap .maplegend .legend-mark.inspect{
+  background:#e0483f; border-radius:50%; box-shadow:0 0 0 3px rgba(224,72,63,.18);
+}
 .map-zoom-canvas,.camera-zoom-canvas{
   transform-origin:50% 50%;
   transition:transform 160ms cubic-bezier(.2,.75,.25,1);
@@ -3330,10 +3366,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .iso-reset:active{transform:translateY(1px);}
 /* 각도가 바뀔 때 짧게 따라붙는다 — 순간이동하면 무엇이 어떻게 돌아갔는지 못 본다 */
 .iso-scene{transition:transform .32s cubic-bezier(.22,.75,.28,1);}
+/* 점검 지점 핀의 빌보드 상쇄도 씬과 같은 곡선으로 이징한다 — 릴리즈 순간 씬은
+   부드럽게 도는데 핀만 최종 각도로 튀면, 그 0.32s 동안 배지가 잠깐 비스듬해진다. */
+.iso-insp-pin{transition:transform .32s cubic-bezier(.22,.75,.28,1);}
 /* 드래그 중에는 손을 따라와야 하므로 지연을 걷는다 */
-.iso-stage:active .iso-scene{transition:none;}
+.iso-stage:active .iso-scene,
+.iso-stage:active .iso-insp-pin{transition:none;}
 @media (prefers-reduced-motion:reduce){
   .iso-scene{transition:none;}
+  .iso-insp-pin{transition:none;}
   .iso-reset{transition:none;}
 }
 

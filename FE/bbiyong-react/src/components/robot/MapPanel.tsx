@@ -6,6 +6,7 @@ import { isFloorplan } from '../../live/floorplan.ts'
 import MappingProgress from './MappingProgress.tsx'
 import LiveNavMap from './LiveNavMap.tsx'
 import IsoMapView from './IsoMapView.tsx'
+import { useInspection } from '../../live/inspection.ts'
 
 const ZOOM_MIN = 0.7
 const ZOOM_MAX = 2.2
@@ -25,6 +26,9 @@ export default function MapPanel() {
   const { refs } = useSim()
   const { enabled, telemetry, plan, mapping } = useLive()
   const mapDown = enabled && isDown(capOf(telemetry, CAP_KEYS.map))
+  // 확정 점검 지점(S15P11E101-787). 운영 탭에서 승인한 AprilTag 지점을 이 지도에도 얹는다 —
+  // /topic/inspection 을 그대로 구독하므로 운영 탭 2D 지도와 같은 값을 본다.
+  const { points: inspectionPoints } = useInspection()
 
   // 정제 도면이 있으면 입체로 보여 준다(S15P11E101-676). 없으면 볼 것이 없으므로 2D 다.
   //
@@ -94,7 +98,9 @@ export default function MapPanel() {
             </div>
           )
           : enabled
-          ? (showIso ? <IsoMapView zoomFactor={zoom} /> : <LiveNavMap zoomFactor={zoom} planOnly />)
+          ? (showIso
+              ? <IsoMapView zoomFactor={zoom} points={inspectionPoints} />
+              : <LiveNavMap zoomFactor={zoom} planOnly inspection={{ points: inspectionPoints }} />)
           : <canvas
               ref={refs.map2d}
               className="map-zoom-canvas"
@@ -118,6 +124,7 @@ export default function MapPanel() {
           <span><i className="legend-mark switchboard" />분전반</span>
           <span><i className="legend-mark fire" />화재 지점</span>
           <span><i className="legend-mark obstacle" />장애물</span>
+          <span><i className="legend-mark inspect" />점검 지점</span>
         </div>}
         <div className="map-controls" aria-label="지도 화면 조절">
           <button

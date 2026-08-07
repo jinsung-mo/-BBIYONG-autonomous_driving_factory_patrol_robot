@@ -8,6 +8,7 @@ import {
 import { errMessage } from '../../live/errors.ts'
 import { isMapFrame, localized } from '../../live/mappers.ts'
 import { DISPLAY_ROT } from '../../live/navMap.ts'
+import type { InspectionPoint } from '../../live/contracts.d.ts'
 
 // 2D 도면을 압출해 2.5D 로 보여주는 뷰 (S15P11E101-676).
 //
@@ -52,7 +53,7 @@ const CAR_LAYERS = Array.from({ length: CAR_H }, (_, k) => ({
 // 씬 전체를 돌리므로 도면과 로봇 마커가 함께 돈다(마커는 씬 안에 있다).
 const SPIN_BASE = -24 + (DISPLAY_ROT * 180) / Math.PI
 
-export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) {
+export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor?: number, points?: InspectionPoint[] }) {
   const { plan, connected, onNavUpdate, robotOnline, telemetry } = useLive()
   // 텔레메트리가 map 이 아니라고 말하면 그린 것을 거둔다(S15P11E101-773)
   const unlocalized = !!telemetry?.location && !isMapFrame(telemetry.location)
@@ -397,6 +398,35 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
             <i className="iso-car-light" />
           </div>
         </div>
+
+        {/* 확정 점검 지점(S15P11E101-787). 운영 탭에서 승인한 AprilTag 지점을 벽 위에 핀으로
+            세운다 — 2D 운영 지도의 마름모 태그와 같은 자리를 3D 개요에서도 짚어 준다.
+            번호는 순찰이 도는 차례다. 핀은 씬 회전을 상쇄(빌보드)해 어느 각도에서 봐도
+            번호가 정면으로 읽힌다. 바닥까지 내리는 기둥으로 어느 자리 위인지 알린다.
+            enabled=false(순찰 제외) 지점은 흐리게 둔다 — 지우면 왜 안 도는지 알 수 없다. */}
+        {points.map((p) => {
+          const t = p?.target
+          if (!t || !Number.isFinite(Number(t.x)) || !Number.isFinite(Number(t.y))) return null
+          const px = worldToPlanPx(plan as any, Number(t.x), Number(t.y), src.scale)
+          return (
+            <div
+              key={p.pointId}
+              className={`iso-insp${p.enabled === false ? ' off' : ''}`}
+              style={{
+                left: `${px.x}px`,
+                top: `${px.y}px`,
+                // 벽·로봇보다 높이 띄운다 — 개요에서 지점 핀이 벽에 묻히지 않게.
+                '--rz': `${WALL_H * LAYER_STEP + 16}px`,
+                // 씬 회전(rotateX(tilt) rotateZ(spin))의 역을 걸어 화면을 향하게 한다.
+                '--face': `rotateZ(${-spin}deg) rotateX(${-tilt}deg)`,
+              } as React.CSSProperties}
+              title={`${p.name || `태그 ${p.tagId}`}${p.enabled === false ? ' (순찰 제외)' : ''}`}
+            >
+              <i className="iso-insp-drop" />
+              <span className="iso-insp-pin"><b>{p.sequence}</b></span>
+            </div>
+          )
+        })}
       </div>
 
       {/* 위치를 믿을 수 없으면 왜 마커가 없는지 말한다(S15P11E101-773).
