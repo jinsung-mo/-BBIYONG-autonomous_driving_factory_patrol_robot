@@ -199,6 +199,7 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
           mapping={mapping}
           inspection={mapping ? null : inspection}
           follow={mapping}
+          lightFloor
         />
         {mapping && (
           <div className="routemap-note" role="status">

@@ -26,29 +26,6 @@ export const SCHEMA_VERSION = 1
 
 const isV1 = (m: any) => Number(m?.schemaVersion ?? SCHEMA_VERSION) === SCHEMA_VERSION
 
-// ---- 목 데이터 -------------------------------------------------------------
-//
-// 로봇 배선 전까지 화면을 만들기 위한 값이다. 실서버에서 진짜 메시지가 한 번이라도
-// 오면 목은 물러난다 — 목과 실물이 섞여 보이면 어느 쪽을 믿을지 알 수 없다.
-
-const MOCK_CANDIDATES: InspectionCandidate[] = [
-  {
-    schemaVersion: 1, kind: 'inspection_candidate', candidateId: 'cand-101', tagId: 101,
-    confidence: 0.94, target: { x: 3.20, y: 4.85 }, viewpoint: { x: 2.40, y: 4.85, yaw: 0 },
-    standOffM: 0.8, source: 'apriltag', createdAt: '2026-08-06T20:14:03Z',
-  },
-  {
-    schemaVersion: 1, kind: 'inspection_candidate', candidateId: 'cand-102', tagId: 102,
-    confidence: 0.71, target: { x: 6.05, y: 2.10 }, viewpoint: { x: 6.05, y: 2.95, yaw: -1.5708 },
-    standOffM: 0.85, source: 'apriltag', createdAt: '2026-08-06T20:15:47Z',
-  },
-  {
-    schemaVersion: 1, kind: 'inspection_candidate', candidateId: 'cand-103', tagId: 103,
-    confidence: 0.58, target: { x: 1.15, y: 7.40 }, viewpoint: { x: 1.95, y: 7.40, yaw: 3.1416 },
-    standOffM: 0.8, source: 'apriltag', createdAt: '2026-08-06T20:17:22Z',
-  },
-]
-
 /** 확정 점의 sequence 를 1..n 으로 다시 매긴다. 삭제 뒤 번호가 비면 순서를 못 읽는다. */
 export function resequence(points: InspectionPoint[]): InspectionPoint[] {
   return [...points]
@@ -106,7 +83,10 @@ export function sendPointCommand(cmd: InspectionPointCommand): boolean {
 
 type InspectionState = { candidates: InspectionCandidate[], points: InspectionPoint[] }
 
-let state: InspectionState = { candidates: MOCK_CANDIDATES, points: [] }
+// 로봇이 AprilTag 를 보고 후보를 올리기 전까지 승인 대기 목록은 비어 있다.
+// (예전에는 화면을 만들기 위한 목 후보 3건을 초기값으로 넣어, 로봇 배선 전에는
+//  '항상 3건' 이 떠 있었다 — 실운영에서 유령 후보로 보여 걷어냈다.)
+let state: InspectionState = { candidates: [], points: [] }
 // 실물(후보/확정/스냅샷)이 한 번이라도 오면 목을 걷는다
 let live = false
 const storeListeners = new Set<() => void>()

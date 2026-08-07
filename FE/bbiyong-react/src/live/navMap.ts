@@ -284,8 +284,11 @@ function drawInspection(g: any, sx: any, sy: any, view: any, inspect: any, textR
   }
 }
 
-export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true, overlays = true, inspect: any = null) {
-  g.fillStyle = '#15171c'
+export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true, overlays = true, inspect: any = null, bgColor = '#15171c') {
+  // 바탕색. 기본은 어두운 관제 톤이지만, 지도 탭·순찰 경로처럼 '흰 바닥' 으로 보여
+  // 주고 싶은 화면은 밝은 색을 넘긴다(S15P11E101-822). 도면/격자는 이 위에 그려지고,
+  // 이미지 바깥 여백이 이 색으로 채워져 바닥이 뷰 전체로 이어진다.
+  g.fillStyle = bgColor
   g.fillRect(0, 0, cv.width, cv.height)
   if (!nav) return
 

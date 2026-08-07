@@ -77,7 +77,9 @@ canvas{display:block; width:100%; height:100%;}
 /* 순찰 경로 편집 지도 (S15P11E101-514) — 운영 탭은 세로로 흐르는 문서라 높이를 직접 준다 */
 /* .vwrap 의 flex:1 을 끈다 — 그대로 두면 지도가 패널 높이를 다 먹고 아래 목록이 화면 밖으로 밀린다.
    .vwrap 이 이 규칙보다 뒤에 선언돼 있어 같은 특정도로는 못 이긴다 → id 로 올린다. */
-#pgRoute .routemap{flex:0 0 auto; height:min(46vh, 420px); margin-bottom:10px;}
+/* 흰 바닥으로 통일(S15P11E101-822). 캔버스가 그려지기 전(연결 대기·데이터 없음)에도
+   어두운 판이 비치지 않도록 컨테이너 바탕도 흰색으로 둔다. */
+#pgRoute .routemap{flex:0 0 auto; height:min(64vh, 640px); margin-bottom:10px; background:#ffffff;}
 #pgRoute .routemap canvas{width:100%; height:100%; display:block;}
 #pgRoute{margin-top:14px;}
 /* 이름 칸이 남는 폭을 다 먹으면 좌표가 화면 끝으로 밀려 읽기 어렵다 — 폭을 잡고 좌표를 붙인다 */
@@ -1662,9 +1664,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   position:absolute; inset:0; overflow:hidden;
   perspective:1400px; perspective-origin:50% 46%;
   cursor:grab; touch-action:none;
-  /* 배경(S15P11E101-748). 짙은 남색이라 흰 패널 사이에서 이 판만 구멍처럼 보였다.
-     주변과 같은 밝은 톤으로 두고, 위쪽만 아주 옅게 눌러 바닥이 놓일 자리를 만든다. */
-  background:radial-gradient(120% 90% at 50% 10%, #FFFFFF 0%, #F4F5F8 58%, #E9EAF0 100%);
+  /* 배경(S15P11E101-748 → 822). 예전엔 옅은 그라디언트라, 확대·이동하면 흰 바닥 판이
+     직사각형으로 끝나고 그 밖으로 살짝 어두운 가장자리가 드러났다. 바탕을 바닥과 같은
+     순백으로 평평하게 깔아, 바닥이 어디서 끝나는지 눈에 띄지 않고 뷰 전체가 흰 바닥으로
+     이어져 보이게 한다. */
+  background:#ffffff;
 }
 .iso-stage:active{cursor:grabbing;}
 .iso-stage:focus-visible{outline:2px solid var(--dk-green); outline-offset:-2px;}
@@ -3351,7 +3355,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 다크 모드에서는 배경을 어둡게 되돌린다. 밝은 판을 그대로 두면 어두운 화면에
    흰 사각형 하나가 뚫린 것처럼 보인다. */
 :root[data-theme="dark"] .iso-stage{
-  background:radial-gradient(120% 90% at 50% 10%, #1b212b 0%, #141920 58%, #0f131a 100%);
+  /* 다크에서도 같은 이유로 평평하게 — 바닥(#1A1E26)과 이어지는 한 톤으로 둔다 */
+  background:#0f131a;
 }
 /* 다크에서는 벽이 밝은 회색이라 바닥과 붙는다 — 바닥만 한 단 눌러 층을 만든다 */
 :root[data-theme="dark"] .iso-floor{
