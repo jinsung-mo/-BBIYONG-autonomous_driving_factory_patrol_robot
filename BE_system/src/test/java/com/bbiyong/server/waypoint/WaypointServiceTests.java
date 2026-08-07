@@ -1,5 +1,6 @@
 package com.bbiyong.server.waypoint;
 
+import com.bbiyong.server.sync.ResourceChangedEvent;
 import com.bbiyong.server.waypoint.domain.Waypoint;
 import com.bbiyong.server.waypoint.dto.WaypointRequest;
 import com.bbiyong.server.waypoint.dto.WaypointResponses;
@@ -8,16 +9,19 @@ import com.bbiyong.server.waypoint.service.WaypointService;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,7 +29,8 @@ class WaypointServiceTests {
 
     private final WaypointRepository repository = mock(WaypointRepository.class);
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
-    private final WaypointService service = new WaypointService(repository, sessionManager);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+    private final WaypointService service = new WaypointService(repository, sessionManager, eventPublisher);
 
     private Waypoint wp(String id, double x, double y, int seq) {
         Waypoint w = new Waypoint();
@@ -95,9 +100,27 @@ class WaypointServiceTests {
 
     @Test
     void deleteMissingReturns404() {
-        when(repository.existsById("nope")).thenReturn(false);
+        when(repository.findById("nope")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.delete("nope"))
                 .isInstanceOf(ResponseStatusException.class);
+        // 실패한 삭제를 다른 접속자에게 알리면 불필요한 재조회만 생긴다
+        verify(eventPublisher, never()).publishEvent(any(ResourceChangedEvent.class));
+    }
+
+    // --- 변경 브로드캐스트(/topic/sync) — 다른 접속자 화면 실시간 갱신 (S15P11E101) ---
+
+    @Test
+    void mutationsPublishPatrolRouteChangedEvent() {
+        when(repository.findByRobotIdOrderBySeqAscCreatedAtAsc("orinka_01")).thenReturn(List.of());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.findById("a")).thenReturn(Optional.of(wp("a", 1.0, 1.0, 0)));
+
+        service.add(null, new WaypointRequest(1.0, 1.0, null, null, null));
+        service.replace("orinka_01", List.of(new WaypointRequest(2.0, 2.0, null, null, null)));
+        service.delete("a");
+
+        verify(eventPublisher, org.mockito.Mockito.times(3))
+                .publishEvent(new ResourceChangedEvent("patrol-route", "orinka_01"));
     }
 
     @Test

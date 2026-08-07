@@ -1,11 +1,13 @@
 package com.bbiyong.server.waypoint.service;
 
+import com.bbiyong.server.sync.ResourceChangedEvent;
 import com.bbiyong.server.waypoint.domain.Waypoint;
 import com.bbiyong.server.waypoint.dto.WaypointRequest;
 import com.bbiyong.server.waypoint.dto.WaypointResponses;
 import com.bbiyong.server.waypoint.repository.WaypointRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,10 +36,13 @@ public class WaypointService {
 
     private final WaypointRepository repository;
     private final RobotWebSocketSessionManager sessionManager;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public WaypointService(WaypointRepository repository, RobotWebSocketSessionManager sessionManager) {
+    public WaypointService(WaypointRepository repository, RobotWebSocketSessionManager sessionManager,
+                           ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.sessionManager = sessionManager;
+        this.eventPublisher = eventPublisher;
     }
 
     /** 순찰 지점 1개 추가(지도 클릭). seq 미지정 시 맨 뒤로. */
@@ -58,7 +63,10 @@ public class WaypointService {
         w.setYaw(normalizeYaw(req.yaw()));
         w.setSeq(seq);
         w.setCreatedAt(Instant.now());
-        return WaypointResponses.Item.of(repository.save(w));
+        WaypointResponses.Item item = WaypointResponses.Item.of(repository.save(w));
+        // 다른 접속자 화면도 같은 경로를 봐야 한다 — 커밋 후 /topic/sync 로 재조회를 알린다.
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-route", rid));
+        return item;
     }
 
     @Transactional(readOnly = true)
@@ -82,6 +90,8 @@ public class WaypointService {
         String rid = resolveRobotId(robotId);
         repository.deleteByRobotId(rid);
         if (reqs == null || reqs.isEmpty()) {
+            // 빈 교체도 '전부 삭제' 라는 변경이다 — 다른 접속자 화면에서도 지워져야 한다.
+            eventPublisher.publishEvent(new ResourceChangedEvent("patrol-route", rid));
             return List.of();
         }
         if (reqs.size() > MAX_WAYPOINTS) {
@@ -108,15 +118,18 @@ public class WaypointService {
             w.setCreatedAt(now);
             saved.add(repository.save(w));
         }
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-route", rid));
         return WaypointResponses.items(saved);
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "순찰 지점을 찾을 수 없습니다: " + id);
-        }
+        // robotId 를 이벤트에 실어야 하므로 존재 확인을 조회로 한다.
+        Waypoint w = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "순찰 지점을 찾을 수 없습니다: " + id));
         repository.deleteById(id);
+        eventPublisher.publishEvent(new ResourceChangedEvent("patrol-route", w.getRobotId()));
     }
 
     /**

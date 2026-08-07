@@ -4,6 +4,8 @@ import com.bbiyong.server.map.domain.MapArtifact;
 import com.bbiyong.server.map.dto.MapResponses;
 import com.bbiyong.server.map.dto.MapUploadRequest;
 import com.bbiyong.server.map.repository.MapArtifactRepository;
+import com.bbiyong.server.sync.ResourceChangedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,10 +23,13 @@ public class MapService {
 
     private final MapArtifactRepository mapRepository;
     private final MapStorageService storageService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public MapService(MapArtifactRepository mapRepository, MapStorageService storageService) {
+    public MapService(MapArtifactRepository mapRepository, MapStorageService storageService,
+                      ApplicationEventPublisher eventPublisher) {
         this.mapRepository = mapRepository;
         this.storageService = storageService;
+        this.eventPublisher = eventPublisher;
     }
 
     /** 맵 이미지 파일을 저장하고 메타데이터를 등록한다. */
@@ -46,7 +51,10 @@ public class MapService {
         artifact.setFileSizeBytes(file.getSize());
         artifact.setKind("RAW");
         artifact.setCreatedAt(Instant.now());
-        return MapResponses.RegisterResult.of(mapRepository.save(artifact));
+        MapResponses.RegisterResult result = MapResponses.RegisterResult.of(mapRepository.save(artifact));
+        // 저장된 맵 목록이 늘었다 — 열려 있는 다른 관제 화면도 새로 읽게 알린다(/topic/sync).
+        eventPublisher.publishEvent(new ResourceChangedEvent("maps", meta.robotId()));
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -80,7 +88,11 @@ public class MapService {
             }
         }
         target.setActive(true);
-        return MapResponses.Detail.of(mapRepository.save(target));
+        MapResponses.Detail detail = MapResponses.Detail.of(mapRepository.save(target));
+        // 활성 맵 표시(배지)와 목록이 다른 접속자 화면에서도 맞아야 한다.
+        // 도면 생성(FloorPlanService)도 저장 직후 이 메서드로 활성화하므로 여기 한 곳이면 된다.
+        eventPublisher.publishEvent(new ResourceChangedEvent("maps", target.getRobotId()));
+        return detail;
     }
 
     /** 현재 활성 맵. 없으면 404. */
