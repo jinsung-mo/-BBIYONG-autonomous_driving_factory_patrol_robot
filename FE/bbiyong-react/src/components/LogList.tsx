@@ -22,47 +22,34 @@ const FILTERS = [
 ]
 const PAGE_SIZE = 20
 
-// 기간은 서버가 YYYY-MM-DD 로 받는다(startDate). '전체'는 아예 보내지 않는다.
-const RANGES = [
-  { key: 'ALL', label: '전체 기간', days: 0 },
-  { key: 'TODAY', label: '오늘', days: 1 },
-  { key: 'D7', label: '최근 7일', days: 7 },
-  { key: 'D30', label: '최근 30일', days: 30 },
-]
-
-// days=1 이면 오늘 0시부터다. 로컬 시각 기준으로 만든다 —
-// toISOString() 은 UTC 라 한국 시간 오전 9시 이전에는 어제 날짜가 나온다.
-// 종료일에 미래 날짜를 고르게 두지 않는다 — 이벤트는 과거에만 있다
+// 종료일에 미래 날짜를 고르게 두지 않는다 — 이벤트는 과거에만 있다.
+// 로컬 시각 기준으로 만든다(toISOString 은 UTC 라 오전 9시 이전엔 어제가 나온다).
 const TODAY = (() => {
   const d = new Date()
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 })()
 
-function startDateOf(days: number) {
-  if (!days) return null
-  const d = new Date()
-  d.setDate(d.getDate() - (days - 1))
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
+const DATE_INPUT_STYLE = { padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' } as const
 
 /** @param {{ variant?: string, simple?: boolean }} props 리스트에 붙일 CSS 클래스 및 간소화 여부 */
 export default function LogList({ variant = 'elog', simple = false }: { variant?: string, simple?: boolean }) {
   const { status } = useSim()
   const { enabled, connected, alerts, dismissAlert } = useLive()
-  // 조회 대상 로봇·설비 목록은 편성 컨텍스트가 갖고 있다(S15P11E101-591)
-  const { selected, robots, multi, equipments, equipmentName, reload: reloadFleet } = useFleet()
+  // 조회 대상 로봇 목록은 편성 컨텍스트가 갖고 있다(S15P11E101-591)
+  const { selected, robots, multi, reload: reloadFleet } = useFleet()
   const { accessToken, isAdmin, canOperate } = useAuth()
 
   const [filter, setFilter] = useState('ALL')
   // 심각도·해결 상태·기간 — 서버가 쿼리로 받아 거른다(관제센터 확장)
   const [level, setLevel] = useState('')
   const [statusF, setStatusF] = useState('')
-  const [range, setRange] = useState('ALL')
-  // 설비·종료일은 서버가 받는 파라미터인데 여태 화면에 없었다(S15P11E101-591)
-  const [equipment, setEquipment] = useState('')
+  // 조회 구간 — 시작일~종료일(YYYY-MM-DD)을 직접 고른다(S15P11E101 콘솔 정리).
+  // 예전엔 시작=프리셋 / 종료=자유 입력이라 '오늘' + 어제 종료 같은 모순 조회가 가능했다.
+  const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  // 시작일이 종료일보다 늦으면 서버 조건이 모순돼 항상 빈 결과가 된다 — 조회를 막고 안내한다.
+  const rangeInvalid = !!(startDate && endDate && startDate > endDate)
   // 편성이 여럿일 때만 로봇으로 좁힐 의미가 있다. 기본은 '고른 로봇'이다.
   const [byRobot, setByRobot] = useState(true)
   const [history, setHistory] = useState<any[]>([])
@@ -91,10 +78,10 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
         type: filter === 'ALL' ? null : (filter as import('../live/contracts.d.ts').EventType),
         level: (level || null) as import('../live/contracts.d.ts').EventLevel | null,
         status: (statusF || null) as import('../live/contracts.d.ts').EventStatus | null,
-        startDate: startDateOf(RANGES.find((r) => r.key === range)?.days ?? 0),
+        startDate: startDate || null,
         endDate: endDate || null,
         robotId: multi && byRobot ? selected : null,
-        equipmentId: equipment || null,
+        equipmentId: null,
       }, accessToken)
       const rows = (res?.content || []).map(eventToLog)
       setHistory((prev) => (reset ? rows : [...prev, ...rows]))
@@ -105,13 +92,14 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
     } finally {
       setLoading(false)
     }
-  }, [enabled, accessToken, filter, level, statusF, range, endDate, equipment, multi, byRobot, selected])
+  }, [enabled, accessToken, filter, level, statusF, startDate, endDate, multi, byRobot, selected])
 
-  // 필터가 바뀌면 처음부터 다시 받는다
+  // 필터가 바뀌면 처음부터 다시 받는다. 구간이 모순이면 조회하지 않는다.
   useEffect(() => {
     if (!enabled) { setHistory([]); setMore(false); setError(null); return }
+    if (rangeInvalid) { setHistory([]); setMore(false); setError('시작일이 종료일보다 늦습니다.'); return }
     load(0, true)
-  }, [enabled, filter, level, statusF, range, endDate, equipment, byRobot, selected, load])
+  }, [enabled, filter, level, statusF, startDate, endDate, byRobot, selected, load, rangeInvalid])
 
   if (!enabled) {
     // 시뮬 모드 — 기존 시뮬 로그를 그대로 보여준다(필터·이력 없음)
@@ -137,7 +125,6 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
     .filter((l: any) => !level || l.level === level)
     .filter((l: any) => !statusF || l.status === statusF)
     .filter((l: any) => !(multi && byRobot) || l.robotId === selected)
-    .filter((l: any) => !equipment || l.equipmentId === equipment)
   // 실시간 수신 직후에는 liveRows로 보이고, 같은 eventId가 이력 조회에 잡히면
   // 이력 행으로 교체한다. 같은 이벤트가 두 줄로 보이지 않게 한다.
   const historyEventIds = new Set(history.map((l) => l.eventId).filter((id) => id != null))
@@ -226,21 +213,18 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                   <option value="UNRESOLVED">{EVENT_STATUS_LABEL.UNRESOLVED}</option>
                   <option value="RESOLVED">{EVENT_STATUS_LABEL.RESOLVED}</option>
                 </select>
-                <select style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
-                  aria-label="조회 기간" value={range} onChange={(e) => setRange(e.target.value)}>
-                  {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-                </select>
-                <select style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
-                  aria-label="설비" value={equipment} onChange={(e) => setEquipment(e.target.value)}>
-                  <option value="">설비 전체</option>
-                  {equipments.map((eq) => {
-                    const eid = eq.equipmentId
-                    return <option key={eid} value={eid}>{equipmentName(eid)}</option>
-                  })}
-                </select>
-                <input style={{ padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' }}
-                  type="date" aria-label="종료일" value={endDate} max={TODAY}
-                  onChange={(e) => setEndDate(e.target.value)} />
+                {/* 조회 구간 — 시작일~종료일(연-월-일)을 직접 고른다. 비워 두면 그쪽 경계는 없다. */}
+                <label style={{ fontSize: '11.5px', color: '#5A6072' }}>시작일
+                  <input style={{ ...DATE_INPUT_STYLE, width: '100%', marginTop: '3px' }}
+                    type="date" aria-label="시작일" value={startDate} max={endDate || TODAY}
+                    onChange={(e) => setStartDate(e.target.value)} />
+                </label>
+                <label style={{ fontSize: '11.5px', color: '#5A6072' }}>종료일
+                  <input style={{ ...DATE_INPUT_STYLE, width: '100%', marginTop: '3px' }}
+                    type="date" aria-label="종료일" value={endDate} min={startDate || undefined} max={TODAY}
+                    onChange={(e) => setEndDate(e.target.value)} />
+                </label>
+                {rangeInvalid && <div className="form-msg err" style={{ fontSize: '11.5px' }}>시작일이 종료일보다 늦습니다.</div>}
                 {multi && (
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#5A6072', marginTop: '2px' }}>
                     <input type="checkbox" checked={byRobot} onChange={(e) => setByRobot(e.target.checked)} />
@@ -258,7 +242,7 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                 EVENT LOG · {filter}
               </span>
               <span style={{ marginLeft: 'auto', fontSize: '11.5px', color: '#A8ADBC' }}>
-                {RANGES.find(r => r.key === range)?.label} · <span className="mono">{rows.length}</span>건
+                {startDate || endDate ? `${startDate || '처음'} ~ ${endDate || '오늘'}` : '전체 기간'} · <span className="mono">{rows.length}</span>건
               </span>
             </div>
             <div style={{ flex: 1, minHeight: 0, overflow: 'auto', marginTop: '9px' }}>

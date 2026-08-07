@@ -118,13 +118,10 @@ export default function MapPanel() {
           </button>
         )}
         {mapDown && !showMapping && <span className="nodata">SLAM 맵 데이터 없음</span>}
+        {/* 범례는 실제 도면에 보이는 것만 남긴다(S15P11E101 콘솔 정리) — 벽·로봇. */}
         {!showMapping && !showEmpty && <div className="maplegend" aria-label="지도 범례">
           <span><i className="legend-mark robot" />오린카</span>
-          <span><i className="legend-mark route" />순찰 경로</span>
-          <span><i className="legend-mark switchboard" />분전반</span>
-          <span><i className="legend-mark fire" />화재 지점</span>
-          <span><i className="legend-mark obstacle" />장애물</span>
-          <span><i className="legend-mark inspect" />점검 지점</span>
+          <span><i className="legend-mark wall" />벽</span>
         </div>}
         <div className="map-controls" aria-label="지도 화면 조절">
           <button

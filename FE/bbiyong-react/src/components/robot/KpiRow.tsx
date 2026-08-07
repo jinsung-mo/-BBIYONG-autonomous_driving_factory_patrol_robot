@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
+import { useAuth } from '../../auth/AuthContext.tsx'
 import { telemetryToStatus } from '../../live/mappers.ts'
+import { fetchDashboardStats } from '../../live/dashboard.ts'
 
 // 화면 맨 위의 큰 숫자들.
 //
@@ -32,19 +35,36 @@ function Kpi({ value, unit, label, tone = 'none', note }: {
 
 export default function KpiRow() {
   const { status } = useSim()
-  const { enabled, connected, telemetry, alerts } = useLive()
+  const { enabled, connected, telemetry } = useLive()
+  const { accessToken } = useAuth()
 
   const live = enabled ? telemetryToStatus(telemetry) : null
   const batt = live ? live.batt : status.batt
 
   const battTone: Tone = batt == null ? 'none' : batt <= 15 ? 'bad' : batt <= 35 ? 'warn' : 'ok'
 
-  // 최고 온도 — 'MAX 38.4°C ⚠ 임계 초과' 같은 표시 문자열에서 숫자만 뽑는다.
-  // 실서버에 해당 텔레메트리가 없으면 임의 값을 만들지 않고 '—' 로 둔다.
-  const hot = enabled ? Number.NaN
-    : Number(String(status.thermalMax || '').match(/-?\d+(\.\d+)?/)?.[0])
-  const alarmCount = enabled ? alerts.length
-    : (status.logs || []).filter((log: any) => log.kind === 'fire' || log.kind === 'heat').length
+  // 경보 이벤트 — 하루 단위 집계(S15P11E101 콘솔 정리).
+  // live: 서버 대시보드 통계의 '오늘 이벤트 건수'(GET /api/dashboard/stats)를 30초 주기로 갱신.
+  //       세션에 떠 있는 실시간 경보 수(alerts.length)는 접속 시점에 따라 달라져 하루 집계가 아니다.
+  // sim:  오늘 세션 로그 중 화재/과열 건수.
+  const [todayCount, setTodayCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!enabled || !accessToken) { setTodayCount(null); return undefined }
+    let alive = true
+    const load = async () => {
+      try {
+        const res = await fetchDashboardStats(accessToken)
+        if (alive) setTodayCount(Number(res?.today?.eventCount ?? 0))
+      } catch { /* 조회 실패 시 이전 값 유지 */ }
+    }
+    load()
+    const id = setInterval(load, 30_000)
+    return () => { alive = false; clearInterval(id) }
+  }, [enabled, accessToken])
+
+  const simAlarms = (status.logs || []).filter((log: any) => log.kind === 'fire' || log.kind === 'heat').length
+  const alarmValue = enabled ? todayCount : simAlarms
+  const alarmTone: Tone = alarmValue == null ? 'none' : alarmValue > 0 ? 'bad' : 'none'
 
   const robotOnline = enabled ? (connected && telemetry?.status !== 'OFFLINE') : true
   const robotTone: Tone = robotOnline ? 'ok' : 'bad'
@@ -56,12 +76,8 @@ export default function KpiRow() {
         label="배터리" tone={battTone}
       />
       <Kpi
-        value={Number.isFinite(hot) ? hot.toFixed(1) : '—'} unit={Number.isFinite(hot) ? '°C' : undefined}
-        label="최고 온도" tone={!Number.isFinite(hot) ? 'none' : hot >= 60 ? 'bad' : hot >= 45 ? 'warn' : 'ok'}
-      />
-      <Kpi
-        value={String(alarmCount)} unit="건"
-        label="경보 이벤트" tone={alarmCount > 0 ? 'bad' : 'none'}
+        value={alarmValue == null ? '—' : String(alarmValue)} unit={alarmValue == null ? undefined : '건'}
+        label="경보 이벤트 (오늘)" tone={alarmTone}
       />
       <Kpi
         value={robotOnline ? 'ON' : 'OFF'}

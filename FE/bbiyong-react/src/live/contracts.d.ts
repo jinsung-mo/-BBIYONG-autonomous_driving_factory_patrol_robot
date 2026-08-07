@@ -931,7 +931,7 @@ export interface EventDetail extends EventLog {
  * 화면 구획. 시뮬레이션에서는 관제를 지도와 카메라 두 화면으로 나눈다 —
  * 한 화면에 다 넣으면 어느 것도 크지 않다. 실서버는 'live' 하나로 유지한다.
  */
-export type Section = 'live' | 'cam' | 'events' | 'stats' | 'ops' | 'config'
+export type Section = 'live' | 'cam' | 'events' | 'config'
 
 // ---------------------------------------------------------------- 통계 지표 3종 (S15P11E101-768)
 

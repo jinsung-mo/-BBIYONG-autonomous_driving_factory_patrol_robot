@@ -1,7 +1,7 @@
 import { errMessage, errStatus } from '../../live/errors.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.tsx'
-import { getDataSource, saveDataSource } from '../../live/config.ts'
+import { saveDataSource } from '../../live/config.ts'
 import { GENDERS, formatPhone, validateSignup, todayISO, MIN_BIRTH_ISO } from '../../auth/signupRules.ts'
 import { REASON_TEXT } from '../../auth/sessionPolicy.ts'
 import { sendSignupCode, verifySignupCode } from '../../live/authApi.ts'
@@ -22,9 +22,10 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
   const [form, setForm] = useState(EMPTY)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const [source, setSource] = useState(getDataSource)
-  const live = source === 'live'
+  // 시뮬레이션(mock) 진입을 제거했다(S15P11E101 콘솔 정리) — 항상 실서버로 접속한다.
+  const live = true
   const recovery = mode === 'find-id' || mode === 'reset-pw'
+  useEffect(() => { saveDataSource('live') }, [])
 
   // 이메일 인증(실서버 회원가입 전용). 서버가 이메일 기준으로 인증 상태를 들고 있으므로
   // 화면은 '코드 전송 → 검증 성공' 만 확인하면 된다. 이메일을 고치면 인증은 무효가 된다.
@@ -77,12 +78,6 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
     } catch (e2) {
       setEmailMsg(errMessage(e2))
     } finally { setEmailBusy(false) }
-  }
-  const switchSource = (v: any) => {
-    if (v === source) return
-    // 실서버와 시뮬레이션은 계정 저장소가 다르다. 이전 모드의 개인정보·비밀번호를
-    // 다음 모드로 들고 가지 않도록, 전환 시 전체 입력을 비운다.
-    saveDataSource(v); setSource(v); reset()
   }
 
   // 뒤로가기(bfcache)로 이 화면에 돌아오면 이전 입력이 그대로 살아 있다.
@@ -147,10 +142,6 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
             <button type="button" role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'on' : ''} onClick={() => switchMode('signup')} disabled={busy}>회원가입</button>
           </div>
         )}
-        <div className="auth-seg src" role="radiogroup" aria-label="접속 모드">
-          <button type="button" role="radio" aria-checked={!live} className={!live ? 'on' : ''} onClick={() => switchSource('mock')} disabled={busy}>시뮬레이션</button>
-          <button type="button" role="radio" aria-checked={live} className={live ? 'on' : ''} onClick={() => switchSource('live')} disabled={busy}>실서버</button>
-        </div>
         {recovery ? (
           <>
             <AccountRecovery mode={mode as 'find-id' | 'reset-pw'} live={live} />
