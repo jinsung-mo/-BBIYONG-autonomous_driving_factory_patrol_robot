@@ -23,16 +23,15 @@ export default function Nav({ section, onSection }: { section: Section,
   const { user, isAdmin } = useAuth()
 
   // 실서버와 시뮬레이션 모두 지도, 카메라, 이벤트, 통계 화면을 기본으로 제공한다.
+  // 운영 탭은 카메라 바로 옆에 둔다(S15P11E101-836) — 관제 흐름상 카메라로 현장을 보고
+  // 곧장 운영 조작으로 넘어가는 동선이 자연스럽다. 운영·설정은 관리자에게만 보인다.
   const tabs: Array<{ key: Section, label: string }> = [
     { key: 'live' as const, label: '지도' },
     { key: 'cam' as const, label: '카메라' },
+    ...(isAdmin ? [{ key: 'ops' as const, label: '운영' }] : []),
     { key: 'events' as const, label: '이벤트' },
     { key: 'stats' as const, label: '통계' },
-    ...(isAdmin
-      ? [
-        { key: 'ops' as const, label: '운영' }, { key: 'config' as const, label: '설정' },
-      ]
-      : []),
+    ...(isAdmin ? [{ key: 'config' as const, label: '설정' }] : []),
   ]
 
   return (
