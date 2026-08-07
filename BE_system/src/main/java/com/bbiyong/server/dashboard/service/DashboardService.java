@@ -123,7 +123,11 @@ public class DashboardService {
         // 오늘 이벤트 전체
         List<EventLog> todayEvents = eventLogRepository.findByTimestampAfter(todayStart);
 
-        long totalCount = todayEvents.size();
+        // 경보 이벤트 집계에서 SYSTEM(로봇 연결/해제 등 정보성)은 제외한다 —
+        // 관제 KPI '경보 이벤트'는 화재/과열 같은 실제 경보만 세야 한다.
+        long totalCount = todayEvents.stream()
+                .filter(e -> !"SYSTEM".equals(e.getType()))
+                .count();
         long criticalCount = todayEvents.stream()
                 .filter(e -> "CRITICAL".equals(e.getLevel()))
                 .count();

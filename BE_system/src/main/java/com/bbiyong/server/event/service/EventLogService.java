@@ -12,10 +12,13 @@ import com.bbiyong.server.notification.service.NotificationDispatchService;
 import com.bbiyong.server.video.dto.VideoResponses;
 import com.bbiyong.server.video.repository.VideoClipRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
+import com.bbiyong.server.wss.event.RobotConnectedEvent;
+import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotCautionEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -53,6 +56,12 @@ public class EventLogService {
     private final RobotWebSocketSessionManager sessionManager;
     private final AlertBroadcastService alertBroadcastService;
     private final ConcurrentHashMap<String, Instant> recentRobotAlerts = new ConcurrentHashMap<>();
+
+    // 로봇 연결/해제를 SYSTEM 이벤트로 남길지(기본 on). 로봇별 마지막 연결상태를 들고 상태
+    // 전이만 기록한다 — 세션 종료와 타임아웃 스윕이 해제 이벤트를 중복 발행해도 한 번만 남긴다.
+    @Value("${bbiyong.event.log-robot-connection:true}")
+    private boolean robotConnectionLogEnabled;
+    private final ConcurrentHashMap<String, Boolean> robotConnected = new ConcurrentHashMap<>();
 
     public EventLogService(
             EventLogRepository eventLogRepository,
@@ -204,6 +213,54 @@ public class EventLogService {
             return;
         }
         persist(AlertMessage.fromCaution(event.getPacket()), null);
+    }
+
+    /**
+     * 로봇 연결 — SYSTEM 이벤트로 남긴다. 이벤트 탭 '시스템' 필터에서 연결 이력을 볼 수 있다.
+     * 상태 전이(연결 안됨 → 연결됨)일 때만 기록해 재연결·중복 발행을 걸러낸다.
+     */
+    @Async(AsyncConfig.ALERT_EXECUTOR)
+    @EventListener
+    public void handleRobotConnected(RobotConnectedEvent event) {
+        if (!robotConnectionLogEnabled) {
+            return;
+        }
+        String robotId = event.getRobotId();
+        if (Boolean.TRUE.equals(robotConnected.put(robotId, Boolean.TRUE))) {
+            return; // 이미 연결됨으로 기록됨
+        }
+        saveSystemEvent(robotId, "로봇 " + robotId + " 연결됨");
+    }
+
+    /**
+     * 로봇 연결 해제 — SYSTEM 이벤트로 남긴다.
+     * 세션 종료와 타임아웃 스윕이 해제 이벤트를 각각 발행하므로, 상태 전이일 때만 한 번 기록한다.
+     */
+    @Async(AsyncConfig.ALERT_EXECUTOR)
+    @EventListener
+    public void handleRobotDisconnected(RobotDisconnectedEvent event) {
+        if (!robotConnectionLogEnabled) {
+            return;
+        }
+        String robotId = event.getRobotId();
+        if (Boolean.FALSE.equals(robotConnected.put(robotId, Boolean.FALSE))) {
+            return; // 이미 연결 끊김으로 기록됨(중복 발행 방지)
+        }
+        saveSystemEvent(robotId, "로봇 " + robotId + " 연결 끊김");
+    }
+
+    /** 정보성 SYSTEM 이벤트 저장(연결/해제 로그 등). 조치 대상이 아니므로 status=RESOLVED. */
+    private void saveSystemEvent(String robotId, String message) {
+        EventLog entry = new EventLog();
+        entry.setType("SYSTEM");
+        entry.setLevel("INFO");
+        entry.setRobotId(robotId);
+        entry.setMessage(message);
+        entry.setTimestamp(Instant.now());
+        entry.setStatus("RESOLVED");
+        entry.setSimulated(false);
+        eventLogRepository.save(entry);
+        log.info("SYSTEM event logged: {}", message);
     }
 
     private void persist(AlertMessage alert, String simulationRecipientUserId) {
