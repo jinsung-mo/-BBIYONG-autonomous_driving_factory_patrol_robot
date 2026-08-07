@@ -4,6 +4,7 @@ import com.bbiyong.server.scheduler.domain.PatrolSchedule;
 import com.bbiyong.server.scheduler.repository.PatrolScheduleRepository;
 import com.bbiyong.server.waypoint.service.WaypointService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
@@ -29,23 +30,35 @@ public class PatrolSchedulerService {
     private final WaypointService waypointService;
     private final TaskScheduler taskScheduler;
 
+    // 자동 순찰 스케줄 발동 on/off (S15P11E101-850 콘솔 정리로 자동 순찰 스케줄 기능 제거).
+    // 기본 OFF — DB 에 남은 활성 스케줄이 있어도 cron 등록을 하지 않아 자동 순찰이 발동되지 않는다.
+    // 다시 켜려면 BBIYONG_PATROL_SCHEDULER_ENABLED=true 로 주입한다.
+    private final boolean schedulerEnabled;
+
     // 스케줄 ID -> ScheduledFuture 매핑 (스케줄 취소용)
     private final Map<Long, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
 
     public PatrolSchedulerService(
             PatrolScheduleRepository scheduleRepository,
             WaypointService waypointService,
-            TaskScheduler taskScheduler) {
+            TaskScheduler taskScheduler,
+            @Value("${bbiyong.patrol.scheduler.enabled:false}") boolean schedulerEnabled) {
         this.scheduleRepository = scheduleRepository;
         this.waypointService = waypointService;
         this.taskScheduler = taskScheduler;
+        this.schedulerEnabled = schedulerEnabled;
     }
 
     /**
-     * 애플리케이션 시작 시 활성화된 모든 스케줄 로드
+     * 애플리케이션 시작 시 활성화된 모든 스케줄 로드.
+     * 스케줄러가 꺼져 있으면(기본값) 아무것도 등록하지 않는다 — 서버 재기동으로도 자동 순찰이 되살아나지 않는다.
      */
     @PostConstruct
     public void loadSchedules() {
+        if (!schedulerEnabled) {
+            log.info("자동 순찰 스케줄러 비활성화(bbiyong.patrol.scheduler.enabled=false) — 스케줄을 등록하지 않습니다.");
+            return;
+        }
         log.info("순찰 스케줄 로딩 시작");
         List<PatrolSchedule> activeSchedules = scheduleRepository.findByEnabledTrue();
         for (PatrolSchedule schedule : activeSchedules) {
@@ -68,6 +81,10 @@ public class PatrolSchedulerService {
      * 특정 스케줄을 TaskScheduler에 등록
      */
     public void scheduleTask(PatrolSchedule schedule) {
+        if (!schedulerEnabled) {
+            log.info("자동 순찰 스케줄러 비활성화 — 등록 건너뜀: scheduleId={}", schedule.getScheduleId());
+            return;
+        }
         try {
             CronTrigger cronTrigger = new CronTrigger(schedule.getCronExpression());
 
