@@ -2014,6 +2014,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .kpi-badge.warn{background:var(--nx-warning);}
 .kpi-badge.bad{background:var(--nx-danger-vivid);}
 .kpi-badge.none{background:var(--nx-neutral); color:var(--nx-muted);}
+/* 미니 바차트 (S15P11E101-814) — 디자인 시스템 v3 의 서명 요소.
+   핸드오프 "구현 시 우선순위" 4번: "수치 옆에는 미니 차트를".
+   과거 막대는 중립, 최근 3개만 상태색. 축·격자선·범례·툴팁 없음 —
+   값을 읽는 것이 아니라 "추세의 인상"만 주는 요소다.
+   색은 --bb-* 가 아니라 이 코드베이스가 실제로 쓰는 --nx-* 를 쓴다.
+   (v3 토큰 전면 도입은 별건이다 — 여기서 두 체계를 섞으면 상태색이 화면마다 갈린다.) */
+.kpi-spark{display:block; margin-top:10px; flex:0 0 auto; overflow:visible;}
+.kpi-spark rect{fill:var(--nx-neutral);}
+.kpi-spark rect.on.ok{fill:var(--nx-accent);}
+.kpi-spark rect.on.warn{fill:var(--nx-warning);}
+.kpi-spark rect.on.bad{fill:var(--nx-danger-vivid);}
+.kpi-spark rect.on.none{fill:var(--nx-muted);}
+/* 좁은 화면에서는 접는다 — 폭이 통째로 필요한데 그보다 숫자가 먼저다 */
+@media (max-width:1180px){ .kpi-spark{display:none;} }
 .sr-only{
   position:absolute; width:1px; height:1px; padding:0; margin:-1px;
   overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
