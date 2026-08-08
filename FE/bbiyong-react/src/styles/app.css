@@ -2510,13 +2510,14 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-page .maplegend{color:var(--nx-muted); margin-top:12px;}
 .nav-page .maplegend span{background:transparent; border:0; padding:0;}
 /* 지도 범례는 도면과 떨어진 설명 행이 아니라, 첨부 레퍼런스처럼 지도 위에 뜬다.
-   🔴 좌측 시작점은 **유리 패널 폭만큼 비켜야 한다**(S15P11E101-814).
-   플로팅 씬 전환 뒤 좌측 상태 패널(left:34px, width:clamp(240px,24vw,302px), z-index:6)이
-   씬 위에 떠 있는데, 범례가 left:16px 이라 그 뒤로 들어가 잘려 보였다(배포본에서 확인).
-   패널과 같은 계산식을 써서 폭이 바뀌어도 따라가게 한다. */
+   🔴 [S15P11E101-814 후속] 이전에는 `.vwrap`(=씬)이 `inset:0` 으로 화면 전체를 덮어
+   패널과 같은 좌표계를 썼으므로, 범례도 패널 폭만큼 비키는 계산식을 그대로 썼다.
+   이제 `.nav-canvas` 자체가 `left:calc(34px + 패널폭 + 18px)` 로 패널을 피해서 시작하므로
+   `.vwrap`(그 안쪽) 기준 left 에 같은 계산식을 또 더하면 **이중 오프셋**이 되어 범례가
+   씬 밖으로 밀려난다(실측으로 확인). 씬 안쪽 여백만 남기면 된다. */
 #pgMap .vwrap > .maplegend{
   position:absolute; top:16px;
-  left:calc(34px + clamp(240px, 24vw, 302px) + 18px);
+  left:16px;
   z-index:4;
   display:flex; align-items:center; gap:18px; flex-wrap:nowrap;
   width:max-content; max-width:calc(100% - 32px); margin:0; padding:12px 18px;
@@ -2626,6 +2627,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root.view-fullscreen:fullscreen #pgMap .nav-hero,
 :root.view-fullscreen:fullscreen #pgMap .nav-side{display:none;}
 :root.view-fullscreen:fullscreen #pgMap .nav-stage{display:block; flex:1 1 0; min-height:0;}
+/* 🔴 [S15P11E101-814 후속] 전체화면에서는 좌측 패널이 `display:none` 이므로 씬이
+   패널을 피할 이유가 없다 — `.nav-canvas` 의 평상시 인셋(left:calc(...), right:28px,
+   bottom:26px)을 되돌려 화면 전체를 다시 채운다. 그대로 두면 width:100% 와 left 오프셋이
+   같이 걸려 우측으로 넘친다. */
+:root.view-fullscreen:fullscreen #pgMap .nav-canvas{inset:0; border-radius:0; box-shadow:none;}
 :root.view-fullscreen:fullscreen #pgMap .nav-canvas,
 :root.view-fullscreen:fullscreen #pgMap .nav-canvas > #pMap,
 :root.view-fullscreen:fullscreen #pgMap .nav-canvas .vwrap{width:100%; height:100%; min-height:0;}
@@ -3345,11 +3351,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 #pgMap.v3-theme .map-control:hover:not(:disabled),
 #pgCam.v3-theme .map-control:hover:not(:disabled){background:#F4F5F8; color:#232733;}
-/* 🔴 입체/평면 토글도 유리 패널 폭만큼 비켜 세운다(S15P11E101-814).
-   공용 `.mapview` 는 `left:10px` 이라 좌측 상태 패널 뒤로 들어가 절반이 잘려 있었다
-   (배포본에서 확인 — "입:" 만 보였다). 범례와 같은 계산식을 쓴다.
+/* 🔴 [S15P11E101-814 후속] 입체/평면 토글도 범례와 같은 이유로 되돌린다 — 이제
+   `.nav-canvas` 자체가 패널을 피해서 시작하므로, `.vwrap` 기준 left 에 패널 폭
+   계산식을 또 더하면 이중 오프셋이 된다. 범례와 같은 좌측 여백(16px)만 준다.
    카메라 화면에는 좌측 유리 패널이 없으므로 지도에만 적용한다. */
-#pgMap.v3-theme .mapview{left:calc(34px + clamp(240px, 24vw, 302px) + 18px);}
+#pgMap.v3-theme .mapview{left:16px;}
 #pgMap.v3-theme .mapview,#pgCam.v3-theme .mapview{
   background:rgba(255,255,255,.9); color:#3F4880; border:0; border-radius:999px;
   font-size:11.5px; font-weight:600; box-shadow:0 1px 3px rgba(35,39,51,.14);
@@ -3951,13 +3957,27 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    지도 씬과 달리 여전히 좌우 패널 그리드이므로 여백을 그대로 되돌려 준다. */
 #pgMap > fieldset.lockfs{padding:0 32px 32px;}
 
-/* ── 지도 : 씬이 좌우·아래 끝까지, 로봇 상태 패널은 좌측에 뜬 유리 카드 ──
+/* ── 지도 : 씬은 좌측 패널을 피해서 뜨고, 좌우·아래에 여백을 둬 "네모" 판으로 보이게 한다
+   (S15P11E101-814 후속, 배포본 스크린샷 확인: 패널 뒤로 씬이 비쳐 침범한 것처럼 보였고
+   화면 끝까지 붙어 경계 없는 판처럼 보였다).
    `.map-view` 안쪽(실시간 지도)만 고른다 — 매핑 탭은 그대로 좌우 그리드로 둔다. */
 #pgMap .map-view .nav-stage{
   display:block; position:relative;
   flex:1 1 auto; min-height:0;
 }
-#pgMap .map-view .nav-canvas{position:absolute; inset:0;}
+/* 🔴 좌측은 더 이상 inset:0 이 아니다 — 패널(left:34px, width:clamp(240px,24vw,302px))과
+   같은 계산식으로 시작점을 잡아 패널 뒤로 깔리지 않게 한다. 우측·아래는 카메라 화면
+   (`#pgCam .cam-main`)과 같은 28px/26px 계열로 맞춰 이 디자인 시스템의 인셋 문법을 따른다.
+   모서리·그림자도 카메라 씬과 같은 톤(radius --bb-r-scene, box-shadow)을 준다 — 지도는
+   밝게 유지해야 하므로 --bb-scene-dark 는 쓰지 않는다(배경은 `.vwrap` 이 이미 담당). */
+#pgMap .map-view .nav-canvas{
+  position:absolute;
+  left:calc(34px + clamp(240px, 24vw, 302px) + 18px);
+  right:28px; top:0; bottom:26px;
+  border-radius:var(--bb-r-scene);
+  overflow:hidden;
+  box-shadow:0 18px 46px rgba(35,39,51,.10);
+}
 /* 🔴 패널은 **내용 높이만큼**만 차지한다(S15P11E101-814).
    원본 디자인은 `top:0; bottom:0` 로 화면 끝까지 세운 전면 유리 기둥이었지만,
    그건 그 안에 제목 + 필터 칩 + 로봇 카드 2장이 차 있을 때의 배치다.
@@ -4002,9 +4022,14 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   z-index:6; overflow:auto;
 }
 
-/* 1180 이하: 유리·카드 패널이 씬을 다 덮지 않도록 폭을 더 줄인다. */
+/* 1180 이하: 유리·카드 패널이 씬을 다 덮지 않도록 폭을 더 줄인다.
+   🔴 [S15P11E101-814 후속] `.nav-canvas` 의 left 도 패널과 같은 폭 계산식을 쓰므로,
+   여기서 패널 폭만 줄이고 캔버스 left 를 같이 좁히지 않으면 둘의 계산식이 서로 어긋나
+   여백만 불필요하게 커진다(패널은 좁아지는데 씬은 넓은 화면 기준 폭만큼 계속 비켜 있음).
+   같은 clamp 값으로 맞춘다. */
 @media (max-width:1180px){
   #pgMap .map-view .nav-side,#pgCam .cam-side-panel{width:clamp(200px, 34vw, 260px);}
+  #pgMap .map-view .nav-canvas{left:calc(34px + clamp(200px, 34vw, 260px) + 18px);}
 }
 
 /* 🔴 [2026-08-08 병합 메모] 이 아래 두 블록은 서로 다른 화면의 규칙이고 겹치는
