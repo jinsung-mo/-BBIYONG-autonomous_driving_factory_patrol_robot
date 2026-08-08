@@ -40,9 +40,13 @@ export default function MapPage() {
         <KpiRow />
       </div>
 
-      {/* 지도 / 매핑 전환 탭(S15P11E101 콘솔 정리). 매핑은 관리자 전용. */}
+      {/* 지도 / 매핑 전환 탭(S15P11E101 콘솔 정리). 매핑은 관리자 전용.
+          🔴 `seg` 클래스를 뗐다(S15P11E101-814 후속). 그건 옛 다크 테마 로봇 화면의
+          세그먼트 컨트롤이고, `.seg button{flex:1}` 때문에 두 버튼이 가로를 반씩 나눠
+          가져 탭이 화면 폭 전체로 늘어나 있었다(배포본에서 확인).
+          생김새는 `#pgMap .map-tabs` 가 전부 정의하므로 이 클래스는 필요 없다. */}
       {isAdmin && (
-        <div className="map-tabs seg" role="tablist" aria-label="지도 또는 매핑">
+        <div className="map-tabs" role="tablist" aria-label="지도 또는 매핑">
           <button type="button" role="tab" aria-selected={tab === 'map'} className={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}>지도</button>
           <button type="button" role="tab" aria-selected={tab === 'mapping'} className={tab === 'mapping' ? 'on' : ''} onClick={() => setTab('mapping')}>매핑</button>
         </div>
@@ -50,7 +54,13 @@ export default function MapPage() {
 
       {/* 지도 화면은 계속 마운트해 둔다(hidden) — 탭을 옮겼다고 캔버스와 STOMP 구독을 버리면
           돌아올 때마다 지도가 처음부터 다시 붙는다. */}
-      <div hidden={isAdmin && tab === 'mapping'}>
+      {/* 🔴 이 wrapper 에 클래스를 준다(S15P11E101-814 후속). 예전에는 클래스 없는
+          평범한 div 였는데, `.nav-page` 가 세로 flex 라 이 div 가 flex 항목이 되고
+          그 안의 `.nav-stage{flex:1 1 0}` 은 **블록 부모 안이라 무시**됐다. 그래서
+          씬 높이가 남는 높이가 아니라 **콘텐츠 높이**로 정해졌다.
+          이벤트 로그가 좌측 열 높이를 벌어 주던 동안에는 티가 안 났는데, 그걸 떼자
+          상태 카드 하나 높이로 주저앉았다(배포본에서 확인). 높이 사슬을 잇는다. */}
+      <div className="map-view" hidden={isAdmin && tab === 'mapping'}>
         <div className="nav-stage">
           {/* 🔴 이벤트 로그 카드를 뗐다(S15P11E101-867). 이벤트는 전용 탭이 따로 있고
               거기서 필터·기간 조회·상세·영상까지 준다. 여기 있던 건 최근 몇 줄만 보여 주는

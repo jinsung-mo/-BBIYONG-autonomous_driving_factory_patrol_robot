@@ -2416,7 +2416,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #pgMap .map-tabs{
   display:inline-flex; gap:2px; padding:3px; margin:0 0 12px;
   background:var(--bb-surface, rgba(120,128,150,.12)); border-radius:999px;
+  /* 🔴 `.nav-page` 가 세로 flex 라 자식은 기본값 align-items:stretch 로 **가로 전폭**이
+     된다 — inline-flex 로 둬도 소용없다. 알약은 내용만큼만 넓어야 한다. */
+  align-self:flex-start;
 }
+/* 지도 뷰 wrapper — 씬이 남는 높이를 받도록 높이 사슬을 잇는다(S15P11E101-814 후속).
+   클래스 없는 div 였을 때는 여기서 사슬이 끊겨 `.nav-stage{flex:1 1 0}` 이 무시되고
+   씬 높이가 콘텐츠 기준으로 정해졌다.
+   🔴 display 를 주면 `hidden` 속성의 기본 display:none 을 덮어써 버리므로,
+   [hidden] 을 반드시 다시 눌러 준다 — 안 그러면 매핑 탭에서 지도가 같이 보인다. */
+#pgMap .map-view{flex:1 1 0; min-height:0; display:flex; flex-direction:column;}
+#pgMap .map-view[hidden]{display:none;}
 #pgMap .map-tabs button{
   border:0; border-radius:999px; padding:7px 18px; cursor:pointer;
   background:transparent; color:var(--bb-body, #5a6274);
