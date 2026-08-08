@@ -9,6 +9,7 @@ import com.bbiyong.server.auth.dto.LoginResponse;
 import com.bbiyong.server.auth.dto.MessageResponse;
 import com.bbiyong.server.auth.dto.RefreshRequest;
 import com.bbiyong.server.auth.dto.RefreshResponse;
+import com.bbiyong.server.auth.dto.ResetPasswordByPhoneRequest;
 import com.bbiyong.server.auth.dto.ResetPasswordRequest;
 import com.bbiyong.server.auth.dto.SignupRequest;
 import com.bbiyong.server.auth.dto.SignupResponse;
@@ -173,6 +174,35 @@ public class AuthController {
 	@PostMapping("/password/reset")
 	public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
 		authService.resetPassword(request);
+		return ResponseEntity.ok(MessageResponse.ok("비밀번호가 변경되었습니다. 새 비밀번호로 로그인하세요."));
+	}
+
+	@Operation(
+			summary = "비밀번호 재설정 인증코드 발송 (휴대전화 경로)",
+			description = """
+					이메일이 기억나지 않는 사용자를 위한 경로입니다. 이름·휴대전화번호·생년월일로 계정을 찾아
+					**그 계정의 이메일로** 재설정 인증코드를 발송하고, 어느 메일함을 열어야 하는지 알 수 있도록
+					마스킹된 이메일(예: ki***@gmail.com)을 반환합니다.
+					- 일치 계정이 없으면 404 (아이디 찾기와 동일한 노출 수준)
+					- SMS 는 발송하지 않습니다. 코드는 항상 이메일로 갑니다.
+					"""
+	)
+	@PostMapping("/password/send-reset-code-by-phone")
+	public ResponseEntity<FindIdResponse> sendResetCodeByPhone(@Valid @RequestBody FindIdRequest request) {
+		return ResponseEntity.ok(authService.sendPasswordResetCodeByPhone(request));
+	}
+
+	@Operation(
+			summary = "비밀번호 재설정 (휴대전화 경로)",
+			description = """
+					휴대전화 경로로 받은 인증코드와 새 비밀번호를 제출해 비밀번호를 변경합니다.
+					사용자는 마스킹된 이메일만 알고 있으므로, 본인 확인 3종을 다시 받아 서버가 계정을 재확인합니다.
+					"""
+	)
+	@PostMapping("/password/reset-by-phone")
+	public ResponseEntity<MessageResponse> resetPasswordByPhone(
+			@Valid @RequestBody ResetPasswordByPhoneRequest request) {
+		authService.resetPasswordByPhone(request);
 		return ResponseEntity.ok(MessageResponse.ok("비밀번호가 변경되었습니다. 새 비밀번호로 로그인하세요."));
 	}
 }

@@ -381,4 +381,95 @@ class AuthControllerTests {
 								"""))
 				.andExpect(status().isBadRequest());
 	}
+
+	// ── 휴대전화 경로 비밀번호 재설정 (S15P11E101-846) ──────────────────────────
+	// 이메일이 기억나지 않는 사용자를 위한 경로. SMS 는 보내지 않는다 —
+	// 휴대전화로 계정을 찾아 그 계정의 '이메일'로 코드를 보낸다.
+
+	@Test
+	void sendResetCodeByPhoneReturnsMaskedEmail() throws Exception {
+		signup("byphone@bbiyong.io", VALID_PW, "폰으로찾기");
+
+		// 어느 메일함을 열어야 하는지 알아야 다음 단계로 갈 수 있으므로 마스킹 이메일을 돌려준다.
+		mockMvc.perform(post("/api/auth/password/send-reset-code-by-phone")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "폰으로찾기",
+								  "phoneNumber": "01012345678",
+								  "birthDate": "1995-03-15"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.maskedEmail").value("by***@bbiyong.io"));
+	}
+
+	@Test
+	void sendResetCodeByPhoneReturnsNotFoundForUnknownProfile() throws Exception {
+		// 🔴 이메일 경로와 달리 404 다 — 마스킹 이메일을 못 돌려주면 사용자가 진행할 수 없다.
+		// 같은 3종을 받는 find-id 가 이미 404 를 내므로 노출 수준은 그대로다.
+		mockMvc.perform(post("/api/auth/password/send-reset-code-by-phone")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "없는사람",
+								  "phoneNumber": "01099998888",
+								  "birthDate": "1980-01-01"
+								}
+								"""))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void resetPasswordByPhoneChangesLoginPassword() throws Exception {
+		signup("byphonereset@bbiyong.io", VALID_PW, "폰재설정");
+
+		String newPw = "PhoneBbiyong9@";
+		mockMvc.perform(post("/api/auth/password/reset-by-phone")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "폰재설정",
+								  "phoneNumber": "01012345678",
+								  "birthDate": "1995-03-15",
+								  "code": "123456",
+								  "newPassword": "%s"
+								}
+								""".formatted(newPw)))
+				.andExpect(status().isOk());
+
+		// 새 비밀번호로 로그인 성공 — 사용자는 이메일을 한 번도 입력하지 않았다
+		mockMvc.perform(post("/api/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{ "email": "byphonereset@bbiyong.io", "password": "%s" }
+								""".formatted(newPw)))
+				.andExpect(status().isOk());
+
+		// 옛 비밀번호로는 실패
+		mockMvc.perform(post("/api/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{ "email": "byphonereset@bbiyong.io", "password": "%s" }
+								""".formatted(VALID_PW)))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void resetPasswordByPhoneRejectsWeakNewPassword() throws Exception {
+		signup("byphoneweak@bbiyong.io", VALID_PW, "폰약한재설정");
+
+		mockMvc.perform(post("/api/auth/password/reset-by-phone")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "폰약한재설정",
+								  "phoneNumber": "01012345678",
+								  "birthDate": "1995-03-15",
+								  "code": "123456",
+								  "newPassword": "abcdefg"
+								}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
 }
