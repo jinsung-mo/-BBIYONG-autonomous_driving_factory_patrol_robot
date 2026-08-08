@@ -11,7 +11,7 @@ import { ROBOT_ID, getDataSource, saveDataSource } from './config.ts'
 import { connect, disconnect, subscribe, publish, onState, setToken } from './stompClient.ts'
 import { DEFAULT_DRIVE_SPEED, angularFor, clampDriveSpeed } from './mappers.ts'
 import { useSettings } from '../settings/SettingsContext.tsx'
-import { decodeMapSnapshot, bakeMap, TRAIL_MAX } from './navMap.ts'
+import { decodeMapSnapshot, bakeMap, decodePatrolMask, bakeMask, TRAIL_MAX } from './navMap.ts'
 import { activateMap, isMappingComplete, isMappingStatus, phaseOf, fetchMapStatus, PHASE_IDLE, PHASE_MAPPING } from './mapping.ts'
 import { TILT_COMMAND } from './cameraTilt.ts'
 import { isFloorplanReady, loadActivePlan, releasePlan } from './floorplan.ts'
@@ -147,7 +147,7 @@ export function LiveProvider({ children }: any) {
   // 실시간 SLAM 맵(가이드 §5). NAV_LIVE 가 3Hz 로 오고 scan 배열이 커서 영상 프레임과 같은
   // 방식으로 다룬다 — React state 로 올리지 않고 ref 에 최신값만 두고 리스너가 직접 받아간다.
   /** @type {import('react').MutableRefObject<import('./contracts').NavState>} */
-  const navRef = useRef<import('./contracts.d.ts').NavState>({ map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null })
+  const navRef = useRef<import('./contracts.d.ts').NavState>({ map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null, maskCanvas: null })
   const navListeners = useRef(new Set<(nav: import('./contracts').NavState) => void>())
   // 구독자를 서로 격리한다. 한 리스너가 던지면 forEach 가 거기서 끊겨 뒤쪽 구독자는
   // 갱신을 못 받는다 — 관제 캔버스가 실패했다고 운영 탭 진행 표시까지 멈추면 안 된다.
@@ -171,6 +171,7 @@ export function LiveProvider({ children }: any) {
     n.pose = null
     n.scan = null
     n.trail = []
+    n.maskCanvas = null
     emitNav()
   }, [emitNav])
 
@@ -198,7 +199,7 @@ export function LiveProvider({ children }: any) {
       setMappingComplete(null)
       videoRef.current = { FRONT: null, THERMAL: null }
       setVideoSeen({ FRONT: false, THERMAL: false })
-      navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null }
+      navRef.current = { map: null, mapCanvas: null, pose: null, scan: null, trail: [], plan: null, maskCanvas: null }
       emitNav()
       applyOwnership(EMPTY_OWNERSHIP); setMySessionId(null)
       disconnect()
@@ -325,6 +326,16 @@ export function LiveProvider({ children }: any) {
           // 크기가 안 맞는 맵은 버리고 직전 맵을 유지한다 — 깨진 화면보다 낫다
           console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', errMessage(e))
           return
+        }
+        // 순찰 가능 마스크(S15P11E101-869) — 아직 안 보낼 수 있다. 없거나 깨졌으면
+        // 오버레이 없이 기존 동작 그대로 둔다(마스크 없다고 클릭이 막히면 안 된다).
+        try {
+          nav.map.mask = msg.patrolMask ? decodePatrolMask(msg.patrolMask, nav.map.w, nav.map.h) : null
+          nav.maskCanvas = nav.map.mask ? bakeMask(nav.map.mask, nav.map.w, nav.map.h) : null
+        } catch (e) {
+          console.warn('[nav] 순찰 마스크 디코드 실패 — 마스크 없이 진행', errMessage(e))
+          nav.map.mask = null
+          nav.maskCanvas = null
         }
       } else if (isMappingComplete(msg)) {
         // 완료 이벤트가 어느 토픽으로 올지 계약에 없다. 맵과 같은 토픽으로 올 수도 있어 여기서도 받는다.

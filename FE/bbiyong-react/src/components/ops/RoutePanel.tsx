@@ -20,8 +20,20 @@ import { useResourceSync } from '../../live/sync.ts'
 // (조건부 스프레드) 그대로 두면 서버가 기본값(이름 없음 → wpLabel 이 '지점 N'으로 표시,
 // 방향 없음 → 로봇 자동 응시)으로 채운다. 순서(seq)는 지점을 찍은 순서 그대로 간다 —
 // 재정렬 UI(↑/↓)도 뗐으므로 addWaypoint 가 매번 '끝에 추가'로 보내는 seq 가 곧 최종 순서다.
+// blockedBy → 화면 표시 폴백(S15P11E101-869). hint 가 없을 때만 쓴다 — hint 는 로봇이
+// 준 문장을 그대로 쓰는 게 원칙이고, 이 표는 그게 없을 때의 안전망이다.
+const BLOCKED_HINT: Record<string, string> = {
+  MAP_SAVING: '지도 저장 중입니다',
+  MAPPING_ACTIVE: '매핑 중입니다',
+  NO_MAP: '먼저 매핑하세요',
+  LOCALIZATION_NOT_READY: '위치 확인 중입니다',
+  NAV_NOT_READY: '주행 시스템 준비 중입니다',
+  NO_ROUTE: '지점을 찍으세요',
+  ESTOP: '비상정지 해제가 필요합니다',
+}
+
 export default function RoutePanel({ inspection = null }: { inspection?: any } = {}) {
-  const { enabled, connected, mapping } = useLive()
+  const { enabled, connected, mapping, telemetry } = useLive()
   const { accessToken } = useAuth()
 
   const [route, setRoute] = useState<import('../../live/contracts.d.ts').Waypoint[]>([])
@@ -46,8 +58,15 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
   useEffect(() => { load() }, [load])
 
   // 지도 클릭 — 서버에 바로 1건 추가한다(POST). 목록만 늘려 두면 새로고침에 사라진다.
-  const onPick = async (p: any) => {
-    if (!p) { setMsg({ kind: 'warn', text: '맵 바깥은 지정할 수 없습니다. 회색으로 칠해진 영역 안을 클릭하세요.' }); return }
+  // reason='masked' 는 순찰 마스크로 막힌 칸(S15P11E101-869) — 로봇이 회전 여유까지 계산해
+  // 판정한 결과라 맵 바깥 안내와는 다른 문구로 알린다.
+  const onPick = async (p: any, reason?: 'outside' | 'masked') => {
+    if (!p) {
+      setMsg(reason === 'masked'
+        ? { kind: 'warn', text: '이 자리는 회전 여유가 없어 순찰 지점으로 찍을 수 없습니다.' }
+        : { kind: 'warn', text: '맵 바깥은 지정할 수 없습니다. 회색으로 칠해진 영역 안을 클릭하세요.' })
+      return
+    }
     if (busy) return
     setBusy(true)
     try {
@@ -112,6 +131,15 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
   // 서버에 저장된 경로는 지우지 않는다. 매핑이 끝나고 다시 판단할 자산이다.
   const editLocked = offline || mapping
 
+  // 순찰 시작 가능 여부(S15P11E101-869). 로봇이 readiness 를 보내면 그 판단을 그대로 따르고,
+  // FE 는 조건을 조합하지 않는다. 아직 안 보내는 로봇(구버전)에서는 기존 조합 로직 그대로 —
+  // 없는데 잠그면 로봇 쪽이 안 올라간 시연 중에 화면이 죽는다.
+  const readiness = telemetry?.readiness
+  const startDisabled = readiness ? (!readiness.canStartPatrol || busy) : (editLocked || busy || !route.length)
+  const startHint = readiness && !readiness.canStartPatrol
+    ? (readiness.hint || BLOCKED_HINT[readiness.blockedBy ?? ''] || '지금은 순찰을 시작할 수 없습니다.')
+    : null
+
   return (
     <div className="card-v3" id="pgRoute">
       <h3 style={{ margin: 0, marginBottom: '12px' }}>순찰 경로 <span className="k">PATROL ROUTE</span></h3>
@@ -160,7 +188,10 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
 
       <div className="gotor">
         {/* 시작은 눈에 띄게 둔다 — 로봇이 실제로 움직이기 시작하는 버튼이다. filled 는 화면당 하나(S15P11E101-814) */}
-        <button type="button" id="btnStartPatrol" className="btn-filled" onClick={onStart} disabled={editLocked || busy || !route.length}>
+        <button
+          type="button" id="btnStartPatrol" className="btn-filled" onClick={onStart}
+          disabled={startDisabled} title={startHint ?? undefined}
+        >
           순찰 시작
         </button>
         {/* 순찰 종료(S15P11E101-868) — 로봇 연동은 아직 없다. 눌러도 아무 일도 일어나지
@@ -173,6 +204,11 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
           순찰 종료
         </button>
       </div>
+      {startHint && (
+        <p className="cfg-help" id="patrolReadinessHint" style={{ marginTop: 6, marginBottom: 0 }}>
+          {startHint}
+        </p>
+      )}
       <p className="cfg-help" style={{ marginTop: 6, marginBottom: 0 }}>
         <b>순찰 종료</b>는 로봇 연동 대기 중입니다 — 지금은 눌러도 아무 동작도 하지 않습니다.
       </p>

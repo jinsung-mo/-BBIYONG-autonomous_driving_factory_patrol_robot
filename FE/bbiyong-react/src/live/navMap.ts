@@ -23,6 +23,61 @@ export function decodeMapSnapshot(msg: any) {
   return { w: msg.w, h: msg.h, res: msg.res, ox: msg.ox, oy: msg.oy, seq: msg.sequence, data }
 }
 
+// patrolMask 디코드(S15P11E101-869) — decodeMapSnapshot 과 같은 flat RLE 형식이라
+// 새 디코더를 짜지 않고 같은 방식으로 편다. 셀 순서도 맵과 같은 그리드(w×h)다.
+// 크기가 안 맞으면 던진다 — decodeMapSnapshot 과 같은 이유로, 조용히 어긋난 위치를
+// 막는 것보다 버리고 이전 상태를 유지하는 편이 낫다(호출부가 catch 한다).
+export function decodePatrolMask(mask: any, w: number, h: number): Uint8Array | null {
+  if (!mask?.data?.length) return null
+  const out = new Uint8Array(w * h)
+  let i = 0
+  for (let k = 0; k < mask.data.length; k += 2) {
+    const v = mask.data[k] ? 1 : 0
+    const n = mask.data[k + 1]
+    out.fill(v, i, Math.min(i + n, out.length))
+    i += n
+  }
+  if (i !== w * h) throw new Error(`마스크 크기 불일치: ${i} != ${w * h}`)
+  return out
+}
+
+// --bb-scene-dark 토큰을 마스크 오버레이 색으로 쓴다(새 색을 만들지 않는다).
+// 캔버스 픽셀 버퍼는 CSS 변수를 직접 못 읽어 여기서 한 번 RGB 로 풀어 둔다.
+function maskDimColor() {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--bb-scene-dark').trim()
+    const n = parseInt(v.replace('#', ''), 16)
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 150 }
+  } catch {
+    return { r: 13, g: 16, b: 23, a: 150 }
+  }
+}
+
+// mask(1=가능·0=불가) → 오버레이 캔버스. 0 인 칸만 어둡게 칠하고 나머지는 투명하게 둬
+// 배경(원본 격자/도면) 위에 그대로 얹을 수 있게 한다. bakeMap 과 같은 이유로 미리 굽는다 —
+// 셀이 많아 매 프레임 순회하면 느리다.
+export function bakeMask(mask: Uint8Array, w: number, h: number) {
+  const c = document.createElement('canvas')
+  c.width = w; c.height = h
+  const g = c.getContext('2d')!
+  const img = g.createImageData(w, h)
+  const d = img.data
+  const dim = maskDimColor()
+  for (let i = 0; i < w * h; i++) {
+    // map 데이터와 같은 아래→위 순서 뒤집기(bakeMap 참고)
+    const row = h - 1 - ((i / w) | 0)
+    const col = i % w
+    const j = (row * w + col) * 4
+    if (mask[i] === 0) {
+      d[j] = dim.r; d[j + 1] = dim.g; d[j + 2] = dim.b; d[j + 3] = dim.a
+    } else {
+      d[j + 3] = 0
+    }
+  }
+  g.putImageData(img, 0, 0)
+  return c
+}
+
 // 셀이 많아 매 프레임 다시 그리면 느리다 — sequence 가 바뀔 때만 1픽셀=1셀로 굽고 draw 에서 확대한다
 export function bakeMap(m: any) {
   const c = document.createElement('canvas')
@@ -145,6 +200,26 @@ export function insideMap(m: any, x: any, y: any) {
     dx = rx; dy = ry
   }
   return dx >= 0 && dy >= 0 && dx <= m.w * m.res && dy <= m.h * m.res
+}
+
+// patrolMask 상 이 좌표가 막혀 있는지(S15P11E101-869). mask 는 nav.map 과 같은 그리드다 —
+// insideMap 과 같은 회전 축 변환을 재사용해 회전 도면에서도 같은 칸을 가리키게 한다.
+// mask/m 이 없으면(아직 로봇이 안 보내는 경우) 항상 false — 기존 동작 그대로 둔다.
+export function isMasked(mask: Uint8Array | null | undefined, m: any, x: any, y: any) {
+  if (!mask || !insideMap(m, x, y)) return false
+  let dx = x - m.ox
+  let dy = y - m.oy
+  const yaw = Number(m.oyaw) || 0
+  if (yaw) {
+    const c = Math.cos(-yaw), s2 = Math.sin(-yaw)
+    const rx = dx * c - dy * s2
+    const ry = dx * s2 + dy * c
+    dx = rx; dy = ry
+  }
+  const col = Math.floor(dx / m.res)
+  const row = Math.floor(dy / m.res)
+  if (col < 0 || row < 0 || col >= m.w || row >= m.h) return false
+  return mask[row * m.w + col] === 0
 }
 
 // 맵 + 궤적 + 스캔 + 로봇 — nav.html 그대로
@@ -336,6 +411,26 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
       g.restore()
     } else {
       g.drawImage(bg.img, sx(bg.ox), sy(bg.oy + bg.h * bg.res), wpx, hpx)
+    }
+  }
+
+  // 순찰 가능 마스크 오버레이(S15P11E101-869) — 배경 위, 나머지 오버레이보다 먼저 그린다.
+  // mask 는 항상 nav.map(원본 격자) 기준 그리드다 — 지금 보이는 배경이 도면이어도
+  // 좌표는 원본 격자 원점·해상도로 배치해야 실제로 막힌 칸과 어긋나지 않는다.
+  const m = nav.map
+  if (m?.mask && nav.maskCanvas) {
+    const yaw = Number(m.oyaw) || 0
+    const mwpx = m.w * m.res * view.s
+    const mhpx = m.h * m.res * view.s
+    if (yaw) {
+      const ax = sx(m.ox), ay = sy(m.oy)
+      g.save()
+      g.translate(ax, ay)
+      g.rotate(-yaw)
+      g.drawImage(nav.maskCanvas, 0, -mhpx, mwpx, mhpx)
+      g.restore()
+    } else {
+      g.drawImage(nav.maskCanvas, sx(m.ox), sy(m.oy + m.h * m.res), mwpx, mhpx)
     }
   }
 
