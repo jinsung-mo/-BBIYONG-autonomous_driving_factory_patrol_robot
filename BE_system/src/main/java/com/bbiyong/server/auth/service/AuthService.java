@@ -7,6 +7,7 @@ import com.bbiyong.server.auth.dto.FindIdResponse;
 import com.bbiyong.server.auth.dto.LoginRequest;
 import com.bbiyong.server.auth.dto.LoginResponse;
 import com.bbiyong.server.auth.dto.RefreshResponse;
+import com.bbiyong.server.auth.dto.ResetPasswordByPhoneRequest;
 import com.bbiyong.server.auth.dto.ResetPasswordRequest;
 import com.bbiyong.server.auth.dto.SignupRequest;
 import com.bbiyong.server.auth.dto.SignupResponse;
@@ -103,14 +104,58 @@ public class AuthService {
      */
     @Transactional(readOnly = true)
     public FindIdResponse findEmail(FindIdRequest request) {
-        String inputDigits = digitsOnly(request.phoneNumber());
+        User user = findByIdentity(request.name(), request.phoneNumber(), request.birthDate());
+        return new FindIdResponse(maskEmail(user.getEmail()));
+    }
+
+    /**
+     * 휴대전화 경로 비밀번호 재설정 — 1단계. 이름·휴대전화·생년월일로 계정을 찾아
+     * <b>그 계정의 이메일</b>로 재설정 인증코드를 보내고, 어느 메일함을 열어야 하는지
+     * 알 수 있도록 마스킹된 이메일을 돌려준다.
+     *
+     * <p>🔴 이메일 경로({@link #sendPasswordResetCode})와 달리 계정이 없으면 404 다.
+     * 그쪽은 이메일 한 줄만 받으므로 무응답으로 계정 열거를 막을 수 있지만, 이쪽은
+     * 마스킹 이메일을 돌려주지 않으면 사용자가 다음 단계로 갈 수 없다. 이미 같은 3종을
+     * 받는 아이디 찾기(find-id)가 동일하게 404 를 내므로 노출 수준은 그대로다.
+     */
+    public FindIdResponse sendPasswordResetCodeByPhone(FindIdRequest request) {
+        User user = findByIdentity(request.name(), request.phoneNumber(), request.birthDate());
+        emailVerificationService.sendCode(
+                EmailVerificationService.Purpose.PASSWORD_RESET, user.getEmail());
+        return new FindIdResponse(maskEmail(user.getEmail()));
+    }
+
+    /**
+     * 휴대전화 경로 비밀번호 재설정 — 2단계. 본인 확인 3종으로 계정을 다시 찾아
+     * 그 이메일에 발급된 코드를 검증한다(코드 저장소는 이메일 경로와 공용).
+     */
+    @Transactional
+    public void resetPasswordByPhone(ResetPasswordByPhoneRequest request) {
+        // 이메일 경로와 같은 순서 — 정책 검증을 먼저 해서 약한 비밀번호 때문에
+        // 1회용 코드가 소모되는 헛수고를 막는다.
+        PasswordPolicy.validate(request.newPassword());
+        User user = findByIdentity(request.name(), request.phoneNumber(), request.birthDate());
+        emailVerificationService.verifyCode(
+                EmailVerificationService.Purpose.PASSWORD_RESET, user.getEmail(), request.code());
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+        emailVerificationService.consumeVerified(
+                EmailVerificationService.Purpose.PASSWORD_RESET, user.getEmail());
+    }
+
+    /**
+     * 이름·휴대전화·생년월일이 모두 일치하는 계정 하나를 찾는다.
+     * 휴대전화는 저장 형식(하이픈 유무)이 계정마다 다를 수 있어 숫자만 비교한다.
+     */
+    private User findByIdentity(String name, String phoneNumber, LocalDate birthDate) {
+        String inputDigits = digitsOnly(phoneNumber);
         Optional<User> match = userRepository
-                .findByNameAndBirthDate(request.name().trim(), request.birthDate()).stream()
+                .findByNameAndBirthDate(name.trim(), birthDate).stream()
                 .filter(u -> digitsOnly(u.getPhoneNumber()).equals(inputDigits))
                 .findFirst();
-        User user = match.orElseThrow(() -> new ResponseStatusException(
+        return match.orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.NOT_FOUND, "일치하는 계정을 찾을 수 없습니다. 입력한 정보를 확인하세요."));
-        return new FindIdResponse(maskEmail(user.getEmail()));
     }
 
     /**
