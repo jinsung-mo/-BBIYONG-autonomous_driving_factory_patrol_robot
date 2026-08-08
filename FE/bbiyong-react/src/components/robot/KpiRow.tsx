@@ -16,8 +16,54 @@ type Tone = 'ok' | 'warn' | 'bad' | 'none'
 
 const SIGN: Record<Tone, string> = { ok: '✓', warn: '!', bad: '⚠', none: '–' }
 
-function Kpi({ value, unit, label, tone = 'none', note }: {
+// ── 미니 바차트 (S15P11E101-814) ──────────────────────────────────────────
+// 디자인 시스템 v3 의 서명 요소다. 핸드오프의 "구현 시 우선순위" 4번이
+// "수치 옆에는 미니 차트를, 라벨은 항상 수치보다 작고 흐리게" 인데 그동안 빠져 있었다.
+// 규격(원본 console-v3-standalone-src.html): 74×30 · 막대 2.5px · r1.2 · 간격 6px ·
+// 과거는 중립색 · 최근 3개만 상태색. 축·격자선·범례·툴팁 금지 — "추세의 인상"만 준다.
+//
+// 🔴 데이터를 지어내지 않는다. 아래 useTrend 는 **실제로 관측된 값만** 쌓는다.
+// 관측이 3개면 막대도 3개다. 있지도 않은 과거를 그리면 조작자가 그것을 믿는다 —
+// 이 파일 맨 위의 "값이 없으면 '—'" 규칙과 같은 이유다.
+const SPARK_N = 8
+const BAR_W = 2.5, BAR_GAP = 6, SPARK_H = 30, SPARK_PAD = 2
+
+/** 값이 바뀔 때마다 최근 n개를 굴려 담는다. 관측 이력이 없으면 빈 배열이다. */
+function useTrend(value: number | null, n = SPARK_N) {
+  const [hist, setHist] = useState<number[]>([])
+  useEffect(() => {
+    if (value == null || !Number.isFinite(value)) return
+    setHist((h) => (h[h.length - 1] === value ? h : [...h, value].slice(-n)))
+  }, [value, n])
+  return hist
+}
+
+function Spark({ hist, tone }: { hist: number[], tone: Tone }) {
+  // 관측이 2개 미만이면 추세라고 부를 수 없다 — 아예 그리지 않는다.
+  if (hist.length < 2) return null
+  const max = Math.max(...hist, 1)
+  const usable = SPARK_H - SPARK_PAD * 2
+  return (
+    <svg className="kpi-spark" width={SPARK_N * BAR_GAP} height={SPARK_H} aria-hidden="true">
+      {hist.map((v, i) => {
+        const h = Math.max(2, (v / max) * usable)
+        // 최근 3개만 상태색 — 지금 어느 쪽으로 가고 있는지가 읽혀야 한다.
+        const recent = i >= hist.length - 3
+        return (
+          <rect
+            key={i} x={i * BAR_GAP} y={SPARK_H - SPARK_PAD - h}
+            width={BAR_W} height={h} rx={BAR_W / 2}
+            className={recent ? `on ${tone}` : undefined}
+          />
+        )
+      })}
+    </svg>
+  )
+}
+
+function Kpi({ value, unit, label, tone = 'none', note, trend }: {
   value: string, unit?: string, label: string, tone?: Tone, note?: string,
+  trend?: number[],
 }) {
   return (
     <div className="kpi">
@@ -28,6 +74,7 @@ function Kpi({ value, unit, label, tone = 'none', note }: {
         <div className="kpi-label">{label}</div>
       </div>
       <span className={`kpi-badge ${tone}`} aria-hidden="true">{SIGN[tone]}</span>
+      {trend && <Spark hist={trend} tone={tone} />}
       {note && <span className="sr-only">{note}</span>}
     </div>
   )
@@ -69,19 +116,25 @@ export default function KpiRow() {
   const robotOnline = enabled ? (connected && telemetry?.status !== 'OFFLINE') : true
   const robotTone: Tone = robotOnline ? 'ok' : 'bad'
 
+  // 추세는 이 화면이 열려 있는 동안 관측한 값으로만 만든다(과거를 서버에서 끌어오지 않는다).
+  // 배터리는 텔레메트리마다, 경보는 30초 폴링마다, 접속은 상태가 바뀔 때마다 한 칸씩 쌓인다.
+  const battTrend = useTrend(batt ?? null)
+  const alarmTrend = useTrend(alarmValue ?? null)
+  const onlineTrend = useTrend(robotOnline ? 1 : 0)
+
   return (
     <div className="kpis">
       <Kpi
         value={batt == null ? '—' : String(batt)} unit={batt == null ? undefined : '%'}
-        label="배터리" tone={battTone}
+        label="배터리" tone={battTone} trend={battTrend}
       />
       <Kpi
         value={alarmValue == null ? '—' : String(alarmValue)} unit={alarmValue == null ? undefined : '건'}
-        label="경보 이벤트 (오늘)" tone={alarmTone}
+        label="경보 이벤트 (오늘)" tone={alarmTone} trend={alarmTrend}
       />
       <Kpi
         value={robotOnline ? 'ON' : 'OFF'}
-        label="로봇 상태" tone={robotTone}
+        label="로봇 상태" tone={robotTone} trend={onlineTrend}
       />
     </div>
   )
