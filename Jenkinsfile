@@ -109,6 +109,11 @@ pipeline {
                         string(
                             credentialsId: 'bbiyong-robot-upload-token',
                             variable: 'BBIYONG_ROBOT_UPLOAD_TOKEN'
+                        ),
+                        usernamePassword(
+                            credentialsId: 'bbiyong-gmail-smtp',
+                            usernameVariable: 'BBIYONG_MAIL_USERNAME',
+                            passwordVariable: 'BBIYONG_MAIL_PASSWORD'
                         )
                     ]) {
                         sh 'docker compose up -d --build'

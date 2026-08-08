@@ -1,10 +1,11 @@
 package com.bbiyong.server.auth.service;
 
 import com.bbiyong.server.auth.service.EmailVerificationService.Purpose;
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.regex.Matcher;
@@ -14,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * 인메모리 인증코드 서비스의 발송/검증/만료/시도제한 로직 단위 테스트.
@@ -32,18 +34,19 @@ class EmailVerificationServiceTest {
 	}
 
 	private String sendAndCaptureCode(EmailVerificationService svc, JavaMailSender sender,
-									   Purpose purpose, String email) {
+									   Purpose purpose, String email) throws Exception {
 		svc.sendCode(purpose, email);
-		ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+		ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
 		verify(sender).send(captor.capture());
-		Matcher m = CODE.matcher(captor.getValue().getText());
+		Matcher m = CODE.matcher(captor.getValue().getContent().toString());
 		assertThat(m.find()).isTrue();
 		return m.group(1);
 	}
 
 	@Test
-	void verifiesWithCorrectCodeAndMarksVerified() {
+	void verifiesWithCorrectCodeAndMarksVerified() throws Exception {
 		JavaMailSender sender = mock(JavaMailSender.class);
+		when(sender.createMimeMessage()).thenAnswer(inv -> new JavaMailSenderImpl().createMimeMessage());
 		EmailVerificationService svc = service(sender, 300, 5);
 
 		String code = sendAndCaptureCode(svc, sender, Purpose.SIGNUP, "user@bbiyong.io");
@@ -54,8 +57,9 @@ class EmailVerificationServiceTest {
 	}
 
 	@Test
-	void normalizesEmailCaseAndWhitespace() {
+	void normalizesEmailCaseAndWhitespace() throws Exception {
 		JavaMailSender sender = mock(JavaMailSender.class);
+		when(sender.createMimeMessage()).thenAnswer(inv -> new JavaMailSenderImpl().createMimeMessage());
 		EmailVerificationService svc = service(sender, 300, 5);
 
 		String code = sendAndCaptureCode(svc, sender, Purpose.SIGNUP, "User@Bbiyong.io");
@@ -64,8 +68,9 @@ class EmailVerificationServiceTest {
 	}
 
 	@Test
-	void rejectsWrongCode() {
+	void rejectsWrongCode() throws Exception {
 		JavaMailSender sender = mock(JavaMailSender.class);
+		when(sender.createMimeMessage()).thenAnswer(inv -> new JavaMailSenderImpl().createMimeMessage());
 		EmailVerificationService svc = service(sender, 300, 5);
 		sendAndCaptureCode(svc, sender, Purpose.SIGNUP, "user@bbiyong.io");
 
@@ -75,8 +80,9 @@ class EmailVerificationServiceTest {
 	}
 
 	@Test
-	void rejectsExpiredCode() {
+	void rejectsExpiredCode() throws Exception {
 		JavaMailSender sender = mock(JavaMailSender.class);
+		when(sender.createMimeMessage()).thenAnswer(inv -> new JavaMailSenderImpl().createMimeMessage());
 		EmailVerificationService svc = service(sender, 0, 5); // TTL 0 → 즉시 만료
 		String code = sendAndCaptureCode(svc, sender, Purpose.SIGNUP, "user@bbiyong.io");
 
@@ -85,8 +91,9 @@ class EmailVerificationServiceTest {
 	}
 
 	@Test
-	void blocksAfterTooManyAttempts() {
+	void blocksAfterTooManyAttempts() throws Exception {
 		JavaMailSender sender = mock(JavaMailSender.class);
+		when(sender.createMimeMessage()).thenAnswer(inv -> new JavaMailSenderImpl().createMimeMessage());
 		EmailVerificationService svc = service(sender, 300, 1); // 시도 1회 초과 시 차단
 		sendAndCaptureCode(svc, sender, Purpose.SIGNUP, "user@bbiyong.io");
 
@@ -99,8 +106,9 @@ class EmailVerificationServiceTest {
 	}
 
 	@Test
-	void purposesAreIsolated() {
+	void purposesAreIsolated() throws Exception {
 		JavaMailSender sender = mock(JavaMailSender.class);
+		when(sender.createMimeMessage()).thenAnswer(inv -> new JavaMailSenderImpl().createMimeMessage());
 		EmailVerificationService svc = service(sender, 300, 5);
 		String code = sendAndCaptureCode(svc, sender, Purpose.SIGNUP, "user@bbiyong.io");
 
@@ -110,8 +118,9 @@ class EmailVerificationServiceTest {
 	}
 
 	@Test
-	void consumeVerifiedClearsState() {
+	void consumeVerifiedClearsState() throws Exception {
 		JavaMailSender sender = mock(JavaMailSender.class);
+		when(sender.createMimeMessage()).thenAnswer(inv -> new JavaMailSenderImpl().createMimeMessage());
 		EmailVerificationService svc = service(sender, 300, 5);
 		String code = sendAndCaptureCode(svc, sender, Purpose.SIGNUP, "user@bbiyong.io");
 		svc.verifyCode(Purpose.SIGNUP, "user@bbiyong.io", code);
