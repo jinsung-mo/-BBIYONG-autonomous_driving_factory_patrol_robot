@@ -73,7 +73,7 @@ export default function MappingTab() {
             {!enabled && <p className="cfg-help">시뮬레이션 모드에서는 실제 맵이 없습니다. 실서버 모드로 로그인하면 진행 상황이 표시됩니다.</p>}
             {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
 
-            <div className="gotor">
+            <div className="gotor mapping-actions">
               <button
                 type="button" id="btnStartMapping" className="btn-filled"
                 onClick={() => setConfirming(true)}
