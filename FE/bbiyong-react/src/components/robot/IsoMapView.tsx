@@ -54,7 +54,8 @@ const CAR_LAYERS = Array.from({ length: CAR_H }, (_, k) => ({
 // 표시 회전. SLAM 뷰(navMap.DISPLAY_ROT, 현재 0 — S15P11E101-796)와 같은 값을 쓴다 —
 // 두 화면이 다른 방향을 보면 조작자가 지도를 옮겨 볼 때마다 방향 감각을 다시 잡아야 한다.
 // 씬 전체를 돌리므로 도면과 로봇 마커가 함께 돈다(마커는 씬 안에 있다).
-const SPIN_BASE = -24 + (DISPLAY_ROT * 180) / Math.PI
+// 기본 방위를 수평(벽이 화면 축과 나란함)으로 둔다(S15P11E101 콘솔 정리) — 이전의 대각(-24°) 제거.
+const SPIN_BASE = 0 + (DISPLAY_ROT * 180) / Math.PI
 
 export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor?: number, points?: InspectionPoint[] }) {
   const { plan, connected, onNavUpdate, robotOnline, telemetry } = useLive()

@@ -100,7 +100,7 @@ export default function MapPanel() {
           : enabled
           ? (showIso
               ? <IsoMapView zoomFactor={zoom} points={inspectionPoints} />
-              : <LiveNavMap zoomFactor={zoom} planOnly inspection={{ points: inspectionPoints }} lightFloor />)
+              : <LiveNavMap zoomFactor={zoom} planOnly follow inspection={{ points: inspectionPoints }} lightFloor />)
           : <canvas
               ref={refs.map2d}
               className="map-zoom-canvas"
