@@ -41,12 +41,24 @@ function useTrend(value: number | null, n = SPARK_N) {
 function Spark({ hist, tone }: { hist: number[], tone: Tone }) {
   // 관측이 2개 미만이면 추세라고 부를 수 없다 — 아예 그리지 않는다.
   if (hist.length < 2) return null
-  const max = Math.max(...hist, 1)
+
+  // 🔴 절대값(v/max)이 아니라 **관측 구간의 최소~최대**로 스케일한다.
+  // v/max 로 그렸더니 배터리처럼 값이 잘 안 변하는 KPI 에서 모든 막대가 최대 높이가 되어
+  // 바코드처럼 보였다(배포본에서 확인 — 46% 고정이라 v/max 가 전부 1).
+  // 이 차트는 값을 읽는 것이 아니라 "추세의 인상"만 주는 요소이므로, 변화가 없으면
+  // **낮고 평평한 줄**로 보이는 것이 맞다.
+  const lo = Math.min(...hist)
+  const hi = Math.max(...hist)
+  const span = hi - lo
   const usable = SPARK_H - SPARK_PAD * 2
+  const FLOOR = 3   // 변화가 없을 때의 높이. 0 이면 아예 사라져 "값 없음"과 헷갈린다.
+
   return (
     <svg className="kpi-spark" width={SPARK_N * BAR_GAP} height={SPARK_H} aria-hidden="true">
       {hist.map((v, i) => {
-        const h = Math.max(2, (v / max) * usable)
+        const h = span > 0
+          ? FLOOR + ((v - lo) / span) * (usable - FLOOR)
+          : FLOOR
         // 최근 3개만 상태색 — 지금 어느 쪽으로 가고 있는지가 읽혀야 한다.
         const recent = i >= hist.length - 3
         return (
