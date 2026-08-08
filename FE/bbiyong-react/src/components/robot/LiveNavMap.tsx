@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
-import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, backgroundOf, followPose } from '../../live/navMap.ts'
+import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, isMasked, backgroundOf, followPose } from '../../live/navMap.ts'
 import { localized } from '../../live/mappers.ts'
 
 // live 모드의 2D 맵 캔버스 — 로봇이 보내는 실제 SLAM 맵/스캔/자세를 그린다.
@@ -32,7 +32,9 @@ import { localized } from '../../live/mappers.ts'
 // 관제 지도 탭(MapPanel)은 그대로 나침반을 보여준다.
 export default function LiveNavMap({ route = null, onPick = null, onSetHeading = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false, inspection = null, lightFloor = false, compass = true }: {
     route?: import('../../live/contracts').Waypoint[] | null,
-    onPick?: ((p: { x: number, y: number } | null) => void) | null,
+    // reason: 'outside' 는 맵 바깥, 'masked' 는 순찰 마스크로 막힌 칸(S15P11E101-869) —
+    // 호출부가 서로 다른 안내문을 보여줄 수 있게 구분해 넘긴다.
+    onPick?: ((p: { x: number, y: number } | null, reason?: 'outside' | 'masked') => void) | null,
     onSetHeading?: ((index: number, yawRadians: number) => void) | null,
     zoomFactor?: number,
     planOnly?: boolean,
@@ -195,7 +197,10 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
     const px = (e.clientX - r.left) * (cv.width / r.width)
     const py = (e.clientY - r.top) * (cv.height / r.height)
     const { x, y } = canvasToWorld(viewRef.current, nav, headingUpRef.current, px, py, cv)
-    if (!insideMap(bg, x, y)) { pick(null); return }
+    if (!insideMap(bg, x, y)) { pick(null, 'outside'); return }
+    // 마스크는 항상 nav.map(원본 격자) 기준이다 — 없으면(아직 로봇이 안 보내는 경우)
+    // isMasked 가 항상 false 라 기존 동작 그대로 클릭이 통과한다.
+    if (isMasked(nav?.map?.mask, nav?.map, x, y)) { pick(null, 'masked'); return }
     pick({ x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) })
   }
 

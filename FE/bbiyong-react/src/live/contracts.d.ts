@@ -77,6 +77,25 @@ export type Capabilities = Partial<Record<
 >>
 
 /**
+ * 순찰 시작 가능 여부를 로봇이 판단해 하나로 알려준다(S15P11E101-869).
+ * FE 는 상태를 조합하지 않는다 — canStartPatrol 로 버튼을 켜고 끄고, hint 를 그대로 보여준다.
+ * blockedBy 는 표에 없는 새 값이 와도 깨지면 안 된다 — hint 폴백, hint 도 없으면 일반 문구.
+ */
+export type BlockedByReason =
+  | 'MAP_SAVING' | 'MAPPING_ACTIVE' | 'NO_MAP' | 'LOCALIZATION_NOT_READY'
+  | 'NAV_NOT_READY' | 'NO_ROUTE' | 'ESTOP'
+
+export interface Readiness {
+  canStartPatrol: boolean
+  canStartMapping?: boolean
+  /** 표에 없는 값이 올 수 있다 — 문자열로 넓게 받는다 */
+  blockedBy: BlockedByReason | string | null
+  /** 로봇이 준 문장을 그대로 쓴다 — FE 가 표를 보고 다시 만들지 않는다 */
+  hint?: string
+  retryAfterSec?: number
+}
+
+/**
  * /topic/robots — 서버가 로봇 패킷을 그대로 직렬화해 중계한다.
  *
  * 브리지는 값이 없으면 null 로 채우지 않고 **필드를 생략**한다. 그래서 거의 모두 선택이다 —
@@ -101,6 +120,8 @@ export interface RobotTelemetry {
   cameraTilt?: number
   camera_tilt?: number
   tilt?: number
+  /** 순찰 시작 가능 여부(S15P11E101-869). 아직 안 보낼 수 있다 — 없으면 기존 동작 그대로다. */
+  readiness?: Readiness
 }
 
 /** /topic/alerts — 로봇이 확정한 화재·과열. AlertMessage record 그대로. */
@@ -159,6 +180,12 @@ export interface MapSnapshot {
   oy: number
   encoding?: string
   cells: number[]
+  /**
+   * 순찰 지점을 찍어도 되는 칸(S15P11E101-869). 지도와 같은 flat RLE 형식이고,
+   * 셀 순서도 cells 와 같은 그리드(w×h)를 가리킨다. 1=가능·0=불가.
+   * 아직 안 보낼 수 있다 — 없으면 오버레이를 그리지 않는다(기존 동작 유지).
+   */
+  patrolMask?: { encoding?: string, data: number[] }
 }
 
 /** nav_bridge 포맷. ranges[i] === 0 은 무효 측정이다. */
@@ -476,6 +503,8 @@ export interface DecodedMap {
   seq: number
   /** '#' 벽 · ' ' 자유 · '.' 미탐색 (row-major, 아래→위) */
   data: string
+  /** patrolMask 디코드 결과(S15P11E101-869). 셀당 1=찍어도 됨·0=안 됨. 안 왔으면 null. */
+  mask?: Uint8Array | null
 }
 
 /** 활성 도면(floorplan.loadActivePlan). 배치 기하는 DecodedMap 과 같은 규칙이다. */
@@ -522,6 +551,8 @@ export interface NavState {
   /** [x, y] 미터 */
   trail: Array<[number, number]>
   plan?: PlanLayer | null
+  /** patrolMask 를 구운 오버레이(S15P11E101-869). map 과 같은 그리드 — 없으면 안 왔다는 뜻. */
+  maskCanvas?: HTMLCanvasElement | null
 }
 
 /** 지도 팬·줌 상태(navMap.makeView). */
