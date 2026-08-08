@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext.tsx'
 import NotifyPanel from './NotifyPanel.tsx'
 import UsersPanel from './UsersPanel.tsx'
 import EquipmentPanel from './EquipmentPanel.tsx'
+import OrinPowerPanel from './OrinPowerPanel.tsx'
 import InspectionPanel from '../ops/InspectionPanel.tsx'
 import KpiRow from '../robot/KpiRow.tsx'
 import { useInspection } from '../../live/inspection.ts'
@@ -57,6 +58,9 @@ export default function ConfigPage() {
             onSelect={setInspSel}
           />
           <UsersPanel />
+
+          {/* Orin 전력 모드 — 저성능/고성능 토글 + 부하 그래프(S15P11E101-814) */}
+          <OrinPowerPanel />
 
           <div className="card-v3">
             <h3 style={{ margin: 0, marginBottom: '12px' }}>초기화 <span className="k">RESET</span></h3>
