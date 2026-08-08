@@ -2510,11 +2510,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-page .maplegend{color:var(--nx-muted); margin-top:12px;}
 .nav-page .maplegend span{background:transparent; border:0; padding:0;}
 /* 지도 범례는 도면과 떨어진 설명 행이 아니라, 첨부 레퍼런스처럼 지도 위에 뜬다.
-   🔴 [S15P11E101-814 후속] 이전에는 `.vwrap`(=씬)이 `inset:0` 으로 화면 전체를 덮어
-   패널과 같은 좌표계를 썼으므로, 범례도 패널 폭만큼 비키는 계산식을 그대로 썼다.
-   이제 `.nav-canvas` 자체가 `left:calc(34px + 패널폭 + 18px)` 로 패널을 피해서 시작하므로
-   `.vwrap`(그 안쪽) 기준 left 에 같은 계산식을 또 더하면 **이중 오프셋**이 되어 범례가
-   씬 밖으로 밀려난다(실측으로 확인). 씬 안쪽 여백만 남기면 된다. */
+   [S15P11E101-814 재작업] `.vwrap` 은 이제 좌우 그리드의 우측 칸(`.nav-canvas > .panel`)
+   안에 있고 그 칸은 이미 좌측 패널과 grid gap(24px)만큼 떨어져 있다 — 패널 폭을 피하는
+   계산식을 범례에 또 줄 이유가 없다. `.vwrap` 기준으로 씬 안쪽 여백(16px)만 준다. */
 #pgMap .vwrap > .maplegend{
   position:absolute; top:16px;
   left:16px;
@@ -2627,11 +2625,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root.view-fullscreen:fullscreen #pgMap .nav-hero,
 :root.view-fullscreen:fullscreen #pgMap .nav-side{display:none;}
 :root.view-fullscreen:fullscreen #pgMap .nav-stage{display:block; flex:1 1 0; min-height:0;}
-/* 🔴 [S15P11E101-814 후속] 전체화면에서는 좌측 패널이 `display:none` 이므로 씬이
-   패널을 피할 이유가 없다 — `.nav-canvas` 의 평상시 인셋(left:calc(...), right:28px,
-   bottom:26px)을 되돌려 화면 전체를 다시 채운다. 그대로 두면 width:100% 와 left 오프셋이
-   같이 걸려 우측으로 넘친다. */
-:root.view-fullscreen:fullscreen #pgMap .nav-canvas{inset:0; border-radius:0; box-shadow:none;}
 :root.view-fullscreen:fullscreen #pgMap .nav-canvas,
 :root.view-fullscreen:fullscreen #pgMap .nav-canvas > #pMap,
 :root.view-fullscreen:fullscreen #pgMap .nav-canvas .vwrap{width:100%; height:100%; min-height:0;}
@@ -2728,6 +2721,33 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 /* 지도는 배경과 같은 톤이라 살짝 밝혀 바닥과 구분한다 */
 #pgMap .nav-canvas .vwrap{background:var(--nx-elev);}
+
+/* 🔴 [S15P11E101-814 재작업, 2026-08-08] 위 "틀을 없앤다" 결정은 실시간 지도·카메라
+   두 화면에서는 되돌린다. 사용자 확인: "매핑은 이렇게 잘 해놓고 왜 나머지 두 페이지는
+   안 그랬던거야" — 기준은 매핑 탭(MappingTab.tsx)이다. 그 화면은 좌측 패널이 그리드의
+   제 칸을 차지하고, 우측 콘텐츠(`RoutePanel`, `.card-v3`)가 둥근 모서리·그림자를 가진
+   독립된 카드로 뜬다 — 서로 겹치지 않는다. `.nav-stage`/`.cam-stage` 그리드 정의(2178·
+   2197행, gap:24px)는 이미 세 화면이 공유하므로 손대지 않고, 여기서는 실시간 지도·영상의
+   카드 껍질만 매핑 탭과 같은 값(`.card-v3`: background:#fff · radius:16px ·
+   box-shadow:3px 5px 16px rgba(35,39,51,.08), 2979행)으로 되살린다.
+   다만 `.card-v3`(RoutePanel)와 달리 안쪽 여백은 0 으로 둔다 — 지도·영상은 콘텐츠
+   전체가 씬 자체라, 20px 여백을 주면 그만큼 보는 면적이 줄고 범례·조작 버튼 같은 씬 위
+   오버레이(모두 `.vwrap` 기준 좌표)가 카드 안에서 다시 밀려야 한다. 카드의 테두리·
+   그림자·모서리만 주고 씬이 카드 안을 꽉 채우는 형태 — "액자 여백 없는 카드". */
+#pgMap .map-view .nav-canvas > .panel,
+#pgCam .cam-main > .panel:not(.pip){
+  background:#fff; border:0; border-radius:16px;
+  box-shadow:3px 5px 16px rgba(35,39,51,.08);
+  padding:0; overflow:hidden;
+}
+/* 씬(.vwrap)이 카드 테두리까지 꽉 채우도록 — 카드가 이미 반경·그림자를 주므로
+   `.vwrap` 자체의 반경(9px, 209행)·그림자(2725행)는 이 두 화면에서만 지우고 카드 반경에
+   맞춘다. 카메라 제목 칩(2342행, `.panel` 기준 top:0;left:0)은 패딩이 0 이라 그대로
+   씬 모서리에 붙는다 — 어긋나지 않는다. */
+#pgMap .map-view .nav-canvas .vwrap,
+#pgCam .cam-main .vwrap{
+  border:0; border-radius:16px; box-shadow:none;
+}
 
 #pgCam #pControl .ctl{padding-top:0;}
 
@@ -3340,8 +3360,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6E7385;
   background:transparent; padding:0; font-weight:500;
 }
-/* 영상·지도 판은 카드가 아니다 — 그대로 배경 위에 놓인다(688 규칙 유지) */
-#pgCam.v3-theme .cam-main > .panel{background:transparent; box-shadow:none;}
+/* 🔴 [S15P11E101-814 재작업] "영상·지도 판은 카드가 아니다" 규칙은 지웠다 — 이제 카드다
+   (2731행 근처 설명 참고). `.panel.pip`(열화상 PiP)는 이 선택자에 걸리지 않도록 처음부터
+   `:not(.pip)` 였던 적이 없어 함께 지워도 pip 자신의 배경·그림자(2362행)는 그대로다. */
 
 /* 화면 조절 아이콘 — v3 는 흰 원형에 그림자만. 사각 버튼은 v2 잔재다. */
 #pgMap.v3-theme .map-control,#pgCam.v3-theme .map-control{
@@ -3351,10 +3372,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 #pgMap.v3-theme .map-control:hover:not(:disabled),
 #pgCam.v3-theme .map-control:hover:not(:disabled){background:#F4F5F8; color:#232733;}
-/* 🔴 [S15P11E101-814 후속] 입체/평면 토글도 범례와 같은 이유로 되돌린다 — 이제
-   `.nav-canvas` 자체가 패널을 피해서 시작하므로, `.vwrap` 기준 left 에 패널 폭
-   계산식을 또 더하면 이중 오프셋이 된다. 범례와 같은 좌측 여백(16px)만 준다.
-   카메라 화면에는 좌측 유리 패널이 없으므로 지도에만 적용한다. */
+/* [S15P11E101-814 재작업] 입체/평면 토글도 범례와 같은 이유로 좌측 여백만 준다(16px) —
+   `.vwrap` 이 이미 좌우 그리드의 우측 칸 안에 있어 패널 폭을 피하는 계산식이 필요 없다.
+   카메라 화면에는 좌측 패널과 겹치는 씬이 없으므로 지도에만 적용한다. */
 #pgMap.v3-theme .mapview{left:16px;}
 #pgMap.v3-theme .mapview,#pgCam.v3-theme .mapview{
   background:rgba(255,255,255,.9); color:#3F4880; border:0; border-radius:999px;
@@ -3930,107 +3950,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 
 /* ============================================================
-   플로팅 씬 레이아웃 — 지도 · 카메라 (S15P11E101-814)
-   ------------------------------------------------------------
-   디자인 시스템 v3 정본(docs/design/refs/console-v3-standalone-src.html
-   의 지도·카메라 프레임, 2026-08-08 확정): "씬은 화면 끝까지 깔고, 정보는
-   그 위에 뜬다. 좌/우로 칸을 나누지 않는다."
-
-   `.nav-stage`/`.nav-side`/`.cam-stage`(좌우 그리드)는 이벤트·설정 화면이
-   그대로 쓰는 공용 클래스라 그 정의 자체는 건드리지 않는다 — 여기 규칙은
-   전부 `#pgMap`/`#pgCam` 로 ID 스코프해 두 화면에만 닿는다.
-   지도 화면은 매핑 탭도 같은 `#pgMap` 아래에서 `.nav-stage/.nav-side/.nav-canvas`
-   를 재사용하므로(MappingTab.tsx), 실시간 지도 쪽만 골라 닿도록
-   `.map-view .nav-stage` 처럼 한 단 더 좁혀 스코프한다 — 안 그러면 매핑 탭의
-   좌우 그리드까지 절대배치로 깨진다.
-
-   되돌리려면: 이 블록 전체(파일 끝)를 지우면 원래의 좌우 그리드로 복귀한다.
+   [폐기됨, 2026-08-08] 여기 있던 "플로팅 씬 레이아웃"(S15P11E101-814) 블록을 지웠다.
+   씬을 화면 끝까지 깔고 패널을 그 위에 절대배치로 띄우는 방식이었는데, 사용자 확인:
+   "매핑은 이렇게 잘 해놓고 왜 나머지 두 페이지는 안 그랬던거야." 기준은 매핑 탭이다 —
+   `.nav-stage`/`.cam-stage` 좌우 그리드(2178·2197행, `--nx-side-w` + gap:24px, 세 화면
+   공유)에 좌측 패널·우측 콘텐츠가 각자 카드로 뜨고 겹치지 않는다. 지도·카메라도 이제
+   같은 그리드를 그대로 쓴다 — 여기서 더 이상 `#pgMap`/`#pgCam` 페이지 패딩이나
+   `.nav-stage`/`.nav-canvas`/`.nav-side`/`.cam-stage`/`.cam-main`/`.cam-side-panel` 을
+   덮어쓰지 않는다. 실시간 지도·영상에 카드 껍질(반경·그림자)을 주는 규칙은 2731행 근처
+   ("틀을 없앤다" 바로 다음)로 옮겼다 — 그 자리에 있던 기존 "카드 아니다" 결정과 나란히
+   둬야 왜 뒤집었는지 한눈에 보인다.
    ============================================================ */
-
-/* 페이지 좌우·아래 여백을 걷어 씬이 화면 끝까지 닿게 한다. 위쪽 여백만 남긴다
-   (탭바와의 리듬). 히어로(타이틀+KPI)·매핑 탭은 걷어낸 여백을 스스로 되찾는다 —
-   안 그러면 그 둘의 내용이 화면 끝에 바로 붙어 버린다. */
-#pgMap.page.nav-page,#pgCam.page.nav-page{padding:16px 0 0; position:relative;}
-#pgMap .nav-hero,#pgCam .nav-hero{padding:0 32px;}
-#pgMap .map-tabs{margin-left:32px; margin-right:32px;}
-/* 매핑 탭(MappingTab)은 `#pgMap` 의 직계 자식 `<fieldset class="lockfs">` 다.
-   지도 씬과 달리 여전히 좌우 패널 그리드이므로 여백을 그대로 되돌려 준다. */
-#pgMap > fieldset.lockfs{padding:0 32px 32px;}
-
-/* ── 지도 : 씬은 좌측 패널을 피해서 뜨고, 좌우·아래에 여백을 둬 "네모" 판으로 보이게 한다
-   (S15P11E101-814 후속, 배포본 스크린샷 확인: 패널 뒤로 씬이 비쳐 침범한 것처럼 보였고
-   화면 끝까지 붙어 경계 없는 판처럼 보였다).
-   `.map-view` 안쪽(실시간 지도)만 고른다 — 매핑 탭은 그대로 좌우 그리드로 둔다. */
-#pgMap .map-view .nav-stage{
-  display:block; position:relative;
-  flex:1 1 auto; min-height:0;
-}
-/* 🔴 좌측은 더 이상 inset:0 이 아니다 — 패널(left:34px, width:clamp(240px,24vw,302px))과
-   같은 계산식으로 시작점을 잡아 패널 뒤로 깔리지 않게 한다. 우측·아래는 카메라 화면
-   (`#pgCam .cam-main`)과 같은 28px/26px 계열로 맞춰 이 디자인 시스템의 인셋 문법을 따른다.
-   모서리·그림자도 카메라 씬과 같은 톤(radius --bb-r-scene, box-shadow)을 준다 — 지도는
-   밝게 유지해야 하므로 --bb-scene-dark 는 쓰지 않는다(배경은 `.vwrap` 이 이미 담당). */
-#pgMap .map-view .nav-canvas{
-  position:absolute;
-  left:calc(34px + clamp(240px, 24vw, 302px) + 18px);
-  right:28px; top:0; bottom:26px;
-  border-radius:var(--bb-r-scene);
-  overflow:hidden;
-  box-shadow:0 18px 46px rgba(35,39,51,.10);
-}
-/* 🔴 패널은 **내용 높이만큼**만 차지한다(S15P11E101-814).
-   원본 디자인은 `top:0; bottom:0` 로 화면 끝까지 세운 전면 유리 기둥이었지만,
-   그건 그 안에 제목 + 필터 칩 + 로봇 카드 2장이 차 있을 때의 배치다.
-   우리 화면에는 상태 카드 하나뿐이라, 같은 값을 쓰면 카드 아래로 **비어 있는 반투명 기둥**이
-   화면 끝까지 남는다. 그 너머로 3D 씬이 비쳐 "지도가 상태 패널을 침범한" 것처럼 보였다
-   (배포본에서 확인).
-   내용에 맞춰 줄이고, 넘치면 그때만 스크롤한다. 바닥에 닿지 않으므로 radius 도 네 귀 모두 준다. */
-#pgMap .map-view .nav-side{
-  position:absolute; left:34px; top:0; bottom:auto;
-  width:clamp(240px, 24vw, 302px);
-  max-height:calc(100% - 24px);
-  z-index:6; overflow:auto;
-  border-radius:22px;
-  padding:22px;
-  background:rgba(255,255,255,.6);
-  backdrop-filter:blur(18px) saturate(1.5);
-  -webkit-backdrop-filter:blur(18px) saturate(1.5);
-  box-shadow:0 18px 46px rgba(35,39,51,.10);
-}
-/* 🔴 패널이 콘텐츠 높이가 되면 상태 카드를 늘려 채우면 안 된다.
-   `#pgMap .nav-side > #pStatus` 는 2192행에서 `flex:1 1 0; min-height:0` 이다 —
-   패널이 화면 끝까지 뻗던 시절에는 "남는 높이를 카드가 먹는다" 가 맞았지만,
-   이제 패널 높이가 콘텐츠로 정해지므로 basis 0 + min-height 0 이면 **카드가 0 으로
-   찌그러질 수 있다.** 자기 높이를 쓰도록 되돌린다. */
-#pgMap .map-view .nav-side > #pStatus{flex:0 0 auto;}
-
-/* ── 카메라 : 씬 = 영상(둥근 모서리로 화면 안쪽에 살짝 띄워), 조작·로그 카드는
-   불투명 흰색 — 어두운 영상 위에서는 블러보다 가독성이 우선이라
-   backdrop-filter 를 쓰지 않는다. `.cam-side-panel` 내부의 두 카드(#pControl·
-   #pEvents)는 이미 불투명 흰 카드다(3697행) — 바깥 껍데기만 뜬 위치로 옮긴다. */
-#pgCam .cam-stage{
-  display:block; position:relative;
-  flex:1 1 auto; min-height:0;
-}
-#pgCam .cam-main{
-  position:absolute; left:28px; right:28px; top:0; bottom:26px;
-  border-radius:18px; overflow:hidden; background:#0D1017;
-}
-#pgCam .cam-side-panel{
-  position:absolute; left:28px; top:0; bottom:26px;
-  width:clamp(240px, 24vw, 302px);
-  z-index:6; overflow:auto;
-}
-
-/* 1180 이하: 유리·카드 패널이 씬을 다 덮지 않도록 폭을 더 줄인다.
-   🔴 [S15P11E101-814 후속] `.nav-canvas` 의 left 도 패널과 같은 폭 계산식을 쓰므로,
-   여기서 패널 폭만 줄이고 캔버스 left 를 같이 좁히지 않으면 둘의 계산식이 서로 어긋나
-   여백만 불필요하게 커진다(패널은 좁아지는데 씬은 넓은 화면 기준 폭만큼 계속 비켜 있음).
-   같은 clamp 값으로 맞춘다. */
-@media (max-width:1180px){
-  #pgMap .map-view .nav-side,#pgCam .cam-side-panel{width:clamp(200px, 34vw, 260px);}
-  #pgMap .map-view .nav-canvas{left:calc(34px + clamp(200px, 34vw, 260px) + 18px);}
-}
 
 /* 🔴 [2026-08-08 병합 메모] 이 아래 두 블록은 서로 다른 화면의 규칙이고 겹치는
    선택자가 없다. 각각 다른 브랜치가 **파일 끝에** 추가하는 바람에 같은 위치에
