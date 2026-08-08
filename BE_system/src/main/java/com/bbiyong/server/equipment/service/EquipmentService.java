@@ -49,6 +49,39 @@ public class EquipmentService {
     }
 
     /**
+     * AprilTag 점검 지점 승인(CONFIRM) 시 감시 대상 설비로 등록/갱신한다 (S15P11E101).
+     *
+     * <p>승인한 점검 지점이 그대로 '분전반 임계온도' 목록에 나타나 임계온도를 설정할 수 있게 한다.
+     * upsert: 이미 있으면 이름/좌표만 갱신하고 임계온도·상태는 보존한다(관리자가 정한 값을 지우지 않는다).
+     * 좌표(x,y)는 confirm 명령에 없을 수 있어 null 이면 건드리지 않는다(있으면 지도 표시에 쓴다).
+     */
+    @Transactional
+    public void registerInspectionEquipment(String equipmentId, String name, Double x, Double y) {
+        if (equipmentId == null || equipmentId.isBlank()) {
+            return;
+        }
+        Equipment e = equipmentRepository.findById(equipmentId).orElseGet(() -> {
+            Equipment created = new Equipment();
+            created.setEquipmentId(equipmentId);
+            created.setStatus("UNKNOWN");
+            return created;
+        });
+        if (name != null && !name.isBlank()) {
+            e.setName(name.trim());
+        } else if (e.getName() == null) {
+            e.setName(equipmentId);
+        }
+        if (x != null) {
+            e.setX(x);
+        }
+        if (y != null) {
+            e.setY(y);
+        }
+        equipmentRepository.save(e);
+        log.info("Equipment [{}] registered from inspection point (name={})", equipmentId, e.getName());
+    }
+
+    /**
      * 서버 과열 판정 (S15P11E101-836). 최근온도와 임계온도가 모두 있으면 초과 여부로 OVER/NORMAL 을
      * 매기고, 둘 중 하나라도 없으면 판정할 수 없어 fallback(기존 상태 또는 로봇 판정)을 그대로 둔다.
      */

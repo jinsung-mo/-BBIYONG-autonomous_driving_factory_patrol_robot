@@ -32,4 +32,18 @@ public class InspectionCommand {
 
     /** UPDATE 시 순찰 순서(선택). */
     private Integer sequence;
+
+    /**
+     * CONFIRM 시 점검 지점(AprilTag)의 태그 위치(map 프레임, 미터, 선택).
+     * 승인된 점검 지점을 설비로 등록할 때 지도 좌표로 쓴다 — FE 후보의 target 을 그대로 실어 보내면 된다.
+     * 없으면 설비는 좌표 없이 등록되고 임계온도 설정에는 영향이 없다.
+     */
+    private Target target;
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Target {
+        private Double x;
+        private Double y;
+    }
 }

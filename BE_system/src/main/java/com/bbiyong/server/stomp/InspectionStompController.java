@@ -1,5 +1,6 @@
 package com.bbiyong.server.stomp;
 
+import com.bbiyong.server.equipment.service.EquipmentService;
 import com.bbiyong.server.stomp.dto.InspectionCommand;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import lombok.extern.slf4j.Slf4j;
@@ -47,13 +48,16 @@ public class InspectionStompController {
     private final RobotWebSocketSessionManager sessionManager;
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
+    private final EquipmentService equipmentService;
 
     public InspectionStompController(RobotWebSocketSessionManager sessionManager,
                                      SimpMessagingTemplate messagingTemplate,
-                                     ObjectMapper objectMapper) {
+                                     ObjectMapper objectMapper,
+                                     EquipmentService equipmentService) {
         this.sessionManager = sessionManager;
         this.messagingTemplate = messagingTemplate;
         this.objectMapper = objectMapper;
+        this.equipmentService = equipmentService;
     }
 
     @MessageMapping("/control/inspection")
@@ -83,6 +87,13 @@ public class InspectionStompController {
                 payload.put("candidateId", cmd.getCandidateId());
                 if (command.equals("CONFIRM")) {
                     putNameIfPresent(payload, cmd.getName());
+                    // 승인한 점검 지점을 감시 설비로 등록한다(S15P11E101) — 곧바로 '분전반 임계온도'
+                    // 목록에 나타나 임계온도를 설정할 수 있다. 좌표(target)는 실려 오면 함께 저장한다.
+                    InspectionCommand.Target t = cmd.getTarget();
+                    equipmentService.registerInspectionEquipment(
+                            cmd.getCandidateId(), cmd.getName(),
+                            t != null ? t.getX() : null,
+                            t != null ? t.getY() : null);
                 }
             }
             case "UPDATE", "DELETE" -> {
