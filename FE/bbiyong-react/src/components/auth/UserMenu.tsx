@@ -23,7 +23,9 @@ function MyPageModal({ onClose }: any) {
   return (
     <Modal title="마이페이지" onClose={onClose}>
       <form onSubmit={save}>
-        <div className="form-row"><label>이메일</label><input value={user.email} disabled /></div>
+        {/* type="email" 은 의미상으로도 맞고, 모달 CSS 가 **식별자에만** mono 를 주는 근거가 된다
+            (사람 이름·권한 같은 한글 값은 본문 폰트여야 한다). */}
+        <div className="form-row"><label>이메일</label><input type="email" value={user.email} disabled /></div>
         <div className="form-row"><label>이름</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div className="form-row"><label>권한</label><input value={roleText(user.role)} disabled /></div>
         {msg && <div className="form-msg ok">{msg}</div>}

@@ -3971,3 +3971,81 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @media (max-width:1180px){
   #pgMap .map-view .nav-side,#pgCam .cam-side-panel{width:clamp(200px, 34vw, 260px);}
 }
+
+/* ============ 모달 v3 (S15P11E101-815) ============
+   공용 모달 셸(.modal-overlay/.modal/...)에 붙는다 — 마이페이지·비밀번호 수정 모달에서
+   시작했지만 셸을 공유하는 다른 확인창(권한 변경·이벤트 삭제·맵 모델링 시작 등)에도
+   같이 적용된다. 티켓 범위는 시각 언어 교체뿐, 문구·검증 로직은 건드리지 않는다.
+   919행의 구형 .modal-overlay/.modal 규칙은 그대로 둔다 — 여기서 같은 선택자를
+   다시 선언해 파일 순서로 덮어쓴다(캐스케이드), 원본은 지우지 않는다.
+   모달은 조밀한 화면이라 씬 언어(유리)가 아니라 패널 그리드 문법을 쓴다 —
+   카드 자체엔 backdrop-filter 를 걸지 않는다. 딤에만 옅은 블러를 허용한다. */
+.modal-overlay{
+  background:rgba(35,39,51,.4);
+  backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+}
+.modal{
+  background:var(--bb-grad-panel);
+  border:1px solid rgba(255,255,255,.8);
+  border-radius:var(--bb-r-card);
+  box-shadow:2px 6px 22px rgba(35,39,51,.07);
+  color:var(--bb-ink);
+}
+.modal-head{
+  padding:var(--bb-sp-5) var(--bb-sp-6);
+  border-bottom:1px solid var(--bb-line);
+}
+.modal-head h3{
+  font-size:var(--bb-fs-title); font-weight:700; color:var(--bb-ink); letter-spacing:-.2px;
+}
+.modal-x{
+  color:var(--bb-muted); border-radius:var(--bb-r-input); font-size:13px;
+}
+.modal-x:hover{background:var(--bb-line); color:var(--bb-ink);}
+.modal-body{padding:var(--bb-sp-6);}
+
+/* 카드 안 서브 표면(다시 읽기 전용 값 등)에 쓸 자리 — 지금은 .form-row input:disabled 만 해당 */
+.modal .form-row label{
+  font-size:var(--bb-fs-label); font-weight:600; color:var(--bb-body);
+}
+/* 🔴 본문 폰트가 기본이다. mono 는 아래에서 해당하는 것에만 준다.
+   "인풋 값은 mono 13.5/600" 은 **설정 화면 스펙**에서 온 문구이고, 그 화면의 인풋은
+   임계온도 같은 **수치**다. 전역 규칙은 "본문/UI 는 Gothic A1, 수치·시각·좌표는 mono" 다.
+   이 모달에는 **이름(한글)** 이 들어간다 — 한글을 mono 로 쓰면 자간이 어그러지고,
+   무엇보다 mono 는 "이건 기계가 잰 값" 이라는 신호라 사람 이름에 붙으면 뜻이 틀린다. */
+.modal .form-row input{
+  padding:9px 11px;
+  border:1px solid var(--bb-line-strong); border-radius:var(--bb-r-input);
+  background:#fff; color:var(--bb-ink);
+  font-family:var(--bb-font); font-size:13.5px; font-weight:600;
+}
+/* 식별자(이메일)와 비밀번호만 mono.
+   - 이메일: 계정을 가리키는 **식별자**다. 대소문자·점·하이픈을 또렷이 구분해야 한다.
+   - 비밀번호: 0/O, 1/l/I 를 구분해야 오타를 스스로 잡는다. 관제 계정이라 더 그렇다. */
+.modal .form-row input[type="email"],
+.modal .form-row input[type="password"]{
+  font-family:var(--bb-font-mono);
+}
+.modal .form-row input:focus{border-color:#6E79B4; outline:none;}
+.modal .form-row input:disabled{
+  background:var(--bb-grad-subsurface); color:var(--bb-muted); opacity:1;
+}
+
+.modal .form-msg{font-size:var(--bb-fs-body); border-radius:var(--bb-r-input);}
+.modal .form-msg.ok{background:var(--bb-ok-tint); color:var(--bb-ok-text); border:1px solid rgba(111,164,135,.4);}
+.modal .form-msg.err{background:var(--bb-danger-tint); color:var(--bb-danger-text); border:1px solid rgba(192,122,114,.4);}
+.modal .form-msg.warn{background:var(--bb-warn-tint); color:var(--bb-warn-text); border:1px solid rgba(201,162,106,.4);}
+
+.modal .form-actions{gap:var(--bb-sp-2);}
+/* 버튼 위계 — filled 는 모달당 주 행동 1개, 취소는 text */
+.modal .btn-primary{
+  border-radius:var(--bb-r-input);
+  background:var(--bb-primary); border-color:var(--bb-primary);
+  font-family:var(--bb-font); font-weight:700; font-size:var(--bb-fs-body); color:#fff;
+}
+.modal .btn-primary:hover{background:var(--bb-primary-hover); border-color:var(--bb-primary-hover);}
+.modal .btn-ghost{
+  border:0; background:transparent; padding:9px 12px;
+  font-family:var(--bb-font); font-weight:600; font-size:var(--bb-fs-body); color:var(--bb-muted);
+}
+.modal .btn-ghost:hover{color:var(--bb-ink); background:var(--bb-line);}
