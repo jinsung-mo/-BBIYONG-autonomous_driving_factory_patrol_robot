@@ -180,6 +180,29 @@ export function resetPasswordRequest(email: string, code: string, newPassword: s
   return post('/api/auth/password/reset', { email, code, newPassword })
 }
 
+// ---- 휴대전화 경로 비밀번호 찾기 (S15P11E101-846) ----
+//
+// 이메일이 기억나지 않는 사용자를 위한 경로다. 🔴 SMS 는 오지 않는다 — 우리에게 SMS 발송
+// 수단이 없다. 서버가 이름·휴대전화·생년월일로 계정을 찾아 **그 계정의 이메일로** 같은
+// 6자리 코드를 보내고, 어느 메일함을 열어야 하는지 알 수 있게 마스킹 이메일을 돌려준다.
+//
+// 재설정 단계에서 이메일을 다시 실어 보내지 못하는 이유: 화면이 아는 값은 마스킹된 것뿐이다.
+// 그래서 본인 확인 3종을 다시 보내 서버가 계정을 재확인하게 한다(그래서 전용 엔드포인트다).
+
+/** 휴대전화 경로 재설정 코드 발송. 일치 계정이 없으면 404. 응답은 { maskedEmail }. */
+export function sendResetCodeByPhone(name: string, phoneNumber: string, birthDate: string) {
+  return post('/api/auth/password/send-reset-code-by-phone', { name, phoneNumber, birthDate })
+}
+
+/** 휴대전화 경로 비밀번호 재설정 — 본인 확인 3종 + 인증코드 + 새 비밀번호. */
+export function resetPasswordByPhoneRequest(
+  name: string, phoneNumber: string, birthDate: string, code: string, newPassword: string,
+) {
+  return post('/api/auth/password/reset-by-phone', {
+    name, phoneNumber, birthDate, code, newPassword,
+  })
+}
+
 /**
  * 인가가 필요한 조회 API 공통 호출부.
  * 반환 타입은 호출부가 제네릭 대신 JSDoc 캐스트로 좁힌다(JS 라 제네릭 호출을 못 쓴다).
