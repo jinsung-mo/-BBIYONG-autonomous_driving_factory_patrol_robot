@@ -69,13 +69,15 @@ class EquipmentTests {
         // 데모 시드/흔적(panel_A/B/C, '데모')은 정리 대상, 실제 로봇 점검 설비는 유지.
         Equipment demoA = new Equipment(); demoA.setEquipmentId("panel_A"); demoA.setName("A구역 분전반"); demoA.setStatus("UNKNOWN");
         Equipment demoNamed = new Equipment(); demoNamed.setEquipmentId("eq_x"); demoNamed.setName("데모"); demoNamed.setStatus("UNKNOWN");
+        Equipment demoPanel = new Equipment(); demoPanel.setEquipmentId("demo_panel"); demoPanel.setName("demo_panel"); demoPanel.setStatus("OVER");
         Equipment real = new Equipment(); real.setEquipmentId("switchboard_101"); real.setName("101호 분전반"); real.setStatus("UNKNOWN");
-        equipmentRepository.saveAll(java.util.List.of(demoA, demoNamed, real));
+        equipmentRepository.saveAll(java.util.List.of(demoA, demoNamed, demoPanel, real));
 
         equipmentService.purgeDemoEquipments();
 
         assertThat(equipmentRepository.findById("panel_A")).isEmpty();
         assertThat(equipmentRepository.findById("eq_x")).isEmpty();
+        assertThat(equipmentRepository.findById("demo_panel")).isEmpty();
         assertThat(equipmentRepository.findById("switchboard_101")).isPresent();
     }
 

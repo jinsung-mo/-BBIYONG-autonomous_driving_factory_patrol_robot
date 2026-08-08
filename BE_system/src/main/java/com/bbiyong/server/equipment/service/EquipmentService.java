@@ -83,10 +83,17 @@ public class EquipmentService {
 
     private static final Set<String> DEMO_IDS = Set.of("panel_A", "panel_B", "panel_C");
 
+    /**
+     * 데모/더미 설비 판정. 자동 시드(panel_A/B/C)와 옛 이벤트 시뮬레이션이 남긴
+     * 잔재('데모' 한글 · 'demo_panel' 등 영문 demo)를 모두 잡는다.
+     * 실 로봇 설비 id/name 에는 'demo'·'데모'가 들어가지 않으므로 오삭제 위험은 없다.
+     */
     private static boolean isDemo(Equipment e) {
-        String id = e.getEquipmentId() == null ? "" : e.getEquipmentId();
-        String name = e.getName() == null ? "" : e.getName();
-        return DEMO_IDS.contains(id) || id.contains("데모") || name.contains("데모");
+        String id = (e.getEquipmentId() == null ? "" : e.getEquipmentId()).toLowerCase();
+        String name = (e.getName() == null ? "" : e.getName()).toLowerCase();
+        return DEMO_IDS.contains(e.getEquipmentId())
+                || id.contains("demo") || name.contains("demo")
+                || id.contains("데모") || name.contains("데모");
     }
 
     @EventListener
