@@ -3999,11 +3999,23 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .modal .form-row label{
   font-size:var(--bb-fs-label); font-weight:600; color:var(--bb-body);
 }
+/* 🔴 본문 폰트가 기본이다. mono 는 아래에서 해당하는 것에만 준다.
+   "인풋 값은 mono 13.5/600" 은 **설정 화면 스펙**에서 온 문구이고, 그 화면의 인풋은
+   임계온도 같은 **수치**다. 전역 규칙은 "본문/UI 는 Gothic A1, 수치·시각·좌표는 mono" 다.
+   이 모달에는 **이름(한글)** 이 들어간다 — 한글을 mono 로 쓰면 자간이 어그러지고,
+   무엇보다 mono 는 "이건 기계가 잰 값" 이라는 신호라 사람 이름에 붙으면 뜻이 틀린다. */
 .modal .form-row input{
   padding:9px 11px;
   border:1px solid var(--bb-line-strong); border-radius:var(--bb-r-input);
   background:#fff; color:var(--bb-ink);
-  font-family:var(--bb-font-mono); font-size:13.5px; font-weight:600;
+  font-family:var(--bb-font); font-size:13.5px; font-weight:600;
+}
+/* 식별자(이메일)와 비밀번호만 mono.
+   - 이메일: 계정을 가리키는 **식별자**다. 대소문자·점·하이픈을 또렷이 구분해야 한다.
+   - 비밀번호: 0/O, 1/l/I 를 구분해야 오타를 스스로 잡는다. 관제 계정이라 더 그렇다. */
+.modal .form-row input[type="email"],
+.modal .form-row input[type="password"]{
+  font-family:var(--bb-font-mono);
 }
 .modal .form-row input:focus{border-color:#6E79B4; outline:none;}
 .modal .form-row input:disabled{
