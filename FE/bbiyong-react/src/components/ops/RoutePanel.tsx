@@ -135,10 +135,18 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
   // FE 는 조건을 조합하지 않는다. 아직 안 보내는 로봇(구버전)에서는 기존 조합 로직 그대로 —
   // 없는데 잠그면 로봇 쪽이 안 올라간 시연 중에 화면이 죽는다.
   const readiness = telemetry?.readiness
-  const startDisabled = readiness ? (!readiness.canStartPatrol || busy) : (editLocked || busy || !route.length)
-  const startHint = readiness && !readiness.canStartPatrol
-    ? (readiness.hint || BLOCKED_HINT[readiness.blockedBy ?? ''] || '지금은 순찰을 시작할 수 없습니다.')
-    : null
+  // 🔴 `offline` 만은 readiness 가 있어도 FE 가 판단한다. 나머지 상태 조합은 로봇에 맡긴다.
+  //
+  // readiness 는 **로봇이 보낸 마지막 값**이다. 연결이 끊기면 그 값이 그대로 남는다 —
+  // `canStartPatrol:true` 인 채로 로봇이 사라지면 버튼이 계속 눌리는 상태가 된다.
+  // 로봇은 자기가 끊긴 것을 알릴 수 없으므로(끊겼으니까) 이 한 가지는 FE 만 알 수 있다.
+  const startDisabled = offline || busy
+    || (readiness ? !readiness.canStartPatrol : (mapping || !route.length))
+  const startHint = offline
+    ? '로봇과 연결이 끊겼습니다.'
+    : (readiness && !readiness.canStartPatrol
+      ? (readiness.hint || BLOCKED_HINT[readiness.blockedBy ?? ''] || '지금은 순찰을 시작할 수 없습니다.')
+      : null)
 
   return (
     <div className="card-v3" id="pgRoute">
