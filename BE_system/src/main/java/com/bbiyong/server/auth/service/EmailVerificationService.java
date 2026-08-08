@@ -5,10 +5,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 
 import java.security.SecureRandom;
 import java.util.concurrent.ConcurrentHashMap;
@@ -141,13 +144,14 @@ public class EmailVerificationService {
             return;
         }
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(from);
-            message.setTo(email);
-            message.setSubject(subject);
-            message.setText(body);
-            mailSender.send(message);
-        } catch (MailException ex) {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "utf-8");
+            helper.setFrom(from);
+            helper.setTo(email);
+            helper.setSubject(subject);
+            helper.setText(body, false);
+            mailSender.send(mimeMessage);
+        } catch (MessagingException | MailException ex) {
             log.error("[EmailVerification] 메일 발송 실패 to={} purpose={}", email, purpose, ex);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "인증 메일 발송에 실패했습니다. 잠시 후 다시 시도하세요.");
