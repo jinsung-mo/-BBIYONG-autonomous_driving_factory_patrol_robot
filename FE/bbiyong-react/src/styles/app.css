@@ -412,36 +412,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   font-size:var(--bb-fs-caption); color:var(--bb-body); }
 .welcome-robotcard__st i{ width:5px; height:5px; border-radius:50%; background:var(--bb-ok); flex:none; }
 
-/* ── 하단 통계 2연 카드 ──────────────────────────────────────────────────
-   🔴 가로 폭 규칙 — 왼쪽은 히어로와 부딪히면 안 되니 left 고정(608px), 오른쪽은 좁은
-   화면에서 잘리면 안 되니 right:34px, 무한정 늘어나 "띠"가 되지 않게 max-width:658px.
-   결과: 폭 = min(658, 뷰포트폭 - 642) — 어느 폭에서도 오른쪽 여백이 남아 잘리지 않는다.
-   🔴 세로 — bottom 은 양수(26px), padding 도 정상값. 카드는 화면 안에 완전히 들어간다
-   (이전 판의 "하단에서 잘리는 카드"는 이 개편으로 폐기한다). */
-.welcome-stats{
-  position:absolute; left:calc(var(--bb-sp-9) + 574px); right:var(--bb-sp-9); bottom:26px;
-  max-width:658px; display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:stretch;
-}
-.welcome-stat{
-  background:#fff; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4);
-  padding:18px 20px; display:flex; flex-direction:column;
-}
-/* 제목·수치를 둘 다 굵게. muted-2 는 흰 면에서 대비가 모자라니 ink 로 올린다. */
-.welcome-stat__t{
-  font-size:var(--bb-fs-card); font-weight:700; color:var(--bb-ink);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.welcome-stat__v{ margin-top:8px; display:flex; align-items:baseline; gap:6px; }
-.welcome-stat__v b{ font-weight:700; font-size:28px; letter-spacing:-1px; }
-.welcome-stat__v span{ font-size:14px; font-weight:500; color:var(--bb-faint); }
-/* 3단째 면 — tokens.css 의 `.bb-card > .bb-subsurface` 문법. 그림자 없음(그림자를 세 번
-   겹치면 화면이 지저분해진다) · radius 는 카드(16)보다 작은 tile(10). */
-.welcome-spark{
-  margin-top:12px; background:var(--bb-grad-subsurface); border:1px solid rgba(255,255,255,.9);
-  border-radius:var(--bb-r-tile); box-shadow:none; padding:9px 11px; height:50px;
-  display:flex; align-items:flex-end; gap:6px; overflow:hidden;
-}
-.welcome-spark i{ width:2.5px; border-radius:1.2px; background:#DEE0E7; display:block; flex:none; }
+/* 🔴 하단 통계 2연 카드(.welcome-stats / .welcome-stat / .welcome-spark)는 규칙째
+   삭제됐다 [사용자 지침 2026-08-08]. 로그인 전 랜딩이라 붙일 실데이터가 없어 더미
+   수치를 보여 주던 자리다 — 마크업이 사라졌으므로 스타일도 남기지 않는다. */
 
 /* ══════ 모션 ══════════════════════════════════════════════════════════════
    관제 제품이지 마케팅 랜딩이 아니다 — 움직이는 것은 "실제로 움직이는 것"뿐이다.
@@ -461,7 +434,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @keyframes welcomeSweep{ to{ transform:rotate(360deg); } }
 
 .welcome-hero{ animation:welcomeHeroRise .55s var(--bb-ease) both; }
-.welcome-stats{ animation:welcomeRise .5s var(--bb-ease) .58s both; }
 .welcome-eq{ animation:welcomePop .5s var(--bb-ease) both; }  /* 지연은 컴포넌트에서 인라인으로 준다 */
 .welcome-cab{ opacity:0; animation:welcomePop .5s var(--bb-ease) 1.0s forwards; }
 .welcome-alarm{ opacity:0; animation:welcomeFade .5s var(--bb-ease) 1.7s forwards; }
@@ -518,8 +490,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
     padding:var(--bb-sp-8) var(--bb-sp-9); }
   .welcome-hero{ position:static; transform:none; width:100%; max-width:620px; margin:0;
     animation-name:welcomeRise; }   /* 중앙정렬을 안 쓰므로 -50% 를 품은 키프레임도 안 쓴다 */
-  /* 2연 카드는 폭 658 이 통째로 필요해서 여기서는 접는다(잘린 카드를 보이느니 감춘다). */
-  .welcome-stats,.welcome-scene__path,
+  .welcome-scene__path,
   .welcome-robot,.welcome-robotcard,.welcome-eq,.welcome-cab,.welcome-badge,.welcome-alarm{ display:none; }
 }
 @media (max-width:620px){
@@ -531,7 +502,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 모션을 원치 않는 사용자에게는 전부 끄되 "최종 상태"로 세운다 — 꺼서 안 보이면 안 된다.
    (로봇 rAF 루프도 컴포넌트 쪽에서 같은 미디어쿼리를 보고 시작하지 않는다.) */
 @media (prefers-reduced-motion: reduce){
-  .welcome-hero,.welcome-stats,.welcome-eq,.welcome-cab,.welcome-alarm,
+  .welcome-hero,.welcome-eq,.welcome-cab,.welcome-alarm,
   .welcome-robot,.welcome-robot__sweep,.welcome-robotcard,.welcome-eyebrow i{ animation:none; }
   .welcome-robot,.welcome-robotcard,.welcome-alarm,.welcome-cab{ opacity:1; }
   .welcome-robot__sweep{ opacity:.6; }
@@ -797,15 +768,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .authflow.is-login .welcome-hero{ transform:translate(-120%,-50%); opacity:0; pointer-events:none; }
 
-/* ② 하단 2연 통계 카드 — 히어로와 함께 사라진다.
-   스크림이 화면 전체를 흐리는데 카드만 남겨 두면 숫자를 읽을 수 없는 반쯤 죽은 요소가
-   된다. 자리를 지킨 채 opacity 만 낮추지 않고 살짝 가라앉히며(translateY) 방향을 준다. */
-.authflow .welcome-stats{
-  transition:transform var(--fl-dur) var(--bb-ease), opacity var(--fl-dur) var(--bb-ease);
-}
-.authflow.is-login .welcome-stats{ opacity:0; transform:translateY(16px); pointer-events:none; }
-
-/* ③ 스크림 — 블러를 전담한다.
+/* ② 스크림 — 블러를 전담한다.
    🔴 순찰 씬에 filter 를 걸지 않는 이유 둘: (a) filter 는 조상에 containing block 을
    만들어 position:fixed 자식이 깨진다 (b) 매 프레임 transform 이 도는 씬에 blur 를 걸면
    GPU 가 매 프레임 다시 흐린다. 스크림은 자기 뒤만 흐리므로 씬은 원래 비용 그대로 돈다.
@@ -841,13 +804,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    패널 폭 전환(max-width)도 끈다: 회원가입으로 넓어질 때 폼이 움직여 보인다. */
 @media (prefers-reduced-motion: reduce){
   .authflow .welcome-hero,
-  .authflow .welcome-stats,
   .authflow .scrim,
   .authflow .auth-wrap{
     transition:opacity var(--fl-dur) var(--bb-ease) !important;
   }
   .authflow .welcome-hero,.authflow.is-login .welcome-hero{ transform:translateY(-50%) !important; }
-  .authflow .welcome-stats,.authflow.is-login .welcome-stats{ transform:none !important; }
   .authflow .auth-wrap,.authflow.login-in .auth-wrap{ transform:none !important; }
   .auth-glass{ transition:none; }
 }
