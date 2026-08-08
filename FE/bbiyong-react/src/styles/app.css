@@ -164,12 +164,11 @@ canvas{display:block; width:100%; height:100%;}
 #pgRoute .routemap{flex:0 0 auto; height:min(64vh, 640px); margin-bottom:10px; background:#ffffff;}
 #pgRoute .routemap canvas{width:100%; height:100%; display:block;}
 #pgRoute{margin-top:14px;}
-/* 이름 칸이 남는 폭을 다 먹으면 좌표가 화면 끝으로 밀려 읽기 어렵다 — 폭을 잡고 좌표를 붙인다 */
-#routeList li input{flex:0 1 240px; min-width:0; background:var(--dk-panel); color:var(--dk-ink);
-  border:1px solid var(--dk-line); border-radius:7px; padding:5px 8px; font-size:12px;}
 #routeList li .tag{color:var(--dk-ink); background:var(--dk-line); border-color:transparent; min-width:18px; text-align:center;}
-#routeList li .dbtn{padding:5px 8px; font-size:11px;}
-#routeList li .t{margin-left:0; margin-right:auto; white-space:nowrap;}
+/* 지점 행에 번호·삭제만 남으면서(S15P11E101-814) 내용이 줄어든 만큼, 카드 밀도 기준에 맞춰
+   행 자체를 더 두껍게 준다 — 빈 공간을 다른 걸로 채우는 대신 지금은 여백으로 남겨 둔다. */
+#routeList li{min-height:56px; padding:18px 20px;}
+#routeList li .tag{font-size:11px; min-width:22px; padding:3px 7px;}
 /* 맵 모델링 진행 단계 (S15P11E101-483) — 대기 · 진행 중 · 완료 */
 .mapstat{display:flex; align-items:flex-start; gap:8px; margin-top:10px; padding:9px 11px;
   border-radius:9px; font-size:11.5px; line-height:1.7; border:1px solid var(--dk-line); background:var(--dk-panel2);}
@@ -421,6 +420,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-radius:50%; background:var(--bb-ok);
 }
 .welcome-cab.is-on::after{ background:var(--bb-primary); }
+/* 이미 과열(judge:'warn')인 배전반 — dwell 여부와 무관하게 항상 warn 톤이다.
+   [사용자 지침 2026-08-08] "붉은색 객체는 온도가 이미 높은 배전반". */
+.welcome-cab--warn{ background:linear-gradient(90deg, var(--bb-warn-tint) 0 52%, #E3CBA0 52% 100%); }
+.welcome-cab--warn::after{ background:var(--bb-warn); }
+.welcome-cab--warn.is-on::after{ background:var(--bb-primary); }
 
 /* 배전반 온도 배지 — dwell(점검 중)일 때만, 그 배전반에만 뜬다.
    🔴 항상 캐비닛 **아래**다. 상태 카드가 로봇 위를 늘 덮으므로 위에 두면 정지할 때마다
@@ -434,10 +438,33 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   transition:opacity .28s var(--bb-ease), transform .28s var(--bb-ease);
 }
 .welcome-badge.is-on .welcome-badge__in{ opacity:1; transform:none; }
+.welcome-badge__id{ font-size:var(--bb-fs-caption); font-weight:500; color:var(--bb-muted-2); letter-spacing:.2px; }
 .welcome-badge__t{ font-weight:600; font-size:var(--bb-fs-label); color:var(--bb-ink); letter-spacing:-.2px; }
 .welcome-badge__j{ font-size:var(--bb-fs-caption); font-weight:600; padding:2px 6px; border-radius:999px; }
 .welcome-badge__j--ok{ background:var(--bb-ok-tint); color:var(--bb-ok-text); }
 .welcome-badge__j--warn{ background:var(--bb-warn-tint); color:var(--bb-warn-text); }
+
+/* 씬 범례 — 배전반 색이 무엇을 뜻하는지(과열/정상) 설명한다 [사용자 지침 2026-08-08].
+   히어로 문구에 섞지 않고 지도 화면 범례(#pgMap .vwrap > .maplegend)와 같은 문법을
+   그대로 재사용한다 — 씬 위에 뜨는 작은 반투명 알약, 캡션 크기, 색 마크 + 짧은 라벨.
+   지도 축척처럼 씬 우측 하단에 둔다. 씬(.welcome-scene)이 이미 aria-hidden 이라
+   장식 취급은 지도 범례와 동일하다. */
+.welcome-scene-legend{
+  position:absolute; right:18px; bottom:18px; z-index:3;
+  display:flex; flex-direction:column; gap:5px;
+  padding:8px 12px; border-radius:var(--bb-r-tile);
+  background:rgba(255,255,255,.74);
+  backdrop-filter:blur(12px) saturate(1.2); -webkit-backdrop-filter:blur(12px) saturate(1.2);
+  box-shadow:0 4px 14px rgba(35,39,51,.08);
+  pointer-events:none;
+}
+.welcome-scene-legend__row{
+  display:flex; align-items:center; gap:6px;
+  font-size:var(--bb-fs-caption); font-weight:500; color:var(--bb-muted-2); white-space:nowrap;
+}
+.welcome-scene-legend__mark{ width:8px; height:8px; border-radius:2px; flex:none; }
+.welcome-scene-legend__mark--ok{ background:var(--bb-ok); }
+.welcome-scene-legend__mark--warn{ background:var(--bb-warn); }
 
 /* ── 히어로: 밝은 씬 위 → 유리 허용 (어두운 영상 위엔 금지) ── */
 .welcome-hero{
@@ -449,20 +476,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   -webkit-backdrop-filter:blur(16px) saturate(1.4);
   box-shadow:0 18px 46px rgba(35,39,51,.07);
 }
-.welcome-eyebrow{
-  display:flex; align-items:center; gap:10px;
-  font-size:11px; font-weight:500; letter-spacing:1.6px; color:var(--bb-muted);
-}
-.welcome-eyebrow i{                     /* 실시간 상태 점만 깜빡인다 */
-  width:7px; height:7px; border-radius:50%; background:var(--bb-ok);
-  animation:bb-fade 1.4s ease-in-out infinite;
-}
-.welcome-eyebrow .sep{
-  padding-left:12px; margin-left:2px; border-left:1px solid var(--bb-line-strong);
-  letter-spacing:.5px; color:#A8ADBC;
-}
-
-.welcome-brand{ margin-top:16px; font-size:46px; font-weight:800; letter-spacing:-1.6px; line-height:1.05; }
+.welcome-brand{ font-size:46px; font-weight:800; letter-spacing:-1.6px; line-height:1.05; }
 .welcome-brand .dot{ color:var(--bb-danger-text); }
 .welcome-brand .en{ margin-left:14px; font-size:.28em; font-weight:500; letter-spacing:3px; color:#A8ADBC; vertical-align:middle; }
 
@@ -476,10 +490,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   transition:background var(--bb-dur) var(--bb-ease);
 }
 .welcome-cta:hover{ background:var(--bb-primary-hover); }
-.welcome-foot{
-  margin-top:22px; padding-top:14px; border-top:1px solid var(--bb-line);
-  font-size:var(--bb-fs-caption); letter-spacing:1px; color:#A8ADBC;
-}
 
 /* ── 로봇을 따라다니는 상태 카드 (레퍼런스의 Haulix 카드에 해당) ──
    위치는 JS 가 transform 으로만 준다. 폭을 고정해야 좌/우 뒤집기 계산이 안 흔들린다. */
@@ -579,7 +589,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   .welcome-hero{ position:static; transform:none; width:100%; max-width:620px; margin:0;
     animation-name:welcomeRise; }   /* 중앙정렬을 안 쓰므로 -50% 를 품은 키프레임도 안 쓴다 */
   .welcome-scene__path,
-  .welcome-robot,.welcome-robotcard,.welcome-eq,.welcome-cab,.welcome-badge,.welcome-alarm{ display:none; }
+  .welcome-robot,.welcome-robotcard,.welcome-eq,.welcome-cab,.welcome-badge,.welcome-alarm,
+  .welcome-scene-legend{ display:none; }
 }
 @media (max-width:620px){
   .welcome-wrap{ padding:var(--bb-sp-6) var(--bb-sp-6); }
@@ -591,7 +602,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    (로봇 rAF 루프도 컴포넌트 쪽에서 같은 미디어쿼리를 보고 시작하지 않는다.) */
 @media (prefers-reduced-motion: reduce){
   .welcome-hero,.welcome-eq,.welcome-cab,.welcome-alarm,
-  .welcome-robot,.welcome-robot__sweep,.welcome-robotcard,.welcome-eyebrow i{ animation:none; }
+  .welcome-robot,.welcome-robot__sweep,.welcome-robotcard{ animation:none; }
   .welcome-robot,.welcome-robotcard,.welcome-alarm,.welcome-cab{ opacity:1; }
   .welcome-robot__sweep{ opacity:.6; }
   .welcome-scene__path .p-route{ stroke-dashoffset:0; animation:none; }
@@ -654,15 +665,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   padding:14px 18px 18px; min-width:0;    /* 2열 그리드에서 date 입력이 열을 밀지 않도록 */
   align-self:start;
 }
+/* 회원가입 열 제목("계정 정보"/"개인 정보")을 지운 자리 — 카드 상단 padding 을 그만큼
+   올려 입력칸이 카드 위쪽에 붙지 않게 한다 [사용자 지침 2026-08-08]. */
+.auth-glass.is-signup .col{ padding-top:40px; }
 
 .auth-brand{
   font-size:23px; font-weight:800; letter-spacing:-.8px; text-align:center; color:var(--bb-ink);
-}
-.auth-brand span{
-  display:block; margin-top:6px;
-  font-family:var(--bb-font-mono); font-size:12px; font-weight:500;
-  /* muted(#7C8296)는 흰 면에서 3.82:1 이라 기준(4.5)에 못 미친다. body 로 올린다. */
-  letter-spacing:1.6px; color:var(--bb-body);
 }
 
 /* 세그먼트 필 — 탭 그룹을 알약 하나로. 선택은 진한 채움, 나머지는 글자만.
@@ -703,15 +711,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    길이가 다른 게 '다른 묶음'으로 더 확실히 읽힌다. */
 .fields{display:grid; grid-template-columns:1fr; gap:14px 26px; align-items:start;}
 .auth-glass.is-signup .fields{grid-template-columns:1fr 1fr;}
-
-/* 열 제목 — 로그인 모드에서는 묶음이 하나뿐이라 숨긴다. 카드 면 자체가 이미
-   묶음을 보여 주므로, 제목은 회원가입(묶음 둘)에서만 이름표 역할을 한다. */
-.col__h{
-  display:none; margin-bottom:14px;
-  font-family:var(--bb-font-mono); font-size:var(--bb-fs-caption); font-weight:600;
-  letter-spacing:1.2px; color:var(--bb-muted-2);
-}
-.auth-glass.is-signup .col__h{display:block;}
 
 /* 제출 — 화면에서 채운 버튼은 이것 하나뿐이다(규칙: 채운 건 하나만).
    유리가 756px 로 넓어져도 제출 버튼은 380px 로 묶는다. */
@@ -1525,12 +1524,18 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 rgba(68,106,154,.08),0 5px 14px rgba(43,82,132,.06);
 }
 
-/* 영상과 지도는 가장 선명한 콘텐츠이므로 유리 프레임만 두르고 내부는 흐리지 않는다. */
-.sim-skin .vwrap{
+/* 영상과 지도는 가장 선명한 콘텐츠이므로 유리 프레임만 두르고 내부는 흐리지 않는다.
+   🔴 `#pgB.sim-skin` 으로 스코프한다(S15P11E101-814 모서리 잔재 수정). 예전에는 `.sim-skin
+   .vwrap` 로 스코프 없이 걸려 있었는데, `sim-skin` 클래스는 #pgB(옛 다크 Liquid Glass
+   조작화면) 뿐 아니라 #pgMap·#pgCam(-814 에서 틀 없는 밝은 씬으로 새로 갈아엎은 화면)
+   에도 그대로 남아 있다. 그래서 이 유리 테두리가 지도·카메라 화면에도 새어 들어가
+   '틀을 없앤다'(아래 #pgMap .nav-canvas > .panel 규칙)로 지운 테두리를 다시 그리고
+   있었다. 이 유리 재질은 #pgB 조작화면 전용으로 좁힌다. */
+#pgB.sim-skin .vwrap{
   border-radius:18px; border-color:rgba(205,232,255,.22);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 10px 26px rgba(0,0,0,.16);
 }
-:root[data-theme="light"] .sim-skin .vwrap{
+:root[data-theme="light"] #pgB.sim-skin .vwrap{
   border-color:rgba(255,255,255,.90); box-shadow:inset 0 1px 0 #fff,0 10px 24px rgba(42,80,128,.10);
 }
 .sim-skin .vwrap .hud,.sim-skin .vwrap .hud2,.sim-skin .vwrap .rec,.sim-skin .mapview{
@@ -1713,9 +1718,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 
 /* ---- 콘텐츠는 유리가 아니다 ----
    영상·열화상·지도는 판독 대상이다. 그 위에 유리를 덧대면 판독을 방해한다.
-   테두리만 유리로 두르고 안은 건드리지 않는다. */
-.sim-skin .vwrap{backdrop-filter:none;}
-.sim-skin .vwrap::before{
+   테두리만 유리로 두르고 안은 건드리지 않는다.
+   🔴 이 ::before 가 지도 화면 좌상단 모서리에 남던 선 잔재의 실제 원인이었다
+   (S15P11E101-814). `#pgB.sim-skin` 으로 스코프해 #pgMap·#pgCam 에는 더 안 그린다 —
+   위 "🔴 #pgB.sim-skin 으로 스코프한다" 주석과 같은 이유다. */
+#pgB.sim-skin .vwrap{backdrop-filter:none;}
+#pgB.sim-skin .vwrap::before{
   content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:2;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.30),
@@ -2971,6 +2979,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .v3-theme .btn-text { padding: 9px 18px; border-radius: 20px; border: 0; background: transparent; color: #5A6072; font-weight: 600; font-size: 12.5px; font-family: inherit; cursor: pointer; transition: background 0.15s; }
 .v3-theme .btn-text:hover:not(:disabled) { background: #F4F5F8; color: #232733; }
 .v3-theme .btn-text:disabled { opacity: 0.5; cursor: not-allowed; }
+/* outlined — 되돌리기 어려운 일(danger 글자색), filled 가 이미 화면에 하나 있을 때 그 다음으로 무거운 동작에 쓴다.
+   순찰 종료(S15P11E101-868)처럼 '위험/되돌리기' 계열이지만 filled 는 화면당 하나 규칙을 지켜야 할 때. */
+.v3-theme .btn-outlined { padding: 8px 17px; border-radius: 20px; border: 1px solid #C4C6D4; background: transparent; color: var(--bb-danger-text); font-weight: 600; font-size: 12.5px; font-family: inherit; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.v3-theme .btn-outlined:hover:not(:disabled) { background: #FBF6F5; border-color: var(--bb-danger-text); }
+.v3-theme .btn-outlined:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .v3-theme .basebtn.danger { background: #C07A72; color: #fff; border-radius: 20px; padding: 9px 18px; border: 0; font-weight:600; font-size:12.5px; }
 .v3-theme .basebtn.danger:hover:not(:disabled) { background: #B4655C; }
@@ -3962,6 +3975,89 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @media (max-width:1180px){
   #pgMap .map-view .nav-side,#pgCam .cam-side-panel{width:clamp(200px, 34vw, 260px);}
 }
+
+/* 🔴 [2026-08-08 병합 메모] 이 아래 두 블록은 서로 다른 화면의 규칙이고 겹치는
+   선택자가 없다. 각각 다른 브랜치가 **파일 끝에** 추가하는 바람에 같은 위치에
+   삽입되어 git 이 충돌로 본 것뿐이다(내용 충돌이 아니라 위치 충돌).
+   앞으로는 파일 끝에 붙이지 말고 각 화면 구역 뒤에 넣는다 — 아래 순서는 무관하다. */
+
+/* ============ 모달 v3 (S15P11E101-815) ============
+   공용 모달 셸(.modal-overlay/.modal/...)에 붙는다 — 마이페이지·비밀번호 수정 모달에서
+   시작했지만 셸을 공유하는 다른 확인창(권한 변경·이벤트 삭제·맵 모델링 시작 등)에도
+   같이 적용된다. 티켓 범위는 시각 언어 교체뿐, 문구·검증 로직은 건드리지 않는다.
+   919행의 구형 .modal-overlay/.modal 규칙은 그대로 둔다 — 여기서 같은 선택자를
+   다시 선언해 파일 순서로 덮어쓴다(캐스케이드), 원본은 지우지 않는다.
+   모달은 조밀한 화면이라 씬 언어(유리)가 아니라 패널 그리드 문법을 쓴다 —
+   카드 자체엔 backdrop-filter 를 걸지 않는다. 딤에만 옅은 블러를 허용한다. */
+.modal-overlay{
+  background:rgba(35,39,51,.4);
+  backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+}
+.modal{
+  background:var(--bb-grad-panel);
+  border:1px solid rgba(255,255,255,.8);
+  border-radius:var(--bb-r-card);
+  box-shadow:2px 6px 22px rgba(35,39,51,.07);
+  color:var(--bb-ink);
+}
+.modal-head{
+  padding:var(--bb-sp-5) var(--bb-sp-6);
+  border-bottom:1px solid var(--bb-line);
+}
+.modal-head h3{
+  font-size:var(--bb-fs-title); font-weight:700; color:var(--bb-ink); letter-spacing:-.2px;
+}
+.modal-x{
+  color:var(--bb-muted); border-radius:var(--bb-r-input); font-size:13px;
+}
+.modal-x:hover{background:var(--bb-line); color:var(--bb-ink);}
+.modal-body{padding:var(--bb-sp-6);}
+
+/* 카드 안 서브 표면(다시 읽기 전용 값 등)에 쓸 자리 — 지금은 .form-row input:disabled 만 해당 */
+.modal .form-row label{
+  font-size:var(--bb-fs-label); font-weight:600; color:var(--bb-body);
+}
+/* 🔴 본문 폰트가 기본이다. mono 는 아래에서 해당하는 것에만 준다.
+   "인풋 값은 mono 13.5/600" 은 **설정 화면 스펙**에서 온 문구이고, 그 화면의 인풋은
+   임계온도 같은 **수치**다. 전역 규칙은 "본문/UI 는 Gothic A1, 수치·시각·좌표는 mono" 다.
+   이 모달에는 **이름(한글)** 이 들어간다 — 한글을 mono 로 쓰면 자간이 어그러지고,
+   무엇보다 mono 는 "이건 기계가 잰 값" 이라는 신호라 사람 이름에 붙으면 뜻이 틀린다. */
+.modal .form-row input{
+  padding:9px 11px;
+  border:1px solid var(--bb-line-strong); border-radius:var(--bb-r-input);
+  background:#fff; color:var(--bb-ink);
+  font-family:var(--bb-font); font-size:13.5px; font-weight:600;
+}
+/* 식별자(이메일)와 비밀번호만 mono.
+   - 이메일: 계정을 가리키는 **식별자**다. 대소문자·점·하이픈을 또렷이 구분해야 한다.
+   - 비밀번호: 0/O, 1/l/I 를 구분해야 오타를 스스로 잡는다. 관제 계정이라 더 그렇다. */
+.modal .form-row input[type="email"],
+.modal .form-row input[type="password"]{
+  font-family:var(--bb-font-mono);
+}
+.modal .form-row input:focus{border-color:#6E79B4; outline:none;}
+.modal .form-row input:disabled{
+  background:var(--bb-grad-subsurface); color:var(--bb-muted); opacity:1;
+}
+
+.modal .form-msg{font-size:var(--bb-fs-body); border-radius:var(--bb-r-input);}
+.modal .form-msg.ok{background:var(--bb-ok-tint); color:var(--bb-ok-text); border:1px solid rgba(111,164,135,.4);}
+.modal .form-msg.err{background:var(--bb-danger-tint); color:var(--bb-danger-text); border:1px solid rgba(192,122,114,.4);}
+.modal .form-msg.warn{background:var(--bb-warn-tint); color:var(--bb-warn-text); border:1px solid rgba(201,162,106,.4);}
+
+.modal .form-actions{gap:var(--bb-sp-2);}
+/* 버튼 위계 — filled 는 모달당 주 행동 1개, 취소는 text */
+.modal .btn-primary{
+  border-radius:var(--bb-r-input);
+  background:var(--bb-primary); border-color:var(--bb-primary);
+  font-family:var(--bb-font); font-weight:700; font-size:var(--bb-fs-body); color:#fff;
+}
+.modal .btn-primary:hover{background:var(--bb-primary-hover); border-color:var(--bb-primary-hover);}
+.modal .btn-ghost{
+  border:0; background:transparent; padding:9px 12px;
+  font-family:var(--bb-font); font-weight:600; font-size:var(--bb-fs-body); color:var(--bb-muted);
+}
+.modal .btn-ghost:hover{color:var(--bb-ink); background:var(--bb-line);}
 
 /* ============================================================
    이벤트 목록·상세 모달 v3 (S15P11E101-814)

@@ -29,11 +29,6 @@ export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
   return (
     /* ── 히어로: 밝은 씬 위이므로 유리 패널을 쓴다(어두운 영상 위엔 금지) ── */
     <section className="welcome-hero" onAnimationEnd={clearEntryAnim}>
-      <div className="welcome-eyebrow mono">
-        <i />SYSTEM ONLINE
-        <span className="sep">SSAFY 부울경 1반 · 팀 E101</span>
-      </div>
-
       <h1 className="welcome-brand">
         삐용<span className="dot">.</span><span className="en mono">BBIYONG</span>
       </h1>
@@ -41,16 +36,19 @@ export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
       <p className="welcome-tag">공장 무인 안전<br />이상탐지 통합 관제 시스템</p>
 
       <p className="welcome-desc">
-        순찰 로봇 오린카를 웹 콘솔에서 원격으로 운용합니다.<br />
-        현장의 이상 징후를 상시 감시하고, 발생 즉시 대응 체계로 연결합니다.
+        순찰 로봇 오린카가 배전반 등 설비를 자율 순찰하며 온도 이상을 상시 감시합니다.<br />
+        과열이 감지되면 즉시 경보로 이어지는 관제 콘솔입니다.
       </p>
+
+      {/* 🔴 배전반 색(정상/과열)의 의미는 문구가 아니라 씬 우측 하단의 범례 컴포넌트가
+          설명한다 [사용자 지침 2026-08-08] — PatrolScene.tsx 의 .welcome-scene-legend.
+          "지도 화면 범례(#pgMap .maplegend)와 같은 문법을 재사용해라"는 지시에 따라
+          새 시각 언어를 만들지 않았다. */}
 
       <div className="welcome-cta-row">
         {/* Filled CTA 는 화면당 1개 */}
         <button className="welcome-cta" onClick={onEnter}>관제 시스템 접속</button>
       </div>
-
-      <div className="welcome-foot mono">BBIYONG CONTROL · v1.0 · © 2026 E101</div>
     </section>
   )
 }

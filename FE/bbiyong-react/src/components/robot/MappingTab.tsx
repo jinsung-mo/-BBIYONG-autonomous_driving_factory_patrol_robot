@@ -62,7 +62,6 @@ export default function MappingTab() {
     setMsg({ kind: 'warn', text: '매핑 중단을 요청했습니다. 로봇이 멈추면 진행 표시가 사라집니다.' })
   }
 
-  const area = nav ? (nav.w * nav.res * nav.h * nav.res).toFixed(1) : null
   const offline = !enabled || !connected
 
   return (
@@ -112,15 +111,8 @@ export default function MappingTab() {
             {enabled && connected && !nav && phase === 'idle' && (
               <p className="cfg-help">아직 맵을 받지 못했습니다. 로봇의 라이다·SLAM 노드가 올라오면 여기에 진행 상황이 뜹니다.</p>
             )}
-            {nav && (
-              <div className="cfg-note">
-                <div className="kv"><span>갱신 번호</span><b className="num">#{nav.seq}</b></div>
-                <div className="kv"><span>격자</span><b className="num">{nav.w} × {nav.h}</b></div>
-                <div className="kv"><span>해상도</span><b className="num">{nav.res} m/셀</b></div>
-                <div className="kv"><span>포함 면적</span><b className="num">{area} m²</b></div>
-                <div className="kv"><span>원점</span><b className="num">{nav.ox}, {nav.oy} m</b></div>
-              </div>
-            )}
+            {/* 도면 메타 정보(갱신 번호·격자·해상도·포함 면적·원점) 블록 제거(S15P11E101-814) —
+                조작자에게 필요 없는 정보였다. 나중에 이 자리에 무엇을 넣을지는 별도로 정한다. */}
 
             {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
           </div>
