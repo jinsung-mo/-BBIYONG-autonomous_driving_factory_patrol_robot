@@ -141,7 +141,7 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
           반투명이 쌓여 실질적으로 밝은 면이 되므로, 그 위 순백 카드(.col)와의
           "패널 > 카드" 계층은 -807 그대로 선다. */}
       <div className={`auth-glass${mode === 'signup' ? ' is-signup' : ''}`}>
-        <div className="auth-brand">삐용(BBIYONG)<span> 통합 관제 시스템</span></div>
+        <div className="auth-brand">삐용(BBIYONG)</div>
         {/* 세그먼트 필(S15P11E101-791). 탭 그룹을 알약 하나로 — 선택만 진하게 채운다.
             아이디/비밀번호 찾기(recovery)에서는 로그인·회원가입 탭 대신 제목을 보여 준다.
             🔴 접속 모드(시뮬레이션/실서버) 세그먼트는 걷어냈다 — 콘솔 정리(-850)로
@@ -163,9 +163,10 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
         ) : (
           <form onSubmit={submit}>
             <div className="fields">
-              {/* 2단 · 왼쪽 카드 — 계정 정보. 로그인 모드에서는 이 카드만 남는다. */}
+              {/* 2단 · 왼쪽 카드 — 계정 정보. 로그인 모드에서는 이 카드만 남는다.
+                  🔴 열 제목("계정 정보")은 지웠다 [사용자 지침 2026-08-08] — .col 의
+                  padding-top 을 그만큼 올려 카드 상단 여백이 무너지지 않게 했다. */}
               <div className="col">
-                <div className="col__h">계정 정보</div>
                 <div className="form-row">
                   <label htmlFor="au-email">이메일</label>
                   {/* placeholder 는 예시여야 한다(S15P11E101-802). 전에는 실제 데모 계정
@@ -220,7 +221,6 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
               {/* 2단 · 오른쪽 카드 — 개인 정보. 회원가입 전용, 카드째로 사라진다. */}
               {mode === 'signup' && (
                 <div className="col">
-                  <div className="col__h">개인 정보</div>
                   <div className="form-row">
                     <label htmlFor="su-name">이름</label>
                     <input id="su-name" value={form.name} onChange={set('name')} placeholder="관리자 이름" autoComplete="name" disabled={busy} />
@@ -265,21 +265,11 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
               <button type="submit" className="auth-submit" disabled={busy}>
                 {busy ? '처리 중…' : mode === 'login' ? '로그인' : '회원가입'}
               </button>
-              {/* 안내문은 모드까지 봐야 한다(S15P11E101-802). */}
-              <div className="auth-hint">
-                {mode === 'signup'
-                  ? '가입한 계정으로 바로 로그인할 수 있습니다.'
-                  : (
-                    <>
-                      {/* 두 줄로 나눈다(S15P11E101-803). 한 줄이면 좁은 폭에서 어색하게
-                          끊기고, '무엇을 하는 화면인가' 와 '없으면 어떻게 하나' 는
-                          성격이 다른 문장이라 붙여 둘 이유가 없다. */}
-                      실서버 계정으로 로그인합니다.
-                      <br />
-                      계정이 없으면 회원가입 후 이용하세요.
-                    </>
-                  )}
-              </div>
+              {/* 안내문은 모드까지 봐야 한다(S15P11E101-802). 로그인 모드 문구는 지웠다
+                  [사용자 지침 2026-08-08] — 남길 문구가 없으므로 회원가입에서만 렌더한다. */}
+              {mode === 'signup' && (
+                <div className="auth-hint">가입한 계정으로 바로 로그인할 수 있습니다.</div>
+              )}
               {/* 아이디/비밀번호 찾기 — 로그인 화면에서만 진입한다. */}
               {mode === 'login' && (
                 <div className="auth-links">

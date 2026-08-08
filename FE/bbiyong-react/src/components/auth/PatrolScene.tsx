@@ -100,10 +100,13 @@ const EQUIPMENT: readonly { x: number, y: number, tone?: 'ok' | 'alarm' }[] = [
 // 배전반 — 통로 벽면에 붙은 세로 캐비닛(일반 설비는 가로 슬래브라 형태로 구분). DWELL_AT_VERTEX 와 1:1
 // (0→꼭짓점2, 1→4, 2→6). 🔴 셋 다 정지 지점의 **아래쪽** — 상태 카드가 로봇 위를 늘 덮으므로
 // 위에 두면 정지할 때마다 카드에 가려 사라진다. 동시에 셋 다 vb y ≤ 568(하단 2연 카드 금지 구역).
-const CABINETS: readonly { x: number, y: number, name: string }[] = [
-  { x: 1272, y: 412, name: '배전반 A' },   // 꼭짓점 2 (1220,320) 아래
-  { x: 1302, y: 568, name: '배전반 B' },   // 꼭짓점 4 (1350,500) 아래
-  { x: 1138, y: 435, name: '배전반 C' },   // 꼭짓점 6 (1080,370) 아래
+// id 는 지어낸 형식이 아니다 — 실제 GET /api/equipments 응답의 equipmentId 형식
+// (`panel_01`, `panel_02` …, docs/backend_api_specification.md §1.3)을 그대로 따른다.
+// 로봇이 `orinka_01` 로 식별되듯 배전반도 이 화면에서부터 식별자를 달고 나온다.
+const CABINETS: readonly { x: number, y: number, name: string, id: string }[] = [
+  { x: 1272, y: 412, name: '배전반 A', id: 'panel_01' },   // 꼭짓점 2 (1220,320) 아래
+  { x: 1302, y: 568, name: '배전반 B', id: 'panel_02' },   // 꼭짓점 4 (1350,500) 아래
+  { x: 1138, y: 435, name: '배전반 C', id: 'panel_03' },   // 꼭짓점 6 (1080,370) 아래
 ]
 
 // 스윕이 끝나는 꼭짓점(2·4·6)에 도착하면 잠깐 멈춘다 — 각 지점의 배전반을 "점검"하는 동안이다.
@@ -369,15 +372,22 @@ export default function PatrolScene() {
         />
       ))}
 
-      {/* 배전반 — 세로 캐비닛. dwell 중인 배전반에만 아래 온도 배지가 뜬다. */}
-      {CABINETS.map((c, i) => (
-        <div
-          key={c.name}
-          className="welcome-cab"
-          ref={(el) => { cabRefs.current[i] = el }}
-          style={{ left: pct(c.x, VB_W), top: pct(c.y, VB_H), animationDelay: `${1.0 + i * 0.1}s` }}
-        />
-      ))}
+      {/* 배전반 — 세로 캐비닛. 이미 과열(judge:'warn')인 배전반은 dwell 여부와 무관하게
+          항상 warn 톤으로 보인다 — "붉은(경고) 객체 = 이미 온도가 높은 배전반" [사용자 지침
+          2026-08-08]. 🔴 화재 danger 톤이 아니라 warn 톤을 쓴다 — 이 저장소의 상태색 규칙상
+          danger 는 화재 전용이고 과열은 warn 이다(§B 디자인 시스템 규칙). */}
+      {CABINETS.map((c, i) => {
+        const warn = CABINET_TEMPS[i].judge === 'warn'
+        return (
+          <div
+            key={c.name}
+            className={`welcome-cab${warn ? ' welcome-cab--warn' : ''}`}
+            ref={(el) => { cabRefs.current[i] = el }}
+            title={`${c.name} · ${c.id}`}
+            style={{ left: pct(c.x, VB_W), top: pct(c.y, VB_H), animationDelay: `${1.0 + i * 0.1}s` }}
+          />
+        )
+      })}
       {CABINETS.map((c, i) => {
         const t = CABINET_TEMPS[i]
         return (
@@ -388,6 +398,7 @@ export default function PatrolScene() {
             style={{ left: pct(c.x, VB_W), top: pct(c.y, VB_H) }}
           >
             <div className="welcome-badge__in">
+              <span className="welcome-badge__id mono">{c.id}</span>
               <span className="welcome-badge__t mono">{t.c.toFixed(1)}°C</span>
               <span className={`welcome-badge__j welcome-badge__j--${t.judge}`}>
                 {t.judge === 'ok' ? '정상' : '주의'}
@@ -419,6 +430,18 @@ export default function PatrolScene() {
           <span className={`gauge${batteryLow ? ' low' : ''}`}><i style={{ width: `${BATTERY_PCT}%` }} /></span>
         </div>
         <div className="welcome-robotcard__st"><i /><span ref={status}>순찰 중</span></div>
+      </div>
+
+      {/* 씬 범례 — 배전반 색의 의미(정상/과열). 지도 화면 범례(#pgMap .maplegend)와
+          같은 문법 재사용: 씬 위의 작은 반투명 알약, 지도 축척처럼 우측 하단.
+          [사용자 지침 2026-08-08] */}
+      <div className="welcome-scene-legend">
+        <span className="welcome-scene-legend__row">
+          <i className="welcome-scene-legend__mark welcome-scene-legend__mark--ok" />정상
+        </span>
+        <span className="welcome-scene-legend__row">
+          <i className="welcome-scene-legend__mark welcome-scene-legend__mark--warn" />과열 배전반
+        </span>
       </div>
     </div>
   )
