@@ -2,7 +2,7 @@
 // 컴포넌트가 서버 스키마를 직접 알지 않도록 이 파일에 매핑을 모은다.
 // 계약 원본: docs/fe_backend_integration_guide.md §3.1 (텔레메트리) · §3.2 (경보)
 
-import { ROBOT_V_MAX, ROBOT_W_MAX } from './config.ts'
+import { ROBOT_V_MAX, ROBOT_W_MAX, COMM_GOOD_MS, COMM_SLOW_MS } from './config.ts'
 import { withDisplayNames } from './robotName.ts'
 
 // /topic/robots 의 status → 상태 pill 문구/색
@@ -17,6 +17,37 @@ const STATUS_LABEL: Record<string, { text: string, cls: string }> = {
 
 const num = (v: any, digits = 1) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(digits) : '—')
 
+// 통신 품질 등급 (S15P11E101-602). 임계값은 config.ts (COMM_GOOD_MS / COMM_SLOW_MS).
+//
+// 종전에는 지연시간과 무관하게 '양호'를 문자열에 박아 넣어서, 지연 3,000ms 에도
+// "양호 · 3000ms" 가 떴다. 화재 대응 로봇에서 통신 저하를 조작자가 알아챌 유일한 문구가
+// 거짓말을 하고 있었다.
+//
+// 상태 pill 과 같은 규칙으로 색만이 아니라 기호(✓ ▲ ✕)를 함께 준다 — 적록색맹은
+// 초록(정상)과 빨강(위험)을 구별하지 못한다(app.css 관례).
+export type CommLevel = 'good' | 'slow' | 'bad' | 'down' | 'unknown'
+
+const COMM_GRADE: Record<CommLevel, { label: string, glyph: string, cls: string }> = {
+  good: { label: '양호', glyph: '✓', cls: 'ok' },
+  slow: { label: '지연', glyph: '▲', cls: 'warn' },
+  bad: { label: '불량', glyph: '✕', cls: 'bad' },
+  down: { label: '끊김', glyph: '✕', cls: 'bad' },
+  unknown: { label: '—', glyph: '', cls: '' },
+}
+
+// connected=false 면 지연시간이 얼마였든 '끊김'이다 — 마지막으로 받은 값이 신선해 보이는
+// 것과 지금 연결돼 있는 것은 다른 이야기다. 끊긴 뒤에도 마지막 43ms 가 '양호'로 남아
+// 있으면 조작자가 명령이 나가고 있다고 오해한다.
+export function commGrade(latencyMs: any, connected = true) {
+  const of = (level: CommLevel, ms: number | null, text: string) =>
+    ({ level, ms, text, ...COMM_GRADE[level] })
+  if (!connected) return of('down', null, '끊김')
+  if (typeof latencyMs !== 'number' || !Number.isFinite(latencyMs)) return of('unknown', null, '—')
+  const ms = Math.round(latencyMs)
+  const level: CommLevel = ms <= COMM_GOOD_MS ? 'good' : (ms <= COMM_SLOW_MS ? 'slow' : 'bad')
+  return of(level, ms, `${COMM_GRADE[level].label} · ${ms}ms`)
+}
+
 // 텔레메트리 → StatusPanel 표시값. 값이 없으면 '—' 로 비운다(0으로 위장하지 않는다).
 export function telemetryToStatus(t: any) {
   // status 미상은 '대기'로만 말한다 — 연결 여부는 이 매퍼가 알 수 없으므로 표시하는 쪽(connected)이 판단한다.
@@ -28,7 +59,9 @@ export function telemetryToStatus(t: any) {
     batt: typeof t?.battery === 'number' ? Math.round(t.battery) : null,
     spd: typeof t?.speed === 'number' ? `${num(t.speed)} m/s` : '—',
     estop: t?.estop || '—',
-    comm: typeof t?.commLatencyMs === 'number' ? `양호 · ${Math.round(t.commLatencyMs)}ms` : '—',
+    // 등급 판정에 필요한 connected 를 이 매퍼는 알 수 없다(위 status 폴백과 같은 이유).
+    // 표시하는 쪽이 연결 여부를 알면 commGrade(ms, connected) 를 직접 부르는 편이 정확하다.
+    comm: commGrade(t?.commLatencyMs).text,
     location: t?.location || null,
   }
 }

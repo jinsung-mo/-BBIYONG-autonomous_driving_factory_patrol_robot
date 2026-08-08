@@ -264,6 +264,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .kv b.st.ok{color:var(--dk-green);}
 .kv b.st.warn{color:var(--dk-amber);}
 .kv b.st.danger{color:#ff2d1d; font-weight:800; animation:estopblink 1s steps(1,end) infinite;}
+/* 통신 불량/끊김(S15P11E101-602). danger 와 색은 같지만 **깜빡이지 않는다** —
+   깜빡임은 한 곳에만 남긴다. 빨간 점이 둘 이상 뛰면 정작 급한 쪽을 구별할 수 없다. */
+.kv b.st.bad{color:#ff2d1d; font-weight:800;}
 @keyframes estopblink{50%{opacity:.35;}}
 @media (prefers-reduced-motion: reduce){ .kv b.st.danger{animation:none;} }
 .bar{height:8px; border-radius:5px; background:var(--dk-line); overflow:hidden; margin:2px 0 4px;}

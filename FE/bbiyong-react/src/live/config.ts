@@ -25,6 +25,15 @@ export const ROBOT_ID = env.VITE_ROBOT_ID || 'orinka_01'
 export const ROBOT_V_MAX = Number(env.VITE_ROBOT_V_MAX ?? 1.0)   // m/s
 export const ROBOT_W_MAX = Number(env.VITE_ROBOT_W_MAX ?? 0.6)   // rad/s
 
+// ---- 통신 품질 임계값 (S15P11E101-602) ----
+// 서버가 등급을 주지 않으므로 FE 상수로 정의한다. 서버가 주기 시작하면 이 값은 폴백으로 남긴다.
+//
+// 500ms 가 "느리다"가 아니라 위험선인 이유: 로봇 펌웨어 데드맨이 **0.4s** 다
+// (docs/실측_데이터.md §C). 왕복 지연이 그보다 길면 다음 명령이 도착하기 전에 로봇이
+// 스스로 멈춘다 — 조작자 입장에서는 "명령을 보냈는데 안 간다"로 보이는 구간이다.
+export const COMM_GOOD_MS = Number(env.VITE_COMM_GOOD_MS ?? 150)
+export const COMM_SLOW_MS = Number(env.VITE_COMM_SLOW_MS ?? 500)
+
 // ---- 좌표 변환 (미확정 · BE/로봇 파트 확인 필요) ----
 // 시뮬 지도는 12x8 격자 정수 좌표({c,r})이고, 실서버 텔레메트리는 미터 단위 실수 좌표(x,y)다.
 // 실제 공장 맵의 원점과 스케일이 확정되기 전까지는 아래 기본값(원점 0,0 · 1m = 1칸)으로
