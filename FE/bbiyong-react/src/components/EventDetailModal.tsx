@@ -121,7 +121,7 @@ export default function EventDetailModal({
     && (detail.x !== 0 || detail.y !== 0)
 
   return (
-    <Modal title="이벤트 상세" onClose={onClose} width={620}>
+    <Modal title="이벤트 상세" onClose={onClose} width={620} className="modal-v3 evd-modal">
       {loading && <p className="cfg-help">불러오는 중…</p>}
       {err && <div className="form-msg err">{err}</div>}
 
