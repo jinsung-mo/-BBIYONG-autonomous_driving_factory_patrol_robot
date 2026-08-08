@@ -3827,19 +3827,16 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root[data-theme="light"] #pgMap.v3-theme .pillm.man::before{background:var(--bb-warn);}
 :root[data-theme="light"] #pgMap.v3-theme .pillm.emg::before{background:var(--bb-danger);}
 
-/* 배터리 — 2px 바 + 삼각 마커. 두꺼운 회색 막대는 v2 문법이고,
-   면적이 커서 옆의 숫자보다 먼저 눈에 들어온다. */
+/* 배터리 — 잔량 비례 채움 막대(S15P11E101). 이전의 2px 얇은 선 + 삼각 마커는
+   '채워지는 게이지'로 읽히지 않아, 잔량만큼 색으로 차오르는 둥근 막대로 바꾼다.
+   채움 너비(i)는 인라인 style 로 배터리%가 그대로 들어온다. */
 :root[data-theme="light"] #pgMap.v3-theme .bar{
-  height:2px; background:var(--bb-line); border:0; border-radius:0; overflow:visible;
-  margin:2px 0 10px; position:relative;
+  height:8px; background:var(--bb-line); border:0; border-radius:999px; overflow:hidden;
+  margin:4px 0 10px; position:relative;
 }
 :root[data-theme="light"] #pgMap.v3-theme .bar i{
-  height:2px; border-radius:0; background:var(--bb-ok); position:relative; display:block;
-}
-:root[data-theme="light"] #pgMap.v3-theme .bar i::after{
-  content:''; position:absolute; right:-4px; top:2px;
-  border-left:4px solid transparent; border-right:4px solid transparent;
-  border-top:6px solid var(--bb-ok);
+  height:100%; border-radius:999px; background:var(--bb-ok); display:block;
+  transition:width .3s ease;
 }
 :root[data-theme="light"] #pgMap.v3-theme .kv{
   border:0; padding:8px 0; font-size:12.5px; color:var(--bb-body);
