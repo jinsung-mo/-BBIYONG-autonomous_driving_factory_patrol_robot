@@ -169,6 +169,12 @@ canvas{display:block; width:100%; height:100%;}
    행 자체를 더 두껍게 준다 — 빈 공간을 다른 걸로 채우는 대신 지금은 여백으로 남겨 둔다. */
 #routeList li{min-height:56px; padding:18px 20px;}
 #routeList li .tag{font-size:11px; min-width:22px; padding:3px 7px;}
+/* 🔴 지점 목록과 순찰 시작/종료 줄 사이에 숨 쉴 자리(S15P11E101-814).
+   공용 `.gotor` 는 `margin-top:10px` 뿐이라, 행이 두꺼워진 뒤로는 마지막 카드에
+   버튼이 달라붙어 보였다(배포본에서 확인). 인접 형제 선택자로 좁혀 다른 화면의
+   `.gotor` 여백은 건드리지 않는다. 버튼 아래 안내문도 함께 띄운다. */
+#routeList + .gotor{margin-top:24px; align-items:center;}
+#routeList + .gotor + *{margin-top:14px;}
 /* 맵 모델링 진행 단계 (S15P11E101-483) — 대기 · 진행 중 · 완료 */
 .mapstat{display:flex; align-items:flex-start; gap:8px; margin-top:10px; padding:9px 11px;
   border-radius:9px; font-size:11.5px; line-height:1.7; border:1px solid var(--dk-line); background:var(--dk-panel2);}
@@ -2503,9 +2509,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-canvas .vwrap{background:var(--nx-elev); border:0; border-radius:var(--nx-r-md);}
 .nav-page .maplegend{color:var(--nx-muted); margin-top:12px;}
 .nav-page .maplegend span{background:transparent; border:0; padding:0;}
-/* 지도 범례는 도면과 떨어진 설명 행이 아니라, 첨부 레퍼런스처럼 지도 위에 뜬다. */
+/* 지도 범례는 도면과 떨어진 설명 행이 아니라, 첨부 레퍼런스처럼 지도 위에 뜬다.
+   🔴 좌측 시작점은 **유리 패널 폭만큼 비켜야 한다**(S15P11E101-814).
+   플로팅 씬 전환 뒤 좌측 상태 패널(left:34px, width:clamp(240px,24vw,302px), z-index:6)이
+   씬 위에 떠 있는데, 범례가 left:16px 이라 그 뒤로 들어가 잘려 보였다(배포본에서 확인).
+   패널과 같은 계산식을 써서 폭이 바뀌어도 따라가게 한다. */
 #pgMap .vwrap > .maplegend{
-  position:absolute; top:16px; left:16px; z-index:4;
+  position:absolute; top:16px;
+  left:calc(34px + clamp(240px, 24vw, 302px) + 18px);
+  z-index:4;
   display:flex; align-items:center; gap:18px; flex-wrap:nowrap;
   width:max-content; max-width:calc(100% - 32px); margin:0; padding:12px 18px;
   color:var(--nx-muted); background:rgba(255,255,255,.92);
@@ -3333,6 +3345,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 #pgMap.v3-theme .map-control:hover:not(:disabled),
 #pgCam.v3-theme .map-control:hover:not(:disabled){background:#F4F5F8; color:#232733;}
+/* 🔴 입체/평면 토글도 유리 패널 폭만큼 비켜 세운다(S15P11E101-814).
+   공용 `.mapview` 는 `left:10px` 이라 좌측 상태 패널 뒤로 들어가 절반이 잘려 있었다
+   (배포본에서 확인 — "입:" 만 보였다). 범례와 같은 계산식을 쓴다.
+   카메라 화면에는 좌측 유리 패널이 없으므로 지도에만 적용한다. */
+#pgMap.v3-theme .mapview{left:calc(34px + clamp(240px, 24vw, 302px) + 18px);}
 #pgMap.v3-theme .mapview,#pgCam.v3-theme .mapview{
   background:rgba(255,255,255,.9); color:#3F4880; border:0; border-radius:999px;
   font-size:11.5px; font-weight:600; box-shadow:0 1px 3px rgba(35,39,51,.14);
@@ -3941,17 +3958,31 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   flex:1 1 auto; min-height:0;
 }
 #pgMap .map-view .nav-canvas{position:absolute; inset:0;}
+/* 🔴 패널은 **내용 높이만큼**만 차지한다(S15P11E101-814).
+   원본 디자인은 `top:0; bottom:0` 로 화면 끝까지 세운 전면 유리 기둥이었지만,
+   그건 그 안에 제목 + 필터 칩 + 로봇 카드 2장이 차 있을 때의 배치다.
+   우리 화면에는 상태 카드 하나뿐이라, 같은 값을 쓰면 카드 아래로 **비어 있는 반투명 기둥**이
+   화면 끝까지 남는다. 그 너머로 3D 씬이 비쳐 "지도가 상태 패널을 침범한" 것처럼 보였다
+   (배포본에서 확인).
+   내용에 맞춰 줄이고, 넘치면 그때만 스크롤한다. 바닥에 닿지 않으므로 radius 도 네 귀 모두 준다. */
 #pgMap .map-view .nav-side{
-  position:absolute; left:34px; top:0; bottom:0;
+  position:absolute; left:34px; top:0; bottom:auto;
   width:clamp(240px, 24vw, 302px);
+  max-height:calc(100% - 24px);
   z-index:6; overflow:auto;
-  border-radius:22px 22px 0 0;
-  padding:22px 22px 0;
+  border-radius:22px;
+  padding:22px;
   background:rgba(255,255,255,.6);
   backdrop-filter:blur(18px) saturate(1.5);
   -webkit-backdrop-filter:blur(18px) saturate(1.5);
   box-shadow:0 18px 46px rgba(35,39,51,.10);
 }
+/* 🔴 패널이 콘텐츠 높이가 되면 상태 카드를 늘려 채우면 안 된다.
+   `#pgMap .nav-side > #pStatus` 는 2192행에서 `flex:1 1 0; min-height:0` 이다 —
+   패널이 화면 끝까지 뻗던 시절에는 "남는 높이를 카드가 먹는다" 가 맞았지만,
+   이제 패널 높이가 콘텐츠로 정해지므로 basis 0 + min-height 0 이면 **카드가 0 으로
+   찌그러질 수 있다.** 자기 높이를 쓰도록 되돌린다. */
+#pgMap .map-view .nav-side > #pStatus{flex:0 0 auto;}
 
 /* ── 카메라 : 씬 = 영상(둥근 모서리로 화면 안쪽에 살짝 띄워), 조작·로그 카드는
    불투명 흰색 — 어두운 영상 위에서는 블러보다 가독성이 우선이라
