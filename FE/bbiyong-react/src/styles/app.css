@@ -2712,7 +2712,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 :root[data-theme="light"] #nav.sim-nav .logo{color:var(--nx-text);}
 :root[data-theme="light"] #nav.sim-nav .nav-subtitle,
-:root[data-theme="light"] #nav.sim-nav .clock,
 :root[data-theme="light"] #nav.sim-nav .navrole{color:var(--nx-faint);}
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn{
   background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none; border:0;
@@ -2839,11 +2838,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   display:flex; align-items:center; justify-content:center;
   border:0; border-radius:var(--nx-r-md); color:var(--nx-muted);
 }
+/* 시안 A(최소, S15P11E101-814) — 알약 배경 없이 헤더에 얹은 mono 시각.
+   tabular-nums 로 초가 바뀌어도 자릿수 폭이 흔들리지 않게 한다. */
 #nav.sim-nav .clock{
-  height:44px; min-width:72px; padding:0 13px;
-  display:flex; align-items:center; justify-content:center;
-  border-radius:var(--nx-r-md); background:var(--nx-elev); color:var(--nx-muted);
-  box-shadow:var(--nx-sh-md); font-size:12px;
+  font-family:var(--bb-font-mono); font-variant-numeric:tabular-nums;
+  font-size:13px; font-weight:600; letter-spacing:.2px; color:var(--bb-muted);
+  flex:none;
 }
 #nav.sim-nav .usermenu-btn{gap:0;}
 #nav.sim-nav .usermenu-nm,#nav.sim-nav .usermenu-caret{display:none;}
