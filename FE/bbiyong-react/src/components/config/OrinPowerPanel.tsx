@@ -11,15 +11,23 @@ import { useLive } from '../../live/LiveContext.tsx'
 
 type Tone = 'ok' | 'warn' | 'danger'
 
-// 🔴 임계치는 실측 스펙이 아니라 docs/design/mockups/orin-load-v6.html 의 예시값을 그대로
-// 가져온 잠정치다. 실제 임계치는 Orin 열설계·듀티 한계(docs/실측_데이터.md §E,
-// /tmp/orincar_power.json)를 보고 팀이 따로 정해야 한다.
+// 🔴 CPU·GPU 임계치는 아직 잠정이다 — orin-load-v6.html 의 예시값을 그대로 가져왔다.
+// 실제 임계치는 Orin 열설계·듀티 한계(docs/실측_데이터.md §E, /tmp/orincar_power.json)를
+// 보고 팀이 따로 정해야 한다.
 const CORE_WARN = 70, CORE_DANGER = 90
 const GPU_WARN = 50, GPU_DANGER = 80
-const PWR_WARN = 11000, PWR_DANGER = 13000
-// 전력 그래프의 절대 축 상한(mW). VDD_IN 은 상한이 문서화돼 있지 않아 위험 임계치보다
-// 여유 있게 잡은 잠정값이다 — 절대 스케일(축 고정)을 유지하기 위한 것으로, 실측이 아니다.
-const PWR_AXIS_MAX = 15000
+
+// ── 전력 축 [사용자 확인 2026-08-08] ────────────────────────────────────────
+// 🔴 **peak 25 W** 다. 잠정치(15,000mW)를 실제 스펙으로 교체한다.
+// 절대 스케일을 쓰는 이유가 여기 있다 — 축이 고정돼야 "지금 얼마나 쓰고 있나" 가 읽힌다.
+//
+// 참고로 실측 idle 은 VDD_IN 9,089 mW ≈ 9.1 W (2026-08-08 tegrastats).
+// peak 25 W 대비 **약 36%** 다. 즉 대기 상태에서 정격의 1/3 만 쓰고 있고,
+// 그만큼 여유가 있다는 뜻이라 저성능 모드로 내릴 근거가 된다 — 이 패널의 존재 이유다.
+const PWR_AXIS_MAX = 25000
+// 경고선은 축의 70% / 88% 로 잡는다(17.5 W / 22 W). peak 근처에서만 빨강이 뜨게 해,
+// 평상시 주황이 상시 켜져 경고가 무뎌지는 것을 막는다.
+const PWR_WARN = 17500, PWR_DANGER = 22000
 
 function statusOf(v: number, warn: number, danger: number): Tone {
   return v >= danger ? 'danger' : v >= warn ? 'warn' : 'ok'
