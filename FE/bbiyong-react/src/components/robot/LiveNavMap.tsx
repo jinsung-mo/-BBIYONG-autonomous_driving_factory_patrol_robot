@@ -292,15 +292,8 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
           transform: `scale(${zoomFactor})`,
         }}
       />
-      <button
-        type="button"
-        className="mapview"
-        onClick={() => setHeadingUp((v) => !v)}
-        aria-pressed={headingUp}
-        title="지도 방향 전환"
-      >
-        {headingUp ? '진행 방향 위' : '북향 고정'}
-      </button>
+      {/* 북향 고정/진행방향 위 토글 제거(S15P11E101 콘솔 정리) — 도면은 항상 정치(북향/수평)로 둔다.
+          headingUp 은 false 로 고정되어 도면이 회전 없이 수평으로 표시된다. */}
       {plan && !planOnly && !mapping && (
         <button
           type="button"

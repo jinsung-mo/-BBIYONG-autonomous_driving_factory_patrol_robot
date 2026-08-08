@@ -13,8 +13,9 @@ import LiveNavMap from './LiveNavMap.tsx'
 // 358 → 881 kB 로 뛴다(+523 kB). 그런데 이 뷰는 **'입체' 토글을 켠 관리자만** 본다 —
 // 2D 로만 쓰는 사용자에게까지 three 를 내려보낼 이유가 없다.
 // 별도 청크로 쪼개면 토글을 누르는 순간에만 받는다.
-const ThreeMapView = lazy(() => import('./ThreeMapView.tsx'))
 import { useInspection } from '../../live/inspection.ts'
+
+const ThreeMapView = lazy(() => import('./ThreeMapView.tsx'))
 
 const ZOOM_MIN = 0.7
 const ZOOM_MAX = 2.2
@@ -114,7 +115,9 @@ export default function MapPanel() {
                   <ThreeMapView zoomFactor={zoom} points={inspectionPoints} />
                 </Suspense>
               )
-              : <LiveNavMap zoomFactor={zoom} planOnly inspection={{ points: inspectionPoints }} lightFloor />)
+              /* 🔴 `follow` 는 -855(평면 로봇표시·추종)가 더한 것이다. 3D 뷰를 얹으면서
+                 지우지 않도록 병합 때 살렸다 — 2D 평면 뷰의 로봇 추종 기능이다. */
+              : <LiveNavMap zoomFactor={zoom} planOnly follow inspection={{ points: inspectionPoints }} lightFloor />)
           : <canvas
               ref={refs.map2d}
               className="map-zoom-canvas"

@@ -260,7 +260,14 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
     renderer.shadowMap.type = THREE.PCFShadowMap
 
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200)
-    const VIEW_DIR = new THREE.Vector3(0.62, 0.60, 0.75).normalize()
+    // 기본 시점의 **방위는 0** 이다 — 벽이 화면 축과 나란히 선다.
+    //
+    // 🔴 시안(map-v6.html)은 대각(x·z 를 둘 다 준 코너 시점)이었는데, 그 사이 머지된
+    // S15P11E101-855 가 `IsoMapView` 의 `SPIN_BASE` 를 -24° → 0° 로 바꾸며
+    // "기본 방위를 수평(벽이 화면 축과 나란함)으로 둔다 — 이전의 대각 제거" 라고 못박았다.
+    // 파일이 달라 git 이 충돌로 잡아 주지 못하는 자리라, 여기서 손으로 맞춘다.
+    // 대각으로 보고 싶으면 사용자가 드래그해서 돌리면 된다 — 기본값의 문제다.
+    const VIEW_DIR = new THREE.Vector3(0, 0.62, 0.78).normalize()
 
     const controls = new OrbitControls(camera, canvas)
     controls.enableDamping = true

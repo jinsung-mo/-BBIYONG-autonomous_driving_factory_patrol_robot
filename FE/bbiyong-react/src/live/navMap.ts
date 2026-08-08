@@ -339,10 +339,13 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     }
   }
 
-  // 도면만 보는 화면이면 여기서 끝낸다. 나침반은 아래에서 화면 좌표계에 따로 그린다.
+  // 도면만 보는 화면(지도 탭)이라도 실시간 로봇 위치는 보여 준다(S15P11E101 콘솔 정리) —
+  // 스캔·궤적·순찰 경로 등 잡다한 오버레이는 빼되, 로봇 마커만 얹는다.
   if (!overlays) {
+    drawRobotMarker(g, nav.pose, sx, sy, view)
+    if (rotating) g.restore()
     g.restore()
-    drawCompass(g, cv, DISPLAY_ROT)
+    drawCompass(g, cv, (rotating ? nav.pose.yaw - Math.PI / 2 : 0) + DISPLAY_ROT)
     return
   }
 
@@ -410,15 +413,7 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
   if (inspect) drawInspection(g, sx, sy, view, inspect, textRot)
 
   // 로봇 마커 (점 + 방향 화살표) — pose 는 TF 미확보 시 없을 수 있다
-  if (p) {
-    const X = sx(p.x), Y = sy(p.y), R = Math.max(5, view.s * 0.10)
-    g.fillStyle = '#f0c98a'
-    g.beginPath(); g.arc(X, Y, R, 0, Math.PI * 2); g.fill()
-    g.strokeStyle = '#f0c98a'; g.lineWidth = 2.5
-    g.beginPath(); g.moveTo(X, Y)
-    g.lineTo(X + Math.cos(p.yaw) * R * 2.4, Y - Math.sin(p.yaw) * R * 2.4)
-    g.stroke()
-  }
+  drawRobotMarker(g, p, sx, sy, view)
 
   if (rotating) g.restore()
 
@@ -427,6 +422,18 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
   // 방위 표시 — 회전 여부와 무관하게 북쪽이 어디인지 항상 알 수 있게 화면 좌표계에 그린다.
   // 표시 회전도 화면이 돌아간 각도이므로 함께 더한다 — 안 더하면 N 이 반대를 가리킨다.
   drawCompass(g, cv, (rotating ? nav.pose.yaw - Math.PI / 2 : 0) + DISPLAY_ROT)
+}
+
+// 로봇 마커(점 + 진행방향 화살표). 평면(도면만) 뷰와 오버레이 뷰 양쪽에서 같은 모양으로 그린다.
+function drawRobotMarker(g: any, p: any, sx: any, sy: any, view: any) {
+  if (!p) return
+  const X = sx(p.x), Y = sy(p.y), R = Math.max(5, view.s * 0.10)
+  g.fillStyle = '#f0c98a'
+  g.beginPath(); g.arc(X, Y, R, 0, Math.PI * 2); g.fill()
+  g.strokeStyle = '#f0c98a'; g.lineWidth = 2.5
+  g.beginPath(); g.moveTo(X, Y)
+  g.lineTo(X + Math.cos(p.yaw) * R * 2.4, Y - Math.sin(p.yaw) * R * 2.4)
+  g.stroke()
 }
 
 // 우상단 나침반. angle 만큼 돌아간 화면에서 북(+y)이 향하는 방향을 가리킨다.
