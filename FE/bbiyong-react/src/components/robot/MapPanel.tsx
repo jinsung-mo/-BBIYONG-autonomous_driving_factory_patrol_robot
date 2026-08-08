@@ -6,6 +6,7 @@ import { isFloorplan } from '../../live/floorplan.ts'
 import MappingProgress from './MappingProgress.tsx'
 import LiveNavMap from './LiveNavMap.tsx'
 import IsoMapView from './IsoMapView.tsx'
+import { useInspection } from '../../live/inspection.ts'
 
 const ZOOM_MIN = 0.7
 const ZOOM_MAX = 2.2
@@ -25,6 +26,9 @@ export default function MapPanel() {
   const { refs } = useSim()
   const { enabled, telemetry, plan, mapping } = useLive()
   const mapDown = enabled && isDown(capOf(telemetry, CAP_KEYS.map))
+  // 확정 점검 지점(S15P11E101-787). 운영 탭에서 승인한 AprilTag 지점을 이 지도에도 얹는다 —
+  // /topic/inspection 을 그대로 구독하므로 운영 탭 2D 지도와 같은 값을 본다.
+  const { points: inspectionPoints } = useInspection()
 
   // 정제 도면이 있으면 입체로 보여 준다(S15P11E101-676). 없으면 볼 것이 없으므로 2D 다.
   //
@@ -48,9 +52,27 @@ export default function MapPanel() {
       setFullscreen(active)
       document.documentElement.classList.toggle('view-fullscreen', active)
     }
+    // 마운트 시점에 한 번 맞춘다(S15P11E101-809).
+    // 이 표시는 상단 KPI 와 좌측 패널을 display:none 으로 접는다. 그래서 표시가
+    // 남아 있으면 '상단바와 KPI 가 사라진' 것으로 보이고, 새로고침해야 돌아온다.
+    //
+    // 예전에는 fullscreenchange 가 올 때만 맞췄고, 정리는 언마운트 cleanup 에 맡겼다.
+    // 그런데 이 앱은 탭을 옮겨도 페이지를 언마운트하지 않는다 — 모든 페이지가 계속
+    // 살아 있고 CSS 로만 감춘다. 그래서 cleanup 은 사실상 실행되지 않는다.
+    // 어떤 이유로든(요청 거부, 다른 요소로의 전환, 브라우저 자체 전체화면) 이벤트가
+    // 한 번 어긋나면 표시가 영영 남는다.
+    //
+    // 그래서 '이벤트가 오면 맞춘다' 가 아니라 '실제 상태와 늘 같게 둔다' 로 바꾼다.
+    syncFullscreen()
     document.addEventListener('fullscreenchange', syncFullscreen)
+    // 다른 창을 보다 돌아오는 순간에도 다시 맞춘다. 전체화면 해제가 이 문서 밖에서
+    // 일어나면 fullscreenchange 가 오지 않을 수 있다.
+    document.addEventListener('visibilitychange', syncFullscreen)
+    window.addEventListener('focus', syncFullscreen)
     return () => {
       document.removeEventListener('fullscreenchange', syncFullscreen)
+      document.removeEventListener('visibilitychange', syncFullscreen)
+      window.removeEventListener('focus', syncFullscreen)
       document.documentElement.classList.remove('view-fullscreen')
     }
   }, [])
@@ -76,7 +98,9 @@ export default function MapPanel() {
             </div>
           )
           : enabled
-          ? (showIso ? <IsoMapView zoomFactor={zoom} /> : <LiveNavMap zoomFactor={zoom} planOnly />)
+          ? (showIso
+              ? <IsoMapView zoomFactor={zoom} points={inspectionPoints} />
+              : <LiveNavMap zoomFactor={zoom} planOnly inspection={{ points: inspectionPoints }} lightFloor />)
           : <canvas
               ref={refs.map2d}
               className="map-zoom-canvas"
@@ -94,12 +118,10 @@ export default function MapPanel() {
           </button>
         )}
         {mapDown && !showMapping && <span className="nodata">SLAM 맵 데이터 없음</span>}
+        {/* 범례는 실제 도면에 보이는 것만 남긴다(S15P11E101 콘솔 정리) — 벽·로봇. */}
         {!showMapping && !showEmpty && <div className="maplegend" aria-label="지도 범례">
           <span><i className="legend-mark robot" />오린카</span>
-          <span><i className="legend-mark route" />순찰 경로</span>
-          <span><i className="legend-mark switchboard" />분전반</span>
-          <span><i className="legend-mark fire" />화재 지점</span>
-          <span><i className="legend-mark obstacle" />장애물</span>
+          <span><i className="legend-mark wall" />벽</span>
         </div>}
         <div className="map-controls" aria-label="지도 화면 조절">
           <button

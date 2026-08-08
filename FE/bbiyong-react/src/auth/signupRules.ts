@@ -34,6 +34,19 @@ export function passwordProblems(pw: any) {
   return miss
 }
 
+// 타이핑 중 실시간 표시용 — 각 정책 항목의 충족 여부를 순서 그대로 돌려준다.
+// passwordProblems 와 같은 규칙을 쓰되(문구·검사식 한 곳에서 관리), 통과한 항목까지 함께 노출한다.
+export type PasswordCheck = { label: string, ok: boolean }
+export function passwordChecks(pw: any): PasswordCheck[] {
+  const v = String(pw || '')
+  return [
+    { label: '8자 이상', ok: v.length >= 8 },
+    { label: '영문', ok: /[A-Za-z]/.test(v) },
+    { label: '숫자', ok: /\d/.test(v) },
+    { label: '특수문자', ok: /[^A-Za-z0-9]/.test(v) },
+  ]
+}
+
 const MIN_BIRTH_YEAR = 1900
 
 // 폼 전체 검증. 첫 번째로 걸린 문제 하나만 돌려준다(한 번에 하나씩 고치게).

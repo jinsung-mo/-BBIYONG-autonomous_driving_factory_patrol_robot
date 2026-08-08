@@ -8,6 +8,7 @@ import {
 import { errMessage } from '../../live/errors.ts'
 import { isMapFrame, localized } from '../../live/mappers.ts'
 import { DISPLAY_ROT } from '../../live/navMap.ts'
+import type { InspectionPoint } from '../../live/contracts.d.ts'
 
 // 2D 도면을 압출해 2.5D 로 보여주는 뷰 (S15P11E101-676).
 //
@@ -27,13 +28,16 @@ const PAN_STEP = 48
 /** 이보다 멀리는 못 간다 — 지도를 잃어버리고 빈 화면만 남는 일을 막는다. */
 const PAN_MAX = 1200
 
-/** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다. */
-const LAYER_STEP = 1.15
+/** 층 간격(px). 좁으면 이음새가 보이고 넓으면 계단처럼 보인다.
+    1.15 → 0.77 (2026-08-07): 벽(≈46px)이 방을 압도해 내부가 안 보인다는 피드백으로
+    총 높이를 2/3(≈31px)로 낮췄다. 층 수(WALL_H)를 줄이는 대신 간격을 좁혀,
+    옆면 음영 계단이 오히려 부드러워진다. */
+const LAYER_STEP = 0.77
 // nav 자세가 이 시간 안에 들어왔다면 텔레메트리로 덮지 않는다.
 // 텔레메트리는 1Hz 라, 3Hz 인 nav 와 섞으면 마커가 앞뒤로 떨린다.
 const NAV_FRESH_MS = 2500
 
-// 차체 높이(S15P11E101-750). 벽(WALL_H * LAYER_STEP ≈ 46px)보다 낮아야 방 안의
+// 차체 높이(S15P11E101-750). 벽(WALL_H * LAYER_STEP ≈ 31px)보다 낮아야 방 안의
 // 물건으로 읽힌다 — 벽보다 크면 로봇이 건물을 밟고 선 것처럼 보인다.
 // 목표까지 이보다 멀면 아직 가는 중이다. 보간 잔차(1px 미만)와 갈리는 값이다.
 const MOVING_PX = 1.2
@@ -52,7 +56,7 @@ const CAR_LAYERS = Array.from({ length: CAR_H }, (_, k) => ({
 // 씬 전체를 돌리므로 도면과 로봇 마커가 함께 돈다(마커는 씬 안에 있다).
 const SPIN_BASE = -24 + (DISPLAY_ROT * 180) / Math.PI
 
-export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) {
+export default function IsoMapView({ zoomFactor = 1, points = [] }: { zoomFactor?: number, points?: InspectionPoint[] }) {
   const { plan, connected, onNavUpdate, robotOnline, telemetry } = useLive()
   // 텔레메트리가 map 이 아니라고 말하면 그린 것을 거둔다(S15P11E101-773)
   const unlocalized = !!telemetry?.location && !isMapFrame(telemetry.location)
@@ -67,6 +71,20 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   // 화면 이동(S15P11E101-777). 확대해 놓고 구석을 보려면 옮길 길이 있어야 한다.
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const dragRef = useRef<{ x: number, y: number, tilt: number, spin: number } | null>(null)
+
+  // 로봇 추종(체이스캠) — S15P11E101-835. 켜면 로봇을 화면 중앙에 두고 진행 방향이
+  // 위를 향하도록 씬을 돌린다(자동차 게임 시점). 씬 transform 을 매 프레임 직접 쓰므로
+  // (setState 로 몰면 벽 층 divs 가 전부 다시 그려져 끊긴다) 관련 값은 ref 로도 읽는다.
+  const [follow, setFollow] = useState(false)
+  const followRef = useRef(false)
+  followRef.current = follow
+  const sceneRef = useRef<HTMLDivElement | null>(null)
+  const tiltRef = useRef(tilt)
+  tiltRef.current = tilt
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  const zoomFactorRef = useRef(zoomFactor)
+  zoomFactorRef.current = zoomFactor
 
   // 로봇 위치는 자주 바뀐다. 상태로 두면 프레임마다 다시 렌더되므로 DOM 을 직접 옮긴다.
   const markerRef = useRef<HTMLDivElement | null>(null)
@@ -138,7 +156,11 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
           el.style.display = ''
           el.style.left = `${v.x}px`
           el.style.top = `${v.y}px`
-          el.style.setProperty('--yaw', `${-v.yaw}rad`)
+          // 차체 앞부분 방향(S15P11E101-835). 차체 로컬은 -y(위)가 앞이고, CSS 는
+          // rotate(var(--yaw)) 로 시계방향(y-down)으로 돈다. 월드 yaw 를 씬 픽셀(y-down)
+          // 방향 (cos yaw, -sin yaw) 으로 보내려면 회전각이 (π/2 - yaw) 여야 한다 —
+          // 2D 지도 화살표와 같은 규약이다. 예전 -yaw 는 앞이 90° 어긋나 있었다.
+          el.style.setProperty('--yaw', `${Math.PI / 2 - v.yaw}rad`)
           // 이동 중인가(S15P11E101-750). 목표와의 거리로 잰다 — 텔레메트리의 speed 는
           // 1Hz 라 짧은 이동을 놓치고, 여기 값은 매 프레임 갱신되므로 화면과 어긋나지 않는다.
           // 멈춘 순간 바로 끄면 신호등처럼 깜빡인다 — 잠시 유지하고 끈다.
@@ -150,6 +172,18 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
             el.classList.toggle('moving', moving)
           }
         }
+      }
+      // 추종 시점 — 로봇을 화면 중앙에 두고(transform-origin=로봇) 진행 방향을 위로 돌린다.
+      // 로봇이 없으면(shownRef 없음) 아무것도 몰지 않는다 — 없는 자리를 좇지 않는다.
+      const sc = sceneRef.current
+      const s2 = srcRef.current
+      const v2 = shownRef.current
+      if (sc && s2 && followRef.current && v2) {
+        const z = zoomRef.current * zoomFactorRef.current
+        // 씬 회전: 차체 front(시계각 -yaw)를 위(-90°)로 보낸다 → spin = deg(yaw) - 90
+        const spinFollow = (v2.yaw * 180) / Math.PI - 90
+        sc.style.transformOrigin = `${v2.x}px ${v2.y}px`
+        sc.style.transform = `translate(${s2.w / 2 - v2.x}px, ${s2.h / 2 - v2.y}px) rotateX(${tiltRef.current}deg) rotateZ(${spinFollow}deg) scale(${z})`
       }
       raf = requestAnimationFrame(step)
     }
@@ -167,12 +201,12 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     // 맵 전체 대비 비율로 옮겨야 2D 와 같은 자리에 찍힌다.
     const px = worldToScenePx(p as any, x, y, { w: s2.w, h: s2.h })
     targetRef.current = { x: px.x, y: px.y, yaw: Number.isFinite(yaw) ? yaw : 0 }
-    // 로봇은 벽 위로 띄운다 — 바닥에 붙이면 기울인 화면에서 벽에 가린다
-    // 차량은 벽 높이 위에 둔다(S15P11E101-745 의 결정을 지킨다).
-    // 750 에서 '바닥에 얹힌 것처럼' 을 문자 그대로 받아 z=2 로 내렸다가, 실제로 띄워
-    // 보니 벽 층에 묻혀 아무것도 보이지 않았다 — 745 가 띄운 이유가 그것이었다.
-    // 대신 차체 아래 접지 그림자와 바닥까지 내리는 기둥으로 '어디에 서 있는지' 를 만든다.
-    el.style.setProperty('--rz', `${WALL_H * LAYER_STEP + 6}px`)
+    // 로봇은 바닥에 붙인다(2026-08-07). 745 는 '벽에 가린다' 는 이유로 벽 위에 띄웠지만,
+    // 그 결과가 '로봇이 공중에 둥둥 떠 있다' 는 더 큰 오독을 만들었다 — 순찰 로봇은
+    // 바닥을 달리는 물건이다. 벽 뒤에 가릴 때를 위해 차체에서 벽보다 높이 솟는
+    // 광선 기둥(.iso-robot::before)을 세워 자리를 잃지 않게 한다. 벽도 2/3 로 낮아져
+    // (≈31px) 가림 자체가 줄었다. z=2 는 바닥 판·벽 0층과의 z-fighting 을 피하는 여유다.
+    el.style.setProperty('--rz', '2px')
     el.style.setProperty('--car-h', `${CAR_H}px`)
   }
 
@@ -226,6 +260,7 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
+    if (followRef.current) return   // 추종 중에는 카메라를 자동으로 몬다 — 수동 조작을 막는다
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     dragRef.current = { x: e.clientX, y: e.clientY, tilt, spin }
   }
@@ -242,7 +277,10 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   const onWheel = (e: React.WheelEvent) => {
     // 지도 위에서 굴린 휠은 지도를 확대한다. 페이지가 함께 스크롤되면 조작이 어긋난다.
     e.preventDefault()
-    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY > 0 ? 0.9 : 1.1))))
+    const next = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY > 0 ? 0.9 : 1.1)))
+    // 추종 중에도 확대/축소는 허용한다 — 씬 transform 은 추종 루프가 zoomRef 로 다시 쓴다.
+    zoomRef.current = next(zoomRef.current)
+    setZoom(next)
   }
   // 마우스에만 길을 두지 않는다.
   //   방향키       — 지도를 옮긴다(S15P11E101-777)
@@ -250,6 +288,7 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
   //                 돌리는 길은 드래그로도 있지만 키보드만 쓰는 사람에게는 여기뿐이다)
   //   +/-          — 확대
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (followRef.current) return   // 추종 중에는 이동·회전 키를 막는다 — 카메라는 자동이다
     const arrow = e.key === 'ArrowLeft' || e.key === 'ArrowRight'
       || e.key === 'ArrowUp' || e.key === 'ArrowDown'
     if (arrow && e.shiftKey) {
@@ -277,15 +316,24 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     if (e.key === '+' || e.key === '=') { setZoom((z) => Math.min(ZOOM_MAX, z * 1.15)); e.preventDefault() }
     else if (e.key === '-') { setZoom((z) => Math.max(ZOOM_MIN, z / 1.15)); e.preventDefault() }
   }
-  const reset = useCallback(() => {
-    setTilt(58); setSpin(SPIN_BASE); setZoom(1); setPan({ x: 0, y: 0 })
+  // 추종을 끄면 씬을 직접 몰던 transform-origin 을 비워, React 상태 기반 transform 이
+  // 다시 정상으로 먹게 한다(안 비우면 회전축이 로봇에 남아 개요 시점이 틀어진다).
+  useEffect(() => {
+    const sc = sceneRef.current
+    if (!follow && sc) sc.style.transformOrigin = ''
+  }, [follow])
+  const toggleFollow = useCallback(() => {
+    setFollow((on) => {
+      if (on) {
+        // 끄는 길: 회전축을 즉시 비우고 기본 개요 시점으로 되돌린다.
+        const sc = sceneRef.current
+        if (sc) sc.style.transformOrigin = ''
+        setTilt(58); setSpin(SPIN_BASE); setZoom(1); setPan({ x: 0, y: 0 })
+        return false
+      }
+      return true
+    })
   }, [])
-  // 지금 정면 각도인가. 눌러도 화면이 이미 정면이면 아무것도 안 바뀌어 '먹었는지'
-  // 알 수 없었다 — 버튼이 지금 상태를 말하게 한다(S15P11E101-748).
-  const atFront = Math.abs(tilt - 58) < 0.5
-    && Math.abs(((spin - SPIN_BASE) % 360 + 540) % 360 - 180) < 0.5
-    && Math.abs(zoom - 1) < 0.01
-    && Math.abs(pan.x) < 0.5 && Math.abs(pan.y) < 0.5
 
   // 층. 위로 갈수록 밝게 — 빛이 위에서 온다(S15P11E101-748).
   //
@@ -303,8 +351,10 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
     }
   }), [])
 
-  // 장애물 층. 벽의 절반 높이에 주황 계열 — 낮고 색이 달라 '치울 수 있는 것' 으로 읽힌다.
+  // 장애물 층. 벽의 절반 높이, 청회색 — 낮고 색이 달라 '치울 수 있는 것' 으로 읽힌다.
   // 명도 폭은 벽과 같게 좁힌다(748). 한 물건 안에서 명도가 크게 벌어지면 발광체처럼 보인다.
+  // 주황 → 청회색(2026-08-07): 주황은 분전반 표식(호박색)과 같은 계열로 읽혀,
+  // 벽 옆 장애물이 분전반으로 오인됐다. 2D 지도 범례의 장애물색(#59637a)과 계열을 맞춘다.
   const obstacleLayers = useMemo(() => {
     const n = Math.max(2, Math.round(WALL_H * 0.45))
     return Array.from({ length: n }, (_, k) => ({
@@ -312,7 +362,7 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
       t: k / (n - 1),
     })).map((l) => ({
       z: l.z,
-      color: `hsl(28 52% ${52 + l.t * 14}%)`,
+      color: `hsl(222 14% ${44 + l.t * 14}%)`,
     }))
   }, [])
 
@@ -341,6 +391,7 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
       aria-label="순찰 구역 입체 지도 — 방향키로 이동, Shift+방향키로 회전, 휠 또는 +/− 로 확대, 드래그로 회전"
     >
       <div
+        ref={sceneRef}
         className="iso-scene"
         style={{
           // translate 를 회전보다 앞에 둔다 — 기울어진 지도 안이 아니라 화면 기준으로
@@ -368,7 +419,7 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
             }}
           />
         ))}
-        {/* 장애물 — 벽보다 낮고 주황(S15P11E101-777). 벽은 건물이라 못 치우지만
+        {/* 장애물 — 벽보다 낮고 청회색(S15P11E101-777). 벽은 건물이라 못 치우지만
             장애물은 사람이 치울 수 있는 것이다. 같은 색이면 그 구분이 사라진다. */}
         {src.obstacleUrl && obstacleLayers.map((l) => (
           <div
@@ -382,11 +433,12 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
             }}
           />
         ))}
-        {/* 로봇 — 벽 위로 띄우고, 화면을 돌려도 정면을 보게 한다 */}
+        {/* 로봇 — 바닥에 붙인다(2026-08-07, 공중 부양 오독 수정). */}
         {/* 차량형 마커(S15P11E101-750). 벽과 같은 방식으로 판을 쌓아 부피를 만든다 —
             벽만 입체이고 로봇만 납작하면 같은 씬의 물건으로 읽히지 않는다.
             차체는 yaw 로 돌고, 앞머리의 등이 진행 방향을 알린다.
-            바닥에는 접지 그림자를, 위로는 가는 기둥을 세워 벽 뒤에서도 자리를 잃지 않게 한다. */}
+            바닥에는 접지 그림자를, 위로는 벽보다 높이 솟는 광선 기둥을 세워
+            벽 뒤에 가려도 자리를 잃지 않게 한다. */}
         <div ref={markerRef} className="iso-robot" style={{ display: 'none' }}>
           <i className="iso-car-shadow" />
           <div className="iso-car">
@@ -395,8 +447,42 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
             ))}
             <i className="iso-car-roof" />
             <i className="iso-car-light" />
+            {/* 전방 지시선(S15P11E101-835). 2D 지도의 로봇 마커(원+노란 실선)를 본떠,
+                차체 앞으로 뻗는 선으로 진행 방향을 한눈에 알린다. .iso-car 의
+                rotate(--yaw) 를 그대로 상속하므로 실제 로봇 방향을 실시간으로 따라 돈다. */}
+            <i className="iso-car-dir" />
           </div>
         </div>
+
+        {/* 확정 점검 지점(S15P11E101-787). 운영 탭에서 승인한 AprilTag 지점을 벽 위에 핀으로
+            세운다 — 2D 운영 지도의 마름모 태그와 같은 자리를 3D 개요에서도 짚어 준다.
+            번호는 순찰이 도는 차례다. 핀은 씬 회전을 상쇄(빌보드)해 어느 각도에서 봐도
+            번호가 정면으로 읽힌다. 바닥까지 내리는 기둥으로 어느 자리 위인지 알린다.
+            enabled=false(순찰 제외) 지점은 흐리게 둔다 — 지우면 왜 안 도는지 알 수 없다. */}
+        {points.map((p) => {
+          const t = p?.target
+          if (!t || !Number.isFinite(Number(t.x)) || !Number.isFinite(Number(t.y))) return null
+          // 로봇 마커(aim)와 같은 변환을 쓴다(S15P11E101-789) — 다른 식을 쓰면 핀만 딴 자리에 선다.
+          const px = worldToScenePx(plan as any, Number(t.x), Number(t.y), { w: src.w, h: src.h })
+          return (
+            <div
+              key={p.pointId}
+              className={`iso-insp${p.enabled === false ? ' off' : ''}`}
+              style={{
+                left: `${px.x}px`,
+                top: `${px.y}px`,
+                // 벽·로봇보다 높이 띄운다 — 개요에서 지점 핀이 벽에 묻히지 않게.
+                '--rz': `${WALL_H * LAYER_STEP + 16}px`,
+                // 씬 회전(rotateX(tilt) rotateZ(spin))의 역을 걸어 화면을 향하게 한다.
+                '--face': `rotateZ(${-spin}deg) rotateX(${-tilt}deg)`,
+              } as React.CSSProperties}
+              title={`${p.name || `태그 ${p.tagId}`}${p.enabled === false ? ' (순찰 제외)' : ''}`}
+            >
+              <i className="iso-insp-drop" />
+              <span className="iso-insp-pin"><b>{p.sequence}</b></span>
+            </div>
+          )
+        })}
       </div>
 
       {/* 위치를 믿을 수 없으면 왜 마커가 없는지 말한다(S15P11E101-773).
@@ -409,12 +495,12 @@ export default function IsoMapView({ zoomFactor = 1 }: { zoomFactor?: number }) 
       )}
       <button
         type="button"
-        className={`mapview iso-reset${atFront ? ' on' : ''}`}
-        onClick={reset}
-        aria-pressed={atFront}
-        title={atFront ? '정면 각도입니다' : '보는 각도 초기화'}
+        className={`mapview iso-reset${follow ? ' on' : ''}`}
+        onClick={toggleFollow}
+        aria-pressed={follow}
+        title={follow ? '로봇 추종 중 — 눌러서 개요 시점으로' : '로봇을 따라가는 시점(자동차 게임처럼)'}
       >
-        정면으로
+        {follow ? '추종 중' : '로봇 추종'}
       </button>
     </div>
   )

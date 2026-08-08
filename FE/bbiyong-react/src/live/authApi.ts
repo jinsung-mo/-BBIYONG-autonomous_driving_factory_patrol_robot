@@ -150,6 +150,36 @@ export function signupRequest({ email, password, name, phone, birth, gender }: {
   })
 }
 
+// ---- 이메일 인증 · 아이디/비밀번호 찾기 (S15P11E101) ----
+//
+// 인증 상태는 서버가 이메일 기준으로 들고 있다(토큰 불필요). send → verify 를 거친 뒤에야
+// signup 이 통과하므로, 화면은 verify 성공만 확인하고 그대로 가입을 진행하면 된다.
+
+/** 회원가입 이메일로 인증코드를 발송한다. 이미 가입된 이메일이면 409. */
+export function sendSignupCode(email: string) {
+  return post('/api/auth/email/send-code', { email })
+}
+
+/** 회원가입 이메일 인증코드를 검증한다. 성공 시 서버가 해당 이메일을 '인증됨'으로 표시한다. */
+export function verifySignupCode(email: string, code: string) {
+  return post('/api/auth/email/verify-code', { email, code })
+}
+
+/** 아이디(이메일) 찾기 — 이름·휴대전화(숫자만)·생년월일 일치 시 마스킹된 이메일을 반환한다. */
+export function findIdRequest(name: string, phoneNumber: string, birthDate: string) {
+  return post('/api/auth/find-id', { name, phoneNumber, birthDate })
+}
+
+/** 비밀번호 재설정 인증코드 발송. 계정 열거 방지를 위해 미가입 이메일도 동일하게 200. */
+export function sendResetCode(email: string) {
+  return post('/api/auth/password/send-reset-code', { email })
+}
+
+/** 비밀번호 재설정 — 인증코드 + 새 비밀번호(정책 검증은 서버가 한다). */
+export function resetPasswordRequest(email: string, code: string, newPassword: string) {
+  return post('/api/auth/password/reset', { email, code, newPassword })
+}
+
 /**
  * 인가가 필요한 조회 API 공통 호출부.
  * 반환 타입은 호출부가 제네릭 대신 JSDoc 캐스트로 좁힌다(JS 라 제네릭 호출을 못 쓴다).

@@ -26,7 +26,9 @@ import { localized } from '../../live/mappers.ts'
 // '자동'(yaw 없음)이던 지점도 전부 오른쪽(동쪽)으로 그려지는 버그가 있었는데(같은 티켓에서
 // 별도로 고쳤다), 그것과 별개로 방향을 처음부터 직접 정할 방법이 없었다 — 목록의 숫자 입력은
 // 도(degree)를 외워 타이핑해야 해서 지도 위에서 바로 가리키는 편이 훨씬 직관적이다.
-export default function LiveNavMap({ route = null, onPick = null, onSetHeading = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false, inspection = null }: {
+// lightFloor 를 주면 캔버스 바탕을 흰색으로 칠한다(S15P11E101-822). 지도 탭·순찰 경로는
+// '흰 바닥' 위에 도면을 얹는 편이 3D 입체 뷰(흰 바닥)와 통일돼 보기 편하다.
+export default function LiveNavMap({ route = null, onPick = null, onSetHeading = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false, inspection = null, lightFloor = false }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     onPick?: ((p: { x: number, y: number } | null) => void) | null,
     onSetHeading?: ((index: number, yawRadians: number) => void) | null,
@@ -35,6 +37,7 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
     mapping?: boolean,
     follow?: boolean,
     inspection?: { candidates?: any[], points?: any[], selectedId?: string | null } | null,
+    lightFloor?: boolean,
   }) {
   const { onNavUpdate, connected, plan } = useLive()
   const cvRef = useRef<HTMLCanvasElement | null>(null)
@@ -50,6 +53,9 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
   // 점검 지점도 자주 바뀐다 — 구독을 다시 걸지 않기 위해 ref 로 읽는다(S15P11E101-787)
   const inspectRef = useRef(inspection)
   inspectRef.current = inspection
+  // 바탕색도 ref 로 읽는다 — 구독 effect 가 이 값을 세팅 시점에 가둬 stale 되지 않게 한다.
+  const bgColorRef = useRef('#15171c')
+  bgColorRef.current = lightFloor ? '#ffffff' : '#15171c'
   // 정제 도면이 있으면 기본으로 보여준다(S15P11E101-524). 원본 점유격자로 되돌릴 수도 있어야 한다 —
   // 도면이 실제와 어긋나 보일 때 원본으로 확인할 방법이 없으면 곤란하다.
   // 따라가는 중인가. follow 를 켠 채로 들어오면 켜진 상태로 시작한다.
@@ -89,7 +95,7 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
     const cv = cvRef.current
     if (!cv || !lastRef.current) return
     const fitted = fitCanvas(cv)
-    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeForDraw(), showPlanRef.current, !planOnly, inspectRef.current)
+    if (fitted) drawNav(fitted.g, cv, lastRef.current, viewRef.current, headingUpRef.current, routeForDraw(), showPlanRef.current, !planOnly, inspectRef.current, bgColorRef.current)
   }
 
   useEffect(() => {
@@ -111,7 +117,7 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
       // map 프레임이 아닌 자세는 믿을 수 없다(S15P11E101-773). 그 값으로 화면을 끌면
       // 지도가 엉뚱한 곳으로 밀려나고, 조작자는 그 사실조차 모른다 — 차라리 가만히 둔다.
       if (followingRef.current && localized(nav?.pose)) followPose(viewRef.current, cv, nav!.pose!, 0.5)
-      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeForDraw(), showPlanRef.current, !planOnly, inspectRef.current)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeForDraw(), showPlanRef.current, !planOnly, inspectRef.current, bgColorRef.current)
     }
 
     const off = onNavUpdate(render)

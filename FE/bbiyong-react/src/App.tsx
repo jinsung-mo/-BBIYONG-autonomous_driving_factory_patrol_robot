@@ -13,8 +13,6 @@ import RobotPage from './components/robot/RobotPage.tsx'
 import MapPage from './components/robot/MapPage.tsx'
 import CameraPage from './components/robot/CameraPage.tsx'
 import EventPage from './components/events/EventPage.tsx'
-import StatsPage from './components/stats/StatsPage.tsx'
-import OpsPage from './components/ops/OpsPage.tsx'
 import ConfigPage from './components/config/ConfigPage.tsx'
 import EventAlert from './components/EventAlert.tsx'
 import { SettingsProvider } from './settings/SettingsContext.tsx'
@@ -42,8 +40,6 @@ function Sections({ active, isAdmin }: { active: Section, isAdmin: boolean }) {
       <div hidden={active !== 'live'}><MapPage /></div>
       <div hidden={active !== 'cam'}><CameraPage /></div>
       <div hidden={active !== 'events'}><EventPage /></div>
-      <div hidden={active !== 'stats'}><StatsPage /></div>
-      {isAdmin && active === 'ops' && <OpsPage />}
       {isAdmin && active === 'config' && <ConfigPage />}
     </>
   )
@@ -54,8 +50,10 @@ function Dashboard() {
   const { isAdmin } = useAuth()
   const [section, setSection] = useState<Section>(() => (sessionStorage.getItem('section') as Section) || 'live')
   useEffect(() => { sessionStorage.setItem('section', section) }, [section])
-  // 권한이 줄어드는 경우(관리자 → 뷰어 계정으로 재로그인)를 대비해 접근 가능한 섹션으로 되돌린다
-  const active = !isAdmin && section !== 'live' && section !== 'cam' && section !== 'events' && section !== 'stats' ? 'live' : section
+  // 접근 가능한 섹션으로 되돌린다. 권한 강등(관리자→뷰어)뿐 아니라, 삭제된 옛 섹션이
+  // sessionStorage 에 남아 있는 경우(통계/운영)도 지도로 보정한다.
+  const allowed: Section[] = isAdmin ? ['live', 'cam', 'events', 'config'] : ['live', 'cam', 'events']
+  const active: Section = allowed.includes(section) ? section : 'live'
 
   // 상단바는 페이지 밖에 있어 페이지 배경을 물려받지 못한다. 문서 뿌리에 표시를
   // 달아 배경을 뿌리로 올리고 상단바는 비운다 — 가로로 남는 흰 띠가 사라진다.

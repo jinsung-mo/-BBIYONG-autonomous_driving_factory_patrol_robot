@@ -11,7 +11,7 @@ import { errMessage, errStatus } from './errors.ts'
 // - 활성 맵 지정 : PUT /api/maps/{id}/active. BE 가 정제 도면(FLOORPLAN)을 자동
 //                  활성화하며, 다른 맵을 쓰려면 이 API 로 지정한다.
 
-import { authedGet, authedSend } from './authApi.ts'
+import { authedGet, authedSend, refreshAccessToken } from './authApi.ts'
 import { REST_BASE } from './config.ts'
 
 export const MAPPING_STATUS = 'MAPPING'
@@ -148,9 +148,18 @@ export class NotImplementedError extends Error {}
  * @returns {Promise<string>} objectURL
  */
 export async function loadMapImageUrl(imageUrl: string, accessToken: string | null | undefined) {
-  const res = await fetch(`${REST_BASE}${imageUrl}`, {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  // 이미지는 바이너리(blob)라 authedGet(=JSON 파서)을 쓸 수 없어 직접 fetch 한다.
+  // 그래도 401 갱신 로직은 똑같이 태워야 한다(S15P11E101-822) — 목록은 authedGet 이라
+  // 토큰이 만료돼도 갱신 후 성공하는데, 이미지만 raw fetch 라 401 로 조용히 실패해
+  // '맵 보기' 를 눌러도 그림이 안 뜨던 비대칭이 있었다.
+  const run = (token: string | null | undefined) => fetch(`${REST_BASE}${imageUrl}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
+  let res = await run(accessToken)
+  if (res.status === 401) {
+    const next = await refreshAccessToken()
+    if (next) res = await run(next)
+  }
   if (!res.ok) throw new Error(`맵 이미지를 받지 못했습니다 (HTTP ${res.status})`)
   return URL.createObjectURL(await res.blob())
 }

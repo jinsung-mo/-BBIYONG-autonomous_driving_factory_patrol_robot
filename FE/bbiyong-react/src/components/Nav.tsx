@@ -13,8 +13,7 @@ import UserMenu from './auth/UserMenu.tsx'
 // 뷰어에게 탭 자체를 감추는 이유는 눌러도 못 들어가는 문을 만들지 않기 위해서다.
 // (반대로 관제 화면의 조작 버튼은 감추지 않고 회색으로 남긴다 — 기능이 없는 게 아니라 권한이 없는 것)
 /**
- * @param {{ section: 'live' | 'ops' | 'config',
- *           onSection: (s: 'live' | 'ops' | 'config') => void }} props
+ * @param {{ section: Section, onSection: (s: Section) => void }} props
  */
 export default function Nav({ section, onSection }: { section: Section,
             onSection: (s: Section) => void }) {
@@ -22,17 +21,14 @@ export default function Nav({ section, onSection }: { section: Section,
   const { enabled } = useLive()
   const { user, isAdmin } = useAuth()
 
-  // 실서버와 시뮬레이션 모두 지도, 카메라, 이벤트, 통계 화면을 기본으로 제공한다.
+  // 지도, 카메라, 이벤트 화면을 기본으로 제공한다. 설정은 관리자에게만 보인다.
+  // (S15P11E101 콘솔 정리) 통계 탭 삭제, 운영 탭 삭제 — 운영의 매핑·순찰 경로는 지도 탭으로,
+  // 점검 지점·임계온도는 설정으로 이동했다.
   const tabs: Array<{ key: Section, label: string }> = [
     { key: 'live' as const, label: '지도' },
     { key: 'cam' as const, label: '카메라' },
     { key: 'events' as const, label: '이벤트' },
-    { key: 'stats' as const, label: '통계' },
-    ...(isAdmin
-      ? [
-        { key: 'ops' as const, label: '운영' }, { key: 'config' as const, label: '설정' },
-      ]
-      : []),
+    ...(isAdmin ? [{ key: 'config' as const, label: '설정' }] : []),
   ]
 
   return (
