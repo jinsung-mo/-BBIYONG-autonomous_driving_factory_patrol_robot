@@ -72,6 +72,10 @@ export function LiveProvider({ children }: any) {
   // '모른다' 를 IDLE 과 구분해 둔다 — 모르는 상태에서 도면을 띄우면, 실제로는
   // 매핑 중인데 지도 탭이 옛 도면을 보여 주는 일이 생긴다.
   const [mappingPhase, setMappingPhase] = useState<import('./contracts.d.ts').MappingPhase | null>(null)
+  // 매핑 시작 대기(S15P11E101). START_MAPPING 을 보낸 순간부터 로봇이 실제로 매핑에
+  // 들어가(MAPPING_STATUS) mapping 이 true 가 되기까지의 공백을 메운다 — 그 사이 지도 탭이
+  // 아무 표시 없이 옛 도면을 보여 주지 않도록, 이 신호가 켜지면 로딩 화면을 띄운다.
+  const [mappingStarting, setMappingStarting] = useState(false)
   // 정제 도면(S15P11E101-524). planReady 는 알림, plan 은 실제로 받아 온 도면이다.
   const [planReady, setPlanReady] = useState<any>(null)
   const [plan, setPlan] = useState<import('./contracts.d.ts').PlanLayer | null>(null)
@@ -506,6 +510,21 @@ export function LiveProvider({ children }: any) {
     wasMappingRef.current = now
   }, [mappingPhase, telemetry?.status, resetMappingView])
 
+  // 매핑 시작 대기 해제(S15P11E101). 로봇이 실제로 매핑에 들어갔거나(MAPPING) 완료되면
+  // 대기 신호를 끈다 — 그때부터는 mapping/도면이 화면을 대신한다.
+  useEffect(() => {
+    const running = mappingPhase === PHASE_MAPPING
+      || (mappingPhase == null && telemetry?.status === 'MAPPING')
+    if (running || mappingComplete) setMappingStarting(false)
+  }, [mappingPhase, telemetry?.status, mappingComplete])
+
+  // 로봇이 시작에 응답하지 않아도 로딩이 영영 돌지 않도록 상한을 둔다(요청 거부·오프라인 대비).
+  useEffect(() => {
+    if (!mappingStarting) return undefined
+    const id = setTimeout(() => setMappingStarting(false), 25000)
+    return () => clearTimeout(id)
+  }, [mappingStarting])
+
   // 활성 도면을 받아 온다(S15P11E101-524). 로그인 직후 한 번, 그리고 FLOORPLAN_READY 마다.
   // 이미지는 blob 으로 받아 objectURL 로 들고 있으므로 교체할 때 이전 것을 반드시 풀어야 한다.
   useEffect(() => {
@@ -640,11 +659,11 @@ export function LiveProvider({ children }: any) {
       setCameraTilt: (deg: any) => send('/app/control/camera', { command: TILT_COMMAND, tilt: deg }),
       // 자율 주행하며 2D 맵 생성 시작(S15P11E101-483).
       // BE 는 /app/control/operation 에서 이 명령을 로봇으로 릴레이한다.
-      startMapping: () => send('/app/control/operation', { command: 'START_MAPPING' }),
+      startMapping: () => { setMappingStarting(true); send('/app/control/operation', { command: 'START_MAPPING' }) },
       // 지금 만들어진 맵을 이름 붙여 저장한다(가이드 §5 SAVE_MAP) — 운영 탭에서 쓴다
       saveMap: (name: any) => send('/app/control/operation', { command: 'SAVE_MAP', name }),
       // 진행 중인 자율탐색 매핑 중단(S15P11E101-627). 로봇이 공장을 도는 중에 멈춰 세우는 명령이다.
-      stopMapping: () => send('/app/control/operation', { command: 'STOP_MAPPING' }),
+      stopMapping: () => { setMappingStarting(false); send('/app/control/operation', { command: 'STOP_MAPPING' }) },
     }
   }, [])
 
@@ -756,6 +775,7 @@ export function LiveProvider({ children }: any) {
     speed, setSpeed,
     mappingComplete, clearMappingComplete, robotOnline,
     mappingPhase, mapping: mappingPhase === PHASE_MAPPING || (mappingPhase == null && telemetry?.status === 'MAPPING'),
+    mappingStarting,
     resetMappingView,
     driveMode, setDriveMode,
     plan, planError,
@@ -763,7 +783,7 @@ export function LiveProvider({ children }: any) {
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
       toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
       videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline,
-      mappingPhase, resetMappingView, driveMode, setDriveMode, plan, planError,
+      mappingPhase, mappingStarting, resetMappingView, driveMode, setDriveMode, plan, planError,
       ownershipView, controlOwnership, mySessionId])
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>

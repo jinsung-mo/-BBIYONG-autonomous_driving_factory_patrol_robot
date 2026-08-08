@@ -33,7 +33,7 @@ const clampZoom = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Numbe
 // '지금 보고 있는 것이 확정된 지도' 라고 오해하게 된다 — 그 지도는 아직 그리는 중이다.
 export default function MapPanel() {
   const { refs } = useSim()
-  const { enabled, telemetry, plan, mapping } = useLive()
+  const { enabled, telemetry, plan, mapping, mappingStarting } = useLive()
   const mapDown = enabled && isDown(capOf(telemetry, CAP_KEYS.map))
   // 확정 점검 지점(S15P11E101-787). 운영 탭에서 승인한 AprilTag 지점을 이 지도에도 얹는다 —
   // /topic/inspection 을 그대로 구독하므로 운영 탭 2D 지도와 같은 값을 본다.
@@ -45,9 +45,10 @@ export default function MapPanel() {
   // 정확한 위치를 읽는 데는 위에서 내려다보는 편이 낫다. 조작자가 고를 일이다.
   const canIso = enabled && isFloorplan(plan)
   // 매핑 중에는 도면을 내주지 않는다. 직전 도면이 남아 있어도 지금 구조와 다를 수 있다.
-  const showMapping = enabled && mapping
+  // 시작 대기(mappingStarting)도 포함 — 시작을 누른 순간부터 바로 로딩 화면을 띄운다(S15P11E101).
+  const showMapping = enabled && (mapping || mappingStarting)
   // 매핑도 아니고 도면도 없으면 그릴 것이 없다 — 빈 검은 판 대신 할 일을 적어 준다.
-  const showEmpty = enabled && !mapping && !plan
+  const showEmpty = enabled && !mapping && !mappingStarting && !plan
   const [iso, setIso] = useState(true)
   const [zoom, setZoom] = useState(1)
   const [fullscreen, setFullscreen] = useState(false)
