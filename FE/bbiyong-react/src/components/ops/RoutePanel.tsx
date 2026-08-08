@@ -5,21 +5,26 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import LiveNavMap from '../robot/LiveNavMap.tsx'
 import {
-  addWaypoint, applyWaypoints, deleteWaypoint, listWaypoints, replaceWaypoints,
-  startPatrol, startPatrolMessage, wpLabel,
+  addWaypoint, deleteWaypoint, listWaypoints, startPatrol, startPatrolMessage, wpLabel,
 } from '../../live/waypoints.ts'
 import { useResourceSync } from '../../live/sync.ts'
 
-// 순찰 경로 (S15P11E101-514) — 2D 지도를 클릭해 순찰 지점을 찍고, 순서를 정해 로봇에 하달한다.
+// 순찰 경로 (S15P11E101-514) — 2D 지도를 클릭해 순찰 지점을 찍고, 로봇에 하달한다.
 //
 // 운영 탭에 둔다. 맵을 만들고(모델링) 그 위에 경로를 그리고 로봇에 내려보내는 흐름이
 // 한 화면에서 이어진다. 관제 화면은 모니터링과 실시간 개입만 맡는다(S15P11E101-475).
+//
+// 지점 이름·방향(heading)·순서 편집 UI 는 뗐다(S15P11E101-814) — 각 지점은 번호와 삭제만
+// 남는다. 이름/방향은 여전히 서버 계약(WaypointRequest.name/yaw)에 있지만, 이 화면은 값을
+// 보내지 않는다(undefined) — addWaypoint 가 두 필드를 이미 '있을 때만' 보내도록 돼 있어
+// (조건부 스프레드) 그대로 두면 서버가 기본값(이름 없음 → wpLabel 이 '지점 N'으로 표시,
+// 방향 없음 → 로봇 자동 응시)으로 채운다. 순서(seq)는 지점을 찍은 순서 그대로 간다 —
+// 재정렬 UI(↑/↓)도 뗐으므로 addWaypoint 가 매번 '끝에 추가'로 보내는 seq 가 곧 최종 순서다.
 export default function RoutePanel({ inspection = null }: { inspection?: any } = {}) {
   const { enabled, connected, mapping } = useLive()
   const { accessToken } = useAuth()
 
-  const [route, setRoute] = useState<import('../../live/contracts.d.ts').Waypoint[]>([])      // 화면에서 편집 중인 목록
-  const [saved, setSaved] = useState<import('../../live/contracts.d.ts').Waypoint[]>([])      // 마지막으로 서버에서 받은 목록
+  const [route, setRoute] = useState<import('../../live/contracts.d.ts').Waypoint[]>([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)        // { kind: ok|warn|err, text }
 
@@ -32,7 +37,7 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
     try {
       const rows = await listWaypoints(accessToken)
       if (!alive.current) return
-      setRoute(rows); setSaved(rows); setMsg(null)
+      setRoute(rows); setMsg(null)
     } catch (e) {
       if (alive.current) setMsg({ kind: 'err', text: `순찰 경로를 불러오지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
@@ -49,7 +54,7 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
       const created = await addWaypoint({ ...p, seq: route.length + 1 }, accessToken)
       if (!alive.current) return
       const next = [...route, created]
-      setRoute(next); setSaved(next)
+      setRoute(next)
       setMsg({ kind: 'ok', text: `지점 ${next.length} 추가 — x ${p.x} · y ${p.y} m` })
     } catch (e) {
       if (alive.current) setMsg({ kind: 'err', text: `지점을 추가하지 못했습니다 — ${errMessage(e)}` })
@@ -63,96 +68,27 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
       await deleteWaypoint(w.id, accessToken)
       if (!alive.current) return
       const next = route.filter((_, k) => k !== i)
-      setRoute(next); setSaved(next)
+      setRoute(next)
       setMsg({ kind: 'ok', text: `${wpLabel(w, i)} 삭제` })
     } catch (e) {
       if (alive.current) setMsg({ kind: 'err', text: `삭제하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }
   }
 
-  // 순서·이름은 화면에서만 바꾸고 '경로 저장'(PUT)으로 한 번에 반영한다.
-  const move = (i: any, d: any) => {
-    const j = i + d
-    if (j < 0 || j >= route.length) return
-    const next = route.slice()
-    ;[next[i], next[j]] = [next[j], next[i]]
-    setRoute(next)
-  }
-  const rename = (i: any, name: any) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, name } : w)))
-
-  // 지점 방향(heading) 설정 (S15P11E101-790). 로봇이 그 지점에서 바라볼 방향이다 —
-  // 분전반을 '지나가는' 게 아니라 '바라보고' 점검하려면 필요하다.
-  // 화면은 도(0~359, 0°=동쪽 +x · 90°=북쪽 +y)로 다루고 저장은 radians 다.
-  // 비우면(yaw=null) 로봇이 가까운 구조물(벽/분전반)을 자동으로 바라본다(로봇 auto-yaw).
-  const DEG = 180 / Math.PI
-  const headingDeg = (w: any) => (w.yaw == null || !Number.isFinite(Number(w.yaw))
-    ? '' : String(Math.round(((Number(w.yaw) * DEG) % 360 + 360) % 360)))
-  const setHeading = (i: any, degText: string) => setRoute((prev) => prev.map((w, k) => {
-    if (k !== i) return w
-    const t = degText.trim()
-    if (t === '') return { ...w, yaw: null }
-    const deg = Number(t)
-    if (!Number.isFinite(deg)) return w
-    return { ...w, yaw: (((deg % 360) + 360) % 360) / DEG }
-  }))
-  const clearHeading = (i: any) => setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, yaw: null } : w)))
-
-  // 지도에서 지점을 눌러 드래그해 방향을 정한다(S15P11E101-797). 도(degree) 입력칸과
-  // 같은 값(route[i].yaw, radians)을 쓴다 — 어느 쪽으로 정해도 서로 바로 반영된다.
-  const onSetHeading = (i: number, yawRadians: number) =>
-    setRoute((prev) => prev.map((w, k) => (k === i ? { ...w, yaw: yawRadians } : w)))
-
-  // yaw 도 변경 감지에 넣는다 — 방향만 바꾸고 저장을 안 누르면 서버에 안 남는다.
-  const key = (w: any) => [w.x, w.y, w.name || '', w.yaw == null ? 'auto' : Number(w.yaw).toFixed(4)]
-  const dirty = JSON.stringify(route.map(key)) !== JSON.stringify(saved.map(key))
-  const dirtyRef = useRef(dirty)
-  dirtyRef.current = dirty
-
   // 다른 접속자가 경로를 바꾸면 서버가 /topic/sync 로 알린다 — 새로고침 없이 따라간다.
-  // 내가 고치는 중(dirty)이면 편집본은 두고 서버본(saved)만 갱신한다. 남의 변경이
-  // 입력 중인 목록을 갈아치우면 찍던 지점을 잃는다 — '경로 저장 *' 표시가 충돌을 알린다.
+  // 이 화면은 더 이상 로컬 전용 편집 상태(이름/방향/순서)를 갖지 않으므로 — 추가·삭제가
+  // 이미 서버에 바로 반영되므로 — 받은 목록을 그대로 반영하면 된다.
   const refresh = useCallback(async () => {
     if (!enabled || !accessToken) return
     try {
       const rows = await listWaypoints(accessToken)
       if (!alive.current) return
-      setSaved(rows)
-      setRoute((prev) => (dirtyRef.current ? prev : rows))
+      setRoute(rows)
     } catch {
-      // 사용자가 시작한 동작이 아니다 — 다음 알림이나 '다시 불러오기' 가 길이다
+      // 사용자가 시작한 동작이 아니다 — 다음 알림이 길이다
     }
   }, [enabled, accessToken])
   useResourceSync('patrol-route', refresh)
-
-  const onSave = async () => {
-    if (busy) return
-    setBusy(true)
-    try {
-      const rows = await replaceWaypoints(route, accessToken)
-      if (!alive.current) return
-      setRoute(rows); setSaved(rows)
-      setMsg({ kind: 'ok', text: `순찰 경로 ${rows.length}개 지점을 저장했습니다.` })
-    } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `저장하지 못했습니다 — ${errMessage(e)}` })
-    } finally { if (alive.current) setBusy(false) }
-  }
-
-  // 경로 적용 — 로봇에 보내기만 한다. 순찰은 시작되지 않는다(로봇 계약상 SET_PATROL_ROUTE
-  // 만으로는 돌지 않는다). 경로만 갈아 끼우고 지금은 돌리고 싶지 않을 때 쓴다.
-  const onApply = async () => {
-    if (busy) return
-    setBusy(true)
-    try {
-      const r = await applyWaypoints(accessToken, ROBOT_ID)
-      if (!alive.current) return
-      // 로봇이 꺼져 있어도 200 이 온다 — delivered 로 구분해 알린다(저장은 이미 끝났다).
-      setMsg(r?.delivered
-        ? { kind: 'ok', text: `순찰 경로 ${r.count ?? route.length}개 지점을 로봇에 적용했습니다. 순찰은 아직 시작되지 않았습니다.` }
-        : { kind: 'warn', text: '경로는 서버에 저장돼 있지만 로봇에 전달되지 않았습니다 — 로봇이 연결되면 다시 적용하세요.' })
-    } catch (e) {
-      if (alive.current) setMsg({ kind: 'err', text: `적용하지 못했습니다 — ${errMessage(e)}` })
-    } finally { if (alive.current) setBusy(false) }
-  }
 
   // 순찰 시작 — 반드시 /start 로 한다(S15P11E101-625).
   // 로봇이 경로에 저장맵 세션 ID 를 stamp 하므로, 활성 맵이 바뀐 뒤 예전 경로로 autonomy 를
@@ -183,10 +119,8 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
       {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
       {enabled && (
         <p className="cfg-help">
-          지도를 클릭하면 그 자리에 순찰 지점이 추가됩니다. <b>지점을 누른 채 바라볼 방향으로
-          끌면</b> 그 지점의 방향이 정해집니다(분전반을 바라보게 하고 싶을 때). 순서를 정한 뒤
-          <b>경로 저장</b>으로 서버에 남기고, <b>순찰 시작</b>을 누르면 로봇이 그 경로로 돕니다.
-          <b>경로 적용</b>은 로봇에 경로만 보내고 순찰은 시작하지 않습니다.
+          지도를 클릭하면 그 자리에 순찰 지점이 추가됩니다. 지점을 찍은 순서대로 로봇이 돕니다.
+          <b>순찰 시작</b>을 누르면 저장된 경로로 로봇이 순찰을 시작합니다.
         </p>
       )}
 
@@ -195,11 +129,11 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
         <LiveNavMap
           route={mapping ? null : route}
           onPick={editLocked ? null : onPick}
-          onSetHeading={editLocked ? null : onSetHeading}
           mapping={mapping}
           inspection={mapping ? null : inspection}
           follow={mapping}
           lightFloor
+          compass={false}
         />
         {mapping && (
           <div className="routemap-note" role="status">
@@ -219,50 +153,29 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
         {route.map((w, i) => (
           <li key={w.id ?? i}>
             <span className="tag">{i + 1}</span>
-            <input
-              value={w.name || ''} onChange={(e) => rename(i, e.target.value)}
-              placeholder={`지점 ${i + 1}`} disabled={editLocked || busy}
-              aria-label={`${i + 1}번 지점 이름`}
-            />
-            <span className="t mono">{Number(w.x).toFixed(2)}, {Number(w.y).toFixed(2)} m</span>
-            {/* 방향(heading) — 로봇이 이 지점에서 바라볼 각도(S15P11E101-790).
-                비우면 '자동': 로봇이 가까운 구조물(분전반/벽)을 스스로 바라본다. */}
-            <input
-              type="number" min={0} max={359} inputMode="numeric"
-              className="wp-heading" value={headingDeg(w)}
-              onChange={(e) => setHeading(i, e.target.value)}
-              placeholder="자동" disabled={editLocked || busy}
-              title="로봇이 이 지점에서 바라볼 방향(도, 0=동·90=북). 비우면 가까운 분전반/벽을 자동으로 바라봅니다."
-              aria-label={`${i + 1}번 지점 방향(도)`}
-              style={{ width: '58px' }}
-            />
-            <span className="t" style={{ opacity: 0.7, minWidth: '30px' }}>
-              {w.yaw == null ? '자동' : '°'}
-            </span>
-            {w.yaw != null && (
-              <button type="button" className="btn-tonal" onClick={() => clearHeading(i)} disabled={editLocked || busy} aria-label="방향 자동으로" title="방향 자동(가까운 벽 바라보기)" style={{ padding: '4px 8px' }}>자동</button>
-            )}
-            <button type="button" className="btn-tonal" onClick={() => move(i, -1)} disabled={editLocked || busy || i === 0} aria-label="위로" style={{ padding: '4px 8px' }}>↑</button>
-            <button type="button" className="btn-tonal" onClick={() => move(i, 1)} disabled={editLocked || busy || i === route.length - 1} aria-label="아래로" style={{ padding: '4px 8px' }}>↓</button>
-            <button type="button" className="btn-tonal" onClick={() => onDelete(w, i)} disabled={editLocked || busy} aria-label="삭제" style={{ color: '#B4655C', padding: '4px 8px' }}>삭제</button>
+            <button type="button" className="btn-tonal" onClick={() => onDelete(w, i)} disabled={editLocked || busy} aria-label={`${i + 1}번 지점 삭제`} style={{ color: '#B4655C', marginLeft: 'auto' }}>삭제</button>
           </li>
         ))}
       </ul>
 
       <div className="gotor">
-        <button type="button" className="btn-text" onClick={load} disabled={editLocked || busy}>다시 불러오기</button>
-        <button type="button" id="btnSaveRoute" className="btn-tonal" onClick={onSave} disabled={editLocked || busy || !route.length || !dirty}>
-          경로 저장{dirty ? ' *' : ''}
-        </button>
-        <button type="button" id="btnApplyRoute" className="btn-tonal" onClick={onApply} disabled={editLocked || busy || !route.length}>
-          경로 적용
-        </button>
-        {/* 시작은 눈에 띄게 둔다 — 로봇이 실제로 움직이기 시작하는 버튼이다 */}
+        {/* 시작은 눈에 띄게 둔다 — 로봇이 실제로 움직이기 시작하는 버튼이다. filled 는 화면당 하나(S15P11E101-814) */}
         <button type="button" id="btnStartPatrol" className="btn-filled" onClick={onStart} disabled={editLocked || busy || !route.length}>
           순찰 시작
         </button>
+        {/* 순찰 종료(S15P11E101-868) — 로봇 연동은 아직 없다. 눌러도 아무 일도 일어나지
+            않는데, 눌리기만 하면 조작자를 속이는 셈이라 disabled + 안내문으로 명확히 알린다. */}
+        <button
+          type="button" id="btnStopPatrol" className="btn-outlined"
+          disabled
+          title="로봇 연동 대기 — 아직 순찰 종료 명령을 보내지 않습니다"
+        >
+          순찰 종료
+        </button>
       </div>
-      {dirty && <div className="cfg-note">순서·이름이 바뀌었습니다. <b>경로 저장</b>을 눌러야 서버에 반영됩니다.</div>}
+      <p className="cfg-help" style={{ marginTop: 6, marginBottom: 0 }}>
+        <b>순찰 종료</b>는 로봇 연동 대기 중입니다 — 지금은 눌러도 아무 동작도 하지 않습니다.
+      </p>
     </div>
   )
 }

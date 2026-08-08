@@ -284,7 +284,7 @@ function drawInspection(g: any, sx: any, sy: any, view: any, inspect: any, textR
   }
 }
 
-export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true, overlays = true, inspect: any = null, bgColor = '#15171c') {
+export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false, route: any = null, showPlan = true, overlays = true, inspect: any = null, bgColor = '#15171c', showCompass = true) {
   // 바탕색. 기본은 어두운 관제 톤이지만, 지도 탭·순찰 경로처럼 '흰 바닥' 으로 보여
   // 주고 싶은 화면은 밝은 색을 넘긴다(S15P11E101-822). 도면/격자는 이 위에 그려지고,
   // 이미지 바깥 여백이 이 색으로 채워져 바닥이 뷰 전체로 이어진다.
@@ -345,7 +345,7 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     drawRobotMarker(g, nav.pose, sx, sy, view)
     if (rotating) g.restore()
     g.restore()
-    drawCompass(g, cv, (rotating ? nav.pose.yaw - Math.PI / 2 : 0) + DISPLAY_ROT)
+    if (showCompass) drawCompass(g, cv, (rotating ? nav.pose.yaw - Math.PI / 2 : 0) + DISPLAY_ROT)
     return
   }
 
@@ -421,7 +421,8 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
   g.restore()
   // 방위 표시 — 회전 여부와 무관하게 북쪽이 어디인지 항상 알 수 있게 화면 좌표계에 그린다.
   // 표시 회전도 화면이 돌아간 각도이므로 함께 더한다 — 안 더하면 N 이 반대를 가리킨다.
-  drawCompass(g, cv, (rotating ? nav.pose.yaw - Math.PI / 2 : 0) + DISPLAY_ROT)
+  // showCompass=false 인 화면(매핑 탭, S15P11E101-814)은 나침반을 아예 그리지 않는다.
+  if (showCompass) drawCompass(g, cv, (rotating ? nav.pose.yaw - Math.PI / 2 : 0) + DISPLAY_ROT)
 }
 
 // 로봇 마커(점 + 진행방향 화살표). 평면(도면만) 뷰와 오버레이 뷰 양쪽에서 같은 모양으로 그린다.
