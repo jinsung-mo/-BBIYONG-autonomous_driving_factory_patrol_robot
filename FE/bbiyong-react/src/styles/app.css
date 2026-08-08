@@ -1,3 +1,91 @@
+/* ============ 디자인 시스템 v3 토큰 (--bb-*) ============
+   [S15P11E101-814] 정본: docs/design/mockups/tokens.css (핸드오프 원본, 손으로 베껴 적지 않는다).
+   여기서는 :root 변수 선언만 옮겨 심는다 — 시안은 tokens.css 를 직접 링크하지만
+   앱은 이 app.css 하나로 번들되므로 값만 가져온다.
+   이 블록 자체는 --bb-* 신규 선언일 뿐 기존 화면에 영향 없음 — 실제 적용은
+   아래 --nx-* 블록에서 가리키는 값을 --bb-* 참조로 바꾸는 지점에서 일어난다. */
+:root{
+  /* ── Color: neutral ─────────────────────────── */
+  --bb-ink:            #232733;
+  --bb-ink-2:          #3C4252;
+  --bb-body:           #5A6072;
+  --bb-muted:          #7C8296;
+  --bb-muted-2:        #8B90A3;
+  --bb-faint:          #A2A7B6;
+  --bb-faint-2:        #B6BAC7;
+  --bb-line:           #EEEFF4;
+  --bb-line-strong:    #D6D9E3;
+  --bb-surface:        #F4F5F8;
+  --bb-canvas:         #E4E3ED;
+  --bb-frame-bg:       #F6F5FA;
+  --bb-scene-dark:     #0D1017;
+
+  /* ── Color: brand & status ──────────────────── */
+  --bb-primary:        #4C5695;
+  --bb-primary-hover:  #3F4880;
+  --bb-primary-tonal:  #E4E5F5;
+  --bb-primary-on-tonal:#3F4880;
+
+  --bb-danger:         #C07A72;
+  --bb-danger-text:    #B4655C;
+  --bb-danger-tint:    #F0D6D2;
+
+  --bb-warn:           #C9A26A;
+  --bb-warn-text:      #96762F;
+  --bb-warn-tint:      #F5E7D0;
+
+  --bb-ok:             #6FA487;
+  --bb-ok-text:        #3E7C57;
+  --bb-ok-tint:        #DCEBE2;
+
+  --bb-neutral-dot:    #D5D8E1;
+
+  /* ── Gradients ──────────────────────────────── */
+  --bb-grad-frame:   radial-gradient(120% 90% at 18% 0%, #FCFCFD 0%, #F5F6F8 55%, #EEEFF3 100%);
+  --bb-grad-dense:   radial-gradient(120% 80% at 15% 0%, #FBFBFD 0%, #F3F4F8 60%, #EBECF2 100%);
+  --bb-grad-panel:   linear-gradient(150deg, #FFFFFF 0%, #FAFAFD 42%, #EEF0F7 100%);
+  --bb-grad-subsurface: linear-gradient(150deg, #FDFDFE 0%, #F1F2F9 100%);
+
+  /* ── Type ───────────────────────────────────── */
+  --bb-font:      'Gothic A1', system-ui, 'Malgun Gothic', sans-serif;
+  --bb-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --bb-fs-display: 34px;
+  --bb-fs-kpi:     30px;
+  --bb-fs-kpi-sm:  26px;
+  --bb-fs-title:   15px;
+  --bb-fs-card:    13.5px;
+  --bb-fs-body:    12.5px;
+  --bb-fs-label:   11.5px;
+  --bb-fs-caption: 10.5px;
+
+  /* ── Radius ─────────────────────────────────── */
+  --bb-r-input:  8px;
+  --bb-r-tile:   10px;
+  --bb-r-ctrl:   12px;
+  --bb-r-card:   16px;
+  --bb-r-scene:  18px;
+  --bb-r-panel:  22px;
+  --bb-r-frame:  20px;
+  --bb-r-pill:   999px;
+
+  /* ── Shadow ─────────────────────────────────── */
+  --bb-sh-1:  0 1px 3px rgba(35,39,51,.08);
+  --bb-sh-2:  0 6px 18px rgba(35,39,51,.06);
+  --bb-sh-3:  0 10px 26px rgba(35,39,51,.06);
+  --bb-sh-4:  0 18px 44px rgba(35,39,51,.10);
+  --bb-sh-5:  5px 9px 28px rgba(35,39,51,.13);
+  --bb-sh-up: 0 -8px 44px rgba(35,39,51,.08);
+
+  /* ── Spacing (4px base) ─────────────────────── */
+  --bb-sp-1: 6px;  --bb-sp-2: 8px;  --bb-sp-3: 10px; --bb-sp-4: 12px;
+  --bb-sp-5: 14px; --bb-sp-6: 18px; --bb-sp-7: 22px; --bb-sp-8: 26px;
+  --bb-sp-9: 34px;
+
+  --bb-dur: .12s;
+  --bb-ease: ease;
+}
+
 /* ============ 공통 ============ */
 *{box-sizing:border-box; margin:0;}
 :root{
@@ -1931,12 +2019,16 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    ══════════════════════════════════════════════════════════════════════════ */
 
 :root{
-  --nx-bg:#f0f5f5;
+  /* [S15P11E101-814] v3(--bb-*) 도입 — 이름은 그대로 두고 값만 --bb-* 참조로 바꾼다.
+     --nx-* 참조가 코드 전역에 흩어져 있어 이름을 일괄 치환하면 diff 가 수천 줄이 되고
+     리뷰가 불가능해진다. 값만 갈아끼우면 한 곳에서 전 화면이 바뀌고 되돌리기도 쉽다.
+     실제로 값을 바꾼 항목만 아래 매핑 표기를 달았다 — 표기 없는 줄은 원래 hex 그대로다. */
+  --nx-bg: var(--bb-frame-bg);      /* ← #f0f5f5. 배경: 청록 톤(R<G=B) → v3 보라 톤(B>R>G) */
   --nx-sunken:#e8eaec;
   --nx-elev:#ffffff;
   --nx-surface:#f9fbfc;
   --nx-panel:rgba(249,251,252,.88);
-  --nx-side-panel:#f5f8f8;
+  --nx-side-panel:#f5f8f8;          /* <!-- 미매핑: bb-* 에 대응 개념(유리 사이드 패널) 없음, 억지 매핑 금지 --> */
   --nx-side-card:#ffffff;
   --nx-side-card-shadow:
     0 0 0 1px rgba(15,23,23,.022),
@@ -1944,22 +2036,28 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
     0 -7px 18px rgba(15,23,23,.042),0 7px 18px rgba(15,23,23,.042);
   --nx-event-row-shadow:0 0 0 1px rgba(15,23,23,.018),0 2px 5px rgba(15,23,23,.035),0 7px 18px rgba(15,23,23,.055);
   --nx-divider:#d8dbdb;
-  --nx-text:#232828;
+  --nx-text: var(--bb-ink);         /* ← #232828. 본문: 중성 → v3 푸른 기운(#232733) */
   --nx-muted:#5d6162;
   --nx-faint:#a6abab;
 
-  /* 채도 2단 — 비비드는 점·선, 파스텔은 배지 채움 */
-  --nx-accent:#11b22c;
-  --nx-success:#62c47a;
-  --nx-danger-vivid:#ff4a3e;
-  --nx-danger:#f27876;
-  --nx-warning:#f2b76a;
-  --nx-neutral:#cfd5d6;
+  /* 채도 2단 — 비비드는 점·선, 파스텔은 배지 채움.
+     --nx-success/--nx-danger(파스텔)·--nx-neutral 은 대응하는 bb-*-tint 와 명도·용도가
+     달라(뱃지 배경 vs 텍스트 배경) 확실하지 않으므로 <!-- 미매핑 --> 으로 남긴다. */
+  --nx-accent: var(--bb-ok);         /* ← #11b22c 형광 초록 → 저채도 세이지 */
+  --nx-success:#62c47a;              /* <!-- 미매핑: 파스텔 배지용, bb-ok-tint 와 용도 불확실 --> */
+  --nx-danger-vivid: var(--bb-danger); /* ← #ff4a3e 순빨강 → 벽돌빛. 대비 확인: 흰 배경 위 텍스트로
+    쓰이는 곳(#nav .usermenu-drop button.danger)이 한 곳 있으나 원래도 3.33:1(AA 미달)이었고
+    매핑 후 3.35:1 로 사실상 동일 — 이번 변경으로 새로 나빠지는 지점 아님. */
+  --nx-danger:#f27876;               /* <!-- 미매핑: 파스텔, bb-danger-tint 와 용도 불확실 --> */
+  --nx-warning: var(--bb-warn);      /* ← #f2b76a → 저채도 골드 */
+  --nx-neutral:#cfd5d6;              /* <!-- 미매핑: bb-neutral-dot 은 점(dot) 전용, 배지 배경과 용도 다름 --> */
 
-  --nx-r-sm:8px; --nx-r-md:16px; --nx-r-lg:24px;
-  --nx-sh-sm:0 1px 2px rgba(15,23,23,.04);
-  --nx-sh-md:0 8px 24px rgba(15,23,23,.08);
-  --nx-sh-lg:0 20px 48px rgba(15,23,23,.14);
+  --nx-r-sm: var(--bb-r-input);      /* ← 8px = bb-r-input 8px, 정확히 일치 */
+  --nx-r-md: var(--bb-r-card);       /* ← 16px = bb-r-card 16px, 정확히 일치 */
+  --nx-r-lg: var(--bb-r-panel);      /* ← 24px → bb-r-panel 22px, 7단 중 가장 가까운 단계 */
+  --nx-sh-sm: var(--bb-sh-1);        /* ← 0 1px 2px .04 → bb-sh-1 0 1px 3px .08, 같은 급 */
+  --nx-sh-md: var(--bb-sh-3);        /* ← 0 8px 24px .08 → bb-sh-3 0 10px 26px .06, 같은 급 */
+  --nx-sh-lg: var(--bb-sh-4);        /* ← 0 20px 48px .14 → bb-sh-4 0 18px 44px .10, 같은 급 */
   --nx-side-w:340px;
 }
 /* 상태 값의 정상/주의 색은 어두운 판을 전제한 값이라 흰 카드 위에서 읽히지 않았다.
