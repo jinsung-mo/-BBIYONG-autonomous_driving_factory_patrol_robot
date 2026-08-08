@@ -157,19 +157,28 @@ export interface ExtrudeSource {
   obstacleRatio: number
 }
 
-const toUrl = (cv: HTMLCanvasElement) => new Promise<string>((resolve, reject) => {
-  cv.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error('도면을 이미지로 만들지 못했습니다.'))), 'image/png')
-})
-
 /**
- * 도면 이미지에서 압출에 쓸 재료를 만든다.
+ * 도면 픽셀을 벽/장애물 두 비트맵으로 가른 결과 (S15P11E101-712).
  *
- * blob → objectURL 로 받은 이미지는 same-origin 이라 canvas 가 오염되지 않는다.
- * 그래서 getImageData 로 픽셀을 읽을 수 있다.
- *
- * @param img 이미 디코드가 끝난 도면 이미지 (floorplan.loadActivePlan 이 준다)
+ * CSS 압출(buildExtrudeSource)은 이 비트맵을 마스크 PNG 로 굽지만, three.js 뷰는
+ * 비트맵 자체가 필요하다 — 켜진 칸을 사각형으로 묶어 상자 지오메트리를 세운다.
+ * 두 뷰가 같은 함수를 쓰므로 '무엇이 벽인가' 의 판정이 한 곳에만 있다.
  */
-export async function buildExtrudeSource(img: HTMLImageElement): Promise<ExtrudeSource> {
+export interface PlanGrid {
+  /** 얇게 깎은 벽 비트맵(1=벽) */
+  wall: Uint8Array
+  /** 장애물 비트맵(1=장애물). 없으면 전부 0 이다. */
+  obst: Uint8Array
+  w: number
+  h: number
+  scale: number
+  wallRatio: number
+  wallRatioRaw: number
+  obstacleRatio: number
+}
+
+/** 도면 이미지 → 벽/장애물 비트맵. 판정 규칙(임계·잡음 필터·깎기)은 전부 여기 있다. */
+export function buildPlanGrid(img: HTMLImageElement): PlanGrid {
   const sw = img.naturalWidth || img.width
   const sh = img.naturalHeight || img.height
   if (!sw || !sh) throw new Error('도면 크기를 읽지 못했습니다.')
@@ -220,6 +229,37 @@ export async function buildExtrudeSource(img: HTMLImageElement): Promise<Extrude
   let walls = 0
   for (let p = 0; p < n; p++) if (thin[p]) walls++
 
+  return {
+    wall: thin,
+    obst,
+    w,
+    h,
+    scale,
+    wallRatio: walls / n,
+    wallRatioRaw: rawWalls / n,
+    obstacleRatio: obstacles / n,
+  }
+}
+
+const toUrl = (cv: HTMLCanvasElement) => new Promise<string>((resolve, reject) => {
+  cv.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error('도면을 이미지로 만들지 못했습니다.'))), 'image/png')
+})
+
+/**
+ * 도면 이미지에서 압출에 쓸 재료를 만든다.
+ *
+ * blob → objectURL 로 받은 이미지는 same-origin 이라 canvas 가 오염되지 않는다.
+ * 그래서 getImageData 로 픽셀을 읽을 수 있다.
+ *
+ * @param img 이미 디코드가 끝난 도면 이미지 (floorplan.loadActivePlan 이 준다)
+ */
+export async function buildExtrudeSource(img: HTMLImageElement): Promise<ExtrudeSource> {
+  // 판정은 buildPlanGrid 한 곳에만 있다(S15P11E101-712) — three.js 뷰와 같은 벽을 본다.
+  const grid = buildPlanGrid(img)
+  const { w, h, scale, obst } = grid
+  const thin = grid.wall
+  const n = w * h
+
   // 알파만 쓰므로 색은 흰색으로 통일한다 — 층마다 색을 입히는 것은 CSS 가 한다.
   const toMask = (bits: Uint8Array) => {
     const cv = document.createElement('canvas')
@@ -238,16 +278,16 @@ export async function buildExtrudeSource(img: HTMLImageElement): Promise<Extrude
 
   const maskUrl = await toUrl(toMask(thin))
   // 장애물이 하나도 없으면 빈 마스크를 만들지 않는다 — 빈 층을 40장 쌓을 이유가 없다
-  const obstacleUrl = obstacles ? await toUrl(toMask(obst)) : null
+  const obstacleUrl = grid.obstacleRatio > 0 ? await toUrl(toMask(obst)) : null
   return {
     maskUrl,
     obstacleUrl,
     w,
     h,
     scale,
-    wallRatio: walls / n,
-    wallRatioRaw: rawWalls / n,
-    obstacleRatio: obstacles / n,
+    wallRatio: grid.wallRatio,
+    wallRatioRaw: grid.wallRatioRaw,
+    obstacleRatio: grid.obstacleRatio,
   }
 }
 

@@ -5,7 +5,10 @@ import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import { isFloorplan } from '../../live/floorplan.ts'
 import MappingProgress from './MappingProgress.tsx'
 import LiveNavMap from './LiveNavMap.tsx'
-import IsoMapView from './IsoMapView.tsx'
+// 3D 지도는 three.js 뷰다(S15P11E101-712). CSS 압출판(IsoMapView)은 지우지 않고 남겨 뒀다 —
+// 되돌리려면 아래 import 를 `import IsoMapView from './IsoMapView.tsx'` 로 바꾸고,
+// showIso 분기의 <ThreeMapView …/> 를 <IsoMapView …/> 로 되돌리면 된다(두 줄).
+import ThreeMapView from './ThreeMapView.tsx'
 import { useInspection } from '../../live/inspection.ts'
 
 const ZOOM_MIN = 0.7
@@ -99,7 +102,7 @@ export default function MapPanel() {
           )
           : enabled
           ? (showIso
-              ? <IsoMapView zoomFactor={zoom} points={inspectionPoints} />
+              ? <ThreeMapView zoomFactor={zoom} points={inspectionPoints} />
               : <LiveNavMap zoomFactor={zoom} planOnly inspection={{ points: inspectionPoints }} lightFloor />)
           : <canvas
               ref={refs.map2d}
