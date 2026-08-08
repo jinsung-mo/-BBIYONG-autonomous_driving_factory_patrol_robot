@@ -55,7 +55,7 @@ public class EmailVerificationService {
     public EmailVerificationService(
             JavaMailSender mailSender,
             @Value("${spring.mail.username:}") String mailUsername,
-            @Value("${bbiyong.mail.from:삐용 관제 <no-reply@bbiyong.io>}") String from,
+            @Value("${bbiyong.mail.from:삐용 <no-reply@bbiyong.io>}") String from,
             @Value("${bbiyong.mail.code-ttl-seconds:300}") long codeTtlSeconds,
             @Value("${bbiyong.mail.verified-ttl-seconds:1800}") long verifiedTtlSeconds,
             @Value("${bbiyong.mail.max-verify-attempts:5}") int maxAttempts) {
