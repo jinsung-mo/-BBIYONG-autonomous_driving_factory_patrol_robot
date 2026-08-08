@@ -281,12 +281,24 @@ public final class FloorPlanRenderer {
             if (Math.abs(contourArea(c)) < obstacleMinArea) {
                 continue;
             }
-            Mat oa = new Mat();
-            approxPolyDP(c, oa, 8.0, true);
-            Mat os = orthoSnap(oa);
-            drawContours(obstOut, new MatVector(os), -1, new Scalar(255), -1, 8, new Mat(), Integer.MAX_VALUE, null);
-            oa.release();
-            os.release();
+            // 장애물은 '덩어리'다(S15P11E101). SLAM 은 로봇이 본 표면만 occupied 로 찍고
+            // 가려진 뒷면·내부는 unknown 이라, 윤곽이 열린 호(C자)로 남아 이전의 approxPolyDP+
+            // 직각스냅 채움은 속이 빈 프레임이 됐다. 최소회전사각(minAreaRect)으로 점들의 전체
+            // 범위를 감싸면 윤곽이 열려 있어도 항상 솔리드 사각형으로 채워진다.
+            RotatedRect box = minAreaRect(c);
+            Point2f corners = new Point2f(4);
+            box.points(corners);
+            Mat quad = new Mat(4, 1, CV_32SC2);
+            IntRawIndexer qi = quad.createIndexer();
+            for (int k = 0; k < 4; k++) {
+                Point2f p = corners.position(k);
+                qi.put(k, 0, 0, Math.round(p.x()));
+                qi.put(k, 0, 1, Math.round(p.y()));
+            }
+            qi.release();
+            drawContours(obstOut, new MatVector(quad), -1, new Scalar(255), -1, 8, new Mat(), Integer.MAX_VALUE, null);
+            corners.close();
+            quad.release();
         }
         inner.release();
         obst.release();

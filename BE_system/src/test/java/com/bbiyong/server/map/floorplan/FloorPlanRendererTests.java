@@ -91,6 +91,38 @@ class FloorPlanRendererTests {
         assertThat(isBlack(out, outside[0], outside[1])).isFalse();
     }
 
+    /**
+     * 열린 윤곽(C자) 장애물을 솔리드로 채운다(S15P11E101).
+     * SLAM 은 로봇이 본 표면만 occupied 로 찍어 장애물 뒷면이 열린 채 들어온다. 이전에는
+     * 그 열린 윤곽을 그대로 채워 속이 빈 프레임이 됐다 — minAreaRect 로 감싸 솔리드가 돼야 한다.
+     */
+    @Test
+    void fillsHollowObstacleAsSolid() {
+        int w = 60, h = 40;
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) img.setRGB(x, y, UNKNOWN);
+        }
+        for (int y = 8; y <= 32; y++) {          // 방 내부 free
+            for (int x = 10; x <= 50; x++) img.setRGB(x, y, FREE);
+        }
+        for (int x = 8; x <= 52; x++) for (int y : new int[]{6, 7, 33, 34}) img.setRGB(x, y, WALL);
+        for (int y = 6; y <= 34; y++) for (int x : new int[]{8, 9, 51, 52}) img.setRGB(x, y, WALL);
+
+        // 장애물을 'C자'(오른쪽 열림)로만 찍는다 — 앞면(위/아래/왼쪽)만 스캔되고 뒷면은 미탐색.
+        for (int x = 24; x <= 34; x++) { img.setRGB(x, 14, WALL); img.setRGB(x, 15, WALL); img.setRGB(x, 25, WALL); img.setRGB(x, 26, WALL); }
+        for (int y = 14; y <= 26; y++) { img.setRGB(24, y, WALL); img.setRGB(25, y, WALL); }
+        // 오른쪽(x=33,34 열) 및 내부는 채우지 않는다 → 열린 윤곽 + 빈 속
+
+        FloorPlanRenderer.Result r = new FloorPlanRenderer().renderPlan(img);
+        BufferedImage out = r.image();
+        double[] t = r.rawToOut();
+
+        // 장애물 내부 중심 — 윤곽이 열려 있어도 솔리드로 채워져 중회색이어야 한다.
+        int[] center = toOut(t, 29, 20);
+        assertThat(isObstacleGray(out, center[0], center[1])).isTrue();
+    }
+
     @Test
     void metaTransformKeepsWorldCoordinatesConsistent() {
         BufferedImage src = syntheticMap();
