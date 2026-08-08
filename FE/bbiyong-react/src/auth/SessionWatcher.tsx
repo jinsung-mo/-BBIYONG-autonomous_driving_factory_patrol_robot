@@ -19,12 +19,13 @@ const INPUT_EVENTS = ['mousedown', 'keydown', 'wheel', 'touchstart', 'scroll', '
 // 리스너(WASD 주행·Space 모드전환 등)에 이벤트가 닿기 전에 끊어, 새 리스너가 추가돼도
 // canOperate 를 깜빡하면 여전히 막힌다 — 한 겹 방어를 앞단에 두는 것.
 //
-// 🔴 잠금 바 문구("긴급 정지는 잠금과 무관하게 누를 수 있습니다")를 그대로 지키려면
-// 긴급 정지 컨트롤을 이 차단 위(스크림 위 z-index)로 올려야 한다. 그런데 이 저장소를
-// 뒤져 봐도 긴급 정지 버튼도 단축키도 없다 — 둘 다 S15P11E101-735 에서 함께 제거됐다
-// (components/robot/ControlPanel.tsx:198-200 주석: "버튼도 함께 지운 의도된 사양이다").
-// 문구는 사용자 지침에 따라 바꾸지 않았지만, 지금은 예외로 둘 대상 자체가 없다.
-// 나중에 긴급 정지 컨트롤이 되살아나면 그 요소(또는 감싸는 컨테이너)에
+// 🔴 긴급 정지는 이 제품에 없다 [사용자 확인 2026-08-08]. 버튼도 단축키도 S15P11E101-735 에서
+// 제거됐다(components/robot/ControlPanel.tsx:198-200 주석: "버튼도 함께 지운 의도된 사양이다").
+// 그래서 잠금 바 문구에서 "긴급 정지는 잠금과 무관하게 누를 수 있습니다" 를 뺐다 —
+// 없는 기능을 약속하는 문구는, 잠금 중에 사고가 났을 때 조작자가 있지도 않은 버튼을
+// 찾게 만든다. 차단에는 예외를 두지 않는다.
+//
+// 나중에 잠금을 뚫어야 하는 컨트롤이 생기면 그 요소(또는 감싸는 컨테이너)에
 // `data-lock-exempt` 속성을 달면 이 차단과 아래 포커스 트랩을 함께 우회한다 —
 // CSS 쪽 z-index 는 별도로 스크림(196)보다 위에 놓아야 한다.
 const isExempt = (el: EventTarget | null) =>
@@ -116,7 +117,7 @@ export default function SessionWatcher() {
       <div ref={dialogRef} className="lockbar" role="dialog" aria-modal="true" aria-label="조작 잠금">
         <div className="lockbar-txt">
           <b>🔒 조작이 잠겼습니다</b>
-          <span>화면과 경보는 계속 동작합니다. 긴급 정지는 잠금과 무관하게 누를 수 있습니다.</span>
+          <span>화면과 경보는 계속 동작합니다. 조작을 다시 하려면 비밀번호를 입력하세요.</span>
         </div>
         <form className="lockbar-form" onSubmit={submit}>
           {/* 브라우저 비밀번호 관리자가 계정을 알아보게 이메일을 숨겨 함께 둔다 */}
