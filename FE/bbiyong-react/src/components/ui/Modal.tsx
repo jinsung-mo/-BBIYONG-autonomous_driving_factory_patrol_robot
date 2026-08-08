@@ -11,10 +11,10 @@ import { createPortal } from 'react-dom'
 // 쌓임 맥락도 같은 이유로 갇힌다. 어디서 열리든 화면 기준으로 뜨게 하려면 body 가 맞다.
 /**
  * @param {{ title: string, onClose: () => void,
- *           children?: import('react').ReactNode, width?: number }} props
+ *           children?: import('react').ReactNode, width?: number, className?: string }} props
  */
-export default function Modal({ title, onClose, children, width = 400 }: { title: string, onClose: () => void,
-            children?: import('react').ReactNode, width?: number }) {
+export default function Modal({ title, onClose, children, width = 400, className = '' }: { title: string, onClose: () => void,
+            children?: import('react').ReactNode, width?: number, className?: string }) {
   useEffect(() => {
     const onKey = (e: any) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -23,7 +23,9 @@ export default function Modal({ title, onClose, children, width = 400 }: { title
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: width }} onClick={(e) => e.stopPropagation()}>
+      {/* 모달은 body 로 포털돼 화면의 v3-theme 조상 스코프 밖에서 그려진다 —
+          화면별 스킨은 이 className 으로만 닿는다(S15P11E101-814). */}
+      <div className={`modal${className ? ` ${className}` : ''}`} style={{ maxWidth: width }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{title}</h3>
           <button className="modal-x" aria-label="닫기" onClick={onClose}>✕</button>
