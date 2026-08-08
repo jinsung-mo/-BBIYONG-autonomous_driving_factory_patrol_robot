@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -58,28 +59,34 @@ public class EquipmentService {
         return temperature > threshold ? "OVER" : "NORMAL";
     }
 
-    /** 애플리케이션 기동 시 감시 대상 분전반 초기 시드 (비어있을 때만). */
+    /**
+     * 데모 설비 정리 (S15P11E101). 예전 기동 시드(panel_A/B/C)와 옛 데모 흔적('데모')이
+     * 설정탭 분전반 임계온도 목록에 더미로 남아 있었다. 실제 설비는 로봇 점검(applyInspection)
+     * 으로만 등록되어야 하므로, 자동 시드를 제거하고 기동 시 남은 데모 행을 지운다.
+     *
+     * <p>id 가 panel_A/B/C 이거나, id·이름에 '데모'가 들어간 설비를 삭제한다(멱등).
+     * 배포 DB가 모두 정리된 뒤에는 이 정리 로직을 제거해도 된다.
+     */
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
-    public void seedDefaults() {
-        if (equipmentRepository.count() > 0) {
+    public void purgeDemoEquipments() {
+        List<Equipment> demo = equipmentRepository.findAll().stream()
+                .filter(EquipmentService::isDemo)
+                .toList();
+        if (demo.isEmpty()) {
             return;
         }
-        save("panel_A", "A구역 분전반", 8.5, 3.1, 55.0);
-        save("panel_B", "B구역 분전반", 12.8, 14.2, 55.0);
-        save("panel_C", "C구역 분전반", 3.2, 9.7, 55.0);
-        log.info("Seeded default equipments: panel_A/B/C");
+        equipmentRepository.deleteAll(demo);
+        log.info("Purged {} demo equipment(s): {}", demo.size(),
+                demo.stream().map(Equipment::getEquipmentId).toList());
     }
 
-    private void save(String id, String name, double x, double y, double threshold) {
-        Equipment e = new Equipment();
-        e.setEquipmentId(id);
-        e.setName(name);
-        e.setX(x);
-        e.setY(y);
-        e.setThreshold(threshold);
-        e.setStatus("UNKNOWN");
-        equipmentRepository.save(e);
+    private static final Set<String> DEMO_IDS = Set.of("panel_A", "panel_B", "panel_C");
+
+    private static boolean isDemo(Equipment e) {
+        String id = e.getEquipmentId() == null ? "" : e.getEquipmentId();
+        String name = e.getName() == null ? "" : e.getName();
+        return DEMO_IDS.contains(id) || id.contains("데모") || name.contains("데모");
     }
 
     @EventListener
