@@ -2,6 +2,7 @@ import { useSim } from '../../SimContext.ts'
 import { displayName } from '../../live/robotName.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { telemetryToStatus } from '../../live/mappers.ts'
+import { estimateRuntimeMinutes } from '../../live/batteryRuntime.ts'
 import RadialGauge from './RadialGauge.tsx'
 
 // 순찰 로봇 상태
@@ -20,6 +21,10 @@ export default function StatusPanel() {
   // 화면에는 표시명을 쓴다(S15P11E101-766). 통신·구독은 계약 id 그대로다.
   const name = enabled ? displayName(robotId) : '삐용'
 
+  // 🔴 소모율 실측 전이라 항상 null → '—' 로 보인다. 계수가 들어오면 자동으로 분 단위 값이 뜬다.
+  // 계산은 batteryRuntime.ts 한 곳에 모아 뒀다 — 여기서는 그 결과만 표시한다.
+  const runtimeMin = estimateRuntimeMinutes(batt ?? null)
+
   return (
     <div className="panel" id="pStatus">
       <h3>순찰 로봇 상태 <span className="k">ORINCA FLEET</span></h3>
@@ -35,6 +40,7 @@ export default function StatusPanel() {
         ) : (
           <RadialGauge value={batt} label="배터리" caption="BATTERY" />
         )}
+        <div className="kv"><span>남은 기동 시간</span><b className="num">{runtimeMin == null ? '—' : `${runtimeMin} 분`}</b></div>
       </div>
     </div>
   )
