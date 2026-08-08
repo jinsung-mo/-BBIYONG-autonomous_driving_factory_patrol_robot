@@ -3765,3 +3765,73 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   .navtabs{overflow-x:auto; scrollbar-width:none;}
   .navtabs::-webkit-scrollbar{display:none;}
 }
+
+/* ============================================================
+   플로팅 씬 레이아웃 — 지도 · 카메라 (S15P11E101-814)
+   ------------------------------------------------------------
+   디자인 시스템 v3 정본(docs/design/refs/console-v3-standalone-src.html
+   의 지도·카메라 프레임, 2026-08-08 확정): "씬은 화면 끝까지 깔고, 정보는
+   그 위에 뜬다. 좌/우로 칸을 나누지 않는다."
+
+   `.nav-stage`/`.nav-side`/`.cam-stage`(좌우 그리드)는 이벤트·설정 화면이
+   그대로 쓰는 공용 클래스라 그 정의 자체는 건드리지 않는다 — 여기 규칙은
+   전부 `#pgMap`/`#pgCam` 로 ID 스코프해 두 화면에만 닿는다.
+   지도 화면은 매핑 탭도 같은 `#pgMap` 아래에서 `.nav-stage/.nav-side/.nav-canvas`
+   를 재사용하므로(MappingTab.tsx), 실시간 지도 쪽만 골라 닿도록
+   `.map-view .nav-stage` 처럼 한 단 더 좁혀 스코프한다 — 안 그러면 매핑 탭의
+   좌우 그리드까지 절대배치로 깨진다.
+
+   되돌리려면: 이 블록 전체(파일 끝)를 지우면 원래의 좌우 그리드로 복귀한다.
+   ============================================================ */
+
+/* 페이지 좌우·아래 여백을 걷어 씬이 화면 끝까지 닿게 한다. 위쪽 여백만 남긴다
+   (탭바와의 리듬). 히어로(타이틀+KPI)·매핑 탭은 걷어낸 여백을 스스로 되찾는다 —
+   안 그러면 그 둘의 내용이 화면 끝에 바로 붙어 버린다. */
+#pgMap.page.nav-page,#pgCam.page.nav-page{padding:16px 0 0; position:relative;}
+#pgMap .nav-hero,#pgCam .nav-hero{padding:0 32px;}
+#pgMap .map-tabs{margin-left:32px; margin-right:32px;}
+/* 매핑 탭(MappingTab)은 `#pgMap` 의 직계 자식 `<fieldset class="lockfs">` 다.
+   지도 씬과 달리 여전히 좌우 패널 그리드이므로 여백을 그대로 되돌려 준다. */
+#pgMap > fieldset.lockfs{padding:0 32px 32px;}
+
+/* ── 지도 : 씬이 좌우·아래 끝까지, 로봇 상태 패널은 좌측에 뜬 유리 카드 ──
+   `.map-view` 안쪽(실시간 지도)만 고른다 — 매핑 탭은 그대로 좌우 그리드로 둔다. */
+#pgMap .map-view .nav-stage{
+  display:block; position:relative;
+  flex:1 1 auto; min-height:0;
+}
+#pgMap .map-view .nav-canvas{position:absolute; inset:0;}
+#pgMap .map-view .nav-side{
+  position:absolute; left:34px; top:0; bottom:0;
+  width:clamp(240px, 24vw, 302px);
+  z-index:6; overflow:auto;
+  border-radius:22px 22px 0 0;
+  padding:22px 22px 0;
+  background:rgba(255,255,255,.6);
+  backdrop-filter:blur(18px) saturate(1.5);
+  -webkit-backdrop-filter:blur(18px) saturate(1.5);
+  box-shadow:0 18px 46px rgba(35,39,51,.10);
+}
+
+/* ── 카메라 : 씬 = 영상(둥근 모서리로 화면 안쪽에 살짝 띄워), 조작·로그 카드는
+   불투명 흰색 — 어두운 영상 위에서는 블러보다 가독성이 우선이라
+   backdrop-filter 를 쓰지 않는다. `.cam-side-panel` 내부의 두 카드(#pControl·
+   #pEvents)는 이미 불투명 흰 카드다(3697행) — 바깥 껍데기만 뜬 위치로 옮긴다. */
+#pgCam .cam-stage{
+  display:block; position:relative;
+  flex:1 1 auto; min-height:0;
+}
+#pgCam .cam-main{
+  position:absolute; left:28px; right:28px; top:0; bottom:26px;
+  border-radius:18px; overflow:hidden; background:#0D1017;
+}
+#pgCam .cam-side-panel{
+  position:absolute; left:28px; top:0; bottom:26px;
+  width:clamp(240px, 24vw, 302px);
+  z-index:6; overflow:auto;
+}
+
+/* 1180 이하: 유리·카드 패널이 씬을 다 덮지 않도록 폭을 더 줄인다. */
+@media (max-width:1180px){
+  #pgMap .map-view .nav-side,#pgCam .cam-side-panel{width:clamp(200px, 34vw, 260px);}
+}
