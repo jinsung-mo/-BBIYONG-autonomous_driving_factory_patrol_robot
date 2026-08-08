@@ -142,6 +142,46 @@ canvas{display:block; width:100%; height:100%;}
 .cfg-stack{display:flex; flex-direction:column; max-width:880px;}
 .cfg-stack > .cfg-wide{max-width:none;}
 .cfg-help{font-size:12px; color:var(--dk-sub); line-height:1.6; margin-bottom:12px;}
+
+/* Orin 전력 모드(S15P11E101-814) — 저성능/고성능 토글 + 부하 그래프. .card-v3 는 밝은
+   v3 테마 카드라 위 .cfg-help(어두운 테마 --dk-sub)와 달리 --bb-* 토큰만 쓴다. */
+/* 토글 — #pgMap .map-tabs(2571행 부근)와 같은 알약 세그먼트 문법을 그대로 가져왔다.
+   로봇 연동 전이라 버튼은 항상 disabled — .on 은 아직 쓰지 않는다(실제 모드를 모르므로
+   지어내지 않는다). 나중에 로봇이 현재 모드를 보고하면 .on 을 얹으면 된다. */
+.opw-tabs{
+  display:inline-flex; gap:2px; padding:3px; margin:0 0 6px;
+  background:var(--bb-surface); border-radius:999px;
+}
+.opw-tabs button{
+  border:0; border-radius:999px; padding:8px 20px; min-height:34px; min-width:76px;
+  background:transparent; color:var(--bb-body); font:inherit; font-size:13px; font-weight:600;
+}
+.opw-tabs button:disabled{cursor:not-allowed; opacity:.75;}
+.opw-tabs button.on{background:var(--bb-ink); color:#fff; font-weight:700;}
+
+.opw-row{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:14px;}
+.opw-card{
+  background:#fff; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-2);
+  border:1px solid var(--bb-line); padding:16px 18px; display:flex; flex-direction:column;
+}
+.opw-card__t{font-size:13px; font-weight:700; color:var(--bb-ink);}
+.opw-card__v{margin-top:8px; display:flex; align-items:baseline; gap:6px;}
+.opw-card__v b{
+  font-family:var(--bb-font-mono); font-variant-numeric:tabular-nums; font-weight:700;
+  font-size:24px; letter-spacing:-1px; min-width:3ch; text-align:right; color:var(--bb-ink);
+}
+.opw-card__v b.st-ok{color:var(--bb-ok-text);}
+.opw-card__v b.st-warn{color:var(--bb-warn-text);}
+.opw-card__v b.st-danger{color:var(--bb-danger-text);}
+.opw-card__v .unit{font-size:12px; font-weight:500; color:var(--bb-faint);}
+.opw-card__sub{margin-top:4px; font-size:11px; color:var(--bb-muted); font-family:var(--bb-font-mono); font-variant-numeric:tabular-nums;}
+/* 그래프 영역 — 배경·보더 없음(사용자 지침): 시안 원본의 --bb-grad-subsurface 배경 +
+   보더를 빼서 카드 안에서 "박스처럼" 구분되지 않게 한다. */
+.opw-spark{margin-top:10px; height:44px; display:flex; align-items:flex-end; gap:4px;}
+.opw-spark i{width:3px; border-radius:1.2px; display:block; flex:none;}
+.opw-spark i.st-ok{background:var(--bb-ok);}
+.opw-spark i.st-warn{background:var(--bb-warn);}
+.opw-spark i.st-danger{background:var(--bb-danger);}
 .cfg-note{font-size:11.5px; color:var(--dk-sub); line-height:1.7; margin-top:10px;
   background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:9px; padding:9px 11px;}
 .cfg-note .kv{padding:3px 0;}

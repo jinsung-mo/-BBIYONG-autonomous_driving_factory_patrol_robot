@@ -96,6 +96,22 @@ export interface Readiness {
 }
 
 /**
+ * Orin `tegrastats` 한 줄에서 뽑은 부하·전력 서브셋(S15P11E101-814).
+ * 🔴 아직 로봇/서버가 이 필드를 보내지 않는다 — 계약만 먼저 정의해 둔다. FE 는 값이
+ * 없으면 반드시 '—' 로 표시하고 그래프를 그리지 않는다(값이 없다고 0 으로 채우지 않는다).
+ * 기대 필드명은 아래와 같다. 로봇 담당자가 이 이름에 맞춰 전송하면 자동으로 그려진다.
+ *   - cpuCores  : 코어별 사용률(%). 예 `[44,77,42,44,47,44]` — 개수는 로봇 코어 수를 따른다.
+ *   - gpuPercent: GR3D_FREQ(%), 단일 값.
+ *   - vddInMw   : VDD_IN(mW) — 모듈 전체 입력. VDD_CPU_GPU_CV·VDD_SOC 는 "부분의 합"이
+ *                 아니라서(docs/design/mockups/orin-load-v6.html 참고) 이번 화면 범위 밖이다.
+ */
+export interface OrinPowerTelemetry {
+  cpuCores?: number[]
+  gpuPercent?: number
+  vddInMw?: number
+}
+
+/**
  * /topic/robots — 서버가 로봇 패킷을 그대로 직렬화해 중계한다.
  *
  * 브리지는 값이 없으면 null 로 채우지 않고 **필드를 생략**한다. 그래서 거의 모두 선택이다 —
@@ -122,6 +138,8 @@ export interface RobotTelemetry {
   tilt?: number
   /** 순찰 시작 가능 여부(S15P11E101-869). 아직 안 보낼 수 있다 — 없으면 기존 동작 그대로다. */
   readiness?: Readiness
+  /** Orin CPU/GPU/전력(S15P11E101-814). 아직 안 보낼 수 있다 — 없으면 '—'. */
+  orinPower?: OrinPowerTelemetry
 }
 
 /** /topic/alerts — 로봇이 확정한 화재·과열. AlertMessage record 그대로. */
