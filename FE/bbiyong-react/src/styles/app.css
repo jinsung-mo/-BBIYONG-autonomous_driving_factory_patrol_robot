@@ -133,6 +133,14 @@ canvas{display:block; width:100%; height:100%;}
 .section-page{background:var(--dk-bg); color:var(--dk-ink); padding:16px 18px; overflow:auto;}
 .cfg-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; align-items:start;}
 .cfg-grid .panel{display:block;}
+/* 설정 화면 단일 열 배치 (S15P11E101-814) — 지도·카메라 화면의 좌우 2열(.nav-stage/.nav-side/
+   .nav-canvas)을 그대로 물려 쓰던 걸 걷어내고, 섹션을 위→아래로 쌓는다. 설정은 "한눈에 감시"가
+   아니라 "읽고 고치는" 화면이라 폭을 제한해 읽기 편하게 한다. 폭은 기존 2열(카드 최소폭 330px ×2 +
+   간격)보다 넉넉히 잡아, 향후 붙을 수 있는 넓은 콘텐츠(전력 그래프 등)도 크게 눌리지 않게 한다.
+   새 섹션은 .cfg-stack 아래에 .card-v3 형제 하나로 추가하면 된다 — 폭 제한을 빼야 하면
+   .cfg-wide 를 얹는다. */
+.cfg-stack{display:flex; flex-direction:column; max-width:880px;}
+.cfg-stack > .cfg-wide{max-width:none;}
 .cfg-help{font-size:12px; color:var(--dk-sub); line-height:1.6; margin-bottom:12px;}
 .cfg-note{font-size:11.5px; color:var(--dk-sub); line-height:1.7; margin-top:10px;
   background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:9px; padding:9px 11px;}
