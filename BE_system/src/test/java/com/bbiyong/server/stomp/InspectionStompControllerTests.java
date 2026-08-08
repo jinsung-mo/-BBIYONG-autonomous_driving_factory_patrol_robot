@@ -1,5 +1,6 @@
 package com.bbiyong.server.stomp;
 
+import com.bbiyong.server.equipment.service.EquipmentService;
 import com.bbiyong.server.stomp.dto.InspectionCommand;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import org.junit.jupiter.api.Test;
@@ -29,8 +30,9 @@ class InspectionStompControllerTests {
 
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
     private final SimpMessagingTemplate messagingTemplate = mock(SimpMessagingTemplate.class);
+    private final EquipmentService equipmentService = mock(EquipmentService.class);
     private final InspectionStompController controller =
-            new InspectionStompController(sessionManager, messagingTemplate, new ObjectMapper());
+            new InspectionStompController(sessionManager, messagingTemplate, new ObjectMapper(), equipmentService);
 
     private static Principal admin() {
         return new UsernamePasswordAuthenticationToken(
