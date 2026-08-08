@@ -1442,7 +1442,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 
 /* ---- 영상 · 지도 프레임 ---- */
 .sim-skin .vwrap{border-radius:14px;}
-.sim-skin .vwrap .hud,.sim-skin .vwrap .hud2,.sim-skin .vwrap .rec,.sim-skin .mapview{
+.sim-skin .vwrap .hud,.sim-skin .vwrap .hud2,.sim-skin .vwrap .rec{
+  border-radius:999px; padding:4px 10px; font-size:10px; letter-spacing:.4px;
+  background:rgba(6,9,14,.55); border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(6px);}
+/* [S15P11E101-814] .mapview 는 위 목록에서 뺐다 — sim-skin 클래스가 #pgB(옛 다크
+   조작화면) 뿐 아니라 #pgMap·#pgCam(밝은 v3 씬)에도 남아 있어, 스코프 없는 `.sim-skin
+   .mapview`가 v3 흰 배경을 다시 이 어두운 판으로 덮어썼다(1540행 `.vwrap` 스코핑과
+   같은 원인). #pgB 전용으로 좁힌다 — #pgMap/#pgCam 의 입체·평면/로봇 추종 버튼은
+   `.v3-theme .mapview`(아래) 가 담당한다. */
+#pgB.sim-skin .mapview{
   border-radius:999px; padding:4px 10px; font-size:10px; letter-spacing:.4px;
   background:rgba(6,9,14,.55); border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(6px);}
 .sim-skin .vwrap .rec{display:inline-flex; align-items:center; gap:5px;}
@@ -1605,7 +1613,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root[data-theme="light"] #pgB.sim-skin .vwrap{
   border-color:rgba(255,255,255,.90); box-shadow:inset 0 1px 0 #fff,0 10px 24px rgba(42,80,128,.10);
 }
-.sim-skin .vwrap .hud,.sim-skin .vwrap .hud2,.sim-skin .vwrap .rec,.sim-skin .mapview{
+.sim-skin .vwrap .hud,.sim-skin .vwrap .hud2,.sim-skin .vwrap .rec{
+  background:rgba(12,20,35,.44); border-color:rgba(255,255,255,.26);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 6px 16px rgba(0,0,0,.15);
+  backdrop-filter:blur(18px) saturate(1.5);
+}
+/* [S15P11E101-814] 같은 이유로 `.mapview` 는 #pgB 전용으로 좁힌다(위 1384행과 동일 사유). */
+#pgB.sim-skin .mapview{
   background:rgba(12,20,35,.44); border-color:rgba(255,255,255,.26);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 6px 16px rgba(0,0,0,.15);
   backdrop-filter:blur(18px) saturate(1.5);
@@ -2122,6 +2136,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .iso-stage .mapview{z-index:2;}
 /* 지도 종류(도면/원본) 버튼은 우하단이므로, 평면/입체 전환은 좌상단에 둔다 */
 .mapdim{left:10px; top:8px; bottom:auto;}
+/* [S15P11E101-814] #pgMap(지도 화면)만 예외 — 로봇 추종(.iso-reset)과 나란히
+   우상단에 개별 버튼 두 개로 둔다(세그먼트로 묶지 않는다). 위 좌상단 규칙은
+   #pgB(조작 화면, 옛 다크 스킨·이번 변경 범위 밖)에 그대로 남는다.
+   right 112px 는 "로봇 추종"(가장 넓은 라벨) 폭 + 8px 간격을 실측해 잡은 값 —
+   .map-control 우측 세로 스택(top:50%)과는 세로로 떨어져 있어 겹치지 않는다. */
+#pgMap .vwrap .mapdim{left:auto; right:112px; top:16px; bottom:auto;}
+#pgMap .vwrap .iso-reset{right:16px; top:16px;}
 .maplegend .iso-hint{color:var(--dk-sub); border:0; background:none; padding:0;}
 
 @media (prefers-reduced-motion:reduce){
@@ -2733,8 +2754,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @media (prefers-reduced-motion:reduce){
   .map-zoom-canvas,.camera-zoom-canvas,:is(#pgMap,#pgCam) .map-control{transition:none;}
 }
-/* 입체/평면 전환 버튼은 범례 아래로 내려 두 오버레이가 겹치지 않는다. */
-#pgMap .vwrap .mapdim{top:72px;}
+/* [S15P11E101-814] 입체/평면 전환을 지도 우상단(로봇 추종 옆)으로 옮기면서
+   "범례 아래로 내리기"는 더 필요 없어졌다 — 범례는 좌상단이라 더는 겹치지 않는다.
+   실제 위치는 `#pgMap .vwrap .mapdim` 규칙(위, .iso-reset 근처)이 정한다. */
 /* 카메라 화면의 판들도 남는 높이 안에서 줄어들어야 한다 */
 #pgCam .panel{min-height:0;}
 #pgCam .vwrap{flex:1 1 0; min-height:0;}
@@ -3455,13 +3477,16 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 #pgMap.v3-theme .map-control:hover:not(:disabled),
 #pgCam.v3-theme .map-control:hover:not(:disabled){background:#F4F5F8; color:#232733;}
-/* [S15P11E101-814 재작업] 입체/평면 토글도 범례와 같은 이유로 좌측 여백만 준다(16px) —
-   `.vwrap` 이 이미 좌우 그리드의 우측 칸 안에 있어 패널 폭을 피하는 계산식이 필요 없다.
-   카메라 화면에는 좌측 패널과 겹치는 씬이 없으므로 지도에만 적용한다. */
-#pgMap.v3-theme .mapview{left:16px;}
+/* [S15P11E101-814] 입체/평면·로봇 추종을 지도 우상단에 나란히 두면서 좌측 여백
+   규칙(left:16px)은 뺐다 — 위치는 이제 `#pgMap .vwrap .mapdim`/`.iso-reset`(2055행
+   근처)이 right 기준으로 정한다. 색은 --bb-* 토큰만 참조한다(하드코딩 금지). */
 #pgMap.v3-theme .mapview,#pgCam.v3-theme .mapview{
-  background:rgba(255,255,255,.9); color:#3F4880; border:0; border-radius:999px;
-  font-size:11.5px; font-weight:600; box-shadow:0 1px 3px rgba(35,39,51,.14);
+  background:rgba(255,255,255,.9); color:var(--bb-body); border:0; border-radius:var(--bb-r-pill);
+  font-size:11.5px; font-weight:600; box-shadow:var(--bb-sh-1);
+}
+/* 켜짐 상태는 채움으로 구분한다 — 로봇 추종(.iso-reset.on, 아래)과 같은 문법. */
+#pgMap.v3-theme .mapview.mapdim[aria-pressed="true"]{
+  background:var(--bb-ink); color:#fff;
 }
 /* 범례 — 흐린 회색 대신 읽히는 본문색 */
 #pgMap.v3-theme .maplegend{color:#5A6072; font-size:11.5px;}
