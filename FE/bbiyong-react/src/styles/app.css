@@ -164,12 +164,11 @@ canvas{display:block; width:100%; height:100%;}
 #pgRoute .routemap{flex:0 0 auto; height:min(64vh, 640px); margin-bottom:10px; background:#ffffff;}
 #pgRoute .routemap canvas{width:100%; height:100%; display:block;}
 #pgRoute{margin-top:14px;}
-/* 이름 칸이 남는 폭을 다 먹으면 좌표가 화면 끝으로 밀려 읽기 어렵다 — 폭을 잡고 좌표를 붙인다 */
-#routeList li input{flex:0 1 240px; min-width:0; background:var(--dk-panel); color:var(--dk-ink);
-  border:1px solid var(--dk-line); border-radius:7px; padding:5px 8px; font-size:12px;}
 #routeList li .tag{color:var(--dk-ink); background:var(--dk-line); border-color:transparent; min-width:18px; text-align:center;}
-#routeList li .dbtn{padding:5px 8px; font-size:11px;}
-#routeList li .t{margin-left:0; margin-right:auto; white-space:nowrap;}
+/* 지점 행에 번호·삭제만 남으면서(S15P11E101-814) 내용이 줄어든 만큼, 카드 밀도 기준에 맞춰
+   행 자체를 더 두껍게 준다 — 빈 공간을 다른 걸로 채우는 대신 지금은 여백으로 남겨 둔다. */
+#routeList li{min-height:56px; padding:18px 20px;}
+#routeList li .tag{font-size:11px; min-width:22px; padding:3px 7px;}
 /* 맵 모델링 진행 단계 (S15P11E101-483) — 대기 · 진행 중 · 완료 */
 .mapstat{display:flex; align-items:flex-start; gap:8px; margin-top:10px; padding:9px 11px;
   border-radius:9px; font-size:11.5px; line-height:1.7; border:1px solid var(--dk-line); background:var(--dk-panel2);}
@@ -2971,6 +2970,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .v3-theme .btn-text { padding: 9px 18px; border-radius: 20px; border: 0; background: transparent; color: #5A6072; font-weight: 600; font-size: 12.5px; font-family: inherit; cursor: pointer; transition: background 0.15s; }
 .v3-theme .btn-text:hover:not(:disabled) { background: #F4F5F8; color: #232733; }
 .v3-theme .btn-text:disabled { opacity: 0.5; cursor: not-allowed; }
+/* outlined — 되돌리기 어려운 일(danger 글자색), filled 가 이미 화면에 하나 있을 때 그 다음으로 무거운 동작에 쓴다.
+   순찰 종료(S15P11E101-868)처럼 '위험/되돌리기' 계열이지만 filled 는 화면당 하나 규칙을 지켜야 할 때. */
+.v3-theme .btn-outlined { padding: 8px 17px; border-radius: 20px; border: 1px solid #C4C6D4; background: transparent; color: var(--bb-danger-text); font-weight: 600; font-size: 12.5px; font-family: inherit; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.v3-theme .btn-outlined:hover:not(:disabled) { background: #FBF6F5; border-color: var(--bb-danger-text); }
+.v3-theme .btn-outlined:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .v3-theme .basebtn.danger { background: #C07A72; color: #fff; border-radius: 20px; padding: 9px 18px; border: 0; font-weight:600; font-size:12.5px; }
 .v3-theme .basebtn.danger:hover:not(:disabled) { background: #B4655C; }
