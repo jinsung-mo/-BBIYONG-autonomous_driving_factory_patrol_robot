@@ -146,12 +146,19 @@ public class EmailVerificationService {
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "utf-8");
-            helper.setFrom(from);
+            
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(.*)<(.*)>").matcher(from);
+            if (m.find()) {
+                helper.setFrom(m.group(2).trim(), m.group(1).trim());
+            } else {
+                helper.setFrom(from);
+            }
+            
             helper.setTo(email);
             helper.setSubject(subject);
             helper.setText(body, false);
             mailSender.send(mimeMessage);
-        } catch (MessagingException | MailException ex) {
+        } catch (MessagingException | MailException | java.io.UnsupportedEncodingException ex) {
             log.error("[EmailVerification] 메일 발송 실패 to={} purpose={}", email, purpose, ex);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "인증 메일 발송에 실패했습니다. 잠시 후 다시 시도하세요.");
