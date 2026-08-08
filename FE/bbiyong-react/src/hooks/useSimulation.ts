@@ -15,8 +15,13 @@ export default function useSimulation() {
   useEffect(() => {
     const unsub = sim.subscribe(setStatus)
     sim.start()
+    // 관제 화면은 종일 켜 두므로 자정에만 바뀌는 날짜를 매초 바뀌는 시각과
+    // 같은 무게로 둘 이유가 없다 — 시안 A(S15P11E101-814): 시각만 표시.
+    // toLocaleTimeString 을 계속 써서 자정·서머타임 경계에서도 안전하게 둔다.
+    // 'ko-KR' 로케일은 "20시 43분 58초"(한글 단위) 를 반환해 콜론 포맷("20:43:58")이
+    // 아니다 — 실측 확인 후 'en-GB' 로 교체(값·시간대는 동일, 표기만 콜론).
     const clockTimer = setInterval(() => {
-      setClock(new Date().toLocaleString('ko-KR', { hour12: false }))
+      setClock(new Date().toLocaleTimeString('en-GB', { hour12: false }))
     }, 1000)
     return () => { unsub(); sim.stop(); clearInterval(clockTimer) }
   }, [sim])
