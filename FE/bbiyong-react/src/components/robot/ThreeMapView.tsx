@@ -36,6 +36,29 @@ const COL_OBST = new THREE.Color('hsl(222, 14%, 55%)')
 const COL_FLOOR = new THREE.Color('#FBFBFD')
 const COL_ROBOT = new THREE.Color('#6FA487')   // 정상색
 const COL_HEAD = new THREE.Color('#C9A26A')    // 주의색 — 진행 방향 지시선
+// 빛기둥 색 — 옛 .iso-robot::before(app.css) 의 rgba 값을 그대로 옮긴 것이다.
+const BEAM_RGB = '61,220,151'      // 정상 — rgba(61,220,151,*)
+const BEAM_RGB_OFF = '160,170,180' // 오프라인 — rgba(160,170,180,*)
+
+/**
+ * 위로 갈수록 진해지는 세로 그라디언트 텍스처.
+ *
+ * 옛 CSS 의 `linear-gradient(0deg, rgba(…,0), rgba(…,.5))` 와 같은 모양이다 —
+ * 아래는 완전 투명, 위로 갈수록 짙어진다. 캔버스 한 장을 만들어 스프라이트에 입힌다.
+ */
+function buildBeamTexture(rgb: string, maxAlpha: number): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = 8; c.height = 256
+  const ctx = c.getContext('2d')!
+  const g = ctx.createLinearGradient(0, c.height, 0, 0)   // 아래(y=height) → 위(y=0)
+  g.addColorStop(0, `rgba(${rgb},0)`)
+  g.addColorStop(1, `rgba(${rgb},${maxAlpha})`)
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, c.width, c.height)
+  const tex = new THREE.CanvasTexture(c)
+  tex.needsUpdate = true
+  return tex
+}
 
 /** 윗면만 이만큼 밝힌다. 폭이 넓으면 벽이 발광체처럼 보인다(748 의 교훈). */
 const TOP_LIGHTEN = 0.055
@@ -343,6 +366,25 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
     const head = new THREE.Mesh(headGeo, headMat)
     head.position.set(0, 0.045, -CAR.d)
     robot.add(head)
+
+    // 빛기둥(S15P11E101-712) — 옛 IsoMapView(CSS 2.5D) 의 `.iso-robot::before` 를 그대로
+    // 옮긴 것이다. three.js 는 깊이 버퍼가 정확해 벽 뒤 로봇이 그냥 사라지므로,
+    // depthTest 를 꺼서 벽에 가려도 자리를 잃지 않게 한다. 로봇은 씬 안의 물체라야
+    // 벽과 같은 조명·원근을 받는다 — HTML 오버레이 핀(점검 지점)과는 성격이 다르다.
+    const beamTex = buildBeamTexture(BEAM_RGB, 0.5)
+    const beamTexOff = buildBeamTexture(BEAM_RGB_OFF, 0.4)
+    const beamMat = new THREE.SpriteMaterial({
+      map: beamTex, transparent: true, depthTest: false, depthWrite: false,
+    })
+    const beam = new THREE.Sprite(beamMat)
+    beam.center.set(0.5, 0)               // 스프라이트 기준점을 바닥(아래쪽)으로 — 위로 솟는 기둥
+    const BEAM_H = WALL_H3 * 1.25          // 벽보다 살짝 높게(옛 38px vs 벽 31px 비율과 같다)
+    const BEAM_W = 0.035
+    beam.scale.set(BEAM_W, BEAM_H, 1)
+    beam.position.set(0, 0, 0)             // 로봇 바닥(차체 그룹 원점)에서 솟는다
+    beam.renderOrder = 999                 // 벽·차체보다 나중에 그려 가려지지 않게 한다
+    robot.add(beam)
+
     robot.visible = false
     scene.add(robot)
 
@@ -429,6 +471,8 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
         capMat.transparent = off
         headMat.opacity = off ? 0.42 : 1
         headMat.transparent = off
+        beamMat.map = off ? beamTexOff : beamTex
+        beamMat.needsUpdate = true
       }
 
       // 추종 시점 — 로봇 뒤 위쪽에서 진행 방향을 보고 따라간다(자동차 게임 시점).
@@ -472,6 +516,7 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
       for (const g of geos) g.dispose()
       bodyGeo.dispose(); capGeo.dispose(); headGeo.dispose()
       solidMat.dispose(); floorMat.dispose(); bodyMat.dispose(); capMat.dispose(); headMat.dispose()
+      beamMat.dispose(); beamTex.dispose(); beamTexOff.dispose()
       // WebGL 컨텍스트는 명시적으로 놓는다. 도면을 여러 번 갈아 끼우면 브라우저가
       // 컨텍스트 상한(보통 16개)에 걸려 가장 오래된 것부터 죽인다.
       renderer.dispose()
