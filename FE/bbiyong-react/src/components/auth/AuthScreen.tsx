@@ -130,10 +130,22 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
 
   return (
     <div className="auth-wrap">
-      <div className="auth-card">
+      {/* 🔴 이 화면의 배경은 더 이상 자기 것이 아니다(S15P11E101-808). 전에는 여기에
+          전용 씬(순찰 경로 2줄 + 마커 2개)을 그렸는데, 이제는 웰컴과 공유하는 순찰 씬
+          (AuthFlow 의 PatrolScene)이 뒤에 살아 있고 그 위에 스크림이 블러를 건다.
+          두 씬을 겹쳐 두면 흐려진 경로선이 두 벌 보여 지저분하므로 전용 씬은 걷어냈다.
+
+          1단 패널. 🔴 유리(.bb-glass)를 쓰지 않는다 — 스크림이 이미 backdrop-filter 를
+          쓰고 있어 여기에 또 걸면 tokens.css 가 금지하는 "유리 위에 유리"(블러 중첩)가
+          된다. 대신 반투명 단색(app.css)으로 간다. 스크림(.42)+패널(.74) 두 겹의 흰
+          반투명이 쌓여 실질적으로 밝은 면이 되므로, 그 위 순백 카드(.col)와의
+          "패널 > 카드" 계층은 -807 그대로 선다. */}
+      <div className={`auth-glass${mode === 'signup' ? ' is-signup' : ''}`}>
         <div className="auth-brand">삐용(BBIYONG)<span> 통합 관제 시스템</span></div>
         {/* 세그먼트 필(S15P11E101-791). 탭 그룹을 알약 하나로 — 선택만 진하게 채운다.
-            아이디/비밀번호 찾기(recovery)에서는 로그인·회원가입 탭 대신 제목을 보여 준다. */}
+            아이디/비밀번호 찾기(recovery)에서는 로그인·회원가입 탭 대신 제목을 보여 준다.
+            🔴 접속 모드(시뮬레이션/실서버) 세그먼트는 걷어냈다 — 콘솔 정리(-850)로
+            mock 진입 자체가 없어졌으므로, 선택지가 하나뿐인 라디오가 남아 있었다. */}
         {recovery ? (
           <div className="auth-title">{mode === 'find-id' ? '아이디(이메일) 찾기' : '비밀번호 찾기'}</div>
         ) : (
@@ -143,65 +155,75 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
           </div>
         )}
         {recovery ? (
+          /* 계정 찾기는 2열로 펼 것이 없다 — .fields 그리드를 태우지 않고 1열로 둔다. */
           <>
             <AccountRecovery mode={mode as 'find-id' | 'reset-pw'} live={live} />
             <button type="button" className="auth-back" onClick={() => switchMode('login')}>← 로그인으로</button>
           </>
         ) : (
-          <>
-            <form onSubmit={submit}>
-              {mode === 'signup' && (
+          <form onSubmit={submit}>
+            <div className="fields">
+              {/* 2단 · 왼쪽 카드 — 계정 정보. 로그인 모드에서는 이 카드만 남는다. */}
+              <div className="col">
+                <div className="col__h">계정 정보</div>
                 <div className="form-row">
-                  <label htmlFor="su-name">이름</label>
-                  <input id="su-name" value={form.name} onChange={set('name')} placeholder="관리자 이름" autoComplete="name" disabled={busy} />
+                  <label htmlFor="au-email">이메일</label>
+                  {/* placeholder 는 예시여야 한다(S15P11E101-802). 전에는 실제 데모 계정
+                      주소(safety@bbiyong.io)를 썼는데, 도메인이 실재하는 것처럼 읽혀
+                      값인지 안내인지 구분되지 않았다. example.com 은 예약 도메인이라
+                      실재할 수 없고, 그래서 '예시' 라는 신호가 선다.
+                      가입 화면은 형식보다 '무엇을 넣어야 하는지' 가 먼저다. */}
+                  <input
+                    id="au-email" type="email" value={form.email} onChange={setEmail}
+                    placeholder={mode === 'signup' ? '업무용 이메일 주소' : 'name@example.com'}
+                    autoComplete="username" disabled={busy || (mode === 'signup' && emailVerified)}
+                  />
                 </div>
-              )}
-              <div className="form-row">
-                <label htmlFor="au-email">이메일</label>
-                {/* placeholder 는 예시여야 한다(S15P11E101-802). 전에는 실제 데모 계정
-                    주소(safety@bbiyong.io)를 썼는데, 도메인이 실재하는 것처럼 읽혀
-                    값인지 안내인지 구분되지 않았다. example.com 은 예약 도메인이라
-                    실재할 수 없고, 그래서 '예시' 라는 신호가 선다.
-                    가입 화면은 형식보다 '무엇을 넣어야 하는지' 가 먼저다. */}
-                <input
-                  id="au-email" type="email" value={form.email} onChange={setEmail}
-                  placeholder={mode === 'signup' ? '업무용 이메일 주소' : 'name@example.com'}
-                  autoComplete="username" disabled={busy || (mode === 'signup' && emailVerified)}
-                />
-              </div>
-              {/* 이메일 인증(실서버 회원가입). 인증을 마쳐야 가입 버튼이 동작한다. */}
-              {mode === 'signup' && live && (
+                {/* 이메일 인증(실서버 회원가입). 인증을 마쳐야 가입 버튼이 동작한다.
+                    이메일 바로 아래에 둔다 — 인증 대상이 위 칸의 값이라 떨어뜨리면 무엇을
+                    인증하는지가 흐려진다. */}
+                {mode === 'signup' && live && (
+                  <div className="form-row">
+                    <label htmlFor="au-email-code">이메일 인증</label>
+                    {emailVerified ? (
+                      <div className="field-hint ok">✓ 이메일 인증 완료</div>
+                    ) : !emailSent ? (
+                      <button type="button" className="inline-btn full" onClick={sendEmailCode} disabled={emailBusy || !form.email.trim()}>
+                        {emailBusy ? '전송 중…' : '인증코드 전송'}
+                      </button>
+                    ) : (
+                      <div className="inline-field">
+                        <input id="au-email-code" inputMode="numeric" value={emailCode} onChange={(e) => setEmailCode(e.target.value)} placeholder="6자리 코드" disabled={emailBusy} />
+                        <button type="button" className="inline-btn" onClick={verifyEmailCode} disabled={emailBusy || !emailCode.trim()}>확인</button>
+                        <button type="button" className="inline-btn ghost" onClick={sendEmailCode} disabled={emailBusy}>재전송</button>
+                      </div>
+                    )}
+                    {emailMsg && <div className={`field-hint ${emailVerified ? 'ok' : 'miss'}`}>{emailMsg}</div>}
+                  </div>
+                )}
                 <div className="form-row">
-                  <label htmlFor="au-email-code">이메일 인증</label>
-                  {emailVerified ? (
-                    <div className="field-hint ok">✓ 이메일 인증 완료</div>
-                  ) : !emailSent ? (
-                    <button type="button" className="inline-btn full" onClick={sendEmailCode} disabled={emailBusy || !form.email.trim()}>
-                      {emailBusy ? '전송 중…' : '인증코드 전송'}
-                    </button>
-                  ) : (
-                    <div className="inline-field">
-                      <input id="au-email-code" inputMode="numeric" value={emailCode} onChange={(e) => setEmailCode(e.target.value)} placeholder="6자리 코드" disabled={emailBusy} />
-                      <button type="button" className="inline-btn" onClick={verifyEmailCode} disabled={emailBusy || !emailCode.trim()}>확인</button>
-                      <button type="button" className="inline-btn ghost" onClick={sendEmailCode} disabled={emailBusy}>재전송</button>
-                    </div>
-                  )}
-                  {emailMsg && <div className={`field-hint ${emailVerified ? 'ok' : 'miss'}`}>{emailMsg}</div>}
+                  <label htmlFor="au-pw">비밀번호</label>
+                  <input id="au-pw" type="password" value={form.password} onChange={set('password')} placeholder={mode === 'signup' ? '영문·숫자·특수문자 포함 8자 이상' : '비밀번호'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} disabled={busy} />
+                  {mode === 'signup' && <PasswordChecklist password={form.password} />}
                 </div>
-              )}
-              <div className="form-row">
-                <label htmlFor="au-pw">비밀번호</label>
-                <input id="au-pw" type="password" value={form.password} onChange={set('password')} placeholder={mode === 'signup' ? '영문·숫자·특수문자 포함 8자 이상' : '비밀번호'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} disabled={busy} />
-                {mode === 'signup' && <PasswordChecklist password={form.password} />}
-              </div>
-              {mode === 'signup' && (
-                <>
+                {mode === 'signup' && (
                   <div className="form-row">
                     <label htmlFor="su-pw2">비밀번호 확인</label>
                     <input id="su-pw2" type="password" value={form.password2} onChange={set('password2')} placeholder="비밀번호 확인" autoComplete="new-password" disabled={busy} />
                     {form.password2 && form.password !== form.password2 && (
                       <div className="field-hint miss">비밀번호가 일치하지 않습니다.</div>
                     )}
+                  </div>
+                )}
+              </div>
+
+              {/* 2단 · 오른쪽 카드 — 개인 정보. 회원가입 전용, 카드째로 사라진다. */}
+              {mode === 'signup' && (
+                <div className="col">
+                  <div className="col__h">개인 정보</div>
+                  <div className="form-row">
+                    <label htmlFor="su-name">이름</label>
+                    <input id="su-name" value={form.name} onChange={set('name')} placeholder="관리자 이름" autoComplete="name" disabled={busy} />
                   </div>
                   <div className="form-row">
                     <label htmlFor="su-phone">휴대전화번호</label>
@@ -229,8 +251,12 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
                       ))}
                     </div>
                   </div>
-                </>
+                </div>
               )}
+            </div>
+
+            {/* 카드 밖 · 유리 위. 메시지와 제출은 어느 묶음에도 속하지 않는다(폼 전체에 대한 것). */}
+            <div className="auth-foot">
               {/* 자동 로그아웃 사유. 입력 오류(err)와 구분해서 보여준다(S15P11E101-508) */}
               {!err && logoutReason && REASON_TEXT[logoutReason] && (
                 <div className="form-msg warn" id="logoutReason">{REASON_TEXT[logoutReason]}</div>
@@ -239,15 +265,11 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
               <button type="submit" className="auth-submit" disabled={busy}>
                 {busy ? '처리 중…' : mode === 'login' ? '로그인' : '회원가입'}
               </button>
-            </form>
-            {/* 안내문은 모드까지 봐야 한다(S15P11E101-802). 전에는 live 여부로만 갈려서
-                시뮬레이션 모드에서 회원가입 탭을 열면 데모 계정의 이메일과 비밀번호가
-                그대로 보였다 — 가입 화면에 남의 자격증명이 떠 있는 셈이다. */}
-            <div className="auth-hint">
-              {mode === 'signup'
-                ? '가입한 계정으로 바로 로그인할 수 있습니다.'
-                : (live
-                  ? (
+              {/* 안내문은 모드까지 봐야 한다(S15P11E101-802). */}
+              <div className="auth-hint">
+                {mode === 'signup'
+                  ? '가입한 계정으로 바로 로그인할 수 있습니다.'
+                  : (
                     <>
                       {/* 두 줄로 나눈다(S15P11E101-803). 한 줄이면 좁은 폭에서 어색하게
                           끊기고, '무엇을 하는 화면인가' 와 '없으면 어떻게 하나' 는
@@ -256,18 +278,18 @@ export default function AuthScreen({ onBack }: { onBack?: (() => void) | null })
                       <br />
                       계정이 없으면 회원가입 후 이용하세요.
                     </>
-                  )
-                  : '데모 계정 — safety@bbiyong.io / bbiyong')}
-            </div>
-            {/* 아이디/비밀번호 찾기 — 로그인 화면에서만 진입한다. */}
-            {mode === 'login' && (
-              <div className="auth-links">
-                <button type="button" onClick={() => switchMode('find-id')} disabled={busy}>아이디 찾기</button>
-                <span aria-hidden="true">·</span>
-                <button type="button" onClick={() => switchMode('reset-pw')} disabled={busy}>비밀번호 찾기</button>
+                  )}
               </div>
-            )}
-          </>
+              {/* 아이디/비밀번호 찾기 — 로그인 화면에서만 진입한다. */}
+              {mode === 'login' && (
+                <div className="auth-links">
+                  <button type="button" onClick={() => switchMode('find-id')} disabled={busy}>아이디 찾기</button>
+                  <span aria-hidden="true">·</span>
+                  <button type="button" onClick={() => switchMode('reset-pw')} disabled={busy}>비밀번호 찾기</button>
+                </div>
+              )}
+            </div>
+          </form>
         )}
         {onBack && (
           <button type="button" className="auth-back" onClick={() => { reset(); onBack() }} disabled={busy}>← 처음으로</button>

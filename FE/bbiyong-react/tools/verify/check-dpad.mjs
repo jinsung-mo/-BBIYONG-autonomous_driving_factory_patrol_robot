@@ -77,11 +77,6 @@ await ev(`(()=>{const s=(el,v)=>{const d=Object.getOwnPropertyDescriptor(window.
   const i=document.querySelectorAll('.auth-card input'); s(i[0],'safety@bbiyong.io'); s(i[1],'bbiyong'); document.querySelector('.auth-submit').click()})()`)
 await sleep(4200)
 
-const theme = () => ev(`document.documentElement.getAttribute('data-theme')`)
-const setTheme = async (want) => {
-  for (let i = 0; i < 3 && (await theme()) !== want; i++) { await ev(`document.querySelector('#nav .theme-btn')?.click()`); await sleep(800) }
-  return theme()
-}
 // 주행은 수동 모드에서만 먹는다 — 순찰 중이면 방향 버튼이 잠겨 있다
 const goCam = async () => {
   await ev(`[...document.querySelectorAll('#nav .navtabs button')].find(b=>b.textContent.trim()==='카메라')?.click()`)
@@ -97,8 +92,9 @@ const key = async (type, k) => send('Input.dispatchKeyEvent', {
   nativeVirtualKeyCode: k.toUpperCase().charCodeAt(0), text: type === 'keyDown' ? k : undefined,
 })
 
-for (const want of ['light', 'dark']) {
-  console.log(`\n===== ${await setTheme(want)} 모드 =====`)
+// 테마는 라이트 하나다 — 다크 모드는 걷어냈다(S15P11E101-805).
+for (const want of ['light']) {
+  console.log(`\n===== ${want} =====`)
   await goManual()
   const idle = await ev(STATE)
   console.log('  평소 :', idle?.disabled ? '(잠김 — 수동 모드 아님)' : '')

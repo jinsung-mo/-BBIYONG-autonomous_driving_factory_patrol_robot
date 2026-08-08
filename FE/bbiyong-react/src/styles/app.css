@@ -3,18 +3,12 @@
 :root{
   --ink:#1c2128; --sub:#68727f; --line:#e3e7ee; --bg:#f2f4f8; --card:#ffffff;
   --red:#e2483d; --redbg:#fdeceb; --blue:#2f6fd0; --bluebg:#eaf1fb; --green:#1f9d6c;
-  --dk-bg:#0b0d11; --dk-panel:#14171d; --dk-panel2:#1a1e26; --dk-line:#262b34;
-  --dk-ink:#e6e9ef; --dk-sub:#8b93a3; --dk-green:#3ddc97; --dk-amber:#f5a623; --dk-red:#ff5648;
-}
-/* 다크 모드: CCTV(라이트 설계) 변수를 어둡게 오버라이드 → 전체 다크 */
-:root[data-theme="dark"]{
-  --ink:#e6e9ef; --sub:#8b93a3; --line:#262b34; --bg:#0b0d11; --card:#14171d;
-  --redbg:#2a1512; --bluebg:#16233a;
-}
-/* 라이트 모드: 로봇(다크 설계) 변수를 밝게 오버라이드 → 전체 라이트 */
-:root[data-theme="light"]{
+  /* `--dk-*` 는 로봇 화면이 다크 설계였을 때 붙은 이름이다. 다크 모드를 걷어내면서
+     (S15P11E101-805) 이름은 그대로 두고 기본값만 라이트 값으로 옮겼다 — 231곳의
+     `var(--dk-*)` 참조를 하나도 건드리지 않기 위해서다.
+     `--dk-green/amber/red` 는 상태색이라 원래 두 테마 공통값이었다. 그대로 둔다. */
   --dk-bg:#f2f4f8; --dk-panel:#ffffff; --dk-panel2:#f5f8fc; --dk-line:#e3e7ee;
-  --dk-ink:#1c2128; --dk-sub:#68727f;
+  --dk-ink:#1c2128; --dk-sub:#68727f; --dk-green:#3ddc97; --dk-amber:#f5a623; --dk-red:#ff5648;
 }
 html,body{height:100%;}
 #root{height:100%;}
@@ -31,12 +25,12 @@ canvas{display:block; width:100%; height:100%;}
    이겨 메뉴가 대시보드 뒤로 숨는다 — 버튼이 안 눌리는 것처럼 보였다.
    50 인 이유: 본문(0)보다는 위, 모달(100)·경보(190~201)보다는 아래여야 한다.
    그것들은 nav 를 덮어야 하는 것들이다. */
-#nav{display:flex; align-items:center; gap:14px; padding:10px 18px; background:#101319; color:#e6e9ef;
+/* 배경은 `#nav.sim-nav` 가 항상 덮는다(Nav.tsx 가 sim-nav 를 조건 없이 붙인다) —
+   여기 있던 `background:#101319` 는 한 번도 적용되지 않는 어두운 값이라 걷어냈다. */
+#nav{display:flex; align-items:center; gap:14px; padding:10px 18px; color:#e6e9ef;
   position:relative; z-index:50;}
 #nav .logo{font-size:16px; font-weight:800; letter-spacing:1px; color:#fff;}
 #nav .logo b{color:#ff6a5f;}
-#nav .theme-btn{padding:6px 12px; border-radius:8px; border:1px solid #3a445a; background:#1a2030; color:#dfe4ec; font-size:12px; margin-right:4px;}
-#nav .theme-btn:hover{background:#232a38;}
 #nav .sp{flex:1;}
 /* 섹션 탭 — 관제 / 운영 / 설정 (S15P11E101-475) */
 .navtabs{display:flex; gap:4px; margin-left:18px;}
@@ -274,12 +268,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .maplegend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
 @media (prefers-reduced-motion: reduce){ .cam.alert{box-shadow:none;} }
 
-/* ============ 진입(Welcome) 화면 — v3 "플로팅 씬"(시안 A) ============
+/* ============ 진입(Welcome) 화면 — v3 "플로팅 씬"(확정 시안 welcome-v5-B2) ============
    ⚠ 전면 라이트다. 이전 판은 테마와 무관하게 항상 다크였고, 이번 개편의 핵심이 그 톤 반전이다.
    값은 styles/tokens.css 의 --bb-* 만 참조한다 — 여기서 hex 를 새로 정하지 않는다.
-   (씬의 경로 stroke 2색만 예외: 상태색 계열의 옅은 변형이라 토큰에 없다. 컴포넌트 SVG 에 있다.) */
+   (씬의 경로 stroke 2색만 예외: 상태색 계열의 옅은 변형이라 토큰에 없다. 컴포넌트 SVG 에 있다.)
+   하단 통계 카드는 2연이고 화면 안에 완전히 들어간다 — 이전 판의 "하단에서 잘리는 카드"는 폐기했다. */
 .welcome-wrap{
-  position:relative; min-height:100vh; overflow:hidden;   /* edge 카드가 하단에서 잘리게 한다 */
+  position:relative; min-height:100vh; overflow:hidden;
   font-family:var(--bb-font); color:var(--bb-ink); cursor:default; outline:none;
   background:var(--bb-grad-frame);   /* 규칙 1: 평평한 회색이 아니라 미세한 그라디언트 */
   /* ⚠ 이 요소에는 transform 애니메이션을 걸지 않는다. overflow:hidden 컨테이너에 transform 이
@@ -287,7 +282,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
      진입 모션은 자식별로 건다 — 어차피 stagger 가 필요하다. */
 }
 .welcome-wrap .mono{ font-family:var(--bb-font-mono); }  /* 전역 .mono(Consolas)를 v3 로 덮는다 */
-@keyframes welcomeIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
 
 /* ── 씬: 화면 끝까지 (규칙 3 — 좌우로 칸을 나누지 않는다) ── */
 .welcome-scene{ position:absolute; inset:0; }
@@ -323,6 +317,39 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   display:flex; align-items:center; justify-content:center;
 }
 .welcome-alarm svg{ width:12px; height:11px; display:block; }
+
+/* ── 배전반: 세로 캐비닛 (일반 설비는 가로 슬래브라 형태로 구분된다) ── */
+.welcome-cab{
+  position:absolute; width:22px; height:56px; margin:-28px 0 0 -11px;
+  border-radius:5px; background:linear-gradient(90deg, #E7E9F1 0 52%, #CBD0DE 52% 100%);
+  box-shadow:0 2px 6px rgba(35,39,51,.14);
+}
+.welcome-cab::before{
+  content:''; position:absolute; left:50%; top:6px; bottom:6px; width:1px;
+  background:rgba(35,39,51,.16);
+}
+.welcome-cab::after{
+  content:''; position:absolute; left:4px; top:5px; width:4px; height:4px;
+  border-radius:50%; background:var(--bb-ok);
+}
+.welcome-cab.is-on::after{ background:var(--bb-primary); }
+
+/* 배전반 온도 배지 — dwell(점검 중)일 때만, 그 배전반에만 뜬다.
+   🔴 항상 캐비닛 **아래**다. 상태 카드가 로봇 위를 늘 덮으므로 위에 두면 정지할 때마다
+   카드에 가려 사라진다(시안이 검증 중 잡은 버그 — 되살리지 않는다). */
+.welcome-badge{ position:absolute; transform:translate(-50%, 0); margin-top:34px; pointer-events:none; }
+.welcome-badge__in{
+  display:flex; align-items:center; gap:7px; white-space:nowrap;
+  background:#fff; border-radius:var(--bb-r-tile); box-shadow:var(--bb-sh-3);
+  padding:6px 10px;
+  opacity:0; transform:translateY(-5px);
+  transition:opacity .28s var(--bb-ease), transform .28s var(--bb-ease);
+}
+.welcome-badge.is-on .welcome-badge__in{ opacity:1; transform:none; }
+.welcome-badge__t{ font-weight:600; font-size:var(--bb-fs-label); color:var(--bb-ink); letter-spacing:-.2px; }
+.welcome-badge__j{ font-size:var(--bb-fs-caption); font-weight:600; padding:2px 6px; border-radius:999px; }
+.welcome-badge__j--ok{ background:var(--bb-ok-tint); color:var(--bb-ok-text); }
+.welcome-badge__j--warn{ background:var(--bb-warn-tint); color:var(--bb-warn-text); }
 
 /* ── 히어로: 밝은 씬 위 → 유리 허용 (어두운 영상 위엔 금지) ── */
 .welcome-hero{
@@ -385,17 +412,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   font-size:var(--bb-fs-caption); color:var(--bb-body); }
 .welcome-robotcard__st i{ width:5px; height:5px; border-radius:50%; background:var(--bb-ok); flex:none; }
 
-/* ── 규칙 "경계는 그어도 가두지 않는다": 하단 한쪽만 잘린다 ── */
-.welcome-edge{
-  position:absolute; left:calc(var(--bb-sp-9) + 574px); bottom:-34px; width:344px;
-  background:#fff; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4); padding:18px 20px 34px;
-}
-.welcome-edge__t{ font-size:var(--bb-fs-label); color:var(--bb-muted-2); }
-.welcome-edge__v{ margin-top:6px; display:flex; align-items:baseline; gap:6px; }
-.welcome-edge__v b{ font-weight:600; font-size:28px; letter-spacing:-1px; color:var(--bb-ink); }
-.welcome-edge__v span{ font-size:14px; font-weight:500; color:var(--bb-faint); }
-.welcome-spark{ margin-top:12px; display:flex; align-items:flex-end; gap:6px; height:30px; }
-.welcome-spark i{ width:2.5px; border-radius:1.2px; background:#DEE0E7; display:block; }
+/* 🔴 하단 통계 2연 카드(.welcome-stats / .welcome-stat / .welcome-spark)는 규칙째
+   삭제됐다 [사용자 지침 2026-08-08]. 로그인 전 랜딩이라 붙일 실데이터가 없어 더미
+   수치를 보여 주던 자리다 — 마크업이 사라졌으므로 스타일도 남기지 않는다. */
 
 /* ══════ 모션 ══════════════════════════════════════════════════════════════
    관제 제품이지 마케팅 랜딩이 아니다 — 움직이는 것은 "실제로 움직이는 것"뿐이다.
@@ -409,21 +428,24 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 히어로는 세로 중앙정렬에 translateY(-50%) 를 이미 쓰고 있다 — 그 값을 품은 별도 키프레임이 필요하다 */
 @keyframes welcomeHeroRise{ from{opacity:0; transform:translateY(calc(-50% + 10px));} to{opacity:1; transform:translateY(-50%);} }
 @keyframes welcomeFade{ from{opacity:0;} to{opacity:1;} }
+@keyframes welcomeFadeCorr{ from{opacity:0;} to{opacity:.82;} }  /* 배경 통로는 끝까지 .82 — 명도차 확보 */
 @keyframes welcomePop{ from{opacity:0; transform:scale(.86);} to{opacity:1; transform:none;} }
 @keyframes welcomeDraw{ to{ stroke-dashoffset:0; } }
 @keyframes welcomeSweep{ to{ transform:rotate(360deg); } }
 
 .welcome-hero{ animation:welcomeHeroRise .55s var(--bb-ease) both; }
-.welcome-edge{ animation:welcomeRise .5s var(--bb-ease) .58s both; }
 .welcome-eq{ animation:welcomePop .5s var(--bb-ease) both; }  /* 지연은 컴포넌트에서 인라인으로 준다 */
+.welcome-cab{ opacity:0; animation:welcomePop .5s var(--bb-ease) 1.0s forwards; }
 .welcome-alarm{ opacity:0; animation:welcomeFade .5s var(--bb-ease) 1.7s forwards; }
 
-/* 경로: pathLength="1" 이라 길이를 몰라도 1 → 0 으로 그릴 수 있다.
+/* 통로/코스 등장 순서 — 통로가 먼저 옅게 뜨고(0.1s) 그 위로 코스가 그려진다(0.35s).
+   코스는 pathLength="1" 이라 길이를 몰라도 1 → 0 으로 그릴 수 있다.
    자취(p-trail)는 dasharray 를 자취 길이에 쓰고 있어 그릴 수 없다 — 뒤늦게 떠오르게 한다. */
-.welcome-scene__path .p-ok{ stroke-dasharray:1; stroke-dashoffset:1; animation:welcomeDraw 2s var(--bb-ease) .15s forwards; }
-.welcome-scene__path .p-trail{ opacity:0; animation:welcomeFade .6s var(--bb-ease) 1.5s forwards; }
-.welcome-scene__path .p-alarm{ opacity:0; animation:welcomeFade .8s var(--bb-ease) 1.5s forwards; }
-.welcome-scene__path .p-node{ opacity:0; animation:welcomeFade .5s var(--bb-ease) .9s forwards; }
+.welcome-scene__path .p-corridor{ opacity:0; animation:welcomeFadeCorr .8s var(--bb-ease) .1s forwards; }
+.welcome-scene__path .p-route{ stroke-dasharray:1; stroke-dashoffset:1; animation:welcomeDraw 2.2s var(--bb-ease) .35s forwards; }
+.welcome-scene__path .p-trail{ opacity:0; animation:welcomeFade .6s var(--bb-ease) 1.7s forwards; }
+.welcome-scene__path .p-alarm{ opacity:0; animation:welcomeFade .8s var(--bb-ease) 1.7s forwards; }
+.welcome-scene__path .p-node{ opacity:0; animation:welcomeFade .5s var(--bb-ease) 1.1s forwards; }
 
 /* ── 순찰 로봇: 위치는 JS 가 transform 하나로만 쓴다(레이아웃 속성 건드리지 않음) ── */
 .welcome-robot{
@@ -468,8 +490,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
     padding:var(--bb-sp-8) var(--bb-sp-9); }
   .welcome-hero{ position:static; transform:none; width:100%; max-width:620px; margin:0;
     animation-name:welcomeRise; }   /* 중앙정렬을 안 쓰므로 -50% 를 품은 키프레임도 안 쓴다 */
-  .welcome-edge,.welcome-scene__path,
-  .welcome-robot,.welcome-robotcard,.welcome-eq,.welcome-alarm{ display:none; }
+  .welcome-scene__path,
+  .welcome-robot,.welcome-robotcard,.welcome-eq,.welcome-cab,.welcome-badge,.welcome-alarm{ display:none; }
 }
 @media (max-width:620px){
   .welcome-wrap{ padding:var(--bb-sp-6) var(--bb-sp-6); }
@@ -480,47 +502,71 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 모션을 원치 않는 사용자에게는 전부 끄되 "최종 상태"로 세운다 — 꺼서 안 보이면 안 된다.
    (로봇 rAF 루프도 컴포넌트 쪽에서 같은 미디어쿼리를 보고 시작하지 않는다.) */
 @media (prefers-reduced-motion: reduce){
-  .welcome-hero,.welcome-edge,.welcome-eq,.welcome-alarm,
+  .welcome-hero,.welcome-eq,.welcome-cab,.welcome-alarm,
   .welcome-robot,.welcome-robot__sweep,.welcome-robotcard,.welcome-eyebrow i{ animation:none; }
-  .welcome-robot,.welcome-robotcard,.welcome-alarm{ opacity:1; }
+  .welcome-robot,.welcome-robotcard,.welcome-alarm,.welcome-cab{ opacity:1; }
   .welcome-robot__sweep{ opacity:.6; }
-  .welcome-scene__path .p-ok{ stroke-dashoffset:0; animation:none; }
+  .welcome-scene__path .p-route{ stroke-dashoffset:0; animation:none; }
+  .welcome-scene__path .p-corridor{ opacity:.82; animation:none; }
   .welcome-scene__path .p-trail,
   .welcome-scene__path .p-alarm,
   .welcome-scene__path .p-node{ opacity:1; animation:none; }
 }
 
-/* ============ 회원 인증 화면 — v3 플로팅 씬 (S15P11E101-791) ============
-   전에는 이 화면만 다크(#0a0c10 / #12151b / 형광 초록)였다. 처음 화면(Welcome)은
-   이미 v3 밝은 씬이라, 접속 버튼을 누르는 순간 화면이 흑백으로 뒤집혔다.
+/* ============ 회원 인증 화면 — 유리 쉘 (S15P11E101-807) ============
+   전에는 이 화면만 다크(#0a0c10 / #12151b / 형광 초록)였다(-791 에서 밝은 씬으로 전환).
+   이번 변경은 그 위에 계층을 하나 더한다 — 불투명 카드 한 장이 아니라
+   반투명 유리 패널(.auth-glass = .bb-glass) 안에 불투명 카드(.col = .bb-card)가
+   항목으로 들어앉는 2단 구조다. 확정 시안: docs/design/mockups/login-v5-C1-유리쉘.html
+     1단 유리 패널  — 화면이라는 그릇. 뒤 씬(경로·마커·얼룩)이 비친다
+     2단 불투명 카드 — 그 안에 들어앉는 "항목"(필드 묶음: 계정 정보 / 개인 정보)
+     3단 서브 표면  — 카드 안에서 면 밝기로만 구분(입력·성별 세그먼트)
    값은 tokens.css(핸드오프 정본)에서만 가져온다 — 손으로 베껴 적지 않는다. */
+/* 🔴 배경·씬은 이 화면의 것이 아니다(S15P11E101-808). 뒤에 웰컴과 공유하는 순찰 씬이
+   살아 있고, 그 앞의 스크림(.authflow .scrim)이 블러를 전담한다. 전에 여기 있던
+   전용 배경(grad-frame)·격자(::before)·색 얼룩(::after)·전용 경로 SVG·마커는
+   순찰 씬과 두 겹으로 겹쳐 보이므로 걷어냈다.
+   position:fixed + overflow-y:auto — 화면을 덮되 내용이 길면(회원가입·좁은 폭)
+   패널 안에서 스크롤된다. 전환 상태(opacity·transform)는 아래 .authflow 절이 준다. */
 .auth-wrap{
-  min-height:100vh; display:flex; justify-content:center; padding:32px 20px;
+  position:fixed; inset:0; z-index:4;
+  display:flex; justify-content:center; padding:32px 20px; overflow-y:auto;
   font-family:var(--bb-font); color:var(--bb-ink);
-  /* Welcome 과 같은 씬 배경. 두 화면이 이어져야 '같은 시스템' 으로 읽힌다. */
-  background:var(--bb-grad-frame);
 }
-/* 씬 격자 — 카드가 '무엇 위에' 떠 있는지 알려 준다. 평평한 회색이면 카드가 뜬 것이
-   아니라 그냥 상자로 보인다. tokens.css 의 .bb-scene-grid 와 같은 값이다. */
-.auth-wrap::before{
-  content:''; position:fixed; inset:0; pointer-events:none;
-  background-image:
-    linear-gradient(90deg, rgba(120,128,150,.05) 1px, transparent 1px),
-    linear-gradient(0deg,  rgba(120,128,150,.05) 1px, transparent 1px);
-  background-size:56px 56px;
-}
-.auth-card{
-  position:relative;                      /* 격자 위에 온다 */
-  /* 가운데 정렬을 align-items 가 아니라 margin:auto 로 한다. 회원가입 폼은 화면보다
-     길어질 수 있는데, flex 가운데 정렬은 넘칠 때 위쪽이 잘리고 스크롤로도 닿지 않는다.
-     '상단이 잘리면 잘못 로드된 것처럼 보인다' 는 v3 규칙과도 맞는다. */
+
+/* ── 1단: 패널 ─────────────────────────────────────────────────
+   🔴 -807 은 여기에 tokens.css 의 .bb-glass 를 물렸다. -808 에서 뗐다 — 전환 스크림이
+   backdrop-filter 를 쓰므로 패널까지 유리면 tokens.css 가 금지하는 블러 중첩이 된다.
+   대신 반투명 단색. 알파 .74 는 스크림(.42) 위에 다시 얹히므로 흰 반투명이 두 겹
+   쌓여 거의 불투명한 밝은 면이 되고, 그 위 순백 카드(.col)와의 명도차는 그대로 선다.
+   radius 는 바깥만 r-panel(22) — 안쪽 카드(16)와 같으면 두 모서리가 겹쳐 한 덩어리로 보인다.
+   폭: 로그인 432 = 계정 정보 380(기준안 C 계승) + 좌우 패딩(26×2), 회원가입 756.
+   🔴 폭 전환은 max-width 하나만 애니메이트한다 — 내용(2열 배치·필드 표시)은 즉시
+   바뀐다. 함께 움직이면 필드가 흘러다녀 어지럽다. */
+.auth-glass{
+  position:relative;
   margin:auto;
-  width:100%; max-width:380px;
-  /* 규칙 03 — 테두리 대신 그림자 하나로 층을 만든다 */
-  background:#fff; border:0; border-radius:var(--bb-r-card); box-shadow:var(--bb-sh-4);
-  padding:28px 26px; color:var(--bb-ink);
-  animation:welcomeIn .5s ease both;
+  width:100%; max-width:432px;
+  border-radius:var(--bb-r-panel);
+  padding:26px 26px 22px;
+  background:rgba(255,255,255,.74);
+  border:1px solid rgba(255,255,255,.85);
+  box-shadow:0 18px 46px rgba(35,39,51,.09),
+             inset 0 1px 0 rgba(255,255,255,.92);
+  transition:max-width calc(var(--bb-dur) * 3) var(--bb-ease);
 }
+.auth-glass.is-signup{max-width:756px;}
+
+/* ── 2단: 유리 안에 들어앉는 불투명 카드 ────────────────────────
+   tokens.css 의 `.bb-glass > .bb-card` 는 직계 자식 셀렉터라 여기서는 안 먹는다 —
+   구조가 .auth-glass > form > .fields > .col 로 두 단 깊기 때문이다. 값은 정본과
+   똑같은 세 값(불투명 #fff · 그림자 sh-2 · radius r-card)을 후손 셀렉터로 다시 건다. */
+.auth-glass .col{
+  background:#fff; box-shadow:var(--bb-sh-2); border-radius:var(--bb-r-card);
+  padding:14px 18px 18px; min-width:0;    /* 2열 그리드에서 date 입력이 열을 밀지 않도록 */
+  align-self:start;
+}
+
 .auth-brand{
   font-size:23px; font-weight:800; letter-spacing:-.8px; text-align:center; color:var(--bb-ink);
 }
@@ -532,9 +578,10 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 
 /* 세그먼트 필 — 탭 그룹을 알약 하나로. 선택은 진한 채움, 나머지는 글자만.
-   흰 카드 위라 알약 바탕은 surface 로 둔다(문서의 회색 씬 위 흰 알약과 같은 대비). */
+   유리 위라 알약 바탕은 surface(불투명)로 둔다 — 반투명 트랙을 얹으면 계층 규칙 위반이고
+   뒤 격자가 알약 안에서 끊겨 보인다. */
 .auth-seg{
-  display:flex; gap:2px; padding:3px; margin:20px 0 14px;
+  display:flex; gap:2px; padding:3px; margin:20px auto 14px; max-width:380px;
   background:var(--bb-surface); border-radius:var(--bb-r-pill);
 }
 .auth-seg button{
@@ -550,7 +597,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    구분되지 않는다. 선택은 tonal(옅은 브랜드색)로 — 눈에는 띄되 탭을 이기지 않는다.
    어느 모드로 로그인하는지가 이후 실시간 연동 가능 여부를 정하므로 감출 수는 없다. */
 .auth-seg.src{
-  margin:0 0 18px; padding:0; background:transparent;
+  margin:0 auto 18px; padding:0; background:transparent;
   justify-content:center; gap:4px;
 }
 .auth-seg.src button{flex:0 1 auto; padding:6px 16px; font-size:12px;}
@@ -559,7 +606,28 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .auth-seg.src button:hover:not(:disabled):not(.on){background:var(--bb-surface);}
 
-/* 제출 — 화면에서 채운 버튼은 이것 하나뿐이다(규칙: 채운 건 하나만). */
+/* ── 2열 배치 ───────────────────────────────────────────────────
+   열을 나누는 기준은 논리적 묶음이다.
+     왼쪽 · 계정 정보 : 이메일 → 비밀번호 → 비밀번호 확인(가입만)
+     오른쪽 · 개인 정보(가입만): 이름 → 휴대전화번호 → 생년월일 → 성별
+   비밀번호/확인은 반드시 세로 인접 — 값을 눈으로 대조하는 쌍이라 열을 가로지르면 안 된다.
+   3칸 대 4칸 불균형은 억지로 맞추지 않는다 — 카드가 각자의 묶음을 면으로 보여 주므로
+   길이가 다른 게 '다른 묶음'으로 더 확실히 읽힌다. */
+.fields{display:grid; grid-template-columns:1fr; gap:14px 26px; align-items:start;}
+.auth-glass.is-signup .fields{grid-template-columns:1fr 1fr;}
+
+/* 열 제목 — 로그인 모드에서는 묶음이 하나뿐이라 숨긴다. 카드 면 자체가 이미
+   묶음을 보여 주므로, 제목은 회원가입(묶음 둘)에서만 이름표 역할을 한다. */
+.col__h{
+  display:none; margin-bottom:14px;
+  font-family:var(--bb-font-mono); font-size:var(--bb-fs-caption); font-weight:600;
+  letter-spacing:1.2px; color:var(--bb-muted-2);
+}
+.auth-glass.is-signup .col__h{display:block;}
+
+/* 제출 — 화면에서 채운 버튼은 이것 하나뿐이다(규칙: 채운 건 하나만).
+   유리가 756px 로 넓어져도 제출 버튼은 380px 로 묶는다. */
+.auth-foot{max-width:380px; margin:14px auto 0;}
 .auth-submit{
   width:100%; margin-top:14px; padding:12px 0; border:0; border-radius:20px;
   background:var(--bb-primary); color:#fff;
@@ -577,37 +645,44 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .auth-back:hover:not(:disabled){background:var(--bb-surface); color:var(--bb-ink);}
 
-/* 입력 — .form-row/.seg 는 대시보드 모달과 공용이라 반드시 .auth-card 하위로만 건다.
+/* 입력 — .form-row/.seg 는 대시보드 모달과 공용이라 반드시 .auth-glass 하위로만 건다.
    여기서 새면 모달 폼까지 같이 바뀐다. */
-.auth-card .form-row{margin-bottom:12px;}
-.auth-card .form-row label{font-size:12px; color:var(--bb-body); font-weight:600;}
-.auth-card .form-row input{
-  padding:10px 12px; font-size:13px; border-radius:var(--bb-r-input);
+.auth-glass .form-row{margin-bottom:12px;}
+.auth-glass .form-row:last-child{margin-bottom:0;}
+.auth-glass .form-row label{font-size:12px; color:var(--bb-body); font-weight:600;}
+.auth-glass .form-row input{
+  width:100%; padding:10px 12px; font-size:13px; border-radius:var(--bb-r-input);
   background:#fff; border:1px solid var(--bb-line-strong); color:var(--bb-ink);
 }
-.auth-card .form-row input::placeholder{color:var(--bb-muted);}
-.auth-card .form-row input:focus{border-color:var(--bb-primary); outline:none;}
+.auth-glass .form-row input::placeholder{color:var(--bb-muted);}
+.auth-glass .form-row input:focus{border-color:var(--bb-primary); outline:none;}
+/* date 입력은 브라우저 기본 폭이 내용에 맞춰 잡혀 좁은 열에서 혼자 좁게 앉는다. */
+.auth-glass input[type=date]{min-width:0;}
 /* 성별 선택 — 조작 패널의 .seg 를 인증 카드 톤으로 덮어쓴다 */
-.auth-card .seg.gender{border:0; gap:2px; padding:3px; background:var(--bb-surface); border-radius:var(--bb-r-pill);}
-.auth-card .seg.gender button{
+.auth-glass .seg.gender{border:0; gap:2px; padding:3px; background:var(--bb-surface); border-radius:var(--bb-r-pill);}
+.auth-glass .seg.gender button{
   padding:8px 0; border:0; border-radius:var(--bb-r-pill);
   background:transparent; color:var(--bb-body); font-size:12.5px; font-weight:600;
 }
-.auth-card .seg.gender button.on{background:var(--bb-ink); color:#fff; font-weight:700;}
-.auth-card :focus-visible{outline:2px solid var(--bb-primary); outline-offset:2px;}
-/* 알림 — 배경은 팔레트의 tint 를 그대로 쓴다.
-   글자색만 낮춘다: 토큰의 danger-text(#B4655C)는 danger-tint 위에서 3.08:1,
-   warn-text(#96762F)는 warn-tint 위에서 3.50:1 로 둘 다 기준(4.5)에 못 미친다.
-   색상 계열은 그대로 두고 명도만 내렸다 — tokens.css 는 핸드오프 정본이라
-   손대지 않고, 이 화면 안에서만 덮는다. */
-.auth-card .form-msg{font-size:12.5px; border-radius:var(--bb-r-input);}
-.auth-card .form-msg.err{
+.auth-glass .seg.gender button.on{background:var(--bb-ink); color:#fff; font-weight:700;}
+.auth-glass :focus-visible{outline:2px solid var(--bb-primary); outline-offset:2px;}
+/* 메시지 — 2열일 때 어느 카드에도 놓지 않는다. 폼 전체에 대한 것이지 한 묶음에
+   대한 것이 아니므로 카드 밖, 유리 위 전폭(.auth-foot 안)에 둔다.
+   배경은 팔레트의 tint 를 그대로 쓴다. 글자색만 낮춘다: 토큰의 danger-text(#B4655C)는
+   danger-tint 위에서 3.08:1, warn-text(#96762F)는 warn-tint 위에서 3.50:1 로 둘 다
+   기준(4.5)에 못 미친다. 색상 계열은 그대로 두고 명도만 내렸다 — tokens.css 는
+   핸드오프 정본이라 손대지 않고, 이 화면 안에서만 덮는다. */
+.auth-glass .form-msg{font-size:12.5px; border-radius:var(--bb-r-input);}
+.auth-glass .form-msg.err{
   background:var(--bb-danger-tint); color:#8E3F36; border:1px solid #E2BDB7;
 }
-.auth-card .form-msg.warn{
+.auth-glass .form-msg.warn{
   background:var(--bb-warn-tint); color:#7A5F1E; border:1px solid #E6D2AE;
 }
-.auth-card .form-msg.ok{
+/* 🔴 -847 은 `.auth-card` 로 걸었지만, -807 이 인증 화면의 루트를 유리 쉘
+   `.auth-glass` 로 바꿔서 그 선택자는 이제 아무것도 맞히지 못한다(계정 찾기 성공
+   메시지가 무색으로 떴다). 위 err/warn 과 같은 스코프로 옮긴다. */
+.auth-glass .form-msg.ok{
   background:rgba(31,157,108,.10); color:#1F7A54; border:1px solid #B7E0CD;
 }
 
@@ -658,6 +733,88 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .auth-links button:hover:not(:disabled){color:var(--bb-primary); text-decoration:underline;}
 .auth-links span{color:var(--bb-muted); font-size:11px;}
+
+/* ── 반응형 ─────────────────────────────────────────────────────
+   820px = 유리 756 + 좌우 여백. 그 아래는 열이 좁아져 답답해지므로 1열로 접는다.
+   접히면 카드 두 장이 세로로 쌓인다 — 묶음마다 카드가 하나씩이라 자연스럽다. */
+@media (max-width:820px){
+  .auth-glass.is-signup{max-width:432px;}
+  .auth-glass.is-signup .fields{grid-template-columns:1fr;}
+}
+@media (max-width:620px){
+  .auth-glass{padding:18px 14px;}
+  .auth-glass .col{padding:14px;}
+}
+
+/* ============ 웰컴 ↔ 로그인 전환 (S15P11E101-808) ============
+   확정 시안: docs/design/mockups/flow-welcome-to-login.html
+   구조는 components/auth/AuthFlow.tsx 참고 — 두 화면이 동시에 마운트돼 있고,
+   .authflow 에 붙는 두 클래스만으로 상태가 갈린다.
+     .is-login  → 히어로 퇴장 · 스크림 · 하단 통계 페이드 (나가는 쪽, 먼저)
+     .login-in  → 로그인 패널 등장 (들어오는 쪽, 70ms 늦게 — JS 타이머)
+   애니메이트하는 속성은 transform / opacity 뿐이다. width·left·filter 는 건드리지 않는다
+   (레이아웃 재계산 · 매 프레임 재블러를 부른다).
+
+   지속시간: --bb-dur(.12s)은 hover 용이라 화면 전환엔 너무 빠르다. 화면 전체가 밀려나는
+   전환이라 토큰에서 4배를 파생시킨다(≈ .48s). 새 숫자를 짓지 않고 토큰에서 끌어온다. */
+.authflow{ --fl-dur: calc(var(--bb-dur) * 4); }
+
+/* ① 히어로 — 왼쪽으로 밀려나며 사라진다.
+   -120% 는 자기 폭 기준 상대값이라 히어로 폭이 달라져도 항상 화면 밖으로 나간다
+   (고정 px 이면 좁은 화면에서 덜 밀려나 꼬리가 남는다).
+   translateY(-50%) 는 세로 중앙정렬 값이라 전환 중에도 유지해야 한다. */
+.authflow .welcome-hero{
+  transition:transform var(--fl-dur) var(--bb-ease), opacity var(--fl-dur) var(--bb-ease);
+}
+.authflow.is-login .welcome-hero{ transform:translate(-120%,-50%); opacity:0; pointer-events:none; }
+
+/* ② 스크림 — 블러를 전담한다.
+   🔴 순찰 씬에 filter 를 걸지 않는 이유 둘: (a) filter 는 조상에 containing block 을
+   만들어 position:fixed 자식이 깨진다 (b) 매 프레임 transform 이 도는 씬에 blur 를 걸면
+   GPU 가 매 프레임 다시 흐린다. 스크림은 자기 뒤만 흐리므로 씬은 원래 비용 그대로 돈다.
+   blur 8px + 흰 .42 — 로봇 실루엣과 라이다 스윕이 형태로는 계속 보이되, 로그인 카드 위
+   글자 대비는 그대로다(카드가 불투명 흰색이라 스크림보다 위 z-index 에 있다).
+   전환 중 클릭이 씬으로 새지 않도록 로그인 상태에서만 pointer-events 를 켠다. */
+.authflow .scrim{
+  position:fixed; inset:0; z-index:3;
+  opacity:0; pointer-events:none;
+  backdrop-filter:blur(8px) saturate(1.05);
+  -webkit-backdrop-filter:blur(8px) saturate(1.05);
+  background:rgba(255,255,255,.42);
+  transition:opacity var(--fl-dur) var(--bb-ease);
+}
+.authflow.is-login .scrim{ opacity:1; pointer-events:auto; }
+
+/* ④ 로그인 패널 — 아래에서 올라와 제자리로.
+   "제자리"가 곧 margin:auto 로 중앙 정렬된 자리이므로 시작 위치만 잡고 도착점은
+   transform:none 이면 된다(값을 두 군데서 따로 계산할 필요가 없다). */
+.authflow .auth-wrap{
+  opacity:0; transform:translateY(64px); pointer-events:none;
+  transition:transform var(--fl-dur) var(--bb-ease), opacity var(--fl-dur) var(--bb-ease);
+}
+.authflow.login-in .auth-wrap{ opacity:1; transform:none; pointer-events:auto; }
+
+/* 좁은 폭에서는 히어로가 static 이라 세로 중앙정렬 값(-50%)이 없다 — 그대로 쓰면
+   전환 순간 히어로가 위로 반쯤 튄다. 가로 이동만 남긴다. */
+@media (max-width:1180px){
+  .authflow.is-login .welcome-hero{ transform:translateX(-120%); }
+}
+
+/* 이동을 원치 않는 사용자 — 이동은 끄고 opacity 만으로 전환한다(사라지긴 해야 한다).
+   패널 폭 전환(max-width)도 끈다: 회원가입으로 넓어질 때 폼이 움직여 보인다. */
+@media (prefers-reduced-motion: reduce){
+  .authflow .welcome-hero,
+  .authflow .scrim,
+  .authflow .auth-wrap{
+    transition:opacity var(--fl-dur) var(--bb-ease) !important;
+  }
+  .authflow .welcome-hero,.authflow.is-login .welcome-hero{ transform:translateY(-50%) !important; }
+  .authflow .auth-wrap,.authflow.login-in .auth-wrap{ transform:none !important; }
+  .auth-glass{ transition:none; }
+}
+@media (prefers-reduced-motion: reduce) and (max-width:1180px){
+  .authflow .welcome-hero,.authflow.is-login .welcome-hero{ transform:none !important; }
+}
 
 /* ============ 폼 (인증 · 모달 공용) ============ */
 .form-row{display:flex; flex-direction:column; gap:5px; margin-bottom:11px;}
@@ -957,13 +1114,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #nav.sim-nav::before{
   content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
 }
-:root[data-theme="dark"] #nav.sim-nav{
-  background:
-    radial-gradient(440px 100px at 12% 0%,rgba(64,124,255,.24),transparent 72%),
-    radial-gradient(420px 120px at 92% 30%,rgba(255,126,60,.12),transparent 74%),
-    linear-gradient(100deg,rgba(8,13,24,.96),rgba(7,9,16,.94));
-  border-bottom-color:rgba(255,255,255,.09);
-}
 :root[data-theme="light"] #nav.sim-nav{
   color:#27354a;
   background:
@@ -980,13 +1130,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #nav.sim-nav .nav-subtitle{font-size:13px; font-weight:500; letter-spacing:.2px; color:#93a0b5;}
 :root[data-theme="light"] #nav.sim-nav .nav-subtitle{color:#66758c;}
 #nav.sim-nav .navtabs button{border-radius:999px; padding:6px 15px;}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button{color:#8794a9;}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{color:#e7eef9; background:rgba(255,255,255,.06);}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  color:#f4f8ff; border-color:rgba(108,164,255,.38);
-  background:linear-gradient(135deg,rgba(61,129,229,.48),rgba(76,83,194,.34));
-  box-shadow:0 5px 16px rgba(47,111,208,.24),inset 0 1px 0 rgba(255,255,255,.16);
-}
 :root[data-theme="light"] #nav.sim-nav .logo{color:#17243a;}
 :root[data-theme="light"] #nav.sim-nav .navtabs{
   border-color:rgba(75,106,148,.14); background:rgba(255,255,255,.58);
@@ -999,16 +1142,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:linear-gradient(135deg,#4b8bea,#356fc9);
   box-shadow:0 5px 15px rgba(47,111,208,.24),inset 0 1px 0 rgba(255,255,255,.30);
 }
-#nav.sim-nav .theme-btn,#nav.sim-nav .navrole,#nav.sim-nav .usermenu-btn{
+#nav.sim-nav .navrole,
+#nav.sim-nav .usermenu-btn{
   border-color:rgba(119,150,193,.22); border-radius:999px;
 }
-:root[data-theme="dark"] #nav.sim-nav .theme-btn,
-:root[data-theme="dark"] #nav.sim-nav .usermenu-btn{background:rgba(255,255,255,.055);}
-:root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn{
   color:#35445b; background:rgba(255,255,255,.62); box-shadow:inset 0 1px 0 #fff;
 }
-:root[data-theme="light"] #nav.sim-nav .theme-btn:hover{background:rgba(255,255,255,.90);}
 :root[data-theme="light"] #nav.sim-nav .navrole,
 :root[data-theme="light"] #nav.sim-nav .clock{color:#637087;}
 :root[data-theme="light"] #nav.sim-nav .usermenu-drop{
@@ -1024,13 +1164,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root[data-theme="light"] #nav.sim-nav .usermenu-drop button.danger{color:#c84b42;}
 /* 배경은 한 겹의 검정이 아니라 빛이 도는 남색이다. 왼쪽 위에서 푸른빛이,
    오른쪽에서 따뜻한 빛이 들어와 화면에 깊이를 만든다. */
-:root[data-theme="dark"] #pgB.sim-skin{
-  background:
-    radial-gradient(680px 420px at 4% -6%, rgba(64,124,255,.20), transparent 64%),
-    radial-gradient(760px 620px at 103% 34%, rgba(255,126,60,.16), transparent 62%),
-    radial-gradient(900px 520px at 62% 108%, rgba(96,64,220,.12), transparent 66%),
-    linear-gradient(160deg,#0a0e18 0%,#070910 55%,#0a0a10 100%);
-}
 :root[data-theme="light"] #pgB.sim-skin{
   background:
     radial-gradient(720px 460px at 3% -8%, rgba(64,124,255,.18), transparent 64%),
@@ -1053,16 +1186,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:var(--dk-panel);
   box-shadow:0 18px 40px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03);
 }
-:root[data-theme="dark"] .sim-skin .panel{
-  background:linear-gradient(158deg, rgba(255,255,255,.075) 0%, rgba(255,255,255,.028) 42%, rgba(255,255,255,.014) 100%);
-  border-color:rgba(255,255,255,.10);
-  backdrop-filter:blur(22px) saturate(1.25);
-  box-shadow:0 24px 48px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.10);
-}
 /* 판 위쪽에 1px 흰 선을 그어 '빛이 걸린' 느낌을 주려 했으나, 좌우로 들여쓴 그 선이
    화면에서는 제목 위에 놓인 흰 가로 막대로 보였다. 유리의 가장자리는 테두리선 하나로
    충분하다. (S15P11E101 시뮬 Liquid Glass) */
-:root[data-theme="dark"] .sim-skin .panel{position:relative;}
 :root[data-theme="light"] .sim-skin .panel{
   position:relative;
   background:linear-gradient(150deg,rgba(255,255,255,.84),rgba(255,255,255,.58));
@@ -1071,14 +1197,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:0 18px 42px rgba(49,72,108,.11), inset 0 1px 0 #fff;
 }
 /* 유리판 안의 작은 상자들도 같은 규칙을 따른다 — 하나만 불투명하면 붕 떠 보인다 */
-:root[data-theme="dark"] .sim-skin .stat-card,
-:root[data-theme="dark"] .sim-skin .env div,
-:root[data-theme="dark"] .sim-skin .elog li,
-:root[data-theme="dark"] .sim-skin .seg,
-:root[data-theme="dark"] .sim-skin .spdbar,
-:root[data-theme="dark"] .sim-skin .dpad button,
-:root[data-theme="dark"] .sim-skin .gotor select{
-  background:rgba(255,255,255,.045); border-color:rgba(255,255,255,.09);}
 :root[data-theme="light"] .sim-skin .stat-card,
 :root[data-theme="light"] .sim-skin .env div,
 :root[data-theme="light"] .sim-skin .elog li,
@@ -1106,7 +1224,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .rgauge circle{fill:none; stroke-linecap:round; stroke-width:10;}
 /* 남은 눈금이 보여야 '얼마나 찼는지'를 알 수 있다 — 배경선이 묻히면 그냥 초승달로 읽힌다 */
 .rgauge-track{stroke:var(--dk-line); opacity:.9;}
-:root[data-theme="dark"] .rgauge-track{stroke:rgba(255,255,255,.10);}
 /* 색은 상태가 정한다(정상 초록 · 주의 호박 · 위험 빨강). 그 계열 안에서만 흐리게→진하게
    옮겨 간다 — 장식을 위해 의미가 없는 색을 섞지 않는다. */
 .rgauge{color:var(--dk-green);}
@@ -1116,7 +1233,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .rg-b{stop-color:currentColor; stop-opacity:1;}
 .rgauge-fill{transition:stroke-dasharray .5s ease;}
 /* 호 안쪽을 은은하게 밝혀 값이 '켜져 있다'는 인상을 준다 */
-:root[data-theme="dark"] .rgauge-fill{filter:drop-shadow(0 0 9px currentColor);}
 :root[data-theme="light"] .sim-skin .rgauge-fill{filter:drop-shadow(0 2px 5px currentColor);}
 :root[data-theme="light"] .sim-skin .rgauge-track{stroke:rgba(47,82,126,.12);}
 .rgauge-mid{position:absolute; top:50%; left:0; right:0; transform:translateY(-58%);
@@ -1193,14 +1309,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .sim-skin .dpad button:active,.sim-skin .dpad button.active{transform:scale(.96);}
 .sim-skin .seg{border-radius:999px; padding:3px; background:var(--dk-panel2); border-color:var(--dk-line);}
 .sim-skin .seg button{border-radius:999px;}
-/* 선택·눌림 표시는 어두운 배경 위에서만 반투명으로 둔다. 라이트 모드에서 그대로 쓰면
-   옅은 파랑 위에 흰 글자가 얹혀 읽히지 않는다 — 밝은 화면은 기존 단색 배경을 유지한다. */
-:root[data-theme="dark"] .sim-skin .dbtn.stop{background:linear-gradient(180deg,rgba(255,86,72,.22),rgba(255,86,72,.10));}
-:root[data-theme="dark"] .sim-skin .dbtn.go{background:linear-gradient(180deg,rgba(61,220,151,.20),rgba(61,220,151,.09));}
-:root[data-theme="dark"] .sim-skin .dpad button:active,
-:root[data-theme="dark"] .sim-skin .dpad button.active{
-  background:rgba(47,111,208,.32); border-color:rgba(120,170,240,.6); color:#dce9fb;}
-:root[data-theme="dark"] .sim-skin .seg button.on{background:rgba(47,111,208,.34); color:#dce9fb;}
 /* 라이트 모드의 긴급 정지·순찰 복귀는 옅은 배경에 옅은 글자라 원래도 흐렸다.
    시뮬레이션 화면에서만 글자를 진하게 내려 읽히게 한다. */
 /* 유리판은 뒤의 배경 블룸까지 비친다 — 바탕이 순백이 아니라 그만큼 어둡다.
@@ -1279,22 +1387,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 rgba(71,106,151,.10),0 8px 22px rgba(54,91,142,.11);
 }
 #nav.sim-nav .navtabs button{transition:background .18s ease,box-shadow .18s ease,color .18s ease;}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  background:linear-gradient(145deg,rgba(115,184,255,.52),rgba(86,99,235,.32));
-  border-color:rgba(189,224,255,.48);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.42),0 5px 14px rgba(32,96,214,.22);
-}
 :root[data-theme="light"] #nav.sim-nav .navtabs button.on{
   background:linear-gradient(145deg,rgba(61,144,255,.92),rgba(73,100,225,.78));
   border-color:rgba(255,255,255,.72);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.64),0 5px 14px rgba(38,93,188,.22);
 }
-#nav.sim-nav .theme-btn,#nav.sim-nav .navrole,#nav.sim-nav .usermenu-btn{
+#nav.sim-nav .navrole,
+#nav.sim-nav .usermenu-btn{
   background:rgba(255,255,255,.075); border-color:rgba(255,255,255,.17);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
   backdrop-filter:blur(18px) saturate(1.35);
 }
-:root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .navrole,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn{
   background:rgba(255,255,255,.58); border-color:rgba(255,255,255,.84);
@@ -1305,13 +1408,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .sim-skin .panel{
   position:relative; isolation:isolate; border-radius:24px;
   transition:border-color .22s ease,box-shadow .22s ease,transform .22s ease;
-}
-:root[data-theme="dark"] .sim-skin .panel{
-  background:
-    linear-gradient(145deg,rgba(255,255,255,.105),rgba(255,255,255,.026) 38%,rgba(89,125,255,.045) 100%);
-  border-color:rgba(222,239,255,.17);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(0,0,0,.16),0 20px 46px rgba(2,7,17,.30);
-  backdrop-filter:blur(38px) saturate(1.5) brightness(1.05);
 }
 :root[data-theme="light"] .sim-skin .panel{
   background:
@@ -1328,16 +1424,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .sim-skin .seg,.sim-skin .spdbar,.sim-skin .dpad button,.sim-skin .gotor select{
   backdrop-filter:blur(16px) saturate(1.28);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.08);
-}
-:root[data-theme="dark"] .sim-skin .stat-card,
-:root[data-theme="dark"] .sim-skin .env div,
-:root[data-theme="dark"] .sim-skin .elog li,
-:root[data-theme="dark"] .sim-skin .seg,
-:root[data-theme="dark"] .sim-skin .spdbar,
-:root[data-theme="dark"] .sim-skin .dpad button,
-:root[data-theme="dark"] .sim-skin .gotor select{
-  background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.028));
-  border-color:rgba(220,238,255,.13);
 }
 :root[data-theme="light"] .sim-skin .stat-card,
 :root[data-theme="light"] .sim-skin .env div,
@@ -1415,10 +1501,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    반투명 판은 뒤 배경을 끌어와 바탕 밝기를 원래 패널과 다르게 만든다. 기존 색을 그대로
    쓰면 대비가 내려앉는다. 측정값 기준으로 이 화면에서만 색을 다시 잡는다.
    (base 대비 — 상태 라벨 5.41→2.92 · 긴급 정지 6.01→4.16 으로 떨어졌던 것을 되돌린다) */
-:root[data-theme="dark"] .sim-skin .kv{color:#c2cad8;}
 :root[data-theme="light"] .sim-skin .kv{color:#4e5866;}
-:root[data-theme="dark"] .sim-skin .dbtn.stop{color:#ffb8b2;}
-:root[data-theme="dark"] .sim-skin .dbtn.go{color:#9df0cc;}
 /* 이벤트 로그의 종류 색은 밝은 화면에서 원래도 읽히지 않았다(초록 1.66:1).
    왼쪽 색띠가 종류를 이미 알려 주므로, 본문은 짙게 내려 글자부터 읽히게 한다. */
 :root[data-theme="light"] .sim-skin .elog li.ok b{color:#0d5c3e;}
@@ -1513,12 +1596,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* ---- 2b. 주변색 적응 ----
    유리가 스스로 흰색을 갖지 않는다. 배경을 거의 무채색 틴트로만 덮고,
    채도를 끌어올려 뒤에 있는 색이 표면으로 올라오게 한다. */
-:root[data-theme="dark"] .sim-skin .panel{
-  background:rgba(255,255,255,.045);
-  border-color:rgba(226,240,255,.16);
-  backdrop-filter:blur(var(--blur)) saturate(var(--sat)) brightness(1.06);
-  box-shadow:0 4px 14px rgba(2,7,17,.22);
-}
 :root[data-theme="light"] .sim-skin .panel,
 :root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel{
   background:rgba(255,255,255,.40);
@@ -1581,7 +1658,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    "밝거나 어두운 환경에 스마트하게 적응한다" — 유리는 뒤 배경을 끌어오므로
    바탕 밝기가 흔들린다. 글자는 그 흔들림 위에서도 읽혀야 한다.
    아래 값은 실제로 칠해지는 색을 재서 4.5:1 이상으로 맞춘 것이다. */
-:root[data-theme="dark"] .sim-skin .panel h3{color:#b9c4d6;}
 :root[data-theme="light"] .sim-skin .panel h3{color:#4a5566;}
 
 /* 굴절 링은 비용이 큰 효과다. 움직임을 줄여 달라는 설정에서는 반사만 끄고
@@ -1595,15 +1671,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    결과가 같으니 유리로 보이지 않는다. 애플 예시가 하나같이 색이 흐르는 벽지를 쓰는
    이유가 이것이다. 색이 겹치며 흐르는 장(場)을 깔아 표면마다 다른 색이 배어 나오게 한다.
    관제 화면이므로 채도는 올리되 밝기는 눌러 둔다 — 영상과 열화상이 주인공이다. */
-:root[data-theme="dark"] :is(#pgB, #pgOps, #pgConfig).sim-skin{
-  background:
-    radial-gradient(ellipse 58% 46% at 12% 6%,  rgba(46,132,255,.40), transparent 62%),
-    radial-gradient(ellipse 48% 44% at 88% 14%, rgba(140,86,255,.30), transparent 60%),
-    radial-gradient(ellipse 62% 52% at 96% 82%, rgba(255,122,66,.26), transparent 62%),
-    radial-gradient(ellipse 54% 46% at 24% 96%, rgba(0,196,180,.22), transparent 62%),
-    radial-gradient(ellipse 40% 34% at 54% 48%, rgba(80,150,255,.14), transparent 66%),
-    linear-gradient(152deg,#050a14 0%,#070c18 46%,#0b0a14 100%);
-}
 :root[data-theme="light"] :is(#pgB, #pgOps, #pgConfig).sim-skin{
   background:
     radial-gradient(ellipse 58% 46% at 12% 6%,  rgba(64,146,255,.34), transparent 62%),
@@ -1616,29 +1683,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 
 /* 유리가 색을 더 많이 빌려 오도록 채도를 한 번 더 올린다.
    흰 틴트를 얇게 유지하는 것이 요령이다 — 두꺼우면 뒤 색이 죽는다. */
-:root[data-theme="dark"] .sim-skin .panel{
-  background:rgba(255,255,255,.045);
-  backdrop-filter:blur(var(--blur)) saturate(2.3) brightness(1.08);
-}
 :root[data-theme="light"] .sim-skin .panel,
 :root[data-theme="light"] #pgB.sim-skin :is(#pStatus,#pCam,#pThermal,#pControl,#pMap).panel{
   background:rgba(255,255,255,.40);
   backdrop-filter:blur(var(--blur)) saturate(2.1) brightness(1.06);
 }
 
-/* ---- 글자를 인 유리는 한 단계 조밀하게 ----
-   색이 흐르는 배경을 끌어올수록 표면 밝기가 요동친다. 장식만 보면 좋지만 글자는
-   그 위에서 읽혀야 한다. 색을 하나씩 밝히며 쫓는 대신, 글자를 담은 셀의 유리를
-   조금 더 조밀하게 만든다 — 애플이 "밝거나 어두운 환경에 스마트하게 적응한다"고
-   말한 것이 이 조정이다. 판은 계속 투명하고, 글자 뒤만 안정된다.
-   (다크에서 상태 라벨 4.44 · 로그 본문 4.14 로 내려갔던 것을 되돌린다) */
-:root[data-theme="dark"] .sim-skin .stat-card,
-:root[data-theme="dark"] .sim-skin .env div,
-:root[data-theme="dark"] .sim-skin .elog li{
-  background:linear-gradient(150deg,rgba(10,16,28,.52),rgba(10,14,24,.38));
-  border-color:rgba(210,232,255,.14);
-  backdrop-filter:blur(calc(var(--blur) * .55)) saturate(1.3);
-}
 :root[data-theme="light"] .sim-skin .stat-card,
 :root[data-theme="light"] .sim-skin .env div,
 :root[data-theme="light"] .sim-skin .elog li{
@@ -1646,10 +1696,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-color:rgba(255,255,255,.92);
   backdrop-filter:blur(calc(var(--blur) * .55)) saturate(1.25);
 }
-:root[data-theme="dark"] .sim-skin .kv{color:#ccd4e1;}
-:root[data-theme="dark"] .sim-skin .elog li.ok b{color:#6bf0b6;}
-:root[data-theme="dark"] .sim-skin .elog li.heat b{color:#ffc061;}
-:root[data-theme="dark"] .sim-skin .elog li.fire b{color:#ff9a92;}
 
 /* ---- 라이트 모드에도 색을 돌려준다 ----
    흰 유리를 두껍게 깔면 뒤 색이 죽어 그냥 흰 카드가 된다. 틴트를 얇게 유지하고
@@ -1879,9 +1925,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
      3. 유채색은 상태 전달에만. 제목·본문·라벨은 전부 무채색이다.
      4. 위계는 색이 아니라 크기로. 큰 숫자도 굵게 쓰지 않는다(400).
 
-   다크는 참조 시스템에 없다. 명도만 뒤집고 색상·채도 관계는 그대로 유지해
-   같은 규칙이 어두운 화면에서도 성립하게 했다 — 공장은 20시~08시 무인이라
-   밝은 화면만으로는 야간 근무를 감당하기 어렵다.
+   다크는 참조 시스템에 없었다. 명도만 뒤집은 층을 따로 두었으나, v3 로 새로 만든
+   화면(웰컴·인증)이 테마를 따르지 않아 화면마다 되고 안 되고가 갈렸다 —
+   S15P11E101-805 에서 다크 층을 걷어냈다. 이제 라이트 하나다.
    ══════════════════════════════════════════════════════════════════════════ */
 
 :root{
@@ -1921,36 +1967,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    색상 계열은 그대로 두고 명도만 내려 기준(4.5)을 넘긴다. */
 :root[data-theme="light"] .nav-page .kv b.st.ok{color:#0d6b45;}
 :root[data-theme="light"] .nav-page .kv b.st.warn{color:#8a5300;}
-/* 다크 — 명도만 뒤집는다. 색상·채도 관계는 그대로라 같은 규칙이 성립한다.
-   그림자는 어두운 화면에서 층을 못 만드므로 아주 옅은 테두리로 대신한다 —
-   '테두리를 쓰지 않는다' 는 밝은 배경에서 성립하는 규칙이다. */
-:root[data-theme="dark"]{
-  --nx-bg:#0e1214;
-  --nx-sunken:#141a1d;
-  --nx-elev:#181f23;
-  --nx-surface:#1b2328;
-  --nx-panel:rgba(27,35,40,.92);
-  --nx-side-panel:#1b2328;
-  --nx-side-card:#141a1d;
-  --nx-side-card-shadow:
-    0 0 0 1px rgba(255,255,255,.035),
-    -7px 0 18px rgba(0,0,0,.26),7px 0 18px rgba(0,0,0,.26),
-    0 -7px 18px rgba(0,0,0,.20),0 7px 18px rgba(0,0,0,.20);
-  --nx-event-row-shadow:0 0 0 1px rgba(255,255,255,.03),0 2px 5px rgba(0,0,0,.16),0 7px 18px rgba(0,0,0,.22);
-  --nx-divider:#2b353a;
-  --nx-text:#eef3f3;
-  --nx-muted:#9aa5a7;
-  --nx-faint:#6b7679;
-  --nx-accent:#2ddc4d;
-  --nx-success:#3f9a56;
-  --nx-danger-vivid:#ff6a5e;
-  --nx-danger:#a84d4a;
-  --nx-warning:#b3813f;
-  --nx-neutral:#39454a;
-  --nx-sh-sm:0 1px 2px rgba(0,0,0,.30);
-  --nx-sh-md:0 8px 24px rgba(0,0,0,.42);
-  --nx-sh-lg:0 20px 48px rgba(0,0,0,.55);
-}
 
 /* `.page.on{display:block}` 이 클래스 두 개라 `.nav-page` 하나로는 이기지 못한다.
    그러면 flex 가 적용되지 않아 아래 그리드가 남는 높이를 못 받고 콘텐츠 높이로 눌린다. */
@@ -2068,9 +2084,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   padding:14px 15px 10px; margin-bottom:12px; border-radius:15px;
   background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
 }
-:root[data-theme="dark"] #pgCam #pControl .control-card{
-  background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
-}
 /* 340px 전용 조작 구성: 모드 아래에서 WASD와 세로형 카메라 각도를 나란히 둔다. */
 #pgCam #pControl .ctl{
   display:grid; grid-template-columns:minmax(0,1fr) 62px;
@@ -2125,11 +2138,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   transform:translateY(0) scale(1);
   transition:transform 70ms cubic-bezier(.2,.75,.25,1),box-shadow 70ms ease;
 }
-:root[data-theme="dark"] #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){
-  background:linear-gradient(145deg,#1d252a,#151b1f);
-  border-color:rgba(255,255,255,.08);
-  box-shadow:0 3px 10px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.035);
-}
 /* 화면 클릭과 키보드 입력 모두 같은 물리적 눌림 피드백을 사용한다. */
 #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){
   transform:translateY(3px) scale(.985);
@@ -2148,15 +2156,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @media (prefers-reduced-motion:reduce){
   #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){transition:none;}
   #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){transform:none;}
-}
-:root[data-theme="dark"] #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn):is(:active,.active){
-  background:linear-gradient(145deg,#1d252a,#151b1f);
-  border-color:rgba(255,255,255,.08);
-  color:var(--nx-text);
-  box-shadow:
-    inset 0 5px 9px rgba(0,0,0,.52),
-    inset 0 -1px 0 rgba(255,255,255,.025),
-    0 1px 2px rgba(0,0,0,.12);
 }
 @media (prefers-reduced-motion:reduce){
   #pgCam #pControl :is(.dpad button,.camtilt .spdr .dbtn){transition:none;}
@@ -2214,10 +2213,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border:1px solid rgba(152,170,184,.78);
   box-shadow:0 18px 44px rgba(0,0,0,.44),0 0 0 1px rgba(7,11,16,.64);
 }
-:root[data-theme="dark"] #pgCam .cam-main > .panel.pip{
-  border-color:rgba(168,184,196,.55);
-  box-shadow:0 18px 44px rgba(0,0,0,.58),0 0 0 1px rgba(255,255,255,.035);
-}
 /* 제목이 절대 배치라 흐름에 높이를 주는 것이 vwrap 뿐이다. 비율을 못 박지 않으면
    높이 4px 짜리 띠가 된다 — 화면 비율은 열화상 센서(4:3)에 맞춘다. */
 #pgCam .cam-main > .panel.pip .vwrap{border-radius:0; box-shadow:none; border:0; flex:none; aspect-ratio:4/3;}
@@ -2233,10 +2228,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:var(--nx-elev); border:0; border-radius:var(--nx-r-lg);
   box-shadow:var(--nx-sh-md); padding:20px 22px; backdrop-filter:none;
 }
-:root[data-theme="dark"] .nav-page .panel{
-  /* 어두운 화면에서는 그림자가 층을 못 만든다 — 아주 옅은 테두리로 대신한다 */
-  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.045);
-}
 .nav-page .panel::before,.nav-page .panel::after{display:none;}
 /* 좌측 패널은 지도 위에 떠 있는 인상이라 한 단 더 띄운다 */
 .nav-side > .panel{background:var(--nx-panel); box-shadow:var(--nx-sh-lg);}
@@ -2248,17 +2239,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:var(--nx-sh-lg);
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
-:root[data-theme="dark"] .nav-page :is(#pStatus, .cam-side-panel, .ops-side > .panel, .cfg-side > .panel){
-  box-shadow:var(--nx-sh-lg),inset 0 0 0 1px rgba(255,255,255,.045);
-}
 /* 상태 카드와 조작 카드도 한 단계 내려간 동일 표면으로 맞춘다. */
 .nav-page :is(#pStatus .stat-card,#pControl .control-card){
   background:var(--nx-side-card); background-image:none;
   border:0; border-radius:15px; box-shadow:var(--nx-side-card-shadow);
   backdrop-filter:none; -webkit-backdrop-filter:none;
-}
-:root[data-theme="dark"] .nav-page :is(#pStatus .stat-card,#pControl .control-card){
-  background:var(--nx-side-card); box-shadow:var(--nx-side-card-shadow);
 }
 /* 이벤트 행도 로봇 운영 리포트의 개별 로봇 카드처럼 외곽보다 한 단계 밝은 면이다. */
 .nav-page :is(#pStatus,.cam-side-panel) .elog li{
@@ -2302,12 +2287,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:var(--nx-elev); color:var(--nx-text);
   box-shadow:var(--nx-sh-md);
 }
-#nav.sim-nav .theme-btn,#nav.sim-nav .navrole,#nav.sim-nav .usermenu-btn{
+#nav.sim-nav .navrole,
+#nav.sim-nav .usermenu-btn{
   border:0; border-radius:var(--nx-r-md);
   background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none;
   backdrop-filter:none;
 }
-#nav.sim-nav .theme-btn:hover,#nav.sim-nav .usermenu-btn:hover{background:var(--nx-divider);}
+#nav.sim-nav .usermenu-btn:hover{background:var(--nx-divider);}
 #nav.sim-nav .clock{color:var(--nx-faint);}
 #nav.sim-nav .usermenu-nm{color:var(--nx-text);}
 #nav.sim-nav .usermenu-drop{
@@ -2319,9 +2305,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #nav.sim-nav .usermenu-info b{color:var(--nx-text);}
 #nav.sim-nav .usermenu-info span,#nav.sim-nav .usermenu-caret{color:var(--nx-faint);}
 #nav.sim-nav .usermenu-info{border-bottom-color:var(--nx-divider);}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.06);
-}
 
 /* ── 화면이 넘치지 않게 ─────────────────────────────────────
    지도는 남는 높이를 채우고, 넘치면 지도 안에서 줄인다.
@@ -2335,11 +2318,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-page .stat-card,.nav-page .env div,.nav-page .elog li{
   background:var(--nx-surface); border:0; border-radius:var(--nx-r-md);
   box-shadow:var(--nx-sh-sm); backdrop-filter:none;
-}
-:root[data-theme="dark"] .nav-page .stat-card,
-:root[data-theme="dark"] .nav-page .env div,
-:root[data-theme="dark"] .nav-page .elog li{
-  background:var(--nx-sunken); box-shadow:none;
 }
 .nav-page .kv{color:var(--nx-muted); border-top-color:var(--nx-divider);}
 .nav-page .kv b{color:var(--nx-text);}
@@ -2372,9 +2350,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .nav-page .event-title .event-total b{color:inherit; font-size:11px; font-weight:600;}
 .nav-page .event-title .event-total.hot{background:var(--nx-danger); color:#3d0703;}
-:root[data-theme="dark"] .nav-page .event-title .event-total.hot{
-  background:#7f3d3a; color:#fff0ee;
-}
 /* 지도 판은 캔버스가 주인공이라 안쪽 여백을 줄인다 */
 .nav-canvas .vwrap{background:var(--nx-elev); border:0; border-radius:var(--nx-r-md);}
 .nav-page .maplegend{color:var(--nx-muted); margin-top:12px;}
@@ -2389,11 +2364,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow:0 2px 5px rgba(15,23,23,.055),0 12px 28px rgba(15,23,23,.085);
   backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2);
   pointer-events:none; white-space:nowrap;
-}
-:root[data-theme="dark"] #pgMap .vwrap > .maplegend{
-  color:var(--nx-text); background:rgba(24,31,35,.92);
-  border-color:rgba(255,255,255,.07);
-  box-shadow:0 2px 6px rgba(0,0,0,.28),0 14px 32px rgba(0,0,0,.30);
 }
 #pgMap .vwrap > .maplegend span{
   display:inline-flex; align-items:center; gap:8px;
@@ -2459,15 +2429,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   font-family:inherit; font-size:25px; font-weight:500; line-height:1; cursor:pointer;
   transition:transform 80ms ease,box-shadow 80ms ease,opacity 80ms ease;
 }
-:root[data-theme="dark"] :is(#pgMap,#pgCam) .map-control{
-  background:var(--nx-sunken); box-shadow:0 8px 22px rgba(0,0,0,.34);
-}
 :is(#pgMap,#pgCam) .map-control:hover:not(:disabled){transform:translateY(-1px); box-shadow:var(--nx-sh-lg);}
 :is(#pgMap,#pgCam) .map-control:active:not(:disabled){
   transform:translateY(2px); box-shadow:inset 0 3px 7px rgba(15,23,23,.16),0 1px 2px rgba(15,23,23,.06);
-}
-:root[data-theme="dark"] :is(#pgMap,#pgCam) .map-control:active:not(:disabled){
-  box-shadow:inset 0 4px 8px rgba(0,0,0,.48),0 1px 2px rgba(0,0,0,.16);
 }
 :is(#pgMap,#pgCam) .map-control:focus-visible{outline:2px solid var(--nx-accent); outline-offset:3px;}
 :is(#pgMap,#pgCam) .map-control:disabled{cursor:not-allowed; opacity:.42; box-shadow:none;}
@@ -2531,27 +2495,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    그 규칙들이 `:root[data-theme=...] #nav.sim-nav …` 로 잡혀 있어 클래스만으로는
    이기지 못한다. 같은 자리에서 덮어야 탭 색이 navexa 로 바뀐다.
    (덮지 못한 동안 라이트 선택 탭이 파란 알약으로 남아 대비 2.88 이었다) */
-:root[data-theme="light"] #nav.sim-nav .navtabs button,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button{
+:root[data-theme="light"] #nav.sim-nav .navtabs button{
   background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none; border:0;
 }
-:root[data-theme="light"] #nav.sim-nav .navtabs button:hover,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{
+:root[data-theme="light"] #nav.sim-nav .navtabs button:hover{
   background:var(--nx-divider); color:var(--nx-text);
 }
-:root[data-theme="light"] #nav.sim-nav .navtabs button.on,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
+:root[data-theme="light"] #nav.sim-nav .navtabs button.on{
   background:var(--nx-elev); color:var(--nx-text); border:0;
   box-shadow:var(--nx-sh-md);
-}
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.07);
 }
 :root[data-theme="light"] #nav.sim-nav .logo{color:var(--nx-text);}
 :root[data-theme="light"] #nav.sim-nav .nav-subtitle,
 :root[data-theme="light"] #nav.sim-nav .clock,
 :root[data-theme="light"] #nav.sim-nav .navrole{color:var(--nx-faint);}
-:root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn{
   background:var(--nx-sunken); color:var(--nx-muted); box-shadow:none; border:0;
 }
@@ -2566,10 +2523,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .nav-page .pillm{background:var(--nx-success); color:#06301a;}
 .nav-page .pillm.emg{background:var(--nx-danger-vivid); color:#3d0703;}
 .nav-page .pillm.man{background:var(--nx-warning); color:#3d2600;}
-/* 다크에서는 파스텔 채움도 밝아 흰 글자가 3.37 이었다. 채움을 한 단 내린다. */
-:root[data-theme="dark"] .nav-page .pillm{background:#2f7541; color:#eafff2;}
-:root[data-theme="dark"] .nav-page .pillm.emg{background:var(--nx-danger); color:#fff0ee;}
-:root[data-theme="dark"] .nav-page .pillm.man{background:var(--nx-warning); color:#fff6e6;}
 
 /* ── 틀을 없앤다 ────────────────────────────────────────────
    참조 디자인에서 지도는 카드 안에 들어 있지 않다. 배경 위에 그대로 놓여 있고,
@@ -2584,8 +2537,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 #pgMap .nav-canvas > .panel::before,#pgMap .nav-canvas > .panel::after,
 #pgCam .panel::before,#pgCam .panel::after{display:none;}
-:root[data-theme="dark"] #pgMap .nav-canvas > .panel,
-:root[data-theme="dark"] #pgCam .cam-main > .panel{box-shadow:none;}
 
 /* 제목은 배경 위에 그대로 얹는다 */
 #pgMap .nav-canvas > .panel > h3,#pgCam .cam-main > .panel:not(.pip) > h3{
@@ -2598,8 +2549,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border:0; border-radius:var(--nx-r-lg); overflow:hidden;
   box-shadow:0 10px 30px rgba(15,23,23,.10);
 }
-:root[data-theme="dark"] #pgMap .nav-canvas .vwrap,
-:root[data-theme="dark"] #pgCam .cam-main .vwrap{box-shadow:0 10px 30px rgba(0,0,0,.42);}
 /* 지도는 배경과 같은 톤이라 살짝 밝혀 바닥과 구분한다 */
 #pgMap .nav-canvas .vwrap{background:var(--nx-elev);}
 
@@ -2629,46 +2578,35 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 탭을 감싸던 흰 알약 띠를 걷는다. 참조에서 탭은 각자 알약일 뿐 공통 틀이 없다 —
    틀이 있으면 상단에 가로로 긴 직사각형이 하나 더 생겨 화면이 층으로 나뉜다.
    :root[data-theme=...] 로 잡힌 옛 유리 규칙이 있어 같은 자리에서 덮어야 이긴다. */
-:root[data-theme="light"] #nav.sim-nav .navtabs,
-:root[data-theme="dark"] #nav.sim-nav .navtabs{
+:root[data-theme="light"] #nav.sim-nav .navtabs{
   position:absolute; left:50%; transform:translateX(-50%);
   gap:10px; margin:0; background:transparent; box-shadow:none; border:0; padding:0;
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
 /* 탭은 각자 알약이다. 고르지 않은 것은 배경에 잠긴 회색, 고른 것만 흰 판으로 올라온다 */
-:root[data-theme="light"] #nav.sim-nav .navtabs button,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button{
+:root[data-theme="light"] #nav.sim-nav .navtabs button{
   height:44px; min-width:84px; padding:0 22px;
   border-radius:var(--nx-r-md); border:0;
   background:var(--nx-sunken); box-shadow:none; color:var(--nx-muted);
   font-size:14px; font-weight:500;
 }
-:root[data-theme="light"] #nav.sim-nav .navtabs button:hover,
-:root[data-theme="dark"] #nav.sim-nav .navtabs button:hover{
+:root[data-theme="light"] #nav.sim-nav .navtabs button:hover{
   background:var(--nx-divider); color:var(--nx-text);
 }
 :root[data-theme="light"] #nav.sim-nav .navtabs button.on{
   background:var(--nx-elev); color:var(--nx-text); box-shadow:var(--nx-sh-md);
 }
-:root[data-theme="dark"] #nav.sim-nav .navtabs button.on{
-  background:var(--nx-elev); color:var(--nx-text);
-  box-shadow:var(--nx-sh-md),inset 0 0 0 1px rgba(255,255,255,.08);
-}
-:root[data-theme="light"] #nav.sim-nav .theme-btn,
 :root[data-theme="light"] #nav.sim-nav .usermenu-btn,
-#nav.sim-nav .theme-btn,#nav.sim-nav .usermenu-btn,#nav.sim-nav .navrole{
+#nav.sim-nav .usermenu-btn,
+#nav.sim-nav .navrole{
   background:var(--nx-elev); box-shadow:var(--nx-sh-md);
 }
 #nav.sim-nav .navrole{display:none;}
-#nav.sim-nav .theme-btn,
 #nav.sim-nav .usermenu-btn{
   width:44px; height:44px; min-width:44px; padding:0; margin:0;
   display:flex; align-items:center; justify-content:center;
   border:0; border-radius:var(--nx-r-md); color:var(--nx-muted);
 }
-#nav.sim-nav .theme-btn{font-size:0;}
-#nav.sim-nav .theme-btn::before{content:'☾'; font-size:20px; line-height:1;}
-:root[data-theme="dark"] #nav.sim-nav .theme-btn::before{content:'☀'; font-size:19px;}
 #nav.sim-nav .clock{
   height:44px; min-width:72px; padding:0 13px;
   display:flex; align-items:center; justify-content:center;
@@ -2690,25 +2628,18 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   width:15px; height:9px; border:2px solid currentColor; border-bottom:0;
   border-radius:10px 10px 0 0;
 }
-#nav.sim-nav .theme-btn:hover,#nav.sim-nav .usermenu-btn:hover{
+#nav.sim-nav .usermenu-btn:hover{
   background:var(--nx-surface); color:var(--nx-text);
 }
-:root[data-theme="dark"] #nav.sim-nav .theme-btn,
-:root[data-theme="dark"] #nav.sim-nav .clock,
-:root[data-theme="dark"] #nav.sim-nav .usermenu-btn{
-  box-shadow:var(--nx-sh-md),inset 0 0 0 1px rgba(255,255,255,.055);
-}
 /* 이전 테마별 글래스 배경의 우선순위를 이겨 헤더와 본문을 완전히 같은 면으로 만든다. */
-:root[data-theme="light"] #nav.sim-nav,
-:root[data-theme="dark"] #nav.sim-nav{
+:root[data-theme="light"] #nav.sim-nav{
   background:var(--nx-bg); border:0; border-bottom:0; outline:0; box-shadow:none;
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
 
 /* 중앙 탭이 우측 계정 도구와 겹칠 수 있는 폭에서는 문서 흐름으로 돌린다. */
 @media (max-width:1100px){
-  :root[data-theme="light"] #nav.sim-nav .navtabs,
-  :root[data-theme="dark"] #nav.sim-nav .navtabs{
+  :root[data-theme="light"] #nav.sim-nav .navtabs{
     position:static; transform:none; margin-left:18px;
   }
   #nav.sim-nav .navtabs button{min-width:0; padding:0 16px;}
@@ -2731,13 +2662,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   backdrop-filter: blur(16px) saturate(1.28);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 -1px 0 rgba(0,0,0,.08);
   transition: border-color .18s ease, box-shadow .18s ease;
-}
-:root[data-theme="dark"] .sim-skin input,
-:root[data-theme="dark"] .sim-skin select,
-:root[data-theme="dark"] .sim-skin textarea {
-  background: linear-gradient(145deg, rgba(255,255,255,.085), rgba(255,255,255,.028));
-  border: 1px solid rgba(220,238,255,.15);
-  color: var(--dk-ink, #e6e9ef);
 }
 :root[data-theme="light"] .sim-skin input,
 :root[data-theme="light"] .sim-skin select,
@@ -2780,29 +2704,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-radius: var(--r-in, 12px);
   backdrop-filter: blur(18px) saturate(1.35);
   transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
-}
-:root[data-theme="dark"] .sumbar.sim-skin .sumcard,
-:root[data-theme="dark"] .sumbar.sim-skin .sumhot,
-:root[data-theme="dark"] .fleet.sim-skin,
-:root[data-theme="dark"] .sim-skin .route-item,
-:root[data-theme="dark"] .sim-skin .sched-item,
-:root[data-theme="dark"] .sim-skin .health-card,
-:root[data-theme="dark"] .sim-skin .chart-box,
-:root[data-theme="dark"] .sim-skin .equip-card,
-:root[data-theme="dark"] .sim-skin .notify-card,
-:root[data-theme="dark"] .sim-skin .user-item,
-:root[data-theme="dark"] .sim-skin .users-list li,
-:root[data-theme="dark"] .sim-skin .map-list li,
-:root[data-theme="dark"] .sim-skin .sch-list li,
-:root[data-theme="dark"] .sim-skin .sch-new,
-:root[data-theme="dark"] .sim-skin .health-list li,
-:root[data-theme="dark"] .sim-skin .stats-summary,
-:root[data-theme="dark"] .sim-skin .cfg-points li,
-:root[data-theme="dark"] .sim-skin .cfg-note,
-:root[data-theme="dark"] .sim-skin .gotor {
-  background: linear-gradient(145deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
-  border: 1px solid rgba(222,239,255,.16);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.20), 0 8px 24px rgba(2,7,17,.20);
 }
 :root[data-theme="light"] .sumbar.sim-skin .sumcard,
 :root[data-theme="light"] .sumbar.sim-skin .sumhot,
@@ -2853,11 +2754,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-color: #2b3d5b;
   box-shadow: 0 4px 12px rgba(43,61,91,.25);
 }
-:root[data-theme="dark"] .event-page-panel .logfilter button.on {
-  background: #3b5075;
-  color: #ffffff;
-  border-color: #3b5075;
-}
 
 .event-page-panel .logfilter2 {
   display: flex;
@@ -2879,12 +2775,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   box-shadow: var(--nx-sh-sm, 0 1px 3px rgba(0,0,0,.04));
   outline: none;
   cursor: pointer;
-}
-:root[data-theme="dark"] .event-page-panel .logfilter2 select,
-:root[data-theme="dark"] .event-page-panel .logfilter2 input[type="date"] {
-  background: var(--nx-sunken, #1c242b);
-  border-color: rgba(255,255,255,.12);
-  color: var(--nx-text, #e2e8f0);
 }
 .event-page-panel .logfilter-rb {
   display: inline-flex;
@@ -3315,26 +3205,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #pgMap.v3-theme .elog li.heat b,#pgCam.v3-theme .elog li.heat b{color:#7E6222;}
 #pgMap.v3-theme .elog li.ok b,#pgCam.v3-theme .elog li.ok b{color:#3F6A56;}
 
-/* 지도·카메라의 v3 톤은 밝은 캔버스를 전제한다. 다크 모드에서는 어두운 판 위에
-   잉크색 글자가 얹혀 패널 제목이 1.22:1 까지 떨어졌다 — 그 화면은 원래 톤을 지킨다.
-   무인 시간대에 다크로 보는 사람이 있으므로 밝은 쪽만 바꾼다. */
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme{color:var(--nx-text);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme :is(.panel,.cam-side-panel){
-  background:var(--nx-elev); box-shadow:var(--nx-sh-md), inset 0 0 0 1px rgba(255,255,255,.045);
-}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .panel h3,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .nav-title h2,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .kpi-num{color:var(--nx-text);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .kpi-num .unit,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .kpi-label,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .nav-title .nav-sub{color:var(--nx-muted);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .elog li b,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .logtext{color:var(--nx-text);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .elog li{border-bottom-color:rgba(255,255,255,.08);}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .map-control,
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .mapview{
-  background:var(--nx-elev); color:var(--nx-text);
-}
 /* 라이트에서 판과 그 안의 카드가 둘 다 흰색이라 층이 구분되지 않았다 —
    안쪽 카드를 한 단 낮춘다. */
 :root[data-theme="light"] :is(#pgMap,#pgCam).v3-theme :is(#pStatus .stat-card,.control-card){
@@ -3343,15 +3213,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* KPI 라벨이 4.36 으로 아슬하게 못 미쳤다 — 한 단계 더 내린다 */
 :is(#pgMap,#pgCam).v3-theme .kpi-label,.page.v3-theme .kpi-label{color:#5F6474;}
 
-/* 뿌리 배경을 v3 캔버스로 올린 것은 밝은 톤 전제다. 다크에서 그대로 두면
-   밝은 바탕에 밝은 글자가 얹혀 제목이 통째로 사라진다(대비 1.0 을 쟀다). */
-:root[data-theme="dark"].v3-page,
-:root[data-theme="dark"].v3-page body,
-:root[data-theme="dark"].v3-page #root{background:var(--nx-bg);}
-/* 이벤트·통계·운영·설정은 밝은 톤 전용 화면이라 다크에서도 제 배경을 지닌다 */
-:root[data-theme="dark"] .page.v3-theme:not(#pgMap):not(#pgCam){
-  background:linear-gradient(158deg,#E9E8F1 0%,#F2F2F7 38%,#F9F9FB 72%,#FFFFFF 100%);
-}
 
 /* 이벤트 로그 — 색 세로선을 걷고 점만 남긴다 (지도·카메라 공통)
    ------------------------------------------------------------------
@@ -3427,20 +3288,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .routemap-note span{font-size:11.5px; font-weight:500; color:rgba(255,255,255,.78);}
 
-/* 3D 압출 뷰 마감 (S15P11E101-748)
-   ------------------------------------------------------------------ */
-/* 다크 모드에서는 배경을 어둡게 되돌린다. 밝은 판을 그대로 두면 어두운 화면에
-   흰 사각형 하나가 뚫린 것처럼 보인다. */
-:root[data-theme="dark"] .iso-stage{
-  /* 다크에서도 같은 이유로 평평하게 — 바닥(#1A1E26)과 이어지는 한 톤으로 둔다 */
-  background:#0f131a;
-}
-/* 다크에서는 벽이 밝은 회색이라 바닥과 붙는다 — 바닥만 한 단 눌러 층을 만든다 */
-:root[data-theme="dark"] .iso-floor{
-  /* 어두운 화면에서 흰 판은 조명처럼 튄다. '배경과 이어지게' 라는 뜻을 지키려면
-     여기서는 어두운 판이어야 한다(S15P11E101-777). */
-  --iso-floor:#1A1E26;
-}
 
 /* '정면으로' — 지금 정면이면 눌린 상태로 둔다. 눌러도 화면이 안 바뀌는 경우가 있어
    버튼이 스스로 '지금 고정돼 있다' 를 말해야 한다. */
@@ -3470,9 +3317,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .iso-reset.on{
   background:#232733; color:#fff; font-weight:700;
   box-shadow:0 1px 3px rgba(35,39,51,.24);
-}
-:root[data-theme="dark"] :is(#pgMap,#pgCam).v3-theme .iso-reset.on{
-  background:#e6e9ef; color:#1b212b;
 }
 
 /* 이동 중 표시(S15P11E101-750). 정지와 주행이 같은 모습이면 화면만 보고

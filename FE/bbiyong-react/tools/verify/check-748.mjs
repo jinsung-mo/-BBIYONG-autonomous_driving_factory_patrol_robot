@@ -139,17 +139,7 @@ console.log('  눌림 배경 :', r?.btn?.bg, '· 풀림 배경 :', offBg)
 console.log('  → 눌림이 색으로 보인다 :', ok(String(r?.btn?.bg) !== String(offBg)))
 console.log('  → 각도가 부드럽게 돌아간다 :', ok(parseFloat(r?.sceneTransition) > 0), '(순간이동하면 무엇이 돌았는지 못 본다)')
 
-console.log('\n[5] 다크 모드에서도 자연스러운가')
-await ev(`document.querySelector('#nav .theme-btn')?.click()`); await sleep(1400)
-const d = await iso()
-console.log('  다크 배경 :', String(d?.bgImage).slice(0, 60))
-console.log('  → 흰 판이 뚫려 보이지 않는다 :', ok(!/255, 255, 255/.test(String(d?.bgImage))))
-console.log('  → 벽은 그대로 차분하다 :', ok(Math.abs(hslLight(d?.wallLast) - hslLight(d?.wallFirst)) <= 22))
-{
-  const { data } = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(OUT + 'M748-iso-dark.png', Buffer.from(data, 'base64'))
-}
-await ev(`document.querySelector('#nav .theme-btn')?.click()`); await sleep(1400)
+// [5] 다크 모드 단계는 제거했다 — 다크 모드 자체가 없어졌다(S15P11E101-805).
 {
   const { data } = await send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(OUT + 'M748-iso-light.png', Buffer.from(data, 'base64'))

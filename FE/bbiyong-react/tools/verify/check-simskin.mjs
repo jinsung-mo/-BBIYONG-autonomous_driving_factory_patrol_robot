@@ -87,13 +87,6 @@ const enter = async (mode) => {
   await send('Page.reload'); await sleep(2600)
   await login(mode)
 }
-const theme = () => ev(`document.documentElement.getAttribute('data-theme')`)
-const setTheme = async (want) => {
-  for (let i = 0; i < 3 && (await theme()) !== want; i++) {
-    await ev(`[...document.querySelectorAll('#nav .theme-btn')][0]?.click()`); await sleep(800)
-  }
-  return theme()
-}
 
 await send('Page.enable'); await send('Runtime.enable')
 await enter('mock')
@@ -140,7 +133,7 @@ console.log('  → 최고 온도 포함 :', ok((env || []).some((e) => e.startsW
 // 평소에 붉은 배지가 상주하면 정작 경보가 났을 때 눈에 들어오지 않는다
 console.log('  → 평소엔 강조 없음 :', ok(!(await ev(`!!document.querySelector('#pgMap .kpis .kpi-badge.bad')`))))
 const { data: s1 } = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync(OUT + 'S-sim-dark.png', Buffer.from(s1, 'base64'))
+writeFileSync(OUT + 'S-sim-shot.png', Buffer.from(s1, 'base64'))
 
 console.log('\n[4] 조작이 그대로 되는가')
 const before = await ev(`document.querySelector('#pStatus .kv b.st')?.textContent?.trim()`)
@@ -168,8 +161,9 @@ const TARGETS = [
   ['지표 값', '#pgMap .kpi-num'], ['지표 라벨', '#pgMap .kpi-label'],
   ['로그 본문', '#pStatus .elog li b'],
 ]
-for (const want of ['dark', 'light']) {
-  console.log(`  --- ${await setTheme(want)} ---`)
+// 테마는 라이트 하나다 — 다크 모드는 걷어냈다(S15P11E101-805).
+for (const want of ['light']) {
+  console.log(`  --- ${want} ---`)
   const got = []
   for (const [name, sel] of TARGETS) got.push([name, await ev(`(${CONTRAST})('${sel}')`)])
   console.log('   ', got.map(([n, c]) => `${n} ${c}`).join(' · '))
@@ -177,7 +171,6 @@ for (const want of ['dark', 'light']) {
   const { data } = await send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(OUT + `S-sim-${want}.png`, Buffer.from(data, 'base64'))
 }
-console.log('  테마 복귀 :', await setTheme('dark'))
 
 console.log('\n[5-b] 커서를 따라다니는 원이 없는가')
 // 포인터 좌표를 CSS 변수로 넘겨 스펙큘러를 움직이게 했었다. 그런데 그 변수를 판마다

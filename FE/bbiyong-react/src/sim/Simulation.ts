@@ -523,14 +523,12 @@ export default class Simulation {
     const g = fit(cv); if (!g) return
     const Wc = cv.width, Hc = cv.height
     const t = this.t
-    // 지도 색은 화면 테마를 따른다. 밝은 화면에 검은 지도를 두면 그 판만 구멍처럼 남는다.
-    // 상태색(로봇 초록·화재 빨강·분전반 호박)은 두 테마에서 같다 — 의미가 바뀌지 않는다.
-    const lightMap = document.documentElement.getAttribute('data-theme') === 'light'
-    const P = lightMap
-      ? { bg: '#ffffff', wall: '#96a3a8', wallEdge: 'rgba(110,125,132,.75)',
-          frame: '#c3cacb', route: 'rgba(47,111,208,.7)', label: 'rgba(45,55,64,.85)' }
-      : { bg: '#0a0c10', wall: '#59637a', wallEdge: 'rgba(89,99,122,.35)',
-          frame: '#3a4356', route: 'rgba(63,143,224,.8)', label: 'rgba(180,230,255,.75)' }
+    // 지도 색은 밝은 화면 전제다. 밝은 화면에 검은 지도를 두면 그 판만 구멍처럼 남는다.
+    // 다크 팔레트 분기는 다크 모드와 함께 걷어냈다(S15P11E101-805) — 여긴 CSS 가 아니라 JS 라
+    // CSS 만 고치면 시뮬 지도만 검게 남는다.
+    // 상태색(로봇 초록·화재 빨강·분전반 호박)은 원래 두 테마 공통이라 손대지 않는다.
+    const P = { bg: '#ffffff', wall: '#96a3a8', wallEdge: 'rgba(110,125,132,.75)',
+                frame: '#c3cacb', route: 'rgba(47,111,208,.7)', label: 'rgba(45,55,64,.85)' }
     g.fillStyle = P.bg; g.fillRect(0, 0, Wc, Hc)
     const m = 14, cw = (Wc - m * 2) / CSn, ch = (Hc - m * 2) / RS
     const X = (c: any) => m + c * cw + cw / 2, Y = (r: any) => m + r * ch + ch / 2
