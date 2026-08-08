@@ -1607,22 +1607,44 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root[data-theme="light"] .sim-skin .elog li.heat b{color:#8a5200;}
 :root[data-theme="light"] .sim-skin .elog li.fire b{color:#a52216;}
 
-/* ============ 조작 잠금 (S15P11E101-653) ============
-   화면 전체를 덮지 않는다 — 영상·지도·경보가 계속 보여야 관제다.
-   조작 수단만 잠기고, 이 띠는 그 사실을 알리고 푸는 창구다. */
-.lockbar{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:195;
+/* ============ 조작 잠금 (S15P11E101-653 · 815) ============
+   -653: 화면 전체를 덮지 않는다 — 영상·지도·경보가 계속 보여야 관제다.
+         조작 수단만 잠기고, 이 띠는 그 사실을 알리고 푸는 창구다.
+   -815: 그런데 "조작 수단만 잠근다"를 canOperate 검사 23곳이 각자 판단하게 뒀더니
+         하나가 빠졌다 — LiveSimBridge 의 WASD→DRIVE 키 리스너는 canOperate 를 아예
+         보지 않아 잠금 중에도 실제로 로봇이 움직였다(src/live/LiveSimBridge.tsx:106).
+         그래서 전면 차단 스크림을 한 겹 더 둔다: 클릭은 스크림이, 키보드는
+         SessionWatcher.tsx 의 캡처 단계 리스너가 막는다. 기존 canOperate disabled 는
+         그대로 둔다 — 스크림이 어떤 이유로 안 뜨더라도 컨트롤은 여전히 잠겨 있어야 한다.
+   색은 새로 만들지 않는다: 스크림은 기존 .modal-overlay 와 같은 rgba(4,6,10,.62), 카드는
+   v3 --bb-* 토큰. 잠금 카드 자체는 유리를 쓰지 않는다 — 딤 위 카드는 불투명이어야
+   글자 대비가 안정적이다(this 시스템의 규칙, docs/design/mockups/design-system.html §05). */
+.lock-scrim{position:fixed; inset:0; z-index:196;
+  background:rgba(4,6,10,.62);
+  backdrop-filter:blur(8px) saturate(1.05); -webkit-backdrop-filter:blur(8px) saturate(1.05);}
+.lockbar{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:197;
   display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:center;
-  padding:11px 16px; border-radius:14px; max-width:min(760px,94vw);
-  background:#141922; border:1px solid #3a445a; box-shadow:0 18px 44px rgba(0,0,0,.5);}
+  padding:11px 16px; border-radius:var(--bb-r-card); max-width:min(760px,94vw);
+  background:#fff; box-shadow:var(--bb-sh-4);}
 .lockbar-txt{display:flex; flex-direction:column; gap:2px; min-width:0;}
-.lockbar-txt b{font-size:13px; font-weight:800; color:#fff; white-space:nowrap;}
-.lockbar-txt span{font-size:11px; color:#aab3c2;}
+.lockbar-txt b{font-size:13px; font-weight:800; color:var(--bb-ink); white-space:nowrap;}
+.lockbar-txt span{font-size:11px; color:var(--bb-body);}
 .lockbar-form{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
-.lockbar-form input[type="password"]{width:190px; padding:8px 11px; border-radius:9px;
-  border:1px solid #3a445a; background:#0e1218; color:#e6e9ef; font-size:12.5px;}
-.lockbar-form input[type="password"]:focus{border-color:#3ddc97; outline:none;}
-.lockbar .dbtn{padding:8px 14px; font-size:12.5px; white-space:nowrap;}
-.lockbar-err{flex:1 1 100%; font-size:11.5px; color:#ff8d85; font-weight:700; text-align:center;}
+.lockbar-form input[type="password"]{width:190px; padding:8px 11px; border-radius:var(--bb-r-input);
+  border:1px solid var(--bb-line-strong); background:#fff; color:var(--bb-ink);
+  font-family:var(--bb-font-mono); font-size:13.5px; font-weight:600;}
+/* #6E79B4 는 핸드오프 지침이 그대로 지정한 포커스 보더값이다 — 토큰에 없어도 새로
+   만든 색이 아니라 받아 쓴 값이라 그대로 둔다. */
+.lockbar-form input[type="password"]:focus{border-color:#6E79B4; outline:none;}
+.lockbar-form input[type="password"]:disabled{opacity:.6;}
+/* 잠금 해제 = 주 행동(filled, --bb-primary). 로그아웃은 한 단 낮은 tonal —
+   .auth-seg.src 의 선택 상태와 같은 문법(옅은 면 + 진한 글자)을 그대로 가져온다. */
+.lockbar .dbtn.go{background:var(--bb-primary); border-color:var(--bb-primary); color:#fff; font-weight:700;}
+.lockbar .dbtn.go:hover:not(:disabled){background:var(--bb-primary-hover); border-color:var(--bb-primary-hover);}
+.lockbar .dbtn:not(.go){background:var(--bb-surface); border-color:var(--bb-line-strong); color:var(--bb-ink); font-weight:600;}
+.lockbar .dbtn:not(.go):hover:not(:disabled){background:#EAEBF1;}
+.lockbar .dbtn{padding:8px 14px; font-size:12.5px; white-space:nowrap; border-radius:var(--bb-r-ctrl);}
+.lockbar-err{flex:1 1 100%; font-size:11.5px; color:var(--bb-danger-text); font-weight:700; text-align:center;}
 
 /* 운영·설정 탭을 통째로 잠글 때 쓰는 fieldset — 레이아웃에 관여하지 않게 기본 장식을 지운다.
    min-width:0 이 없으면 fieldset 이 안쪽 콘텐츠 너비를 붙들어 그리드가 넘친다. */
