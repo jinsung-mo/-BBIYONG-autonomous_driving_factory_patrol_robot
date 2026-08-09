@@ -4109,7 +4109,6 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    .v3-theme 의 상속 색(#232733)을 그대로 쓴다. */
 button.elog-card-title{ cursor:pointer; }
 #pgEvents.v3-theme button.elog-card-title:hover{ text-decoration:underline; }
-#pgEvents.v3-theme .elog-card-meta{ font-size:11.5px; color:#7C8296; }
 
 /* 오른쪽 — 강조된 시각 + 그 아래 옅은 상대일("2일 전") */
 #pgEvents.v3-theme .elog-card-right{

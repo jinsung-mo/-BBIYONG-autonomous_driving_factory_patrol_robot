@@ -4,7 +4,7 @@ import { useSim } from '../SimContext.ts'
 import { useLive } from '../live/LiveContext.tsx'
 import { useFleet } from '../live/FleetContext.tsx'
 import { useAuth } from '../auth/AuthContext.tsx'
-import { alertToLog, eventToLog, TYPE_LABEL } from '../live/mappers.ts'
+import { alertToLog, eventToLog } from '../live/mappers.ts'
 import { deleteEvent, fetchEvents, updateEventStatus, LEVEL_LABEL, EVENT_STATUS_LABEL } from '../live/events.ts'
 import Modal from './ui/Modal.tsx'
 import EventDetailModal from './EventDetailModal.tsx'
@@ -328,9 +328,9 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                           {log.status === 'UNRESOLVED' && !log.live && <span className="tag open">{EVENT_STATUS_LABEL.UNRESOLVED}</span>}
                           {log.status === 'RESOLVED' && <span className="tag done">{EVENT_STATUS_LABEL.RESOLVED}</span>}
                         </div>
-                        <div className="elog-card-meta">
-                          {TYPE_LABEL[log.type] || log.type || '—'} · {log.robotId || log.equipmentId || '—'}
-                        </div>
+                        {/* 🔴 메타 줄(타입 · robotId/equipmentId)은 지웠다(S15P11E101-879) —
+                            "시스템 · orinka_01" 처럼 계약 id 가 그대로 노출됐고, 제목이
+                            이미 무슨 일인지 말하므로 남는 정보가 없었다. */}
                       </div>
                       <div className="elog-card-right">
                         <div className="elog-card-time mono">{log.date ? `${log.date} ${log.time}` : log.time}</div>
@@ -446,5 +446,3 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
     </>
   )
 }
-
-export { TYPE_LABEL }
