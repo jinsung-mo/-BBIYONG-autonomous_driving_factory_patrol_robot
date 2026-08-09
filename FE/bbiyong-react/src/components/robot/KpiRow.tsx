@@ -84,9 +84,27 @@ function Spark({ hist, tone, scale = 'relative', max = 100 }: {
   )
 }
 
-function Kpi({ value, unit, label, tone = 'none', note, trend, scale, max }: {
+/** 남은 양을 가로 막대의 **길이**로 보여 준다 — 값이 클수록 오른쪽으로 길어진다.
+ *
+ * 🔴 배터리에 스파크라인(세로 막대 추세)을 쓰면 안 되는 이유 [사용자 지적 2026-08-09]:
+ * 스파크라인은 폭이 항상 꽉 차 있고 높이만 변한다. 그래서 33% 일 때 "막대가 8칸 다
+ * 차 있는데 키만 작은" 모양이 되고, 게이지로 읽는 사람은 "거의 다 찼다"로 오해한다.
+ * 게다가 배터리는 분당 0.207% 씩 줄어서(batteryRuntime.ts) 8칸 관측 구간 안에서는
+ * 사실상 평평하다 — 추세로 그릴 값이 애초에 아니었다.
+ *
+ * 잔량은 "지금 얼마나 남았나" 하나만 답하면 되고, 그건 길이가 가장 빨리 읽힌다. */
+function Gauge({ pct, tone }: { pct: number, tone: Tone }) {
+  const w = Math.max(0, Math.min(100, pct))
+  return (
+    <div className="kpi-gauge" aria-hidden="true">
+      <i className={tone} style={{ width: `${w}%` }} />
+    </div>
+  )
+}
+
+function Kpi({ value, unit, label, tone = 'none', note, trend, scale, max, gauge }: {
   value: string, unit?: string, label: string, tone?: Tone, note?: string,
-  trend?: number[], scale?: ScaleMode, max?: number,
+  trend?: number[], scale?: ScaleMode, max?: number, gauge?: number | null,
 }) {
   return (
     <div className="kpi">
@@ -97,6 +115,8 @@ function Kpi({ value, unit, label, tone = 'none', note, trend, scale, max }: {
         <div className="kpi-label">{label}</div>
       </div>
       <span className={`kpi-badge ${tone}`} aria-hidden="true">{SIGN[tone]}</span>
+      {/* 값이 없으면 빈 게이지조차 그리지 않는다 — 0% 로 보이면 '다 닳았다'로 읽힌다. */}
+      {gauge != null && <Gauge pct={gauge} tone={tone} />}
       {trend && <Spark hist={trend} tone={tone} scale={scale} max={max} />}
       {note && <span className="sr-only">{note}</span>}
     </div>
@@ -143,14 +163,16 @@ export default function KpiRow() {
   // 배터리는 텔레메트리마다, 경보는 30초 폴링마다 한 칸씩 쌓인다.
   // 🔴 로봇 상태(ON/OFF)는 추세가 없다 — 상태이지 값이 아니다. 스파크라인을 그리지 않는다
   // (S15P11E101-814). 그래서 이 KPI 에는 useTrend 를 아예 쓰지 않는다.
-  const battTrend = useTrend(batt ?? null)
   const alarmTrend = useTrend(alarmValue ?? null)
 
   return (
     <div className="kpis">
+      {/* 배터리는 추세가 아니라 **잔량 게이지**다 — 값이 클수록 막대가 오른쪽으로 길어진다.
+          스파크라인이던 시절에는 폭이 늘 꽉 차 있고 높이만 낮아서, 33% 인데도 "거의 다 찼다"로
+          보였다 [사용자 지적 2026-08-09]. Gauge 주석에 이유를 자세히 적어 뒀다. */}
       <Kpi
         value={batt == null ? '—' : String(batt)} unit={batt == null ? undefined : '%'}
-        label="배터리" tone={battTone} trend={battTrend} scale="absolute" max={100}
+        label="배터리" tone={battTone} gauge={batt ?? null}
       />
       <Kpi
         value={alarmValue == null ? '—' : String(alarmValue)} unit={alarmValue == null ? undefined : '건'}
