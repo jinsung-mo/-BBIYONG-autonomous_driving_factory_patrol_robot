@@ -67,6 +67,33 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])
 
+  // 전체화면(S15P11E101-907) — 매핑 탭(title 지정 시)에서만 쓴다. 지도 탭 MapPanel 과 같은
+  // 방식: 문서 전체화면 + view-fullscreen 클래스 동기화(요청 거부·외부 해제에도 상태 정합).
+  const [fullscreen, setFullscreen] = useState(false)
+  useEffect(() => {
+    const sync = () => {
+      const active = document.fullscreenElement === document.documentElement
+      setFullscreen(active)
+      document.documentElement.classList.toggle('view-fullscreen', active)
+    }
+    sync()
+    document.addEventListener('fullscreenchange', sync)
+    document.addEventListener('visibilitychange', sync)
+    window.addEventListener('focus', sync)
+    return () => {
+      document.removeEventListener('fullscreenchange', sync)
+      document.removeEventListener('visibilitychange', sync)
+      window.removeEventListener('focus', sync)
+      document.documentElement.classList.remove('view-fullscreen')
+    }
+  }, [])
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement === document.documentElement) await document.exitFullscreen()
+      else if (!document.fullscreenElement) await document.documentElement.requestFullscreen()
+    } catch { /* 브라우저가 막으면 현재 화면 유지 */ }
+  }, [])
+
   const load = useCallback(async () => {
     if (!enabled || !accessToken) return
     setBusy(true)
@@ -254,6 +281,24 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
           <div className="routemap-note" role="status">
             지도를 새로 그리는 중입니다 — 기존 순찰 지점은 잠시 숨겼습니다.
             <span>저장된 경로는 지워지지 않습니다. 매핑이 끝나면 다시 보입니다.</span>
+          </div>
+        )}
+        {/* 전체화면 — 지도 탭과 같은 방식(문서 전체화면 + view-fullscreen 클래스). S15P11E101-907 */}
+        {title && (
+          <div className="map-controls routemap-controls" aria-label="지도 화면 조절">
+            <button
+              type="button" className="map-control fullscreen"
+              onClick={toggleFullscreen}
+              aria-label={fullscreen ? '전체화면 종료' : '지도 전체화면'}
+              aria-pressed={fullscreen}
+              title={fullscreen ? '전체화면 종료 (Esc)' : '지도 전체화면'}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                {fullscreen
+                  ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+                  : <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />}
+              </svg>
+            </button>
           </div>
         )}
       </div>
