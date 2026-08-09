@@ -152,10 +152,26 @@ export function followPose(view: any, cv: any, pose: any, k = 1) {
 // 맵을 캔버스에 맞춘다 (첫 MAP 수신 시 · 캔버스 크기가 바뀌었을 때)
 export function fitView(view: any, cv: any, m: any) {
   if (!cv.width || !cv.height) return false
-  const w = m.w * m.res, h = m.h * m.res
-  view.s = Math.min(cv.width / w, cv.height / h) * 0.96   // 여백 12→4% (S15P11E101-911: 화면을 더 채운다)
-  view.x = cv.width / 2 - (m.ox + w / 2) * view.s
-  view.y = cv.height / 2 + (m.oy + h / 2) * view.s
+  const W = m.w * m.res, H = m.h * m.res
+  // originYaw 로 회전된 맵의 '실제 외접 사각형'으로 중심·배율을 잡는다(S15P11E101-911).
+  // 예전엔 회전을 무시한 bbox 중심((ox+w/2, oy+h/2))을 캔버스 가운데에 놓았는데, 회전된
+  // 도면은 그 기하 중심이 화면에 보이는 도면 중심과 달라 한쪽으로 치우쳐 보였다.
+  // 배경을 그릴 때와 같은 정변환(world = origin + R(yaw)·local, insideMap 의 역)으로
+  // 네 모서리를 월드로 옮겨 min/max 를 잰다.
+  const yaw = Number(m.oyaw) || 0
+  const c = Math.cos(yaw), s = Math.sin(yaw)
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const [lx, ly] of [[0, 0], [W, 0], [0, H], [W, H]]) {
+    const x = m.ox + lx * c - ly * s
+    const y = m.oy + lx * s + ly * c
+    if (x < minX) minX = x; if (x > maxX) maxX = x
+    if (y < minY) minY = y; if (y > maxY) maxY = y
+  }
+  const bw = maxX - minX, bh = maxY - minY
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+  view.s = Math.min(cv.width / bw, cv.height / bh) * 0.96   // 여백 4%
+  view.x = cv.width / 2 - cx * view.s
+  view.y = cv.height / 2 + cy * view.s
   view.init = true
   return true
 }
