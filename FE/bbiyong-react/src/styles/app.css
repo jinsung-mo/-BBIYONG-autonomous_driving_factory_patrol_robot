@@ -212,6 +212,14 @@ canvas{display:block; width:100%; height:100%;}
 #pgRoute .routemap{flex:0 0 auto; height:min(64vh, 640px); margin-bottom:10px; background:#ffffff;}
 #pgRoute .routemap canvas{width:100%; height:100%; display:block;}
 #pgRoute{margin-top:14px;}
+/* 빈 상태 문구가 카드 안에 또 박스로 감싸여 있었다(S15P11E101-814, 사용자 지적 2026-08-09) —
+   지도만 자기 프레임(테두리/배경)을 갖고, 나머지는 "순찰 경로" 카드 배경 위에 그대로
+   얹는다. 배경·테두리·둥근 모서리를 걷고 위 여백(margin-top)만 남겨 목록·버튼 줄과의
+   간격을 유지한다. `#pgRoute` 로 좁혀 다른 화면의 `.cfg-note` 박스엔 영향 없다. */
+/* `.sim-skin .cfg-note`(라이트 테마 유리질 카드, 위쪽 참고)까지 걷어야 완전히 상자가
+   빠진다 — box-shadow 도 함께 지운다. `#pgRoute` id 특정도가 `.sim-skin`·`.page.v3-theme`
+   조합보다 항상 높아 테마와 무관하게 이긴다. */
+#pgRoute .cfg-note{background:none; border:0; border-radius:0; padding:0; box-shadow:none; backdrop-filter:none;}
 #routeList li .tag{color:var(--dk-ink); background:var(--dk-line); border-color:transparent; min-width:18px; text-align:center;}
 /* 지점 행에 번호·삭제만 남으면서(S15P11E101-814) 내용이 줄어든 만큼, 카드 밀도 기준에 맞춰
    행 자체를 더 두껍게 준다 — 빈 공간을 다른 걸로 채우는 대신 지금은 여백으로 남겨 둔다. */
@@ -224,10 +232,16 @@ canvas{display:block; width:100%; height:100%;}
    구분선(border-top) + 넉넉한 padding-top 으로 "카드 소속 액션"임을 분명히 한다 —
    목록 유무와 무관하게 항상 같은 간격이 나온다. 인접 형제 선택자로 좁혀 다른 화면의
    `.gotor` 여백은 건드리지 않는다. 간격 값은 디자인 시스템 spacing 토큰(--bb-sp-*)을 쓴다. */
+/* 🔴 이 화면은 `.sim-skin` 도 같이 붙어 있어(MapPage) `.sim-skin .gotor` 유리질 카드
+   규칙(배경 그라디언트·둥근 모서리·box-shadow·나머지 세 변 테두리)이 함께 걸린다 —
+   위 구분선(border-top) 하나만 남기고 나머지는 다시 지운다(S15P11E101-814, 사용자 지적
+   2026-08-09). `#routeList` id 특정도가 `.sim-skin` 조합보다 항상 높아 라이트 테마에서도 이긴다. */
 #routeList + .gotor{
   margin-top: var(--bb-sp-7, 22px);
   padding-top: var(--bb-sp-6, 18px);
   border-top: 1px solid var(--bb-line, #EEEFF4);
+  border-left:0; border-right:0; border-bottom:0;
+  border-radius:0; background:none; box-shadow:none; backdrop-filter:none;
   align-items:center;
 }
 #routeList + .gotor + *{margin-top: var(--bb-sp-5, 14px);}
