@@ -2236,11 +2236,73 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* `.page.on{display:block}` 이 클래스 두 개라 `.nav-page` 하나로는 이기지 못한다.
    그러면 flex 가 적용되지 않아 아래 그리드가 남는 높이를 못 받고 콘텐츠 높이로 눌린다. */
 .page.nav-page{
-  background:var(--nx-bg); color:var(--nx-text);
-  padding:16px 32px 32px; gap:0;
-  height:calc(100dvh - 76px); overflow:hidden;
+  color:var(--nx-text);
+  /* 좌우·아래 여백과 배경은 껍데기(.console-shell)가 갖는다 — 슬라이드하는 것은
+     본문뿐이고, 여백까지 같이 움직이면 가장자리가 흔들려 보인다. */
+  background:transparent; padding:0; gap:0;
+  height:100%; overflow:hidden;
   display:flex; flex-direction:column;
 }
+
+/* ── 관제 껍데기 : 머리는 고정, 본문만 슬라이드 ──────────────────────────
+   제목·KPI·보조 줄은 네 화면이 공유하는 머리다. 예전에는 화면마다 하나씩 들고 있어서
+   탭을 옮기면 머리까지 같이 밀려 올라갔다 — 고정된 틀 안에서 내용만 바뀌는 것이 아니라
+   화면 전체가 통째로 굴러가는 것처럼 보인다.
+   머리를 여기로 끌어올리면 슬라이드하는 것은 아래 본문뿐이다. */
+.console-shell{
+  height:calc(100dvh - 76px); overflow:hidden;
+  display:flex; flex-direction:column;
+  padding:16px 32px 32px;
+  background:var(--nx-bg); color:var(--nx-text);
+}
+/* 🔴 머리에 `page v3-theme` 를 그대로 단다. 제목·KPI 의 v3 서식은 전부
+   `.page.v3-theme …` 로 스코프돼 있어서, 이 두 클래스가 없으면 글꼴·크기·점선 밑줄이
+   한꺼번에 풀린다. (`#pgMap.v3-theme …` 쪽 사본이 따로 있지만 값이 완전히 같은 중복이라
+   일반 규칙만으로 네 화면 모두 지금과 동일하게 나온다 — 확인하고 옮겼다.)
+   대신 그 두 클래스가 딸고 오는 상자 규칙은 여기서 되돌린다.
+   🔴 선택자를 `.nav-shell.v3-theme` 로 둔 이유: `.v3-theme`(3179행 부근)가 `min-height:100%`
+   와 배경 그라데이션을 걸고, 그 규칙이 이 블록보다 **뒤에** 있다. 클래스 하나짜리
+   `.nav-shell` 로는 특정도가 같아 뒤가 이긴다 — 머리가 화면 높이만큼 늘어나 본문이
+   0px 로 눌린다(실제로 그렇게 났다). 클래스 둘로 특정도를 올려 확실히 이긴다. */
+.nav-shell.v3-theme{
+  flex:0 0 auto; height:auto; min-height:0; overflow:visible;
+  display:block; background:transparent; padding:0;
+}
+
+/* ── 화면 전환 트랙 : 탭 순서대로 세로로 쌓고 활성 인덱스만큼 끌어올린다 ───────
+   트랙 자체의 높이는 '본문 한 칸'으로 두고 슬롯을 flex-basis 100% 로 넘치게 쌓는다 —
+   translateY 의 % 는 자기 자신의 높이 기준이라, 이렇게 두면 -100% 가 정확히 한 칸이다.
+   슬롯이 셋(뷰어)이든 넷(관리자)이든 계산이 바뀌지 않는다.
+   세로를 고른 이유: 높이는 껍데기가 고정하지만 폭은 가변이라, 가로축이면 리사이즈마다
+   % 기준이 흔들린다. */
+.page-viewport{flex:1 1 0; min-height:0; overflow:hidden;}
+.page-track{
+  height:100%; display:flex; flex-direction:column;
+  transition:transform .42s cubic-bezier(.22,.61,.36,1);
+}
+/* basis 를 100% 로 못 박고 shrink 를 막는다. auto 면 콘텐츠가 긴 설정 화면에서 슬롯이
+   커져 그 뒤 화면들의 정지 위치가 통째로 밀린다.
+   화면 밖으로 나간 슬롯은 슬라이드가 끝난 뒤에 감춘다 — 곧바로 감추면 밀려나는 장면이
+   사라지고, 계속 두면 보이지 않는 버튼에 Tab 이 닿는다. visibility 는 전환 대상이라
+   지연만 주면 되고, 들어오는 슬롯은 지연 없이 즉시 보인다. */
+.page-slot{
+  flex:0 0 100%; height:100%; min-height:0;
+  visibility:hidden; transition:visibility 0s linear .42s;
+}
+.page-slot.on{visibility:visible; transition-delay:0s;}
+@media (prefers-reduced-motion:reduce){
+  .page-track{transition:none;}
+  .page-slot{transition-delay:0s;}
+}
+
+/* ── 화면 제목 아래의 보조 줄 ──────────────────────────────────────
+   지도에만 있던 '지도/매핑' 세그먼트 때문에 지도의 씬은 다른 화면보다 58px 아래에서
+   시작했다(알약 46px + 여백 12px). 나머지 셋이 그만큼 위에서 시작하니, 탭을 옮길 때마다
+   같은 역할의 판이 다른 높이에 나타난다 — 슬라이드로 이으면 그 어긋남이 그대로 눈에 띈다.
+   그래서 이 줄도 머리의 일부로 올린다. 어느 탭이든 자리는 늘 비어 있고, 채울 것이 있는
+   화면(지도)만 채운다. 기준은 지도다.
+   ⚠ 지도의 세그먼트는 관리자에게만 보인다 — 줄은 권한과 무관하게 늘 자리를 지킨다. */
+.nav-subrow{flex:0 0 auto; min-height:46px; margin:0 0 12px; display:flex; align-items:center;}
 
 /* ── 제목 + 큰 숫자 ─────────────────────────────────────────── */
 .nav-hero{
@@ -2695,12 +2757,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 
 /* 지도 / 매핑 전환 탭(S15P11E101 콘솔 정리). 지도 화면 좌상단의 알약형 세그먼트. */
-#pgMap .map-tabs{
-  display:inline-flex; gap:2px; padding:3px; margin:0 0 12px;
+/* 🔴 `#pgMap` 스코프를 뗐다 — 이 세그먼트는 이제 지도 화면 안이 아니라 고정된 머리의
+   `.nav-subrow` 안에 있다(App.tsx). 아래 여백도 그 줄이 갖는다. */
+.nav-subrow .map-tabs{
+  display:inline-flex; gap:2px; padding:3px; margin:0;
   background:var(--bb-surface, rgba(120,128,150,.12)); border-radius:999px;
-  /* 🔴 `.nav-page` 가 세로 flex 라 자식은 기본값 align-items:stretch 로 **가로 전폭**이
-     된다 — inline-flex 로 둬도 소용없다. 알약은 내용만큼만 넓어야 한다. */
-  align-self:flex-start;
+  align-self:center;
 }
 /* 지도 뷰 wrapper — 씬이 남는 높이를 받도록 높이 사슬을 잇는다(S15P11E101-814 후속).
    클래스 없는 div 였을 때는 여기서 사슬이 끊겨 `.nav-stage{flex:1 1 0}` 이 무시되고
@@ -2709,12 +2771,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    [hidden] 을 반드시 다시 눌러 준다 — 안 그러면 매핑 탭에서 지도가 같이 보인다. */
 #pgMap .map-view{flex:1 1 0; min-height:0; display:flex; flex-direction:column;}
 #pgMap .map-view[hidden]{display:none;}
-#pgMap .map-tabs button{
+.nav-subrow .map-tabs button{
   border:0; border-radius:999px; padding:11px 26px; min-height:40px; min-width:84px; cursor:pointer;
   background:transparent; color:var(--bb-body, #5a6274);
   font:inherit; font-size:14px; font-weight:600;
 }
-#pgMap .map-tabs button.on{ background:var(--bb-ink, #1b1f27); color:#fff; font-weight:700; }
+.nav-subrow .map-tabs button.on{ background:var(--bb-ink, #1b1f27); color:#fff; font-weight:700; }
 .map-zoom-canvas,.camera-zoom-canvas{
   transform-origin:50% 50%;
   transition:transform 160ms cubic-bezier(.2,.75,.25,1);
@@ -2755,10 +2817,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   width:100%; height:100%; overflow:hidden; background:var(--nx-bg);
 }
 :root.view-fullscreen:fullscreen #nav.sim-nav{position:relative; z-index:20; flex:0 0 76px; height:76px;}
-:root.view-fullscreen:fullscreen #pgMap.page.nav-page{
-  height:calc(100dvh - 76px); padding:16px 24px 24px;
-}
-:root.view-fullscreen:fullscreen #pgMap .nav-hero,
+/* 🔴 제목·KPI·보조 줄은 이제 화면 안이 아니라 공유 머리에 있다 — 전체화면에서 접을 것도
+   그쪽 하나뿐이다. 화면별 `.nav-hero` 를 각각 감추던 규칙을 여기로 합쳤다.
+   여백도 페이지가 아니라 껍데기가 갖고 있으므로 껍데기에서 줄인다. */
+:root.view-fullscreen:fullscreen .nav-shell{display:none;}
+:root.view-fullscreen:fullscreen .console-shell{padding:16px 24px 24px;}
 :root.view-fullscreen:fullscreen #pgMap .nav-side{display:none;}
 :root.view-fullscreen:fullscreen #pgMap .nav-stage{display:block; flex:1 1 0; min-height:0;}
 :root.view-fullscreen:fullscreen #pgMap .nav-canvas,
@@ -2769,11 +2832,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 :root.view-fullscreen:fullscreen #pgMap .map-controls{right:26px;}
 
-/* 카메라 전체화면도 상단 관제 바는 유지하고 영상만 남은 영역을 채운다. */
-:root.view-fullscreen:fullscreen #pgCam.page.nav-page{
-  height:calc(100dvh - 76px); padding:16px 24px 24px;
-}
-:root.view-fullscreen:fullscreen #pgCam .nav-hero,
+/* 카메라 전체화면도 상단 관제 바는 유지하고 영상만 남은 영역을 채운다.
+   (머리 접기·여백 축소는 위 공용 규칙이 이미 처리한다.) */
 :root.view-fullscreen:fullscreen #pgCam .cam-side-panel{display:none;}
 :root.view-fullscreen:fullscreen #pgCam .cam-stage{display:block; flex:1 1 0; min-height:0;}
 :root.view-fullscreen:fullscreen #pgCam .cam-main,

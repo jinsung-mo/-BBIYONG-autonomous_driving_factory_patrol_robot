@@ -1,7 +1,6 @@
 import { useSettings } from '../../settings/SettingsContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import OrinPowerPanel from './OrinPowerPanel.tsx'
-import KpiRow from '../robot/KpiRow.tsx'
 
 // 설정 (S15P11E101-685: 속도 상한, 열화상 임계온도, 시연 경보, 순찰 지점 설정 항목 삭제)
 // (S15P11E101-836: 구역·설비 현황 제거)
@@ -30,13 +29,9 @@ export default function ConfigPage() {
 
   return (
     <section id="pgConfig" className="page on v3-theme nav-page">
-      <div className="nav-hero">
-        <div className="nav-title">
-          <h2>시스템 설정</h2>
-          <span className="nav-sub">POWER · SYSTEM</span>
-        </div>
-        <KpiRow />
-      </div>
+      {/* 제목(.nav-hero)과 KPI 는 App.tsx 의 공통 껍데기가 그린다(S15P11E101-875) —
+          네 화면이 세로 슬라이드로 이어지므로 머리가 화면마다 다시 그려지면 탭을 옮길 때
+          같은 자리에서 깜빡인다. 제목 문구도 App.tsx 의 표에 있다. */}
       {/* 잠금 중에는 설정을 바꿀 수 없다 */}
       <fieldset className="lockfs" disabled={locked}>
         {/* 설정 섹션을 위→아래로 쌓는다(S15P11E101-814: 2열 그리드 제거).
