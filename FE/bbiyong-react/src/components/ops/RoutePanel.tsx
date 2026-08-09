@@ -31,7 +31,24 @@ const BLOCKED_HINT: Record<string, string> = {
   NAV_NOT_READY: '주행 시스템 준비 중입니다',
   NO_ROUTE: '지점을 찍으세요',
   ESTOP: '비상정지 해제가 필요합니다',
+  NAV_FAILED: '직전 주행이 실패로 끝났습니다',
 }
+
+// 🔴 '순찰 시작' 을 누르는 것 자체가 해소하는 차단 사유(S15P11E101-893).
+//
+// 로봇은 자기가 들고 있는 경로 파일에 저장맵 세션 ID 를 stamp 해 두고, 활성 맵이 바뀌면
+// `ROUTE_SESSION_MISMATCH` 로 순찰을 거절한다(navigation_orchestrator._navigation_ready →
+// 'patrol route must be reapplied'). 그 stamp 는 SET_PATROL_ROUTE 를 다시 받을 때만 갱신되는데
+// (_save_route), 그걸 보내는 API 가 바로 /api/patrol-route/start 다 — apply(SET_PATROL_ROUTE) 후
+// SET_MODE autonomy 를 한 요청 안에서 붙여 보낸다(WaypointService.startPatrol).
+//
+// 즉 이 사유는 **버튼을 눌러야 사라진다.** 그런데 FE 가 이 사유로 버튼을 잠그면 해소 수단이
+// 사라진다 — '경로 적용' 버튼을 뗀 뒤(S15P11E101-814) 사용자에게 남은 길이 이 버튼뿐이라
+// 매핑 직후 순찰이 영구 잠긴다. 핀을 지웠다 다시 찍어도 안 풀리는 이유도 같다: 핀 추가는
+// 서버 DB 에만 쓰고 로봇의 경로 파일은 건드리지 않으므로 stamp 가 그대로다.
+//
+// 나머지 사유(매핑 중·지도 저장 중·위치 미확인 등)는 시작을 눌러도 해소되지 않으므로 그대로 막는다.
+const SELF_CLEARING_BLOCK = 'ROUTE_SESSION_MISMATCH'
 
 export default function RoutePanel({ inspection = null }: { inspection?: any } = {}) {
   const { enabled, connected, mapping, telemetry } = useLive()
@@ -144,13 +161,24 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
   // readiness 는 **로봇이 보낸 마지막 값**이다. 연결이 끊기면 그 값이 그대로 남는다 —
   // `canStartPatrol:true` 인 채로 로봇이 사라지면 버튼이 계속 눌리는 상태가 된다.
   // 로봇은 자기가 끊긴 것을 알릴 수 없으므로(끊겼으니까) 이 한 가지는 FE 만 알 수 있다.
+  //
+  // 단, 로봇이 준 사유가 '시작을 눌러야 풀리는' 것이면(SELF_CLEARING_BLOCK 주석 참고) 잠그지
+  // 않는다. 잠그면 해소 수단이 없어져 교착이다(S15P11E101-893). 대신 무엇이 일어날지 알린다.
+  const staleRoute = (readiness?.blockedBy ?? '') === SELF_CLEARING_BLOCK
+  // 화면에 지점이 하나도 없으면 보낼 경로가 없다 — 로봇이 옛 경로를 들고 있어 NO_ROUTE 로
+  // 오지 않을 뿐이므로, 이때는 FE 가 대신 막고 '지점을 찍으라'고 말한다.
+  const hardBlocked = !!readiness && !readiness.canStartPatrol && !staleRoute
   const startDisabled = offline || busy
-    || (readiness ? !readiness.canStartPatrol : (mapping || !route.length))
+    || (readiness ? (hardBlocked || (staleRoute && !route.length)) : (mapping || !route.length))
   const startHint = offline
     ? '로봇과 연결이 끊겼습니다.'
-    : (readiness && !readiness.canStartPatrol
-      ? (readiness.hint || BLOCKED_HINT[readiness.blockedBy ?? ''] || '지금은 순찰을 시작할 수 없습니다.')
-      : null)
+    : (staleRoute
+      ? (route.length
+        ? '지도가 바뀌었습니다 — 순찰 시작을 누르면 지금 찍은 지점으로 다시 적용하고 출발합니다.'
+        : '지도가 바뀌었습니다 — 지도를 클릭해 순찰 지점을 다시 찍으세요.')
+      : (hardBlocked
+        ? (readiness.hint || BLOCKED_HINT[readiness.blockedBy ?? ''] || '지금은 순찰을 시작할 수 없습니다.')
+        : null))
 
   return (
     <div className="card-v3" id="pgRoute">
