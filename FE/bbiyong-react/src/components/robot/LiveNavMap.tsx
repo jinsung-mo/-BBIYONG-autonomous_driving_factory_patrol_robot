@@ -28,8 +28,8 @@ import { localized } from '../../live/mappers.ts'
 // 도(degree)를 외워 타이핑해야 해서 지도 위에서 바로 가리키는 편이 훨씬 직관적이다.
 // lightFloor 를 주면 캔버스 바탕을 흰색으로 칠한다(S15P11E101-822). 지도 탭·순찰 경로는
 // '흰 바닥' 위에 도면을 얹는 편이 3D 입체 뷰(흰 바닥)와 통일돼 보기 편하다.
-// compass 를 false 로 주면 우상단 나침반을 그리지 않는다(S15P11E101-814). 기본은 true —
-// 관제 지도 탭(MapPanel)은 그대로 나침반을 보여준다.
+// compass 를 false 로 주면 우상단 나침반을 그리지 않는다(S15P11E101-814).
+// 지도 탭 평면 뷰도 이제 끈다 [사용자 지침 2026-08-09] — 도면이 축 정렬이라 정보가 없다.
 export default function LiveNavMap({ route = null, onPick = null, onSetHeading = null, zoomFactor = 1, planOnly = false, mapping = false, follow = false, inspection = null, lightFloor = false, compass = true }: {
     route?: import('../../live/contracts').Waypoint[] | null,
     // reason: 'outside' 는 맵 바깥, 'masked' 는 순찰 마스크로 막힌 칸(S15P11E101-869) —
