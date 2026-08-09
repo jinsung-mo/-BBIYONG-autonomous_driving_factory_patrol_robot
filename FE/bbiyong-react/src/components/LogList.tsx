@@ -229,6 +229,9 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
       if (next === 'RESOLVED') {
         setHistory((prev) => prev.filter((l) => l.eventId !== log.eventId))
         if (log.live) dismissAlert(log.id)
+        // 건수(elog-count)는 서버 총계라 재조회 전까지 안 줄었다(사용자 지적 2026-08-10) —
+        // 기본 필터가 '미해결'이므로 해결한 건은 그 총계에서 빠진다. 즉시 반영한다.
+        setTotalCount((c) => (c == null ? c : Math.max(0, c - 1)))
       } else {
         setHistory((prev) => {
           const nextLog = { ...eventToLog(updated), _touched: true }
@@ -237,6 +240,8 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
             ? prev.map((l) => (l.eventId === log.eventId ? { ...l, ...nextLog } : l))
             : [nextLog, ...prev]
         })
+        // 되돌리기(→미해결)는 현재 '미해결' 필터에서 목록에 다시 들어오므로 총계도 +1.
+        if (statusF === 'UNRESOLVED') setTotalCount((c) => (c == null ? c : c + 1))
       }
       // 요약 띠의 미해결 건수도 같이 바뀌어야 한다. 30초 주기를 기다리면 두 수치가 어긋나 보인다.
       reloadFleet()
@@ -257,6 +262,7 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
       await deleteEvent(pending.eventId, accessToken)
       setHistory((prev) => prev.filter((l) => l.eventId !== pending.eventId))
       if (pending.live) dismissAlert(pending.id)
+      setTotalCount((c) => (c == null ? c : Math.max(0, c - 1)))
       setPending(null)
     } catch (e) {
       setDelErr(errMessage(e))
@@ -283,6 +289,7 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
       if (done.length) {
         const gone = new Set(done)
         setHistory((prev) => prev.filter((l) => !gone.has(l.eventId)))
+        setTotalCount((c) => (c == null ? c : Math.max(0, c - done.length)))
         // 같은 이벤트의 실시간 행도 닫는다 — 남겨 두면 지웠는데 한 줄이 되살아난 것처럼 보인다
         for (const l of liveRows) if (l.eventId != null && gone.has(l.eventId)) dismissAlert(l.id)
         reloadFleet()
