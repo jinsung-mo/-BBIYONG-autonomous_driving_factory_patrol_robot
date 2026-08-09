@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { useLive } from '../../live/LiveContext.tsx'
+import { useFleet } from '../../live/FleetContext.tsx'
+import { eqId } from '../../live/equipments.ts'
 import { isFloorplan } from '../../live/floorplan.ts'
 import { buildPlanGrid, worldToScenePx, type PlanGrid } from '../../live/isoExtrude.ts'
+import { H264VideoDecoder } from '../../live/h264Video.ts'
 import { errMessage } from '../../live/errors.ts'
 import { isMapFrame, localized } from '../../live/mappers.ts'
 import type { InspectionPoint } from '../../live/contracts.d.ts'
@@ -155,8 +158,47 @@ function buildMerged(rects: Rect[], color: THREE.Color, px: (x: number) => numbe
   return g
 }
 
+// 경보 말풍선 속 실시간 전면 영상 (S15P11E101-883).
+// 카메라 탭의 파이프라인(LiveSimBridge → SimContext 캔버스)은 전역 캔버스 ref 에 묶여
+// 있어 재사용할 수 없다 — 같은 디코드 분기(H264 envelope / base64 JPEG)만 축약 이식해
+// 자체 캔버스에 그린다. 프레임 원본은 동일한 onVideoFrame(/topic/video) 구독이다.
+function AlertLiveVideo() {
+  const { onVideoFrame } = useLive()
+  const cvRef = useRef<HTMLCanvasElement | null>(null)
+  const [seen, setSeen] = useState(false)
+  useEffect(() => {
+    const draw = (src: CanvasImageSource, sw: number, sh: number) => {
+      const cv = cvRef.current
+      const g = cv?.getContext('2d')
+      if (!cv || !g || !sw || !sh) return
+      // cover — 프레임 비율이 캔버스와 달라도 여백 없이 채운다
+      const s = Math.max(cv.width / sw, cv.height / sh)
+      const dw = sw * s
+      const dh = sh * s
+      g.drawImage(src, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh)
+      setSeen(true)   // 같은 값이면 React 가 무시한다 — 매 프레임 불러도 리렌더 없음
+    }
+    const decoder = new H264VideoDecoder((frame) => draw(frame, frame.width, frame.height))
+    const img = new Image()
+    img.onload = () => draw(img, img.naturalWidth, img.naturalHeight)
+    const off = onVideoFrame((channel: string, frame: any) => {
+      if (channel !== 'FRONT') return
+      if (frame instanceof Uint8Array) { decoder.push(frame); return }
+      if (frame?.data) img.src = `data:image/${frame.format || 'jpeg'};base64,${frame.data}`
+    })
+    return () => { off(); decoder.close() }
+  }, [onVideoFrame])
+  return (
+    <div className="three-alert-video">
+      <canvas ref={cvRef} width={224} height={126} />
+      {!seen && <span>전면 카메라 수신 대기…</span>}
+    </div>
+  )
+}
+
 export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFactor?: number, points?: InspectionPoint[] }) {
-  const { plan, connected, onNavUpdate, robotOnline, telemetry } = useLive()
+  const { plan, connected, onNavUpdate, robotOnline, telemetry, alerts } = useLive()
+  const { equipments } = useFleet()
   // 텔레메트리가 map 이 아니라고 말하면 그린 것을 거둔다(S15P11E101-773)
   const unlocalized = !!telemetry?.location && !isMapFrame(telemetry.location)
 
@@ -222,6 +264,52 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
   }, [points, plan, grid])
   const pinsRef = useRef(pins)
   pinsRef.current = pins
+
+  // ── 화재/과열 경보 마커 (S15P11E101-883) ─────────────────────────────
+  // /topic/alerts 의 x,y 는 map 프레임 미터다 — 점검 핀과 같은 변환을 거친다.
+  // OVERHEAT 는 좌표 없이 equipmentId 만 올 수 있어 설비 좌표로 폴백한다.
+  const alertPins = useMemo(() => {
+    if (!plan || !grid) {
+      return [] as { id: number, kind: 'fire' | 'heat', x: number, y: number, time: string, title: string, sub: string | null }[]
+    }
+    return alerts.flatMap((a: any) => {
+      if (a?.type !== 'FIRE' && a?.type !== 'OVERHEAT') return []
+      let wx = Number(a.x)
+      let wy = Number(a.y)
+      if (!Number.isFinite(wx) || !Number.isFinite(wy)) {
+        const eq: any = a.equipmentId ? equipments.find((e: any) => eqId(e) === a.equipmentId) : null
+        wx = Number(eq?.x)
+        wy = Number(eq?.y)
+      }
+      if (!Number.isFinite(wx) || !Number.isFinite(wy)) return []   // 위치를 모르면 지도에 찍지 않는다
+      const p = worldToScenePx(plan as any, wx, wy, { w: grid.w, h: grid.h })
+      const t = a.timestamp ? new Date(a.timestamp) : null
+      const heat = a.type === 'OVERHEAT'
+      return [{
+        id: a._id as number,
+        kind: (heat ? 'heat' : 'fire') as 'fire' | 'heat',
+        x: p.x,
+        y: p.y,
+        time: t && !Number.isNaN(t.getTime()) ? t.toTimeString().slice(0, 8) : '—',
+        title: heat ? '과열 감지' : '화재 발생',
+        sub: heat
+          ? `${a.equipmentId || '설비'}${Number.isFinite(a.temperature) ? ` · ${Number(a.temperature).toFixed(1)}℃` : ''}`
+          : null,
+      }]
+    })
+  }, [alerts, equipments, plan, grid])
+  const alertPinsRef = useRef(alertPins)
+  alertPinsRef.current = alertPins
+  // 열려 있는 말풍선(경보 _id). 마커를 다시 누르거나 ×로 닫는다.
+  const [alertSel, setAlertSel] = useState<number | null>(null)
+  const alertSelRef = useRef(alertSel)
+  alertSelRef.current = alertSel
+  const alertEls = useRef(new Map<number, HTMLElement>())
+  const popEl = useRef<HTMLDivElement | null>(null)
+  // 보던 경보가 목록에서 사라지면(닫힘/해제) 말풍선도 닫는다 — 유령 대화상자를 남기지 않는다
+  useEffect(() => {
+    if (alertSel != null && !alertPins.some((p) => p.id === alertSel)) setAlertSel(null)
+  }, [alertPins, alertSel])
 
   // 목표 자세를 옮긴다. 자리를 계산하는 식은 한 곳에 둔다.
   const aim = (x: number, y: number, yaw: number) => {
@@ -505,6 +593,25 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
         el.style.left = `${(tmp.x * 0.5 + 0.5) * r.width}px`
         el.style.top = `${(-tmp.y * 0.5 + 0.5) * r.height}px`
       }
+
+      // 화재/과열 경보 마커 + 열린 말풍선 — 점검 핀과 같은 투영이다(S15P11E101-883).
+      for (const p of alertPinsRef.current) {
+        const el = alertEls.current.get(p.id)
+        if (!el) continue
+        tmp.set(px(p.x), WALL_H3 + 0.5, pz(p.y)).project(camera)
+        const hidden = tmp.z > 1
+        const left = `${(tmp.x * 0.5 + 0.5) * r.width}px`
+        const top = `${(-tmp.y * 0.5 + 0.5) * r.height}px`
+        el.style.visibility = hidden ? 'hidden' : ''
+        el.style.left = left
+        el.style.top = top
+        // 말풍선은 마커와 같은 기준점에 붙인다 — CSS transform 이 위로 띄운다
+        if (alertSelRef.current === p.id && popEl.current) {
+          popEl.current.style.visibility = hidden ? 'hidden' : ''
+          popEl.current.style.left = left
+          popEl.current.style.top = top
+        }
+      }
     }
     tick()
 
@@ -601,6 +708,47 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
           <b>{p.seq}</b>
         </div>
       ))}
+
+      {/* 화재/과열 경보 마커 (S15P11E101-883) — 위치 핀 아이콘, 화재=빨강 · 과열=이벤트
+          로그 과열색. 점검 핀과 같은 HTML 오버레이라 어느 각도에서도 정면으로 읽힌다.
+          누르면 아래 말풍선이 열린다(다시 누르면 닫힘). */}
+      {alertPins.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          ref={(el) => { if (el) alertEls.current.set(p.id, el); else alertEls.current.delete(p.id) }}
+          className={`three-alert ${p.kind}`}
+          title={`${p.title} ${p.time} — 눌러서 상세`}
+          aria-expanded={alertSel === p.id}
+          onClick={() => setAlertSel((cur) => (cur === p.id ? null : p.id))}
+        >
+          <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+            {/* 확정 마커 아이콘 — 위치 핀(물방울 + 중심점) 아래 바닥 타원 */}
+            <path fill="currentColor" d="M12 1.8c-3.5 0-6.3 2.7-6.3 6.1 0 4.4 6.3 10.4 6.3 10.4s6.3-6 6.3-10.4c0-3.4-2.8-6.1-6.3-6.1Z" />
+            <circle cx="12" cy="7.8" r="2.1" fill="#fff" />
+            <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+              d="M7.4 16.4c-2.3.6-3.8 1.6-3.8 2.7 0 1.8 3.8 3.2 8.4 3.2s8.4-1.4 8.4-3.2c0-1.1-1.5-2.1-3.8-2.7" />
+          </svg>
+        </button>
+      ))}
+
+      {/* 경보 말풍선 — 발생 시간과 전면 카메라 실시간 영상. 위치는 렌더 루프가
+          마커와 같은 투영으로 매 프레임 갱신한다. */}
+      {alertSel != null && (() => {
+        const p = alertPins.find((v) => v.id === alertSel)
+        if (!p) return null
+        return (
+          <div ref={popEl} className="three-alert-pop" role="dialog" aria-label={`${p.title} 상세`}>
+            <div className="three-alert-pop__head">
+              <b className={p.kind}>{p.title}</b>
+              <span className="mono">{p.time}</span>
+              <button type="button" className="three-alert-pop__x" onClick={() => setAlertSel(null)} aria-label="말풍선 닫기">×</button>
+            </div>
+            {p.sub && <div className="three-alert-pop__sub">{p.sub}</div>}
+            <AlertLiveVideo />
+          </div>
+        )
+      })()}
 
       {/* 위치를 믿을 수 없으면 왜 로봇이 없는지 말한다(S15P11E101-773).
           아무 말 없이 비어 있으면 로봇이 사라진 줄 안다. */}
