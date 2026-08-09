@@ -71,6 +71,14 @@ export async function loadActivePlan(accessToken: string | null | undefined) {
     kind: (detail.kind || 'RAW').toUpperCase(),
     img,
     url,
+    // 이 도면의 정체성. 경보 핀이 "이 지도의 좌표계에서 찍힌 것인지" 판정하는 데 쓴다.
+    // 재매핑하면 map 프레임 원점이 새로 잡히므로 이전 지도의 x,y 는 새 지도 위에서
+    // 아무 의미가 없다 — 그리면 없는 자리에 불이 난 것처럼 보인다.
+    //   sourceMapId : FLOORPLAN 은 RAW 에서 파생된다. 도면 생성 전 짧은 구간에 들어온
+    //                 이벤트는 RAW 의 id 로 태깅되므로 둘 다 같은 지도로 본다.
+    //   createdAt   : 서버가 mapId 를 아직 안 실어 줄 때의 폴백 기준선.
+    sourceMapId: detail.sourceMapId,
+    createdAt: detail.createdAt,
     // drawNav 가 쓰는 맵 기하와 같은 형태로 맞춘다(미터 단위 원점 + m/px)
     w: Number(pick(grid?.cols, grid?.columns, detail.widthPx)),
     h: Number(pick(grid?.rows, detail.heightPx)),

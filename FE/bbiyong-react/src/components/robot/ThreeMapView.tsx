@@ -231,6 +231,34 @@ function EventClipVideo({ eventId }: { eventId: number }) {
   )
 }
 
+/**
+ * 이 경보가 '지금 보고 있는 지도'에서 찍힌 것인가 — 재매핑 잔상 제거.
+ *
+ * 화재/과열 핑의 x,y 는 감지 순간의 map 프레임 좌표다(로봇 자기 위치). 재매핑하면
+ * SLAM 이 원점을 새로 잡으므로 이전 지도의 좌표는 새 도면 위에서 아무 데도 가리키지
+ * 않는다 — 그런데 이벤트는 UNRESOLVED 로 계속 남아 있어서, 거르지 않으면 새 지도
+ * 위에 지난 지도의 불이 그대로 떠 있다.
+ *
+ * 🔴 이력을 지우는 것이 아니다. 이벤트 로그와 저장 영상은 감사 기록이고 다시보기가
+ *    거기 붙어 있다 — 지도에 그리지 않을 뿐이다(이벤트 탭에는 그대로 나온다).
+ *
+ * 판정 순서
+ *   1) 서버가 mapId 를 실어 주면 그것이 정답이다. 저장된 지도를 다시 활성화해도
+ *      맞는 핀만 돌아온다. FLOORPLAN 은 RAW 에서 파생되므로 둘 다 같은 지도로 본다.
+ *   2) mapId 가 없으면(실시간 경보·구버전 서버) 도면 생성 시각을 기준선으로 쓴다 —
+ *      지금 도면이 생기기 전의 경보는 이전 좌표계의 것이다.
+ *   3) 기준선조차 없으면 판단할 근거가 없다 — 예전처럼 그린다(핀을 함부로 숨기지 않는다).
+ */
+function onCurrentMap(src: any, plan: any): boolean {
+  const mapId = typeof src?.mapId === 'string' && src.mapId ? src.mapId : null
+  if (mapId) return mapId === plan?.id || mapId === plan?.sourceMapId
+  const base = plan?.createdAt ? Date.parse(plan.createdAt) : NaN
+  if (!Number.isFinite(base)) return true
+  const at = src?.timestamp ? Date.parse(src.timestamp) : NaN
+  if (!Number.isFinite(at)) return true
+  return at >= base
+}
+
 // follow 는 부모(MapPanel)의 뷰 세그먼트 [2D|3D|네비게이션]가 결정한다(S15P11E101-908) —
 // 예전에는 이 안의 '네비게이션 모드' 토글 버튼이 들고 있었는데, 뷰 전환을 한 세그먼트로
 // 합치며 상태를 위로 올렸다. false 로 바뀌면 개요 시점으로 되돌린다.
@@ -321,6 +349,9 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
       let next = prev
       for (const a of alerts as any[]) {
         if (a?.type !== 'FIRE' && a?.type !== 'OVERHEAT') continue
+        // 지난 지도의 경보는 고정하지 않는다 — 고정하면 '로봇의 지금 위치'라는
+        // 새 지도 좌표를 얻어, 그리지 말아야 할 핀이 그럴듯한 자리에 되살아난다.
+        if (!onCurrentMap(a, pl)) continue
         const id = a?._id as number | undefined
         if (id == null || next[id]) continue
         // 경보 자체 좌표나 설비 좌표가 있으면 그쪽을 쓰므로 고정하지 않는다.
@@ -380,6 +411,7 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
     const serverEventIds = new Set<number>()
     for (const e of unresolvedEvents) {
       if (e?.type !== 'FIRE' && e?.type !== 'OVERHEAT') continue
+      if (!onCurrentMap(e, plan)) continue        // 이전 지도의 좌표 — 여기 그리면 거짓말이다
       const eid = Number(e.eventId)
       if (!Number.isFinite(eid)) continue
       const pos = toScene(e, null)
@@ -389,6 +421,7 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
     }
     for (const a of alerts as any[]) {
       if (a?.type !== 'FIRE' && a?.type !== 'OVERHEAT') continue
+      if (!onCurrentMap(a, plan)) continue        // 재매핑 전에 들어와 메모리에 남은 경보
       const eid = Number(a.eventId)
       if (Number.isFinite(eid) && serverEventIds.has(eid)) continue   // 서버에 이미 반영됨
       const pos = toScene(a, a._id)
@@ -449,7 +482,13 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
   }, [telemetry])
 
   // 도면이 바뀌면 이전 자세는 다른 좌표계의 값이다 — 버린다.
-  useEffect(() => { targetRef.current = null; shownRef.current = null; poseBufRef.current = [] }, [plan])
+  // 로봇 위치에 고정해 둔 경보 좌표(anchored)도 같이 버린다: 그것은 씬 px 이라
+  // 새 도면에서는 전혀 다른 지점이다. 남겨 두면 지난 지도의 불이 새 지도 위 임의의
+  // 자리에 그대로 떠 있게 된다.
+  useEffect(() => {
+    targetRef.current = null; shownRef.current = null; poseBufRef.current = []
+    setAnchored({})
+  }, [plan])
 
   // 위치를 믿을 수 없으면 로봇을 아예 지운다(S15P11E101-773).
   // 흐리게 두지 않는다 — 흐린 마커도 '저기 있다' 로 읽힌다. 모르면 안 그린다.
