@@ -6,8 +6,9 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import LiveNavMap from '../robot/LiveNavMap.tsx'
 import {
-  addWaypoint, deleteWaypoint, listWaypoints, startPatrol, startPatrolMessage, wpLabel,
+  addWaypoint, deleteWaypoint, listWaypoints, replaceWaypoints, startPatrol, startPatrolMessage, wpLabel,
 } from '../../live/waypoints.ts'
+import { yawToDegrees } from '../../live/navMap.ts'
 import { useResourceSync } from '../../live/sync.ts'
 
 // 순찰 경로 (S15P11E101-514) — 2D 지도를 클릭해 순찰 지점을 찍고, 로봇에 하달한다.
@@ -16,11 +17,17 @@ import { useResourceSync } from '../../live/sync.ts'
 // 한 화면에서 이어진다. 관제 화면은 모니터링과 실시간 개입만 맡는다(S15P11E101-475).
 //
 // 지점 이름·방향(heading)·순서 편집 UI 는 뗐다(S15P11E101-814) — 각 지점은 번호와 삭제만
-// 남는다. 이름/방향은 여전히 서버 계약(WaypointRequest.name/yaw)에 있지만, 이 화면은 값을
-// 보내지 않는다(undefined) — addWaypoint 가 두 필드를 이미 '있을 때만' 보내도록 돼 있어
-// (조건부 스프레드) 그대로 두면 서버가 기본값(이름 없음 → wpLabel 이 '지점 N'으로 표시,
-// 방향 없음 → 로봇 자동 응시)으로 채운다. 순서(seq)는 지점을 찍은 순서 그대로 간다 —
+// 남는다. 이름은 여전히 서버 계약(WaypointRequest.name)에 있지만, 이 화면은 값을
+// 보내지 않는다(undefined) — addWaypoint 가 이미 '있을 때만' 보내도록 돼 있어
+// (조건부 스프레드) 그대로 두면 서버가 기본값(이름 없음 → wpLabel 이 '지점 N'으로 표시)으로
+// 채운다. 순서(seq)는 지점을 찍은 순서 그대로 간다 —
 // 재정렬 UI(↑/↓)도 뗐으므로 addWaypoint 가 매번 '끝에 추가'로 보내는 seq 가 곧 최종 순서다.
+//
+// 방향(heading)만은 되살렸다 — -814 는 디자인 v3 재적용이었고 방향 설정 수단이 함께 딸려
+// 나갔다(도(degree) 입력칸 + 지도 드래그, S15P11E101-790 · -798). 지도 위 손잡이만 되살린다:
+// 각도를 외워 타이핑하는 입력칸은 v3 의 얇은 지점 행과 맞지 않고, 지도에서 바로 가리키는 쪽이
+// 애초에 -798 이 입력칸 위에 얹었던 이유다. 방향은 **여전히 선택**이다 — 안 정하면 yaw 를
+// 아예 보내지 않고(조건부 스프레드) 로봇이 가까운 구조물을 스스로 바라본다.
 // blockedBy → 화면 표시 폴백(S15P11E101-869). hint 가 없을 때만 쓴다 — hint 는 로봇이
 // 준 문장을 그대로 쓰는 게 원칙이고, 이 표는 그게 없을 때의 안전망이다.
 const BLOCKED_HINT: Record<string, string> = {
@@ -227,6 +234,37 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
   // 서버에 저장된 경로는 지우지 않는다. 매핑이 끝나고 다시 판단할 자산이다.
   const editLocked = offline || mapping
 
+  // 지점 방향(heading) 저장 — 지도에서 지점을 눌러 바깥으로 끌면(LiveNavMap.onSetHeading)
+  // 그 지점에서 로봇이 바라볼 방향이 정해진다. yaw=null 이면 '자동'으로 되돌린다.
+  //
+  // yaw 는 계약 그대로 **radians · map 프레임 · 반시계 + · 0 = map +X** 다 — LiveNavMap 이
+  // 이미 그 규약으로 넘겨주므로 여기서는 손대지 않는다. 도(degree)는 화면 표시에만 쓴다.
+  //
+  // 이 화면은 로컬 편집 버퍼를 두지 않는다(S15P11E101-814) — 추가·삭제처럼 방향도 바로
+  // 서버에 쓴다. 한 건만 고치는 API 가 없어 목록 전체 교체(PUT /api/patrol-route)로 보낸다.
+  // replaceWaypoints 가 yaw 를 '있을 때만' 실으므로, null 로 두면 키 자체가 빠져
+  // 서버·로봇이 예전처럼 '방향 미지정'으로 받는다.
+  const saveHeading = async (i: number, yaw: number | null) => {
+    if (editLocked || busy) return
+    const prev = route
+    const next = route.map((w, k) => (k === i ? { ...w, yaw } : w))
+    setRoute(next)
+    setBusy(true)
+    try {
+      const rows = await replaceWaypoints(next, accessToken)
+      if (!alive.current) return
+      if (rows.length) setRoute(rows)
+      setMsg(yaw == null
+        ? { kind: 'ok', text: `지점 ${i + 1} 방향 자동 — 로봇이 스스로 바라봅니다.` }
+        : { kind: 'ok', text: `지점 ${i + 1} 방향 ${yawToDegrees(yaw)}°` })
+    } catch (e) {
+      if (!alive.current) return
+      // 서버에 못 썼으면 화면도 되돌린다 — 저장된 줄 알고 순찰을 시작하는 것이 제일 나쁘다.
+      setRoute(prev)
+      setMsg({ kind: 'err', text: `방향을 저장하지 못했습니다 — ${errMessage(e)}` })
+    } finally { if (alive.current) setBusy(false) }
+  }
+
   // 순찰 시작 가능 여부(S15P11E101-869). 로봇이 readiness 를 보내면 그 판단을 그대로 따르고,
   // FE 는 조건을 조합하지 않는다. 아직 안 보내는 로봇(구버전)에서는 기존 조합 로직 그대로 —
   // 없는데 잠그면 로봇 쪽이 안 올라간 시연 중에 화면이 죽는다.
@@ -275,6 +313,8 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
       {enabled && (
         <p className="cfg-help">
           지도를 클릭하면 그 자리에 순찰 지점이 추가됩니다. 지점을 찍은 순서대로 로봇이 돕니다.
+          <b>지점을 누른 채 바라볼 방향으로 끌면</b> 그 지점의 방향이 정해집니다(분전반 쪽을
+          보게 하고 싶을 때). 방향을 안 정하면 로봇이 가까운 구조물을 스스로 바라봅니다.
           <b>순찰 시작</b>을 누르면 저장된 경로로 로봇이 순찰을 시작합니다.
         </p>
       )}
@@ -284,6 +324,7 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
         <LiveNavMap
           route={mapping ? null : route}
           onPick={editLocked ? null : onPick}
+          onSetHeading={editLocked ? null : saveHeading}
           zoomFactor={zoom}
           mapping={mapping}
           inspection={mapping ? null : inspection}
@@ -337,6 +378,20 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
         {route.map((w, i) => (
           <li key={w.id ?? i}>
             <span className="tag">{i + 1}</span>
+            {/* 지도 위 뱃지와 같은 각도를 목록에서도 읽는다. 방향은 선택이라 '자동'이 정상 상태다. */}
+            <span className="t" style={{ marginLeft: 4 }}>
+              {w.yaw != null && Number.isFinite(Number(w.yaw)) ? `방향 ${yawToDegrees(Number(w.yaw))}°` : '방향 자동'}
+            </span>
+            {w.yaw != null && Number.isFinite(Number(w.yaw)) && (
+              <button
+                type="button" className="btn-tonal" onClick={() => saveHeading(i, null)}
+                disabled={editLocked || busy} aria-label={`${i + 1}번 지점 방향 자동으로`}
+                title="방향을 지정하지 않은 상태로 되돌립니다 — 로봇이 가까운 구조물을 스스로 바라봅니다."
+                style={{ padding: '4px 10px' }}
+              >
+                방향 자동
+              </button>
+            )}
             <button type="button" className="btn-tonal" onClick={() => onDelete(w, i)} disabled={editLocked || busy} aria-label={`${i + 1}번 지점 삭제`} style={{ color: '#B4655C', marginLeft: 'auto' }}>삭제</button>
           </li>
         ))}

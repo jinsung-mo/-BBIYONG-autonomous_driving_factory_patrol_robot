@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
-import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, isMasked, isFree, backgroundOf, followPose } from '../../live/navMap.ts'
+import { makeView, fitView, fitCanvas, drawNav, canvasToWorld, insideMap, isMasked, isFree, backgroundOf, followPose, WAYPOINT_HANDLE_PX } from '../../live/navMap.ts'
 import { localized } from '../../live/mappers.ts'
 
 // live 모드의 2D 맵 캔버스 — 로봇이 보내는 실제 SLAM 맵/스캔/자세를 그린다.
@@ -283,11 +283,22 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
     const rte = routeRef.current
     if (!rte || !rte.length) return -1
     const { x, y } = clientToWorld(cv, clientX, clientY)
+    const s = Math.max(1, viewRef.current.s)
     // 화면에 그려진 지점 반지름(9px, drawNav 와 맞춤)에 손가락 여유를 더해 미터로 환산.
-    const hitMeters = 16 / Math.max(1, viewRef.current.s)
+    const hitMeters = 16 / s
+    // 방향이 이미 정해진 지점은 손잡이(knob)를 잡아도 같은 지점을 돌리는 것으로 친다 —
+    // 보이는 것이 손잡이인데 지점 원만 눌러야 한다면 그건 손잡이가 아니다.
+    // 손잡이는 map 프레임에서 yaw 방향으로 떨어져 있다(화면 y 반전은 여기서 신경 쓰지 않는다 —
+    // canvasToWorld 가 이미 map 프레임으로 되돌려 놓았다).
+    const handleMeters = WAYPOINT_HANDLE_PX / s
     let best = -1, bestDist = hitMeters
     rte.forEach((w, i) => {
-      const d = Math.hypot(Number(w.x) - x, Number(w.y) - y)
+      let d = Math.hypot(Number(w.x) - x, Number(w.y) - y)
+      if (w.yaw != null && Number.isFinite(Number(w.yaw))) {
+        const a = Number(w.yaw)
+        const hd = Math.hypot(Number(w.x) + Math.cos(a) * handleMeters - x, Number(w.y) + Math.sin(a) * handleMeters - y)
+        if (hd < d) d = hd
+      }
       if (d <= bestDist) { bestDist = d; best = i }
     })
     return best
@@ -324,6 +335,12 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
             const dx = x - hd.x, dy = y - hd.y
             // 뗀 자리 바로 근처에서는 각도가 튄다 — 최소 거리를 넘어야 방향으로 인정한다.
             if (Math.hypot(dx, dy) < 0.08) return
+            // 🔴 부호 주의 — 이 atan2 는 **map 프레임**에서 잰다, 화면 픽셀이 아니다.
+            // 화면 좌표는 +y 가 아래라 픽셀로 그냥 atan2 하면 시계방향(= 부호 반대)이 나온다.
+            // clientToWorld → canvasToWorld 가 `(view.y - py)/view.s` 로 y 를 이미 뒤집어
+            // map 프레임 미터로 돌려놓았으므로, 여기서는 부호를 더 손대면 안 된다.
+            // 결과는 계약 그대로 radians · map 프레임 · 반시계 + · 0 = map +X 이고,
+            // atan2 치역이 (-π, π] 라 정규화도 이미 끝나 있다.
             headingPreviewRef.current = { index: hd.index, yaw: Math.atan2(dy, dx) }
             redraw()
             return
