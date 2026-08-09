@@ -2123,6 +2123,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #pgMap .vwrap .iso-reset{right:16px; top:16px;}
 .maplegend .iso-hint{color:var(--dk-sub); border:0; background:none; padding:0;}
 
+/* 뷰 세그먼트 [2D | 3D | 네비게이션](S15P11E101-908) — 우상단, 지도/매핑 서브탭 pill 과 같은 문법.
+   개별 버튼(입체/평면 + 로봇 추종) 둘을 이 세그먼트 하나로 합쳤다. */
+#pgMap .vwrap .mapview-seg{
+  position:absolute; right:16px; top:16px; z-index:6;
+  display:inline-flex; gap:2px; padding:3px; border-radius:999px;
+  background:rgba(255,255,255,.82); box-shadow:0 4px 14px rgba(35,39,51,.10);
+  backdrop-filter:blur(10px) saturate(1.2); -webkit-backdrop-filter:blur(10px) saturate(1.2);
+}
+#pgMap .vwrap .mapview-seg button{
+  border:0; border-radius:999px; padding:5px 12px; cursor:pointer;
+  background:transparent; color:#5A6072; font:inherit; font-size:12px; font-weight:600;
+}
+#pgMap .vwrap .mapview-seg button.on{ background:#232733; color:#fff; }
+
 @media (prefers-reduced-motion:reduce){
   .iso-scene{transition:none;}
 }
@@ -2711,8 +2725,12 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   height:11px; min-height:11px; max-height:11px;
   border:0; border-radius:2px;
 }
+/* 로봇 마크 — 3D 로봇 디자인(흰 차체 + 검정 라이다/카메라)에 맞춘다(S15P11E101-908).
+   초록 점은 옛 초록 박스 로봇의 잔재였다. 흰 몸체에 검정 테두리, 가운데 검정 점(라이다)으로
+   작은 범례에서도 실물 로봇의 인상을 준다. */
 #pgMap .maplegend .legend-mark.robot{
-  background:#55ca85; border-radius:50%; box-shadow:0 0 0 4px rgba(85,202,133,.18);
+  background:#16181d; border-radius:50%;
+  box-shadow:inset 0 0 0 3px #F7F8FA, inset 0 0 0 4px rgba(0,0,0,.28), 0 0 0 3px rgba(35,39,51,.10);
 }
 #pgMap .maplegend .legend-mark.route{flex-basis:24px; width:24px; min-width:24px; max-width:24px; height:3px; min-height:3px; max-height:3px; border-radius:999px; background:#4b83da;}
 #pgMap .maplegend .legend-mark.switchboard{

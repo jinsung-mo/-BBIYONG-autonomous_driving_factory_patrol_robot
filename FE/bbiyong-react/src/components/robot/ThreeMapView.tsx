@@ -196,7 +196,10 @@ function AlertLiveVideo() {
   )
 }
 
-export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFactor?: number, points?: InspectionPoint[] }) {
+// follow 는 부모(MapPanel)의 뷰 세그먼트 [2D|3D|네비게이션]가 결정한다(S15P11E101-908) —
+// 예전에는 이 안의 '네비게이션 모드' 토글 버튼이 들고 있었는데, 뷰 전환을 한 세그먼트로
+// 합치며 상태를 위로 올렸다. false 로 바뀌면 개요 시점으로 되돌린다.
+export default function ThreeMapView({ zoomFactor = 1, points = [], follow = false }: { zoomFactor?: number, points?: InspectionPoint[], follow?: boolean }) {
   const { plan, connected, onNavUpdate, robotOnline, telemetry, alerts } = useLive()
   const { equipments } = useFleet()
   // 텔레메트리가 map 이 아니라고 말하면 그린 것을 거둔다(S15P11E101-773)
@@ -208,7 +211,6 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
   const [sceneSeq, setSceneSeq] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [follow, setFollow] = useState(false)
 
   const hostRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -748,14 +750,13 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
     apiRef.current?.setZoom(zoomFactor)
   }, [zoomFactor])
 
-  const toggleFollow = useCallback(() => {
-    setFollow((on) => {
-      // 끄는 길: 개요 시점으로 되돌린다. 추종 중 카메라를 로봇에 묶어 뒀으므로
-      // 그냥 끄면 로봇 뒤통수를 본 채로 멈춘다.
-      if (on) apiRef.current?.reset()
-      return !on
-    })
-  }, [])
+  // 네비게이션(follow) 이 꺼지면 개요 시점으로 되돌린다(S15P11E101-908). 추종 중에는 카메라를
+  // 로봇에 묶어 두므로, 그냥 끄면 로봇 뒤통수를 본 채로 멈춘다. 켜지는 것은 tick 루프가 맡는다.
+  const prevFollowRef = useRef(follow)
+  useEffect(() => {
+    if (prevFollowRef.current && !follow) apiRef.current?.reset()
+    prevFollowRef.current = follow
+  }, [follow])
 
   // 마우스에만 길을 두지 않는다 — 방향키로 돌리고 +/− 로 확대한다.
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -871,17 +872,7 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
           <span>로컬라이제이션을 기다리는 중입니다 — 회복되면 로봇이 다시 표시됩니다.</span>
         </div>
       )}
-      <button
-        type="button"
-        className={`mapview iso-reset${follow ? ' on' : ''}`}
-        onClick={toggleFollow}
-        aria-pressed={follow}
-        title={follow ? '네비게이션 모드 — 눌러서 개요 시점으로' : '로봇을 따라가는 시점(자동차 내비처럼)'}
-      >
-        {/* 버튼명 '로봇 추종/추종 중' → '네비게이션 모드'(S15P11E101-889).
-            켜짐 여부는 .on 클래스(aria-pressed)가 시각으로 말한다 — 문구는 하나로 둔다. */}
-        네비게이션 모드
-      </button>
+      {/* 네비게이션 모드(로봇 추종) 토글 버튼은 뷰 세그먼트로 이동했다(S15P11E101-908, MapPanel). */}
     </div>
   )
 }

@@ -52,12 +52,17 @@ export default function MapPanel() {
   const showMapping = enabled && (mapping || mappingStarting)
   // 매핑도 아니고 도면도 없으면 그릴 것이 없다 — 빈 검은 판 대신 할 일을 적어 준다.
   const showEmpty = enabled && !mapping && !mappingStarting && !plan
-  const [iso, setIso] = useState(true)
+  // 뷰 모드 세그먼트 [2D | 3D | 네비게이션](S15P11E101-908). 예전의 입체/평면 토글 + 3D
+  // 안의 네비게이션(추종) 버튼을 한 세그먼트로 합쳤다. 네비게이션은 3D 로봇 추종 시점이다.
+  //   2d  → LiveNavMap(평면)
+  //   3d  → ThreeMapView 개요
+  //   nav → ThreeMapView 로봇 추종(follow)
+  const [viewMode, setViewMode] = useState<'2d' | '3d' | 'nav'>('3d')
   const [zoom, setZoom] = useState(1)
   const [fullscreen, setFullscreen] = useState(false)
-  // 도면이 사라지면(원본만 남으면) 2D 로 돌아가야 한다 — 빈 입체 화면을 남기지 않는다
-  useEffect(() => { if (!canIso) setIso(false); else setIso(true) }, [canIso])
-  const showIso = canIso && iso
+  // 도면이 사라지면(원본만 남으면) 2D 로 돌아간다 — 빈 입체 화면을 남기지 않는다. 생기면 3D 기본.
+  useEffect(() => { setViewMode(canIso ? '3d' : '2d') }, [canIso])
+  const showIso = canIso && viewMode !== '2d'
 
   useEffect(() => {
     const syncFullscreen = () => {
@@ -124,12 +129,12 @@ export default function MapPanel() {
                  스피너를 쓰지 않는 것이 이 시스템의 규칙이다(로딩은 골격을 유지한 채 문구로). */
               ? (
                 <Suspense fallback={<span className="nodata">입체 지도를 불러오는 중…</span>}>
-                  <ThreeMapView zoomFactor={zoom} points={inspectionPoints} />
+                  {/* 네비게이션 모드면 로봇을 추종한다(follow) — 세그먼트가 결정(S15P11E101-908). */}
+                  <ThreeMapView zoomFactor={zoom} points={inspectionPoints} follow={viewMode === 'nav'} />
                 </Suspense>
               )
-              /* 🔴 `follow` 는 -855(평면 로봇표시·추종)가 더한 것이다. 3D 뷰를 얹으면서
-                 지우지 않도록 병합 때 살렸다 — 2D 평면 뷰의 로봇 추종 기능이다.
-                 나침반은 끈다 [사용자 지침 2026-08-09] — 정제 도면이 축 정렬이라 정보가 없다. */
+              /* 2D 평면 뷰. 나침반은 끈다 [사용자 지침 2026-08-09] — 정제 도면이 축 정렬이라
+                 정보가 없다. 2D 에서는 로봇을 늘 중심에 두므로 follow 를 켠다(별도 추종 버튼 없음). */
               : <LiveNavMap zoomFactor={zoom} planOnly follow inspection={{ points: inspectionPoints }} lightFloor compass={false} />)
           : <canvas
               ref={refs.map2d}
@@ -137,17 +142,13 @@ export default function MapPanel() {
               style={{ transform: `scale(${zoom})` }}
             />}
         </ErrorBoundary>
+        {/* 뷰 세그먼트 [2D | 3D | 네비게이션](S15P11E101-908) — 좌상단, 지도/매핑 서브탭과 같은 pill 문법. */}
         {canIso && !showMapping && (
-          <button
-            type="button"
-            className="mapview mapdim"
-            onClick={() => setIso((v) => !v)}
-            aria-pressed={iso}
-            title={iso ? '위에서 내려다보기' : '입체로 보기'}
-          >
-            {/* 라벨은 지금 보고 있는 상태다(S15P11E101-889) — '입체/평면' 을 '3D/2D' 로만 바꾼다. */}
-            {iso ? '3D' : '2D'}
-          </button>
+          <div className="mapview-seg" role="tablist" aria-label="지도 보기 방식">
+            <button type="button" role="tab" aria-selected={viewMode === '2d'} className={viewMode === '2d' ? 'on' : ''} onClick={() => setViewMode('2d')}>2D</button>
+            <button type="button" role="tab" aria-selected={viewMode === '3d'} className={viewMode === '3d' ? 'on' : ''} onClick={() => setViewMode('3d')}>3D</button>
+            <button type="button" role="tab" aria-selected={viewMode === 'nav'} className={viewMode === 'nav' ? 'on' : ''} onClick={() => setViewMode('nav')}>네비게이션</button>
+          </div>
         )}
         {mapDown && !showMapping && <span className="nodata">SLAM 맵 데이터 없음</span>}
         {/* 범례는 실제 도면에 보이는 것만 남긴다(S15P11E101 콘솔 정리) — 벽·로봇.
