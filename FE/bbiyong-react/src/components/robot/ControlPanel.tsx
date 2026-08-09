@@ -293,7 +293,7 @@ export default function ControlPanel() {
         {ownership.mine && (
           <div className="ctlown mine" id="ctlOwnMine" role="status">
             <span className="ctlown-txt">
-              내가 조종 중입니다{ownStale ? ' — 점유 상태 확인 중…' : ` (남은 ${leftLabel}초)`}
+              조종 중{ownStale ? ' — 점유 상태 확인 중…' : ''}
             </span>
           </div>
         )}
