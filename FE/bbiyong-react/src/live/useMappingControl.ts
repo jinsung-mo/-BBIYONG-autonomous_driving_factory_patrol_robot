@@ -45,7 +45,11 @@ export function useMappingControl(): MappingControl {
   const onStopMapping = () => {
     control.stopMapping()
     setRequested(false)
-    setMsg({ kind: 'warn', text: '매핑 중단을 요청했습니다. 로봇이 멈추면 진행 표시가 사라집니다.' })
+    // 중단은 '저장 없이 취소'다(로봇 mapping_orchestrator.stop 은 저장/업로드/완료 이벤트를
+    // 내지 않는다 — be_robot 확인 2026-08-10). 그런데 직전에 도착·잔존한 완료 이벤트가 남아
+    // 있으면 phase 가 'complete' 로 걸려 "저장된 것처럼" 보인다. 중단 시 그 딱지를 지운다.
+    clearMappingComplete()
+    setMsg({ kind: 'warn', text: '매핑 중단을 요청했습니다. 저장 없이 취소되며, 로봇이 멈추면 진행 표시가 사라집니다.' })
   }
 
   return { phase, offline: !enabled || !connected, confirming, setConfirming, onStart, onStopMapping, msg }
