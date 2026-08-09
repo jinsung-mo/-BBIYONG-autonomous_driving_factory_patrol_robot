@@ -91,6 +91,12 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
   // 드래그를 마친 포인터업 뒤에는 같은 자리에서 click 이 한 번 더 온다 — 그 한 번만 무시한다.
   const suppressClickRef = useRef(false)
 
+  // 로봇 자세 표본 버퍼 — 2D 스냅샷 보간용(S15P11E101-909). 자세는 1~3Hz 로 오므로 받은
+  // 값을 그대로 찍으면 로봇이 뚝뚝 튄다. 표본 사이를 실제 시간축으로 따라가면 부드럽다.
+  // (3D ThreeMapView 가 쓰는 것과 같은 방식. 지도 탭 2D=planOnly 에서만 rAF 로 돈다.)
+  const poseBufRef = useRef<{ x: number, y: number, yaw: number, at: number }[]>([])
+  const smoothRef = useRef(false)
+
   // 드래그 중이면 미리보기 방향을 반영한 경로를 그린다 — 실제 route(prop)는 아직 그대로다.
   const routeForDraw = () => {
     const rte = routeRef.current
@@ -124,6 +130,16 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
       // 눈에 띄게 흔들리지 않으면서 따라잡는 값이 이 정도다.
       // map 프레임이 아닌 자세는 믿을 수 없다(S15P11E101-773). 그 값으로 화면을 끌면
       // 지도가 엉뚱한 곳으로 밀려나고, 조작자는 그 사실조차 모른다 — 차라리 가만히 둔다.
+      // 자세 표본을 쌓는다(S15P11E101-909) — 아래 rAF 보간이 쓴다.
+      const p: any = nav?.pose
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+        const buf = poseBufRef.current
+        buf.push({ x: p.x, y: p.y, yaw: Number(p.yaw) || 0, at: performance.now() })
+        if (buf.length > 4) buf.shift()
+      }
+      // 보간 모드(지도 탭 2D)에서는 그리기·추종을 rAF 가 매 프레임 보간해서 맡는다.
+      // 여기서 또 그리면 3Hz 튐이 그대로 남는다.
+      if (smoothRef.current) return
       if (followingRef.current && localized(nav?.pose)) followPose(viewRef.current, cv, nav!.pose!, 0.5)
       drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeForDraw(), showPlanRef.current, !planOnly, inspectRef.current, bgColorRef.current, compassRef.current)
     }
@@ -135,6 +151,52 @@ export default function LiveNavMap({ route = null, onPick = null, onSetHeading =
 
     return () => { off(); ro.disconnect() }
   }, [onNavUpdate])
+
+  // 2D 로봇 스냅샷 보간 루프(S15P11E101-909). 지도 탭(planOnly)에서만 돈다 — 매핑 모드는
+  // 이미 자체 rAF(경계 refit)가 있고, ops 2D 는 스캔점까지 그려 60fps 재그리기가 무겁다.
+  // 표시 시점을 최근 수신 간격만큼 뒤로 물려 표본 사이를 선형 보간한다 → 로봇이 실제 궤적
+  // 그대로 일정 속도로 흐른다(3Hz 튐 제거). 배경은 baked drawImage 1회라 60fps 로 그려도 가볍다.
+  useEffect(() => {
+    if (!planOnly || mapping) { smoothRef.current = false; return undefined }
+    smoothRef.current = true
+    let raf = 0
+    const tick = () => {
+      raf = requestAnimationFrame(tick)
+      const cv = cvRef.current
+      const base = lastRef.current
+      if (!cv || !base) return
+      const fitted = fitCanvas(cv)
+      if (!fitted) return
+      // 표본 사이 보간 자세. yaw 는 -π~π 를 오가므로 짧은 쪽으로 감는다.
+      const buf = poseBufRef.current
+      let pose: any = base.pose
+      if (buf.length) {
+        const last = buf[buf.length - 1]
+        const prev = buf[buf.length - 2]
+        const gap = prev ? Math.min(1200, Math.max(150, last.at - prev.at)) : 333
+        const rt = performance.now() - gap
+        pose = { x: last.x, y: last.y, yaw: last.yaw }
+        for (let i = buf.length - 1; i > 0; i--) {
+          const a = buf[i]; const b = buf[i - 1]
+          if (rt >= b.at && rt <= a.at) {
+            const f = a.at === b.at ? 1 : (rt - b.at) / (a.at - b.at)
+            let dy = a.yaw - b.yaw
+            while (dy > Math.PI) dy -= Math.PI * 2
+            while (dy < -Math.PI) dy += Math.PI * 2
+            pose = { x: b.x + (a.x - b.x) * f, y: b.y + (a.y - b.y) * f, yaw: b.yaw + dy * f }
+            break
+          }
+        }
+        if (rt < buf[0].at) pose = { x: buf[0].x, y: buf[0].y, yaw: buf[0].yaw }
+      }
+      const nav = pose ? { ...base, pose } : base
+      // 추종도 보간 자세로. 매 프레임이라 계수를 작게 둔다(3Hz·0.5 → 60fps 는 더 작게).
+      if (followingRef.current && localized(pose)) followPose(viewRef.current, cv, pose, 0.12)
+      drawNav(fitted.g, cv, nav, viewRef.current, headingUpRef.current, routeForDraw(), showPlanRef.current, !planOnly, inspectRef.current, bgColorRef.current, compassRef.current)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => { smoothRef.current = false; cancelAnimationFrame(raf) }
+  }, [planOnly, mapping])
 
   // 토글·경로 변경 즉시 다시 그린다 (다음 NAV_LIVE 를 기다리면 최대 0.3초 늦다)
   useEffect(redraw, [headingUp, route, inspection, compass])
