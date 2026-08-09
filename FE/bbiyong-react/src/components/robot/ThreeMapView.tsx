@@ -265,15 +265,49 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
   const pinsRef = useRef(pins)
   pinsRef.current = pins
 
+  // 좌표 없는 경보를 로봇 위치에 고정한다 (S15P11E101-890).
+  // 로봇이 자기 위치에서 감지한 화재는 alert 에 x,y 가 실려 오지 않는다 — 그때는 그 순간
+  // 로봇이 서 있던 자리를 쓴다. 경보 도착 시점의 씬 좌표를 _id 별로 한 번만 붙잡아 둔다.
+  // (매 프레임 로봇 좌표를 따라가면, 로봇이 그 뒤 움직였을 때 화재 마커가 같이 끌려간다 —
+  //  화재는 발생한 그 자리에 남아야 한다.) 씬 px 로 저장하므로 worldToScenePx 를 거치지 않는다.
+  const [anchored, setAnchored] = useState<Record<number, { x: number, y: number }>>({})
+  useEffect(() => {
+    const g = gridRef.current
+    const pl = planRef.current
+    if (!g || !pl) return
+    setAnchored((prev) => {
+      let next = prev
+      for (const a of alerts as any[]) {
+        if (a?.type !== 'FIRE' && a?.type !== 'OVERHEAT') continue
+        const id = a?._id as number | undefined
+        if (id == null || next[id]) continue
+        // 경보 자체 좌표나 설비 좌표가 있으면 그쪽을 쓰므로 고정하지 않는다.
+        const hasXY = Number.isFinite(Number(a.x)) && Number.isFinite(Number(a.y))
+        const eq: any = a.equipmentId ? equipments.find((e: any) => eqId(e) === a.equipmentId) : null
+        const hasEq = eq && Number.isFinite(Number(eq.x)) && Number.isFinite(Number(eq.y))
+        if (hasXY || hasEq) continue
+        // 로봇의 현재 씬 위치. 받은 목표값(targetRef)을 우선하고, 없으면 그리는 값(shownRef).
+        const pos = targetRef.current || shownRef.current
+        if (!pos) continue   // 아직 로봇 자세를 못 받았다 — 다음 갱신에 다시 시도
+        if (next === prev) next = { ...prev }
+        next[id] = { x: pos.x, y: pos.y }
+      }
+      return next
+    })
+  }, [alerts, equipments])
+
   // ── 화재/과열 경보 마커 (S15P11E101-883) ─────────────────────────────
   // /topic/alerts 의 x,y 는 map 프레임 미터다 — 점검 핀과 같은 변환을 거친다.
-  // OVERHEAT 는 좌표 없이 equipmentId 만 올 수 있어 설비 좌표로 폴백한다.
+  // OVERHEAT 는 좌표 없이 equipmentId 만 올 수 있어 설비 좌표로, 그것도 없으면
+  // 로봇 위치(anchored, 씬 px)로 폴백한다(S15P11E101-890).
   const alertPins = useMemo(() => {
     if (!plan || !grid) {
       return [] as { id: number, kind: 'fire' | 'heat', x: number, y: number, time: string, title: string, sub: string | null }[]
     }
     return alerts.flatMap((a: any) => {
       if (a?.type !== 'FIRE' && a?.type !== 'OVERHEAT') return []
+      const id = a._id as number
+      let sx: number, sy: number
       let wx = Number(a.x)
       let wy = Number(a.y)
       if (!Number.isFinite(wx) || !Number.isFinite(wy)) {
@@ -281,15 +315,22 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
         wx = Number(eq?.x)
         wy = Number(eq?.y)
       }
-      if (!Number.isFinite(wx) || !Number.isFinite(wy)) return []   // 위치를 모르면 지도에 찍지 않는다
-      const p = worldToScenePx(plan as any, wx, wy, { w: grid.w, h: grid.h })
+      if (Number.isFinite(wx) && Number.isFinite(wy)) {
+        const p = worldToScenePx(plan as any, wx, wy, { w: grid.w, h: grid.h })
+        sx = p.x; sy = p.y
+      } else if (anchored[id]) {
+        // 좌표가 없어 로봇 위치에 고정한 경보 — 이미 씬 px 다.
+        sx = anchored[id].x; sy = anchored[id].y
+      } else {
+        return []   // 위치를 아직 모른다 — 로봇 자세가 들어오면 anchored 가 채워져 다시 그려진다
+      }
       const t = a.timestamp ? new Date(a.timestamp) : null
       const heat = a.type === 'OVERHEAT'
       return [{
-        id: a._id as number,
+        id,
         kind: (heat ? 'heat' : 'fire') as 'fire' | 'heat',
-        x: p.x,
-        y: p.y,
+        x: sx,
+        y: sy,
         time: t && !Number.isNaN(t.getTime()) ? t.toTimeString().slice(0, 8) : '—',
         title: heat ? '과열 감지' : '화재 발생',
         sub: heat
@@ -297,7 +338,7 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
           : null,
       }]
     })
-  }, [alerts, equipments, plan, grid])
+  }, [alerts, equipments, plan, grid, anchored])
   const alertPinsRef = useRef(alertPins)
   alertPinsRef.current = alertPins
   // 열려 있는 말풍선(경보 _id). 마커를 다시 누르거나 ×로 닫는다.
