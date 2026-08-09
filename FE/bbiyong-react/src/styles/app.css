@@ -133,17 +133,42 @@ canvas{display:block; width:100%; height:100%;}
 .section-page{background:var(--dk-bg); color:var(--dk-ink); padding:16px 18px; overflow:auto;}
 .cfg-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; align-items:start;}
 .cfg-grid .panel{display:block;}
-/* 설정 화면 단일 열 배치 (S15P11E101-814) — 지도·카메라 화면의 좌우 2열(.nav-stage/.nav-side/
-   .nav-canvas)을 그대로 물려 쓰던 걸 걷어내고, 섹션을 위→아래로 쌓는다. 설정은 "한눈에 감시"가
-   아니라 "읽고 고치는" 화면이라 폭을 제한해 읽기 편하게 한다. 폭은 기존 2열(카드 최소폭 330px ×2 +
-   간격)보다 넉넉히 잡아, 향후 붙을 수 있는 넓은 콘텐츠(전력 그래프 등)도 크게 눌리지 않게 한다.
-   새 섹션은 .cfg-stack 아래에 .card-v3 형제 하나로 추가하면 된다 — 폭 제한을 빼야 하면
-   .cfg-wide 를 얹는다. */
-/* 화면 가운데 정렬(2026-08-09) — 패널을 4개 걷어내면서 남은 카드가 화면 왼쪽에만 붙어
-   오른쪽이 통째로 비어 보였다. 폭은 그대로 두고 여백만 양쪽으로 나눈다 — 남은 공간을
-   메우려고 카드를 늘리면 한 줄이 지나치게 길어져 읽기 어려워진다(위 "폭을 제한한다"와 같은 이유). */
-.cfg-stack{display:flex; flex-direction:column; max-width:880px; margin-inline:auto;}
-.cfg-stack > .cfg-wide{max-width:none;}
+/* 설정 화면 2열 배치 (S15P11E101-876) — 아이패드 설정처럼 **좌측에 항목, 우측에 제어**.
+   [사용자 지침 2026-08-09]
+
+   좌측 폭은 `--nx-side-w` 로, 지도의 상태 패널·카메라의 조작 패널과 **같은 토큰**을 쓴다.
+   숫자를 베껴 쓰지 않는 이유는 이벤트 화면에서 겪은 그대로다 — 340 을 박으면 좁은 폭에서
+   그 화면만 안 줄어 다시 어긋난다. 껍데기(S15P11E101-875)가 네 화면을 세로 슬라이드로
+   잇는 이상, 고정 사이드의 폭과 시작선은 네 화면이 같아야 "같은 자리에서 내용만 바뀐다"로
+   읽힌다.
+
+   단일 열 시절의 판단("설정은 감시가 아니라 읽고 고치는 화면이니 폭을 제한한다")은
+   버리지 않았다 — 우측 카드에 max-width 로 남긴다(아래 .cfg-canvas).
+
+   🔴 겸사겸사 잘림 결함도 여기서 잡힌다: 예전 .cfg-stack 은 flex 사이징이 없어 콘텐츠
+   높이 그대로 커졌는데 부모 .nav-page 가 overflow:hidden 이라, 항목이 화면보다 길어지면
+   맨 아래 카드가 스크롤로도 닿지 않았다. 이제 우측 열이 직접 스크롤한다.
+
+   새 섹션 추가: ConfigPage.tsx 의 SECTIONS 배열에 한 줄. 좌측 목록과 우측 본문이 같이 생긴다.
+   폭이 넓은 콘텐츠(그래프 등)는 그 카드에 .cfg-wide 를 얹어 제한을 뺀다. */
+/* fieldset 은 기본이 블록이라 여기서 높이 사슬이 끊긴다 — 안쪽 .nav-stage 의 flex:1 1 0 이
+   무시되고 본문이 콘텐츠 높이로 정해진다. 지도 화면이 같은 이유로 한 번 주저앉은 적이 있다. */
+#pgConfig .lockfs{flex:1 1 0; min-height:0; display:flex; flex-direction:column;}
+#pgConfig .cfg-nav{
+  background:var(--nx-panel); box-shadow:var(--nx-sh-lg); border-radius:var(--nx-r-lg);
+  padding:12px; gap:2px; overflow-y:auto;
+}
+#pgConfig .cfg-nav button{
+  display:block; width:100%; text-align:left; flex:0 0 auto;
+  border:0; background:transparent; cursor:pointer;
+  padding:12px 16px; border-radius:var(--nx-r-md);
+  font:inherit; font-size:14px; font-weight:600; color:var(--nx-muted);
+}
+#pgConfig .cfg-nav button:hover{background:var(--bb-surface, rgba(120,128,150,.12));}
+#pgConfig .cfg-nav button.on{background:var(--bb-ink, #1b1f27); color:#fff; font-weight:700;}
+/* 우측만 스크롤한다 — 좌측 목록은 늘 제자리에 있어야 어디를 보고 있는지 잃지 않는다. */
+#pgConfig .cfg-canvas{overflow-y:auto; padding-right:4px;}
+#pgConfig .cfg-canvas > :not(.cfg-wide){max-width:880px;}
 .cfg-help{font-size:12px; color:var(--dk-sub); line-height:1.6; margin-bottom:12px;}
 
 /* Orin 전력 모드(S15P11E101-814) — 저성능/고성능 토글 + 부하 그래프. .card-v3 는 밝은
