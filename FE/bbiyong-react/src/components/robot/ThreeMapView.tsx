@@ -685,7 +685,9 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
       for (const p of pinsRef.current) {
         const el = pinEls.current.get(p.id)
         if (!el) continue
-        tmp.set(px(p.x), WALL_H3 + 0.42, pz(p.y)).project(camera)
+        // 바닥에 꽂히게 낮춘다(사용자 요청 2026-08-10) — 예전엔 벽 꼭대기 위(WALL_H3+0.42)라
+        // 핀이 공중에 떠 보였다. 핀 끝(CSS 하단 앵커)이 이 지점을 짚는다.
+        tmp.set(px(p.x), 0.05, pz(p.y)).project(camera)
         // 카메라 뒤로 돌아가면 숨긴다 — 안 그러면 반대편에 유령처럼 찍힌다.
         el.style.visibility = tmp.z > 1 ? 'hidden' : ''
         el.style.left = `${(tmp.x * 0.5 + 0.5) * r.width}px`
@@ -696,7 +698,8 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
       for (const p of alertPinsRef.current) {
         const el = alertEls.current.get(p.id)
         if (!el) continue
-        tmp.set(px(p.x), WALL_H3 + 0.5, pz(p.y)).project(camera)
+        // 경보 마커도 바닥에 꽂는다(사용자 요청 2026-08-10). 말풍선은 CSS 로 마커 위에 뜬다.
+        tmp.set(px(p.x), 0.05, pz(p.y)).project(camera)
         const hidden = tmp.z > 1
         const left = `${(tmp.x * 0.5 + 0.5) * r.width}px`
         const top = `${(-tmp.y * 0.5 + 0.5) * r.height}px`
@@ -836,7 +839,7 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
           aria-expanded={alertSel === p.id}
           onClick={() => setAlertSel((cur) => (cur === p.id ? null : p.id))}
         >
-          <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true">
             {/* 확정 마커 아이콘 — 위치 핀(물방울 + 중심점) 아래 바닥 타원 */}
             <path fill="currentColor" d="M12 1.8c-3.5 0-6.3 2.7-6.3 6.1 0 4.4 6.3 10.4 6.3 10.4s6.3-6 6.3-10.4c0-3.4-2.8-6.1-6.3-6.1Z" />
             <circle cx="12" cy="7.8" r="2.1" fill="#fff" />
