@@ -554,8 +554,20 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .welcome-scene-legend__mark--warn{ background:var(--bb-warn); }
 
 /* ── 히어로: 밝은 씬 위 → 유리 허용 (어두운 영상 위엔 금지) ── */
+/* 가로 위치: 왼쪽 끝에 붙이지 않고 **왼쪽 영역의 중앙**에 세운다 [사용자 지침 2026-08-09].
+   경계값을 눈대중으로 잡지 않는다 — PatrolScene.tsx 가 "x < 740 은 히어로 패널 자리"
+   라고 못 박아 두었고 그 씬의 viewBox 폭이 1440 이다. 740/1440 = 51.39% 가 애니메이션이
+   시작하는 선이므로, 히어로는 0 ~ 51.39% 구간 안에서 가운데 정렬한다.
+   씬 좌표가 바뀌면 이 변수 하나만 따라 고치면 된다.
+
+   `left:0 + right:<경계> + margin-inline:auto` 로 가운데를 잡는 이유: transform 을 건드리지
+   않기 때문이다. `transform:translateY(-50%)` 는 세로 중앙정렬 값이면서 동시에 로그인 전환
+   애니메이션(.authflow.is-login 의 translate(-120%,-50%))이 딛고 서는 기준이라, 여기에
+   X 이동을 섞으면 그 규칙들을 전부 같이 고쳐야 한다. */
 .welcome-hero{
-  position:absolute; left:var(--bb-sp-9); top:50%; transform:translateY(-50%);
+  --welcome-scene-x:51.39%;   /* = 740 / 1440 (PatrolScene.tsx 금지 구역 경계) */
+  position:absolute; top:50%; transform:translateY(-50%);
+  left:0; right:calc(100% - var(--welcome-scene-x)); margin-inline:auto;
   width:534px; max-width:calc(100% - 68px);
   padding:34px 34px 26px; border-radius:var(--bb-r-panel);
   background:rgba(255,255,255,.68);
@@ -568,7 +580,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .welcome-brand .en{ margin-left:14px; font-size:.28em; font-weight:500; letter-spacing:3px; color:#A8ADBC; vertical-align:middle; }
 
 .welcome-tag{ margin-top:18px; font-size:var(--bb-fs-display); font-weight:700; letter-spacing:-1.1px; line-height:1.25; text-wrap:balance; }
-.welcome-desc{ margin-top:14px; font-size:13.5px; line-height:1.9; color:var(--bb-body); text-wrap:pretty; }
+/* 소개 문구를 한 단계 더 키운다 [사용자 지침 2026-08-09] — 13.5 → 15.5px.
+   이 문단이 제품이 무엇인지 설명하는 유일한 자리인데 본문 최소 크기에 가까워 눈에 안 들어왔다.
+   행간은 1.9 → 1.8 로 살짝 줄인다: 글자가 커진 만큼 같은 배수를 쓰면 줄 사이가 벌어져
+   두 줄이 한 문단으로 안 묶인다. */
+.welcome-desc{ margin-top:14px; font-size:15.5px; line-height:1.8; color:var(--bb-body); text-wrap:pretty; }
 
 .welcome-cta-row{ display:flex; align-items:center; gap:var(--bb-sp-4); margin-top:var(--bb-sp-8); }
 .welcome-cta{                            /* Filled CTA 는 화면당 1개 */
@@ -3499,6 +3515,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 :root.v3-page #nav.sim-nav{
   background:transparent; box-shadow:none; border-bottom:0; backdrop-filter:none;
 }
+/* 🔴 관제 껍데기도 투명해야 상단바와 한 면이 된다 [사용자 지적 2026-08-09].
+   `.console-shell` 은 `background:var(--nx-bg)` 라는 **평면색**을 칠하는데, 위 상단바는
+   투명이라 body 의 **그라데이션**이 비친다. 같은 색을 쓴 게 아니라 평면 대 그라데이션이라
+   경계에서 색이 어긋나고, 그래서 머리가 본문 위에 얹힌 별개의 띠처럼 떠 보였다.
+   여기서도 배경을 걷어 body 그라데이션 하나가 위아래를 관통하게 한다 — 바로 위
+   `.page.v3-theme` 를 투명으로 만든 것과 같은 이유다. */
+:root.v3-page .console-shell{background:transparent;}
 :root.v3-page #nav.sim-nav::before,:root.v3-page #nav::before{display:none;}
 
 /* 순찰 경로 상자를 2D 맵 모델링과 같은 높이에서 시작하게 한다.
