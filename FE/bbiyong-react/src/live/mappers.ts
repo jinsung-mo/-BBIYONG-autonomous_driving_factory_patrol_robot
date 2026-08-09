@@ -107,11 +107,11 @@ export function eventToLog(e: any) {
     status: e?.status || null,
     robotId: e?.robotId || null,
     equipmentId: e?.equipmentId || null,
-    // 표시명으로 갈아 끼운다(S15P11E101-766). BE 가 조립한 message 안에도 id 가 박혀 오므로
-    // 문장 전체를 통과시킨다 — 뒤에 붙이는 robotId 만 바꾸면 문장 속 id 가 남는다.
-    msg: withDisplayNames(
-      [e?.message || TYPE_LABEL[e?.type] || e?.type || '이벤트', e?.robotId].filter(Boolean).join(' · '),
-    ),
+    // 표시명으로 갈아 끼운다(S15P11E101-766). BE 가 조립한 message 안에 id 가 박혀 오므로
+    // 문장 전체를 통과시킨다.
+    // 🔴 뒤에 ' · robotId' 를 덧붙이지 않는다(S15P11E101-879) — BE message 에 이미 로봇명이
+    // 들어 있어 "로봇 BBIYONGBOT 연결 끊김 · BBIYONGBOT" 처럼 같은 이름이 두 번 찍혔다.
+    msg: withDisplayNames(e?.message || TYPE_LABEL[e?.type] || e?.type || '이벤트'),
   }
 }
 
