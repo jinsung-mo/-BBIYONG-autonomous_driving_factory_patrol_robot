@@ -415,7 +415,18 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                   </li>
                 )}
                 {sortedRows.map((log) => {
-                  const kindKey = log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'sub'
+                  // 🔴 아이콘 타일은 **종류가 아니라 처리 상태**를 말한다 [사용자 지적 2026-08-09].
+                  // 종전에는 kind(=type) 하나로만 골라서, 해결 처리한 화재가 '해결' 뱃지를 달고도
+                  // 빨간 불꽃 타일 그대로 남았다. 목록을 훑는 조작자는 뱃지 글자보다 색 타일을
+                  // 먼저 보므로, 이미 닫은 경보가 계속 미처리로 읽혔다.
+                  //
+                  // 해결된 행은 상단 KPI 배지와 같은 초록 체크(c-ok · OK_SIGN)로 바꾼다 —
+                  // SYSTEM 이벤트가 이미 쓰고 있는 그 타일이다. 새 색·새 기호를 만들지 않는다.
+                  //
+                  // 제목 글자색(tKey)은 종류를 그대로 따른다 — 무슨 일이었는지(화재/과열)는
+                  // 해결 여부와 별개로 남아야 한다. '긴급' 뱃지도 그대로 붙는다.
+                  const iconKind = log.status === 'RESOLVED' ? 'ok' : log.kind
+                  const kindKey = iconKind === 'fire' || iconKind === 'heat' || iconKind === 'ok' ? iconKind : 'sub'
                   const tKey = log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'
                   const rel = relativeDay(log.ts)
                   return (
@@ -424,7 +435,7 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                         <input type="checkbox" className="elog-pick" checked={checked.has(log.eventId)}
                           onChange={() => toggleOne(log.eventId)} aria-label={`선택 — ${log.msg}`} />
                       )}
-                      <i className={`elog-card-icon c-${kindKey}`} aria-hidden="true"><KindIcon kind={log.kind} /></i>
+                      <i className={`elog-card-icon c-${kindKey}`} aria-hidden="true"><KindIcon kind={iconKind} /></i>
                       <div className="elog-card-body">
                         <div className="elog-card-title-row">
                           {log.eventId != null
