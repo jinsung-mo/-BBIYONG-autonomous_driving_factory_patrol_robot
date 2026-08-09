@@ -763,9 +763,11 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
         className={`mapview iso-reset${follow ? ' on' : ''}`}
         onClick={toggleFollow}
         aria-pressed={follow}
-        title={follow ? '로봇 추종 중 — 눌러서 개요 시점으로' : '로봇을 따라가는 시점(자동차 게임처럼)'}
+        title={follow ? '네비게이션 모드 — 눌러서 개요 시점으로' : '로봇을 따라가는 시점(자동차 내비처럼)'}
       >
-        {follow ? '추종 중' : '로봇 추종'}
+        {/* 버튼명 '로봇 추종/추종 중' → '네비게이션 모드'(S15P11E101-889).
+            켜짐 여부는 .on 클래스(aria-pressed)가 시각으로 말한다 — 문구는 하나로 둔다. */}
+        네비게이션 모드
       </button>
     </div>
   )
