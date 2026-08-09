@@ -17,6 +17,7 @@ import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotCautionEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
+import com.bbiyong.server.wss.event.RobotSystemLogEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
@@ -49,6 +50,18 @@ public class EventLogService {
     // ACKNOWLEDGED(확인됨·조치 진행 중) 포함 — API 문서와 일치. (S15P11E101-715)
     private static final Set<String> ALLOWED_STATUS = Set.of("UNRESOLVED", "ACKNOWLEDGED", "RESOLVED");
     private static final Duration ALERT_DEDUP_WINDOW = Duration.ofMinutes(1);
+
+    /**
+     * 로봇이 올릴 수 있는 조용한 시스템 로그 코드. 이 값이 그대로 이벤트의 {@code type} 이
+     * 되므로 화이트리스트로 막는다 — 로봇이 실수로 "FIRE" 를 보내면 관제의 화재 필터·
+     * 통계·아이콘이 전부 그것을 화재로 센다.
+     */
+    private static final Set<String> ALLOWED_SYSTEM_LOG_CODES = Set.of(
+            "PLANNER_DOWN",             // planner 생존 게이트 실패 — 복구가 필요하다
+            "PLANNER_RECOVER_STARTED",  // 관제의 복구 버튼으로 Nav2 재기동 시작
+            "PLANNER_RECOVER_OK",
+            "PLANNER_RECOVER_FAILED",
+            "PLANNER_RECOVER_BUSY");
 
     private final EventLogRepository eventLogRepository;
     private final NotificationDispatchService notificationDispatchService;
@@ -216,6 +229,46 @@ public class EventLogService {
     }
 
     /**
+     * 로봇이 올린 <b>조용한 시스템 로그</b>(EVENT_SYSTEM).
+     *
+     * <p>🔴 일부러 {@link #persist} 를 타지 않는다. persist 는 {@code /topic/alerts} 방송과
+     * {@code NotificationDispatchService} 발송을 함께 하므로, 그 길로 보내면 관제에 토스트와
+     * 경보음이 뜬다. 사용자 지침(2026-08-10)은 "소리나 알림이 갈 필요는 없다. 정말 로그만
+     * 보여달라" 이므로, 로봇 연결/해제 로그와 같은 조용한 경로({@link #saveSystemEvent})를 쓴다.
+     *
+     * <p>중복 억제는 두 겹이다. 1차는 로봇이 한다(같은 사건은 10분에 한 번). 2차가
+     * {@code message_id} 의 DB unique 제약이며, 재연결로 같은 패킷이 두 번 올라오는 경우를 막는다.
+     */
+    @Async(AsyncConfig.ALERT_EXECUTOR)
+    @EventListener
+    public void handleSystemLogEvent(RobotSystemLogEvent event) {
+        var packet = event.getPacket();
+        if (packet == null) {
+            return;
+        }
+        String code = packet.getCode() == null ? null : packet.getCode().trim().toUpperCase();
+        if (code == null || !ALLOWED_SYSTEM_LOG_CODES.contains(code)) {
+            log.warn("Dropping system log with unknown code=[{}] from robot [{}]",
+                    packet.getCode(), packet.getRobotId());
+            return;
+        }
+        String messageId = packet.getMessageId() == null ? null : packet.getMessageId().trim();
+        if (messageId != null && !messageId.isEmpty()
+                && eventLogRepository.findByMessageId(messageId).isPresent()) {
+            log.info("Suppressing duplicate system log messageId={}", messageId);
+            return;
+        }
+        String message = packet.getMessage() == null || packet.getMessage().isBlank()
+                ? code : packet.getMessage().trim();
+        try {
+            saveSystemEvent(packet.getRobotId(), code, message,
+                    messageId == null || messageId.isEmpty() ? null : messageId);
+        } catch (DataIntegrityViolationException duplicate) {
+            log.info("Suppressing concurrently persisted system log messageId={}", messageId);
+        }
+    }
+
+    /**
      * 로봇 연결 — SYSTEM 이벤트로 남긴다. 이벤트 탭 '시스템' 필터에서 연결 이력을 볼 수 있다.
      * 상태 전이(연결 안됨 → 연결됨)일 때만 기록해 재연결·중복 발행을 걸러낸다.
      */
@@ -251,16 +304,36 @@ public class EventLogService {
 
     /** 정보성 SYSTEM 이벤트 저장(연결/해제 로그 등). 조치 대상이 아니므로 status=RESOLVED. */
     private void saveSystemEvent(String robotId, String message) {
+        saveSystemEvent(robotId, "SYSTEM", message, null);
+    }
+
+    /**
+     * 정보성 이벤트 저장. <b>방송하지 않고 알림도 보내지 않는다</b> — 이것이 "조용한 로그" 의 정의다.
+     *
+     * <p>{@code status=RESOLVED} 인 이유: 관제 대시보드의 '미해결' 카드는
+     * {@code /api/dashboard/stats} 의 unresolvedEvents 를 세는데, UNRESOLVED 로 넣으면
+     * 그 카드가 노랗게 변한다 — 소리만 없을 뿐 경보처럼 보인다. 복구 버튼은 status 가 아니라
+     * {@code type} 을 보고 뜨므로 RESOLVED 여도 조작에 지장이 없다.
+     *
+     * @param type      이벤트 종류. 호출자가 화이트리스트로 검증한 값이어야 한다.
+     * @param messageId 중복 방지 키(DB unique). 없으면 null.
+     */
+    private void saveSystemEvent(String robotId, String type, String message, String messageId) {
         EventLog entry = new EventLog();
-        entry.setType("SYSTEM");
+        entry.setType(type);
         entry.setLevel("INFO");
         entry.setRobotId(robotId);
         entry.setMessage(message);
+        entry.setMessageId(messageId);
         entry.setTimestamp(Instant.now());
         entry.setStatus("RESOLVED");
         entry.setSimulated(false);
-        eventLogRepository.save(entry);
-        log.info("SYSTEM event logged: {}", message);
+        if (messageId == null) {
+            eventLogRepository.save(entry);
+        } else {
+            eventLogRepository.saveAndFlush(entry);
+        }
+        log.info("{} event logged: {}", type, message);
     }
 
     private void persist(AlertMessage alert, String simulationRecipientUserId) {

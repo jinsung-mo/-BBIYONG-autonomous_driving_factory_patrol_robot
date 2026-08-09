@@ -71,6 +71,15 @@ public class RobotPacket {
     private Double threshold;        // 로봇이 보유한 판정 임계치(℃)
     private String thermalImage;     // 과열 시 열화상 스냅샷 base64 (경보와 함께 중계, 미저장)
 
+    // 조용한 시스템 로그 (EVENT_SYSTEM). 화재/과열과 **등급이 다른** 경로다:
+    // /topic/alerts 로 방송하지 않고 알림도 보내지 않으며, 이벤트 목록에만 남는다.
+    //   code    로그 종류. 그대로 이벤트의 type 이 된다 (PLANNER_DOWN, PLANNER_RECOVER_* …).
+    //   message 로봇이 만든, 사람이 읽을 문장. 서버·관제가 다시 만들지 않는다.
+    // 🔴 위 orinPower·readiness 주석과 같은 함정이다 — 이 두 필드를 여기 선언하지
+    //    않으면 로봇이 보내도 @JsonIgnoreProperties(ignoreUnknown = true) 가 조용히 버린다.
+    private String code;
+    private String message;
+
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Location {

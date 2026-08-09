@@ -12,6 +12,7 @@ import com.bbiyong.server.wss.event.RobotInspectionPointEvent;
 import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
+import com.bbiyong.server.wss.event.RobotSystemLogEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import com.bbiyong.server.wss.event.RobotVideoEvent;
 import tools.jackson.databind.ObjectMapper;
@@ -113,6 +114,14 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                     log.info("Caution event received via WSS from [{}]: confidence={}, temp={}",
                             robotId, packet.getConfidence(), packet.getTemperature());
                     eventPublisher.publishEvent(new RobotCautionEvent(this, packet));
+                    break;
+                case "EVENT_SYSTEM":
+                    // 조용한 시스템 로그. 화재/과열과 달리 /topic/alerts 로 방송하지 않고
+                    // 알림도 보내지 않는다 — 이벤트 목록에만 level=INFO 로 남는다.
+                    // (사용자 지침 2026-08-10: "소리나 알림이 갈 필요는 없다. 정말 로그만")
+                    log.info("System log received via WSS from [{}]: code={}, message={}",
+                            robotId, packet.getCode(), packet.getMessage());
+                    eventPublisher.publishEvent(new RobotSystemLogEvent(this, packet));
                     break;
                 case "INSPECTION":
                     // 분전반 정상 점검 리포트 (경보 아님) - 설비 최근점검 상태 갱신용
