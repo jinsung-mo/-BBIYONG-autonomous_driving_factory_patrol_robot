@@ -460,14 +460,17 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .welcome-wrap .mono{ font-family:var(--bb-font-mono); }  /* 전역 .mono(Consolas)를 덮는다 */
 
 /* ── 우측 비주얼: 시안 크롭 이미지(로봇 제품 컷 + "2D 도면 매핑" 카드 + 공장 원경) ──
-   원본 시안(1402×1122)에서 좌측 텍스트·기능 카드가 구워지지 않은 우측 688×1010 만 잘랐다.
-   왼쪽 가장자리는 mask 로 페더링해 페이지 그라디언트 배경과 경계선 없이 잇는다.
+   원본 시안(1402×1122)의 우측 772×1010(x630~) 크롭이다. 로봇 왼쪽에 여백 65px 를 남겨
+   페더에 잘리지 않게 했고, 그 여백에 구워져 있던 4번째 기능 카드는 위쪽 배경 패치로
+   지웠다(제작 과정은 S15P11E101-877 MR 설명 참고).
+   왼쪽 가장자리는 mask 로 페더링해 페이지 그라디언트 배경과 경계선 없이 잇는다 —
+   페더 폭(56px)은 로봇 여백(65px)보다 좁아야 한다. 넓히면 로봇 왼쪽이 흐려져 잘려 보인다.
    🔴 entry 애니메이션(fill:both)은 끝나면 컴포넌트가 지운다(clearEntryAnim) —
    남겨 두면 .authflow.is-login 의 opacity transition 이 씹힌다(히어로와 같은 처리다). */
 .welcome-visual{
   position:absolute; top:0; right:0; height:100%; z-index:1;
-  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 14%);
-          mask-image:linear-gradient(90deg, transparent 0, #000 14%);
+  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 56px);
+          mask-image:linear-gradient(90deg, transparent 0, #000 56px);
   pointer-events:none; user-select:none;
   animation:welcomeFade .8s var(--bb-ease) .15s both;
 }
