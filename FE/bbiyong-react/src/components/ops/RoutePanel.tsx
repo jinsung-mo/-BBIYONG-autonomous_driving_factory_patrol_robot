@@ -50,6 +50,12 @@ const BLOCKED_HINT: Record<string, string> = {
 // 나머지 사유(매핑 중·지도 저장 중·위치 미확인 등)는 시작을 눌러도 해소되지 않으므로 그대로 막는다.
 const SELF_CLEARING_BLOCK = 'ROUTE_SESSION_MISMATCH'
 
+// 확대/축소 — 지도 탭 MapPanel 과 같은 값·문법(S15P11E101-911).
+const ZOOM_MIN = 0.7
+const ZOOM_MAX = 2.2
+const ZOOM_STEP = 0.2
+const clampZoom = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(value.toFixed(2))))
+
 // title/mappingControl 은 매핑 탭 통합용(S15P11E101-904) — 매핑 컨트롤 박스를 이 패널
 // 상단에 얹고, 카드가 화면을 다 채우며 맵을 크게 보여 준다. 안 주면 기존 '순찰 경로' 그대로.
 export default function RoutePanel({ inspection = null, title, mappingControl }: {
@@ -70,6 +76,11 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
   // 전체화면(S15P11E101-907) — 매핑 탭(title 지정 시)에서만 쓴다. 지도 탭 MapPanel 과 같은
   // 방식: 문서 전체화면 + view-fullscreen 클래스 동기화(요청 거부·외부 해제에도 상태 정합).
   const [fullscreen, setFullscreen] = useState(false)
+  // 확대/축소(S15P11E101-911) — 매핑 탭에서도 지도 탭처럼 지도를 키워 볼 수 있어야 한다.
+  const [zoom, setZoom] = useState(1)
+  const changeZoom = useCallback((delta: number) => {
+    setZoom((current) => clampZoom(current + delta))
+  }, [])
   useEffect(() => {
     const sync = () => {
       const active = document.fullscreenElement === document.documentElement
@@ -273,6 +284,7 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
         <LiveNavMap
           route={mapping ? null : route}
           onPick={editLocked ? null : onPick}
+          zoomFactor={zoom}
           mapping={mapping}
           inspection={mapping ? null : inspection}
           follow={mapping}
@@ -288,6 +300,16 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
         {/* 전체화면 — 지도 탭과 같은 방식(문서 전체화면 + view-fullscreen 클래스). S15P11E101-907 */}
         {title && (
           <div className="map-controls routemap-controls" aria-label="지도 화면 조절">
+            <button
+              type="button" className="map-control zoom-in"
+              onClick={() => changeZoom(ZOOM_STEP)} disabled={zoom >= ZOOM_MAX}
+              aria-label="지도 확대" title="지도 확대"
+            >+</button>
+            <button
+              type="button" className="map-control zoom-out"
+              onClick={() => changeZoom(-ZOOM_STEP)} disabled={zoom <= ZOOM_MIN}
+              aria-label="지도 축소" title="지도 축소"
+            >−</button>
             <button
               type="button" className="map-control fullscreen"
               onClick={toggleFullscreen}
