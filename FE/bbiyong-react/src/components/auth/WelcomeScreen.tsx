@@ -1,54 +1,114 @@
-// 진입(랜딩) 화면의 **앞면** — 히어로(브랜드·CTA).
+// 진입(랜딩) 화면 — "안전한 공장을 위한 AIoT 자율순찰로봇" 히어로.
+// 확정 시안: 수정한환영페이지.png (S15P11E101-877)
 //
-// 🔴 배경 순찰 씬은 여기 없다 (S15P11E101-808). 씬은 웰컴과 로그인의 공통 부모
-// (AuthFlow)에 있는 PatrolScene 이 그린다 — 로그인으로 넘어가도 언마운트되지 않아야
-// 로봇이 멈추지 않는다. 이 컴포넌트는 "로그인으로 밀려나며 사라지는 쪽"만 담는다.
+// 🔴 이전 판(v3 "플로팅 씬" — PatrolScene 아이소메트릭 순찰 씬 + 유리 히어로 패널,
+// welcome-v5-B2)은 이 시안으로 통째로 폐기됐다. 우측 비주얼은 시안에서 잘라 낸 정적
+// 이미지(assets/welcome-hero.png) 한 장이다 — 로봇 제품 컷과 "2D 도면 매핑" 카드,
+// 공장 원경이 함께 구워져 있어 여기서 다시 그리지 않는다.
 //
-// 🔴 하단 2연 통계 카드(누적 순찰 시간 · 예상 구동 가능 시간)는 제거됐다
-// [사용자 지침 2026-08-08]. 로그인 전 랜딩이라 붙일 실데이터가 없어 장식용 더미
-// 수치를 넣었던 자리인데, 로그인도 하기 전에 사실이 아닌 숫자를 보여 주는 것이
-// 문제였다. 카드를 만들려고 두었던 더미 데이터 배열·배율 상수도 함께 걷어냈다 —
-// 소비자가 없는데 남겨 두면 "언젠가 쓸 값" 처럼 읽힌다.
-//
-// v3 디자인 시스템 "플로팅 씬" 배치 — 확정 시안 welcome-v5-B2 계열.
-// 화면 끝까지 밝은 씬을 깔고, 정보는 그 위에 뜬다 — 좌우로 칸을 나누지 않는다.
-// 레퍼런스의 좌측 로봇 목록 패널은 가져오지 않는다 — 우리 화면의 좌측은 히어로(브랜드·CTA)다.
+// 하단 기능 카드 4종은 제품 소개 문구다 — 실데이터·수치가 아니므로 "로그인 전 랜딩에
+// 더미 수치 금지" 지침[사용자 지침 2026-08-08]과 충돌하지 않는다.
 //
 // 색·타이포·radius·그림자는 한 값도 여기 적지 않는다. styles/tokens.css 의 --bb-* 를
-// styles/app.css 의 .welcome-* 규칙이 참조한다.
+// styles/app.css 의 .welcome-* 규칙이 참조한다. 시안의 강조 파랑은 --bb-hero-accent.
 
-// 🔴 진입 애니메이션(welcomeHeroRise)은 fill-mode:both 라 끝난 뒤에도
-// transform/opacity 를 계속 강제한다. 그 상태로는 전환용 transition(.authflow.is-login …)이
-// 씹혀 히어로가 밀려나지 않는다 — 애니메이션이 끝나는 즉시 지운다(시안이 브라우저에서
-// 실제로 확인하고 넣은 처리다). 자기 자신의 애니메이션만 본다(자식 것이 버블링된다).
+import heroImg from '../../assets/welcome-hero.png'
+
+// 🔴 진입 애니메이션은 fill-mode:both 라 끝난 뒤에도 transform/opacity 를 계속 강제한다.
+// 그 상태로는 전환용 transition(.authflow.is-login …)이 씹혀 요소가 물러나지 못한다 —
+// 애니메이션이 끝나는 즉시 지운다. 자기 자신의 애니메이션만 본다(자식 것이 버블링된다).
 const clearEntryAnim = (e: React.AnimationEvent<HTMLElement>) => {
   if (e.target === e.currentTarget) e.currentTarget.style.animation = 'none'
 }
 
+// 기능 카드 아이콘 — 시안의 파란 라인 아이콘 4종. 카드 밖에서 쓸 일이 없어 여기 둔다.
+// 색은 CSS(currentColor)가 주고, 여기서는 형태만 그린다.
+const IC = {
+  fire: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 21c3.9 0 6.5-2.5 6.5-6 0-2.6-1.6-4.5-3-6.2-1.2-1.5-2.4-2.9-2.7-4.8-2 1.4-3.1 3.3-3.3 5.2-.7-.5-1.3-1.2-1.6-2C6.3 8.7 5.5 10.9 5.5 13c0 4.5 2.6 8 6.5 8Z" />
+      <path d="M12 21c-1.8 0-3-1.4-3-3.2 0-1.6 1.2-2.8 3-4.3 1.8 1.5 3 2.7 3 4.3 0 1.8-1.2 3.2-3 3.2Z" />
+    </svg>
+  ),
+  plan: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 4h16v16H4Z" />
+      <path d="M12 4v6M12 14v6M4 12h5M15 12h5" />
+    </svg>
+  ),
+  route: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="6" cy="18" r="2.2" />
+      <circle cx="18" cy="6" r="2.2" />
+      <path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8" />
+    </svg>
+  ),
+  bell: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6" />
+      <path d="M10.3 19a2 2 0 0 0 3.4 0" />
+    </svg>
+  ),
+}
+
+// 기능 카드 4종 — 문구는 시안 그대로. 설명의 줄바꿈 위치도 시안을 따른다.
+const FEATURES = [
+  { icon: IC.fire, title: '화재 감지', desc: <>AI로 화재를<br />신속하게 감지</> },
+  { icon: IC.plan, title: '2D 도면 매핑', desc: <>정확한 지도 생성으로<br />효율적인 순찰</> },
+  { icon: IC.route, title: '자율 주행 순찰', desc: <>스스로 경로를 계획하고<br />안전하게 순찰</> },
+  { icon: IC.bell, title: '실시간 알림', desc: <>이상 상황을 즉시 감지하고<br />실시간으로 알림</> },
+]
+
 export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
   return (
-    /* ── 히어로: 밝은 씬 위이므로 유리 패널을 쓴다(어두운 영상 위엔 금지) ── */
-    <section className="welcome-hero" onAnimationEnd={clearEntryAnim}>
-      <h1 className="welcome-brand">
-        삐용<span className="dot">.</span><span className="en mono">BBIYONG</span>
-      </h1>
+    <>
+      {/* 우측 비주얼 — 장식이다. 내용은 히어로 텍스트가 전부 말하므로 보조기기에는 숨긴다. */}
+      <img
+        className="welcome-visual" src={heroImg} alt="" aria-hidden="true"
+        draggable={false} onAnimationEnd={clearEntryAnim}
+      />
 
-      <p className="welcome-tag">공장 무인 안전<br />이상탐지 통합 관제 시스템</p>
+      <section className="welcome-hero" onAnimationEnd={clearEntryAnim}>
+        <p className="welcome-label">BBIYONG</p>
 
-      <p className="welcome-desc">
-        순찰 로봇 오린카가 배전반 등 설비를 자율 순찰하며 온도 이상을 상시 감시합니다.<br />
-        과열이 감지되면 즉시 경보로 이어지는 관제 콘솔입니다.
-      </p>
+        <h1 className="welcome-head">
+          안전한 공장을 위한<br /><em>AIoT</em> 자율순찰로봇
+        </h1>
 
-      {/* 🔴 배전반 색(정상/과열)의 의미는 문구가 아니라 씬 우측 하단의 범례 컴포넌트가
-          설명한다 [사용자 지침 2026-08-08] — PatrolScene.tsx 의 .welcome-scene-legend.
-          "지도 화면 범례(#pgMap .maplegend)와 같은 문법을 재사용해라"는 지시에 따라
-          새 시각 언어를 만들지 않았다. */}
+        <p className="welcome-desc">스스로 순찰하고, 스스로 감지하고, 즉시 알려줍니다.</p>
 
-      <div className="welcome-cta-row">
-        {/* Filled CTA 는 화면당 1개 */}
-        <button className="welcome-cta" onClick={onEnter}>관제 시스템 접속</button>
-      </div>
-    </section>
+        <div className="welcome-cta-row">
+          {/* Filled CTA 는 화면당 1개 */}
+          <button className="welcome-cta" onClick={onEnter}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2.5" y="4" width="19" height="13" rx="2" />
+              <path d="M8 21h8M12 17v4" />
+            </svg>
+            관제시스템 접속
+            <svg className="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 12h15M13 6l6 6-6 6" />
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <ul className="welcome-features" aria-label="주요 기능">
+        {FEATURES.map((f, i) => (
+          /* stagger 는 인라인 지연으로 — CSS 에 카드 수만큼 nth-child 를 늘어놓지 않는다 */
+          <li key={f.title} className="welcome-feature"
+            style={{ animationDelay: `${0.35 + i * 0.12}s` }} onAnimationEnd={clearEntryAnim}>
+            <span className="welcome-feature__ic">{f.icon}</span>
+            <strong className="welcome-feature__t">{f.title}</strong>
+            <span className="welcome-feature__d">{f.desc}</span>
+          </li>
+        ))}
+      </ul>
+    </>
   )
 }
