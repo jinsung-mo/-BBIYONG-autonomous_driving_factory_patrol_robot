@@ -32,6 +32,21 @@ const TODAY = (() => {
 
 const DATE_INPUT_STYLE = { padding: '9px 10px', borderRadius: '8px', border: '1px solid #D6D9E3', background: '#fff', color: '#232733', fontFamily: 'inherit', fontSize: '12.5px' } as const
 
+// 카드 우측의 "N일 전" — 정확한 타임스탬프(ts)가 있을 때만 계산한다. 없으면 렌더 쪽에서 '—'.
+function relativeDay(ts: string | null | undefined): string | null {
+  if (!ts) return null
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return null
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000)
+  if (days <= 0) return '오늘'
+  if (days === 1) return '어제'
+  return `${days}일 전`
+}
+
+// 이벤트 종류별 카드 아이콘 타일 — 색은 기존 c-fire/c-heat/c-ok 팔레트를 그대로 쓴다.
+const KIND_ICON: Record<string, string> = { fire: '▲', heat: '◉', ok: '●' }
+
 /** @param {{ variant?: string, simple?: boolean }} props 리스트에 붙일 CSS 클래스 및 간소화 여부 */
 export default function LogList({ variant = 'elog', simple = false }: { variant?: string, simple?: boolean }) {
   const { status } = useSim()
@@ -66,6 +81,9 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
   const [resolveErr, setResolveErr] = useState<string | null>(null)
   // 상세로 열어 둔 이벤트. 영상은 여기서만 본다(S15P11E101-628)
   const [detailId, setDetailId] = useState<number | null>(null)
+  // 카드 목록 정렬 — 서버는 정렬 파라미터를 받지 않으므로(events.ts) 이미 받아 온
+  // 목록(최신순으로 쌓인다)을 화면에서만 뒤집는다. 데이터를 다시 받지 않는다.
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
 
   const load = useCallback(async (nextPage: any, reset: any) => {
     if (!enabled || !accessToken) return
@@ -132,6 +150,8 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
     ...liveRows.filter((l: any) => l.eventId == null || !historyEventIds.has(l.eventId)),
     ...history,
   ]
+  // 화면에서만 순서를 뒤집는다 — rows 자체(최신순으로 쌓인다)는 그대로 두고 보여줄 때만 바꾼다.
+  const sortedRows = sortOrder === 'asc' ? [...rows].reverse() : rows
 
   // 해결 처리 — 되돌릴 수 있으므로(같은 API 로 UNRESOLVED 로 되돌린다) 확인을 받지 않는다.
   // 삭제와 달리 복구되는 동작이라 확인 모달을 두면 야간 경보를 한 건씩 닫는 일이 번거로워진다.
@@ -242,57 +262,83 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                 EVENT LOG · {filter}
               </span>
               <span style={{ marginLeft: 'auto', fontSize: '11.5px', color: '#A8ADBC' }}>
-                {startDate || endDate ? `${startDate || '처음'} ~ ${endDate || '오늘'}` : '전체 기간'} · <span className="mono">{rows.length}</span>건
+                {startDate || endDate ? `${startDate || '처음'} ~ ${endDate || '오늘'}` : '전체 기간'}
               </span>
             </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', marginTop: '9px' }}>
+
+            {/* 목록 위 헤더 — 좌: 총 건수, 우: 정렬. 목록 자체와 별도 행으로 둔다(S15P11E101-814). */}
+            <div className="elog-toolbar">
+              <span className="elog-count"><b className="mono">{rows.length}</b>건</span>
+              <select className="elog-sort" aria-label="정렬 순서" value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}>
+                <option value="desc">최신순</option>
+                <option value="asc">오래된순</option>
+              </select>
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
               <ul className={variant} style={{ listStyle: 'none', padding: 0 }}>
-                {rows.length === 0 && (
+                {sortedRows.length === 0 && (
                   <li className="logrow">
                     <b>{loading ? '이력 불러오는 중…' : (connected ? '경보 없음 — 수신 대기 중' : '실서버 연결 중…')}</b>
                   </li>
                 )}
-                {rows.map((log) => (
-                  <li key={log.id} className={`logrow ${log.kind}`}>
-                    <i className={`logdot c-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'sub'}`} />
-                    <span className="logtime">{simple ? log.time : (log.date ? `${log.date} ${log.time}` : log.time)}</span>
-                    <>
-                      {log.eventId != null
-                        ? (
-                          <button type="button" className={`logopen logtext t-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'}`} title="상세와 영상 보기"
-                            onClick={() => setDetailId(log.eventId)} style={{ background: 'transparent', border: 0, textAlign: 'left', cursor: 'pointer', padding: 0 }}>
-                            {log.msg}
+                {sortedRows.map((log) => {
+                  const kindKey = log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'sub'
+                  const tKey = log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'
+                  const rel = relativeDay(log.ts)
+                  return (
+                    <li key={log.id} className={`logrow elog-card ${log.kind} ${detailId === log.eventId ? 'sel' : ''}`}>
+                      <i className={`elog-card-icon c-${kindKey}`} aria-hidden="true">{KIND_ICON[log.kind] || '●'}</i>
+                      <div className="elog-card-body">
+                        <div className="elog-card-title-row">
+                          {log.eventId != null
+                            ? (
+                              <button type="button" className={`logopen elog-card-title t-${tKey}`} title="상세와 영상 보기"
+                                onClick={() => setDetailId(log.eventId)}>
+                                {log.msg}
+                              </button>
+                            )
+                            : <span className={`elog-card-title t-${tKey}`}>{log.msg}</span>}
+                          {log.live && <span className="tag live">실시간</span>}
+                          {log.level === 'CRITICAL' && <span className="tag crit">{LEVEL_LABEL.CRITICAL}</span>}
+                          {log.status === 'UNRESOLVED' && !log.live && <span className="tag open">{EVENT_STATUS_LABEL.UNRESOLVED}</span>}
+                          {log.status === 'RESOLVED' && <span className="tag done">{EVENT_STATUS_LABEL.RESOLVED}</span>}
+                        </div>
+                        <div className="elog-card-meta">
+                          {TYPE_LABEL[log.type] || log.type || '—'} · {log.robotId || log.equipmentId || '—'}
+                        </div>
+                      </div>
+                      <div className="elog-card-right">
+                        <div className="elog-card-time mono">{log.date ? `${log.date} ${log.time}` : log.time}</div>
+                        <div className="elog-card-rel">{rel || '—'}</div>
+                      </div>
+                      <div className="elog-card-actions">
+                        {canOperate && log.eventId != null && (
+                          <button type="button" className="logact"
+                            title={log.status === 'RESOLVED' ? '미해결로 되돌리기' : '이 이벤트를 해결 처리'}
+                            aria-label={`${log.status === 'RESOLVED' ? '미해결로 되돌리기' : '해결 처리'} — ${log.msg}`}
+                            disabled={resolving === log.eventId}
+                            onClick={() => onResolve(log, log.status === 'RESOLVED' ? 'UNRESOLVED' : 'RESOLVED')}>
+                            {resolving === log.eventId ? '…' : (log.status === 'RESOLVED' ? '되돌리기' : '해결')}
                           </button>
-                        )
-                        : <span className={`logtext t-${log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'}`}>{log.msg}</span>}
-                      {log.live && <span className="tag live" style={{ marginLeft: 'auto' }}>실시간</span>}
-                      {log.level === 'CRITICAL' && <span className="tag crit" style={{ marginLeft: log.live ? '4px' : 'auto' }}>{LEVEL_LABEL.CRITICAL}</span>}
-                      {log.status === 'UNRESOLVED' && !log.live && <span className="tag open" style={{ marginLeft: (log.live || log.level === 'CRITICAL') ? '4px' : 'auto' }}>{EVENT_STATUS_LABEL.UNRESOLVED}</span>}
-                      {log.status === 'RESOLVED' && <span className="tag done" style={{ marginLeft: (log.live || log.level === 'CRITICAL') ? '4px' : 'auto' }}>{EVENT_STATUS_LABEL.RESOLVED}</span>}
-                      {canOperate && log.eventId != null && (
-                        <button type="button" className="logact"
-                          title={log.status === 'RESOLVED' ? '미해결로 되돌리기' : '이 이벤트를 해결 처리'}
-                          aria-label={`${log.status === 'RESOLVED' ? '미해결로 되돌리기' : '해결 처리'} — ${log.msg}`}
-                          disabled={resolving === log.eventId}
-                          onClick={() => onResolve(log, log.status === 'RESOLVED' ? 'UNRESOLVED' : 'RESOLVED')}>
-                          {resolving === log.eventId ? '…' : (log.status === 'RESOLVED' ? '되돌리기' : '해결')}
-                        </button>
-                      )}
-                      {canOperate && log.eventId != null && (
-                        <button type="button" className="logact" title="이 이벤트를 서버에서 삭제" style={{ color: '#B4655C' }}
-                          aria-label={`이벤트 삭제 — ${log.msg}`} onClick={() => { setDelErr(null); setPending(log) }}>
-                          삭제
-                        </button>
-                      )}
-                      {canOperate && log.live && (
-                        <button type="button" className="logact" title="화면에서 닫기 (서버 기록은 남습니다)"
-                          aria-label={`경보 닫기 — ${log.msg}`} onClick={() => dismissAlert(log.id)}>
-                          닫기
-                        </button>
-                      )}
-                    </>
-                  </li>
-                ))}
+                        )}
+                        {canOperate && log.eventId != null && (
+                          <button type="button" className="logact" title="이 이벤트를 서버에서 삭제" style={{ color: '#B4655C' }}
+                            aria-label={`이벤트 삭제 — ${log.msg}`} onClick={() => { setDelErr(null); setPending(log) }}>
+                            삭제
+                          </button>
+                        )}
+                        {canOperate && log.live && (
+                          <button type="button" className="logact" title="화면에서 닫기 (서버 기록은 남습니다)"
+                            aria-label={`경보 닫기 — ${log.msg}`} onClick={() => dismissAlert(log.id)}>
+                            닫기
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
                 {resolveErr && <li className="heat"><b>해결 처리 실패 — {resolveErr}</b></li>}
                 {error && <li className="heat"><b>이력 조회 실패 — {error}</b></li>}
                 {more && (

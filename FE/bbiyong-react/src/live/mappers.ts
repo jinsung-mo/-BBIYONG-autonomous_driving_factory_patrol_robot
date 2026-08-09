@@ -97,6 +97,9 @@ export function eventToLog(e: any) {
     eventId: e?.eventId,   // 서버 삭제(DELETE /api/events/{id}) 대상 — S15P11E101-516
     time: formatTime(e?.timestamp),
     date: formatDate(e?.timestamp),
+    // 원본 타임스탬프 — 카드 목록의 "N일 전" 상대 시각 표시에 쓴다(S15P11E101-814).
+    // time/date 는 이미 표시용으로 가공(오늘이면 date 비움)돼 있어 상대 일수를 못 구한다.
+    ts: e?.timestamp || null,
     kind,
     type: e?.type || 'SYSTEM',
     // 심각도·해결 상태는 필터와 행 표시에 함께 쓴다(관제센터 확장)
@@ -122,6 +125,7 @@ export function alertToLog(a: any) {
     eventId: a?.eventId ?? null,
     time: formatTime(a?.timestamp),
     date: formatDate(a?.timestamp),
+    ts: a?.timestamp || null,
     kind: a?.type === 'FIRE' ? 'fire' : (a?.type === 'OVERHEAT' ? 'heat' : (a?.level === 'CRITICAL' ? 'heat' : 'ok')),
     type: a?.type || 'SYSTEM',
     level: a?.level || null,

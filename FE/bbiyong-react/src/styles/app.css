@@ -4179,6 +4179,70 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 뱃지가 여럿 붙을 때 숨 쉴 틈만 준다(정보를 더 넣지 않는다) */
 #pgEvents.v3-theme .logrow .tag + .tag{ margin-left:4px; }
 
+/* ── 카드 목록 — 구인 목록형 배치 (S15P11E101-814) ─────────────────
+   위 3352줄의 "로그 행은 상자가 아니다"는 지도·카메라 쪽 elog 위젯에는 여전히
+   맞는 규칙이지만(스무 줄 넘게 쌓이는 얇은 곁다리 목록), 이벤트 탭은 그 자체가
+   화면의 본문이라 표처럼 조밀하면 스캔이 힘들다는 피드백을 받았다. #pgEvents
+   안에서만 낱장 카드로 다시 감싼다 — 지도/카메라 쪽 elog 는 건드리지 않는다.
+   카드 사이 간격 12px, 안쪽 여백 16/18px, 그림자는 옅게 하나만. */
+#pgEvents.v3-theme .logrow.elog-card{
+  align-items:flex-start; gap:14px; padding:16px 18px;
+  background:#fff; border:1px solid transparent; border-radius:16px;
+  box-shadow:2px 4px 14px rgba(35,39,51,.06);
+  margin-bottom:12px; transition:box-shadow .15s ease;
+}
+#pgEvents.v3-theme .logrow.elog-card:last-child{ margin-bottom:0; }
+#pgEvents.v3-theme .logrow.elog-card:hover{ box-shadow:2px 6px 20px rgba(35,39,51,.10); }
+/* 선택된 행(상세를 열어 둔 카드) — 참고 화면의 보라색 아웃라인에 맞춰 브랜드색 테두리 + 조금 더 진한 그림자 */
+#pgEvents.v3-theme .logrow.elog-card.sel{
+  border-color:#4C5695; box-shadow:0 0 0 1px #4C5695, 2px 8px 22px rgba(76,86,149,.18);
+}
+
+/* 왼쪽 — 이벤트 종류를 색+기호로 알리는 48px 안팎의 둥근 정사각 타일 */
+#pgEvents.v3-theme .elog-card-icon{
+  flex:none; width:44px; height:44px; border-radius:12px; margin-top:1px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; font-style:normal; color:#fff;
+}
+#pgEvents.v3-theme .elog-card-icon.c-fire{ background:#C07A72; }
+#pgEvents.v3-theme .elog-card-icon.c-heat{ background:#C9A26A; }
+#pgEvents.v3-theme .elog-card-icon.c-ok{ background:#74A98D; }
+#pgEvents.v3-theme .elog-card-icon.c-sub{ background:#B6BAC7; }
+
+/* 가운데 — 굵은 제목(+ 태그) 위, 옅은 메타 정보(유형·로봇/설비) 아래 */
+#pgEvents.v3-theme .elog-card-body{ flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; padding-top:1px; }
+#pgEvents.v3-theme .elog-card-title-row{ display:flex; align-items:center; flex-wrap:nowrap; gap:6px; }
+#pgEvents.v3-theme .elog-card-title{
+  flex:1; min-width:0; font-size:13.5px; font-weight:700;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  background:transparent; border:0; padding:0; text-align:left; font-family:inherit;
+}
+/* 색은 .t-fire/.t-heat/.t-ok(3165줄)가 정한다 — 여기서 기본색을 박으면 그 규칙을
+   특정도로 덮어써 버린다(#pgEvents 셀렉터가 더 구체적이라). 지정 안 된 경우는
+   .v3-theme 의 상속 색(#232733)을 그대로 쓴다. */
+button.elog-card-title{ cursor:pointer; }
+#pgEvents.v3-theme button.elog-card-title:hover{ text-decoration:underline; }
+#pgEvents.v3-theme .elog-card-meta{ font-size:11.5px; color:#7C8296; }
+
+/* 오른쪽 — 강조된 시각 + 그 아래 옅은 상대일("2일 전") */
+#pgEvents.v3-theme .elog-card-right{
+  flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:2px; padding-top:1px;
+}
+#pgEvents.v3-theme .elog-card-time{ font-size:13px; font-weight:700; color:#232733; white-space:nowrap; }
+#pgEvents.v3-theme .elog-card-rel{ font-size:11px; color:#A8ADBC; }
+
+/* 해결·삭제·닫기 — 기존 .logact 그대로(호버로만 드러남), 세로 중앙에 놓기만 한다 */
+#pgEvents.v3-theme .elog-card-actions{ flex:none; display:flex; gap:4px; align-self:center; }
+
+/* 목록 위 헤더 행 — 좌: 총 건수, 우: 정렬(S15P11E101-814) */
+#pgEvents.v3-theme .elog-toolbar{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-top:12px; padding:0 2px;
+}
+#pgEvents.v3-theme .elog-count{ font-size:12.5px; color:#7C8296; }
+#pgEvents.v3-theme .elog-count b{ font-size:15px; color:#232733; font-weight:700; margin-right:2px; }
+#pgEvents.v3-theme .elog-sort{ width:auto; padding:6px 10px; font-size:11.5px; }
+
 /* ── 상세 모달 v3 스킨 ────────────────────────────────────────────
    Modal 은 body 로 포털되어 #pgEvents/.v3-theme 조상 스코프 밖에서 그려진다 —
    그래서 이 화면 전용 규칙이 하나도 닿지 못해 "v3 미적용" 상태였다.
