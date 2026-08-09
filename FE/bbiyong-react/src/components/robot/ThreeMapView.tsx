@@ -9,6 +9,9 @@ import { buildPlanGrid, worldToScenePx, type PlanGrid } from '../../live/isoExtr
 import { H264VideoDecoder } from '../../live/h264Video.ts'
 import { errMessage } from '../../live/errors.ts'
 import { isMapFrame, localized } from '../../live/mappers.ts'
+import { useUnresolvedAlertEvents } from '../../live/unresolvedAlerts.ts'
+import { useAuth } from '../../auth/AuthContext.tsx'
+import { fetchEventVideos, loadVideoUrl, releaseUrl } from '../../live/videos.ts'
 import type { InspectionPoint } from '../../live/contracts.d.ts'
 
 // three.js 로 그리는 3D 지도 (S15P11E101-712).
@@ -196,6 +199,38 @@ function AlertLiveVideo() {
   )
 }
 
+// 경보 말풍선 속 '저장된 전후 영상'(S15P11E101-911). 이벤트 로그(EventDetailModal)와 같은
+// videos.ts 로더를 쓴다 — eventId 로 연관 영상을 받아 첫 클립을 재생한다. 실시간 영상과 달리
+// 이벤트가 일어난 그 순간(전후 4~5초)을 보여 준다. eventId 가 있는 핀(=서버에 저장된 경보)에만
+// 쓰고, 아직 저장 전인 실시간 경보는 AlertLiveVideo(실시간)로 폴백한다.
+function EventClipVideo({ eventId }: { eventId: number }) {
+  const { accessToken } = useAuth()
+  const [url, setUrl] = useState<string | null>(null)
+  const [msg, setMsg] = useState('영상 불러오는 중…')
+  useEffect(() => {
+    let alive = true
+    let made: string | null = null
+    ;(async () => {
+      try {
+        const vs = await fetchEventVideos(eventId, accessToken)
+        if (!alive) return
+        if (!vs.length) { setMsg('이 경보에 저장된 영상이 없습니다.'); return }
+        const u = await loadVideoUrl(vs[0].id, accessToken)
+        made = u
+        if (alive) setUrl(u); else releaseUrl(u)
+      } catch { if (alive) setMsg('영상을 불러오지 못했습니다.') }
+    })()
+    return () => { alive = false; if (made) releaseUrl(made) }
+  }, [eventId, accessToken])
+  return (
+    <div className="three-alert-video">
+      {url
+        ? <video src={url} controls preload="metadata" width={224} height={126} />
+        : <span>{msg}</span>}
+    </div>
+  )
+}
+
 // follow 는 부모(MapPanel)의 뷰 세그먼트 [2D|3D|네비게이션]가 결정한다(S15P11E101-908) —
 // 예전에는 이 안의 '네비게이션 모드' 토글 버튼이 들고 있었는데, 뷰 전환을 한 세그먼트로
 // 합치며 상태를 위로 올렸다. false 로 바뀌면 개요 시점으로 되돌린다.
@@ -303,56 +338,72 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
     })
   }, [alerts, equipments])
 
-  // ── 화재/과열 경보 마커 (S15P11E101-883) ─────────────────────────────
-  // /topic/alerts 의 x,y 는 map 프레임 미터다 — 점검 핀과 같은 변환을 거친다.
-  // OVERHEAT 는 좌표 없이 equipmentId 만 올 수 있어 설비 좌표로, 그것도 없으면
+  // ── 화재/과열 경보 마커 (S15P11E101-883 · 911) ─────────────────────────
+  // 핀 소스는 '서버의 미해결 이벤트' + '방금 들어온 실시간 경보' 병합이다(S15P11E101-911).
+  // 미해결 이벤트는 eventId·좌표·상태를 가져서 ① 저장 영상을 열 수 있고 ② 해결(RESOLVED)
+  // 전까지 유지되며 ③ 새로고침해도 복원된다. 실시간 경보는 발생 즉시성을 메우되, 같은
+  // eventId 가 서버 목록에 이미 있으면(=저장 반영됨) 중복을 뺀다.
+  // 좌표: x,y(map 프레임 미터) → 없으면 equipmentId 의 설비 좌표 → 그것도 없으면(실시간만)
   // 로봇 위치(anchored, 씬 px)로 폴백한다(S15P11E101-890).
-  const alertPins = useMemo(() => {
-    if (!plan || !grid) {
-      return [] as { id: number, kind: 'fire' | 'heat', x: number, y: number, time: string, title: string, sub: string | null }[]
-    }
-    return alerts.flatMap((a: any) => {
-      if (a?.type !== 'FIRE' && a?.type !== 'OVERHEAT') return []
-      const id = a._id as number
-      let sx: number, sy: number
-      let wx = Number(a.x)
-      let wy = Number(a.y)
+  type AlertPin = { id: string, eventId: number | null, kind: 'fire' | 'heat', x: number, y: number, time: string, title: string, sub: string | null }
+  const unresolvedEvents = useUnresolvedAlertEvents()
+  const alertPins = useMemo<AlertPin[]>(() => {
+    if (!plan || !grid) return []
+    const toScene = (src: any, anchorKey: number | null): { x: number, y: number } | null => {
+      let wx = Number(src.x), wy = Number(src.y)
       if (!Number.isFinite(wx) || !Number.isFinite(wy)) {
-        const eq: any = a.equipmentId ? equipments.find((e: any) => eqId(e) === a.equipmentId) : null
-        wx = Number(eq?.x)
-        wy = Number(eq?.y)
+        const eq: any = src.equipmentId ? equipments.find((e: any) => eqId(e) === src.equipmentId) : null
+        wx = Number(eq?.x); wy = Number(eq?.y)
       }
       if (Number.isFinite(wx) && Number.isFinite(wy)) {
         const p = worldToScenePx(plan as any, wx, wy, { w: grid.w, h: grid.h })
-        sx = p.x; sy = p.y
-      } else if (anchored[id]) {
-        // 좌표가 없어 로봇 위치에 고정한 경보 — 이미 씬 px 다.
-        sx = anchored[id].x; sy = anchored[id].y
-      } else {
-        return []   // 위치를 아직 모른다 — 로봇 자세가 들어오면 anchored 가 채워져 다시 그려진다
+        return { x: p.x, y: p.y }
       }
-      const t = a.timestamp ? new Date(a.timestamp) : null
-      const heat = a.type === 'OVERHEAT'
-      return [{
-        id,
-        kind: (heat ? 'heat' : 'fire') as 'fire' | 'heat',
-        x: sx,
-        y: sy,
+      if (anchorKey != null && anchored[anchorKey]) return anchored[anchorKey]
+      return null
+    }
+    const mk = (src: any, id: string, eventId: number | null, pos: { x: number, y: number }): AlertPin => {
+      const t = src.timestamp ? new Date(src.timestamp) : null
+      const heat = src.type === 'OVERHEAT'
+      return {
+        id, eventId,
+        kind: heat ? 'heat' : 'fire',
+        x: pos.x, y: pos.y,
         time: t && !Number.isNaN(t.getTime()) ? t.toTimeString().slice(0, 8) : '—',
         title: heat ? '과열 감지' : '화재 발생',
         sub: heat
-          ? `${a.equipmentId || '설비'}${Number.isFinite(a.temperature) ? ` · ${Number(a.temperature).toFixed(1)}℃` : ''}`
+          ? `${src.equipmentId || '설비'}${Number.isFinite(src.temperature) ? ` · ${Number(src.temperature).toFixed(1)}℃` : ''}`
           : null,
-      }]
-    })
-  }, [alerts, equipments, plan, grid, anchored])
+      }
+    }
+    const pins: AlertPin[] = []
+    const serverEventIds = new Set<number>()
+    for (const e of unresolvedEvents) {
+      if (e?.type !== 'FIRE' && e?.type !== 'OVERHEAT') continue
+      const eid = Number(e.eventId)
+      if (!Number.isFinite(eid)) continue
+      const pos = toScene(e, null)
+      if (!pos) continue
+      serverEventIds.add(eid)
+      pins.push(mk(e, `ev${eid}`, eid, pos))
+    }
+    for (const a of alerts as any[]) {
+      if (a?.type !== 'FIRE' && a?.type !== 'OVERHEAT') continue
+      const eid = Number(a.eventId)
+      if (Number.isFinite(eid) && serverEventIds.has(eid)) continue   // 서버에 이미 반영됨
+      const pos = toScene(a, a._id)
+      if (!pos) continue
+      pins.push(mk(a, `lv${a._id}`, Number.isFinite(eid) ? eid : null, pos))
+    }
+    return pins
+  }, [alerts, unresolvedEvents, equipments, plan, grid, anchored])
   const alertPinsRef = useRef(alertPins)
   alertPinsRef.current = alertPins
-  // 열려 있는 말풍선(경보 _id). 마커를 다시 누르거나 ×로 닫는다.
-  const [alertSel, setAlertSel] = useState<number | null>(null)
+  // 열려 있는 말풍선(핀 id — 서버 ev{eventId} 또는 실시간 lv{_id}). 마커를 다시 누르거나 ×로 닫는다.
+  const [alertSel, setAlertSel] = useState<string | null>(null)
   const alertSelRef = useRef(alertSel)
   alertSelRef.current = alertSel
-  const alertEls = useRef(new Map<number, HTMLElement>())
+  const alertEls = useRef(new Map<string, HTMLElement>())
   const popEl = useRef<HTMLDivElement | null>(null)
   // 보던 경보가 목록에서 사라지면(닫힘/해제) 말풍선도 닫는다 — 유령 대화상자를 남기지 않는다
   useEffect(() => {
@@ -849,7 +900,7 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
         </button>
       ))}
 
-      {/* 경보 말풍선 — 발생 시간과 전면 카메라 실시간 영상. 위치는 렌더 루프가
+      {/* 경보 말풍선 — 발생 시간과 이벤트 전후 영상(저장분). 위치는 렌더 루프가
           마커와 같은 투영으로 매 프레임 갱신한다. */}
       {alertSel != null && (() => {
         const p = alertPins.find((v) => v.id === alertSel)
@@ -862,7 +913,9 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
               <button type="button" className="three-alert-pop__x" onClick={() => setAlertSel(null)} aria-label="말풍선 닫기">×</button>
             </div>
             {p.sub && <div className="three-alert-pop__sub">{p.sub}</div>}
-            <AlertLiveVideo />
+            {/* 저장된 이벤트(eventId 보유)면 이벤트 로그와 같은 전후 영상을 보여 준다(S15P11E101-911).
+                아직 저장 전인 실시간 경보면 전면 카메라 실시간으로 폴백한다. */}
+            {p.eventId != null ? <EventClipVideo eventId={p.eventId} /> : <AlertLiveVideo />}
           </div>
         )
       })()}
