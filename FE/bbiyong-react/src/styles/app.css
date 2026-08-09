@@ -133,17 +133,42 @@ canvas{display:block; width:100%; height:100%;}
 .section-page{background:var(--dk-bg); color:var(--dk-ink); padding:16px 18px; overflow:auto;}
 .cfg-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; align-items:start;}
 .cfg-grid .panel{display:block;}
-/* 설정 화면 단일 열 배치 (S15P11E101-814) — 지도·카메라 화면의 좌우 2열(.nav-stage/.nav-side/
-   .nav-canvas)을 그대로 물려 쓰던 걸 걷어내고, 섹션을 위→아래로 쌓는다. 설정은 "한눈에 감시"가
-   아니라 "읽고 고치는" 화면이라 폭을 제한해 읽기 편하게 한다. 폭은 기존 2열(카드 최소폭 330px ×2 +
-   간격)보다 넉넉히 잡아, 향후 붙을 수 있는 넓은 콘텐츠(전력 그래프 등)도 크게 눌리지 않게 한다.
-   새 섹션은 .cfg-stack 아래에 .card-v3 형제 하나로 추가하면 된다 — 폭 제한을 빼야 하면
-   .cfg-wide 를 얹는다. */
-/* 화면 가운데 정렬(2026-08-09) — 패널을 4개 걷어내면서 남은 카드가 화면 왼쪽에만 붙어
-   오른쪽이 통째로 비어 보였다. 폭은 그대로 두고 여백만 양쪽으로 나눈다 — 남은 공간을
-   메우려고 카드를 늘리면 한 줄이 지나치게 길어져 읽기 어려워진다(위 "폭을 제한한다"와 같은 이유). */
-.cfg-stack{display:flex; flex-direction:column; max-width:880px; margin-inline:auto;}
-.cfg-stack > .cfg-wide{max-width:none;}
+/* 설정 화면 2열 배치 (S15P11E101-876) — 아이패드 설정처럼 **좌측에 항목, 우측에 제어**.
+   [사용자 지침 2026-08-09]
+
+   좌측 폭은 `--nx-side-w` 로, 지도의 상태 패널·카메라의 조작 패널과 **같은 토큰**을 쓴다.
+   숫자를 베껴 쓰지 않는 이유는 이벤트 화면에서 겪은 그대로다 — 340 을 박으면 좁은 폭에서
+   그 화면만 안 줄어 다시 어긋난다. 껍데기(S15P11E101-875)가 네 화면을 세로 슬라이드로
+   잇는 이상, 고정 사이드의 폭과 시작선은 네 화면이 같아야 "같은 자리에서 내용만 바뀐다"로
+   읽힌다.
+
+   단일 열 시절의 판단("설정은 감시가 아니라 읽고 고치는 화면이니 폭을 제한한다")은
+   버리지 않았다 — 우측 카드에 max-width 로 남긴다(아래 .cfg-canvas).
+
+   🔴 겸사겸사 잘림 결함도 여기서 잡힌다: 예전 .cfg-stack 은 flex 사이징이 없어 콘텐츠
+   높이 그대로 커졌는데 부모 .nav-page 가 overflow:hidden 이라, 항목이 화면보다 길어지면
+   맨 아래 카드가 스크롤로도 닿지 않았다. 이제 우측 열이 직접 스크롤한다.
+
+   새 섹션 추가: ConfigPage.tsx 의 SECTIONS 배열에 한 줄. 좌측 목록과 우측 본문이 같이 생긴다.
+   폭이 넓은 콘텐츠(그래프 등)는 그 카드에 .cfg-wide 를 얹어 제한을 뺀다. */
+/* fieldset 은 기본이 블록이라 여기서 높이 사슬이 끊긴다 — 안쪽 .nav-stage 의 flex:1 1 0 이
+   무시되고 본문이 콘텐츠 높이로 정해진다. 지도 화면이 같은 이유로 한 번 주저앉은 적이 있다. */
+#pgConfig .lockfs{flex:1 1 0; min-height:0; display:flex; flex-direction:column;}
+#pgConfig .cfg-nav{
+  background:var(--nx-panel); box-shadow:var(--nx-sh-lg); border-radius:var(--nx-r-lg);
+  padding:12px; gap:2px; overflow-y:auto;
+}
+#pgConfig .cfg-nav button{
+  display:block; width:100%; text-align:left; flex:0 0 auto;
+  border:0; background:transparent; cursor:pointer;
+  padding:12px 16px; border-radius:var(--nx-r-md);
+  font:inherit; font-size:14px; font-weight:600; color:var(--nx-muted);
+}
+#pgConfig .cfg-nav button:hover{background:var(--bb-surface, rgba(120,128,150,.12));}
+#pgConfig .cfg-nav button.on{background:var(--bb-ink, #1b1f27); color:#fff; font-weight:700;}
+/* 우측만 스크롤한다 — 좌측 목록은 늘 제자리에 있어야 어디를 보고 있는지 잃지 않는다. */
+#pgConfig .cfg-canvas{overflow-y:auto; padding-right:4px;}
+#pgConfig .cfg-canvas > :not(.cfg-wide){max-width:880px;}
 .cfg-help{font-size:12px; color:var(--dk-sub); line-height:1.6; margin-bottom:12px;}
 
 /* Orin 전력 모드(S15P11E101-814) — 저성능/고성능 토글 + 부하 그래프. .card-v3 는 밝은
@@ -481,10 +506,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* ── 히어로: 시안은 패널 없이 배경 위에 바로 얹는다 — 유리 패널 폐기 ──
    [사용자 지침 2026-08-09] left 를 고정 34px 가 아니라 뷰포트 비례(clamp)로 둔다 —
    넓은 화면에서 텍스트가 왼쪽 벽에 붙어 비주얼과의 사이가 텅 비어 보였다.
-   top 도 42→37% 로 올려 CTA 아래(기능 카드까지)의 세로 공백을 줄인다. */
+   기능 카드가 이 블록 안으로 들어왔으므로(아래 .welcome-features 주석) 텍스트+CTA+카드
+   전체를 화면 세로 중앙(50%)에 세운다 — CTA↔카드 간격은 화면 높이와 무관하게 일정하다. */
 .welcome-hero{
-  position:absolute; left:clamp(var(--bb-sp-9), 7vw, 140px); top:37%; transform:translateY(-50%); z-index:2;
-  width:600px; max-width:calc(100% - 68px);
+  position:absolute; left:clamp(var(--bb-sp-9), 8vw, 190px); top:50%; transform:translateY(-50%); z-index:2;
+  width:700px; max-width:calc(100% - 68px);
   animation:welcomeHeroRise .55s var(--bb-ease) both;
 }
 .welcome-label{ font-size:15px; font-weight:800; letter-spacing:1.6px; color:var(--bb-hero-accent); }
@@ -510,10 +536,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* ── 기능 카드 4종: 제품 소개 문구다(실데이터·수치가 아니라 "랜딩에 더미 수치 금지"
    지침[사용자 지침 2026-08-08]과 충돌하지 않는다). 흰 카드 + 원형 라인 아이콘 + 2줄 설명. ── */
 .welcome-features{
-  /* left 는 히어로와 같은 식이어야 한다 — 어긋나면 두 덩어리가 다른 기둥에 선 것처럼 보인다.
-     bottom 38→26px: 낮은 화면(작업표시줄)에서 카드가 먼저 보이도록 여백을 줄였다. */
-  position:absolute; left:clamp(var(--bb-sp-9), 7vw, 140px); bottom:26px; z-index:2;
-  display:flex; gap:14px; list-style:none; margin:0; padding:0;
+  /* 히어로 블록 안의 흐름 요소다 [사용자 지침 2026-08-09] — 화면 하단 absolute 고정은
+     화면이 높을수록 CTA 와의 사이가 벌어졌다. 흐름에 두면 간격이 항상 같다. */
+  display:flex; gap:14px; list-style:none; margin:44px 0 0; padding:0;
 }
 .welcome-feature{
   width:160px; padding:22px 12px 20px; text-align:center;
@@ -551,7 +576,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   .welcome-hero{ position:static; transform:none; width:100%; max-width:620px; margin:0;
     animation-name:welcomeRise; }   /* 중앙정렬을 안 쓰므로 -50% 를 품은 키프레임도 안 쓴다 */
   .welcome-visual{ display:none; }
-  .welcome-features{ position:static; flex-wrap:wrap; justify-content:center; max-width:660px; }
+  .welcome-features{ flex-wrap:wrap; justify-content:center; max-width:660px; }
 }
 @media (max-width:620px){
   .welcome-wrap{ padding:var(--bb-sp-6) var(--bb-sp-6); }
@@ -805,12 +830,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .authflow.is-login .welcome-hero{ transform:translate(-120%,-50%); opacity:0; pointer-events:none; }
 
-/* ①′ 우측 비주얼·기능 카드 — 히어로와 함께 물러난다. 큰 사진을 transform 으로 밀면
-   페인트 비용이 크므로 opacity 페이드만 쓴다(어차피 스크림 블러가 위를 덮는다). */
-.authflow .welcome-visual,
-.authflow .welcome-features{ transition:opacity var(--fl-dur) var(--bb-ease); }
-.authflow.is-login .welcome-visual,
-.authflow.is-login .welcome-features{ opacity:0; pointer-events:none; }
+/* ①′ 배경 비주얼 — 히어로와 함께 물러난다. 큰 사진을 transform 으로 밀면
+   페인트 비용이 크므로 opacity 페이드만 쓴다(어차피 스크림 블러가 위를 덮는다).
+   (기능 카드는 히어로 블록 안으로 들어가 ① 이 함께 밀어낸다 — 별도 규칙이 없다.) */
+.authflow .welcome-visual{ transition:opacity var(--fl-dur) var(--bb-ease); }
+.authflow.is-login .welcome-visual{ opacity:0; pointer-events:none; }
 
 /* ② 스크림 — 블러를 전담한다.
    🔴 웰컴 층에 filter 를 직접 걸지 않는 이유: filter 는 조상에 containing block 을
@@ -2170,10 +2194,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    지도에만 있던 '지도/매핑' 세그먼트 때문에 지도의 씬은 다른 화면보다 58px 아래에서
    시작했다(알약 46px + 여백 12px). 나머지 셋이 그만큼 위에서 시작하니, 탭을 옮길 때마다
    같은 역할의 판이 다른 높이에 나타난다 — 슬라이드로 이으면 그 어긋남이 그대로 눈에 띈다.
-   그래서 이 줄도 머리의 일부로 올린다. 어느 탭이든 자리는 늘 비어 있고, 채울 것이 있는
-   화면(지도)만 채운다. 기준은 지도다.
-   ⚠ 지도의 세그먼트는 관리자에게만 보인다 — 줄은 권한과 무관하게 늘 자리를 지킨다. */
-.nav-subrow{flex:0 0 auto; min-height:46px; margin:0 0 6px; display:flex; align-items:center;}
+   그래서 이 줄도 머리의 일부로 올린다.
+   🔴 예약 높이(min-height:46px)는 걷어냈다 [사용자 지침 2026-08-09] — 지도 탭(관리자)
+   에서만 채워지는 줄이 나머지 탭에서 빈 띠로 남아, 낮은 화면에서 본문(카메라 영상)을
+   그만큼 잘라먹었다. 대가로 관리자가 지도 탭을 오갈 때 본문 시작 높이가 세그먼트만큼
+   변하지만, 모든 탭에 빈 띠를 두는 것보다 낮은 화면의 본문이 먼저다. */
+.nav-subrow{flex:0 0 auto; margin:0; display:flex; align-items:center;}
+.nav-subrow .map-tabs{margin-bottom:8px;}
 
 /* ── 제목 + 큰 숫자 ─────────────────────────────────────────── */
 .nav-hero{
