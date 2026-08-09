@@ -731,6 +731,8 @@ export interface LiveContextValue {
   mappingPhase: MappingPhase | null
   /** mappingPhase === 'MAPPING' 을 미리 풀어 둔 값 (텔레메트리 status 보조 판정 포함) */
   mapping: boolean
+  /** 매핑 시작 대기(S15P11E101). START_MAPPING 발행 후 로봇이 매핑에 들어가기 전까지 true. */
+  mappingStarting: boolean
   /** 새 매핑 진입 시 이전 세션의 map·pose·scan·trail 을 지운다(S15P11E101-763). plan 은 남긴다. */
   resetMappingView: () => void
   /** 서버가 판정한 로봇 가동 여부. null = 아직 모름 */
