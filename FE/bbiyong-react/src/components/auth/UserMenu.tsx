@@ -2,6 +2,8 @@ import { errMessage } from '../../live/errors.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { roleText } from '../../auth/roles.ts'
+import { passwordProblems } from '../../auth/signupRules.ts'
+import PasswordChecklist from './PasswordChecklist.tsx'
 import Modal from '../ui/Modal.tsx'
 
 const initials = (name: any) => (name || '?').replace(/\s/g, '').slice(0, 2)
@@ -46,7 +48,10 @@ function PasswordModal({ onClose }: any) {
   const save = (e: any) => {
     e.preventDefault(); setErr('')
     try {
-      if (next.length < 4) throw new Error('새 비밀번호는 4자 이상이어야 합니다.')
+      // 회원가입과 같은 정책(S15P11E101-878) — 여기만 느슨하면(이전엔 4자 이상)
+      // 가입 때 강제한 규칙이 첫 변경에서 무너진다. 규칙·문구는 signupRules 한곳에서 온다.
+      const miss = passwordProblems(next)
+      if (miss.length) throw new Error(`비밀번호 조건 미충족 — ${miss.join(' · ')}`)
       if (next !== next2) throw new Error('새 비밀번호가 일치하지 않습니다.')
       changePassword(cur, next)
       setOk(true)
@@ -62,7 +67,12 @@ function PasswordModal({ onClose }: any) {
       ) : (
         <form onSubmit={save}>
           <div className="form-row"><label>현재 비밀번호</label><input type="password" value={cur} onChange={(e) => setCur(e.target.value)} /></div>
-          <div className="form-row"><label>새 비밀번호</label><input type="password" value={next} onChange={(e) => setNext(e.target.value)} /></div>
+          <div className="form-row">
+            <label>새 비밀번호</label>
+            <input type="password" value={next} onChange={(e) => setNext(e.target.value)} />
+            {/* 회원가입과 같은 실시간 체크리스트 — 제출해야 무엇이 틀렸는지 알게 하지 않는다 */}
+            <PasswordChecklist password={next} />
+          </div>
           <div className="form-row"><label>새 비밀번호 확인</label><input type="password" value={next2} onChange={(e) => setNext2(e.target.value)} /></div>
           {err && <div className="form-msg err">{err}</div>}
           <div className="form-actions">
