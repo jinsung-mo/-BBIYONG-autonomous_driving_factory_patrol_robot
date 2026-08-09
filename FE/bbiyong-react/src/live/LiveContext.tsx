@@ -11,7 +11,7 @@ import { ROBOT_ID, getDataSource, saveDataSource } from './config.ts'
 import { connect, disconnect, subscribe, publish, onState, setToken } from './stompClient.ts'
 import { DEFAULT_DRIVE_SPEED, angularFor, clampDriveSpeed } from './mappers.ts'
 import { useSettings } from '../settings/SettingsContext.tsx'
-import { decodeMapSnapshot, bakeMap, decodePatrolMask, bakeMask, TRAIL_MAX } from './navMap.ts'
+import { decodeMapSnapshot, bakeMap, patrolMaskBlock, decodePatrolMask, bakeMask, TRAIL_MAX } from './navMap.ts'
 import { activateMap, isMappingComplete, isMappingStatus, phaseOf, fetchMapStatus, PHASE_IDLE, PHASE_MAPPING } from './mapping.ts'
 import { TILT_COMMAND } from './cameraTilt.ts'
 import { isFloorplanReady, loadActivePlan, releasePlan } from './floorplan.ts'
@@ -321,24 +321,34 @@ export function LiveProvider({ children }: any) {
       /** @param {import('./contracts').MapSnapshot | import('./contracts').NavLive | import('./contracts').MappingMessage} msg */ (msg: any) => {
       const nav = navRef.current
       if (msg?.type === 'MAP') {
-        // 서버는 snapshot 만 보낸다(patch 없음). sequence 가 바뀔 때만 다시 굽는다.
-        if (nav.map && nav.map.seq === msg.sequence) return
-        try {
-          nav.map = decodeMapSnapshot(msg)
-          nav.mapCanvas = bakeMap(nav.map)
-        } catch (e) {
-          // 크기가 안 맞는 맵은 버리고 직전 맵을 유지한다 — 깨진 화면보다 낫다
-          console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', errMessage(e))
-          return
-        }
         // 순찰 가능 마스크(S15P11E101-869) — 아직 안 보낼 수 있다. 없거나 깨졌으면
         // 오버레이 없이 기존 동작 그대로 둔다(마스크 없다고 클릭이 막히면 안 된다).
+        // 필드 이름·격자 정합 판정은 patrolMaskBlock 한 곳에 모여 있다.
+        const usableMask = patrolMaskBlock(msg)
+        const maskRev = usableMask ? (usableMask.revision ?? null) : null
+
+        // 서버는 snapshot 만 보낸다(patch 없음). sequence 가 바뀔 때만 지도를 다시 굽는다.
+        // 다만 마스크는 지도 셀이 그대로여도 바뀌고 그때 sequence 는 오르지 않으므로
+        // (계약 §6), revision 이 달라지면 마스크만 다시 굽는다.
+        const sameMap = !!(nav.map && nav.map.seq === msg.sequence)
+        if (sameMap && nav.map!.maskRev === maskRev) return
+        if (!sameMap) {
+          try {
+            nav.map = decodeMapSnapshot(msg)
+            nav.mapCanvas = bakeMap(nav.map)
+          } catch (e) {
+            // 크기가 안 맞는 맵은 버리고 직전 맵을 유지한다 — 깨진 화면보다 낫다
+            console.warn('[nav] 맵 디코드 실패 — 이전 맵 유지', errMessage(e))
+            return
+          }
+        }
+        nav.map!.maskRev = maskRev
         try {
-          nav.map.mask = msg.patrolMask ? decodePatrolMask(msg.patrolMask, nav.map.w, nav.map.h) : null
-          nav.maskCanvas = nav.map.mask ? bakeMask(nav.map.mask, nav.map.w, nav.map.h) : null
+          nav.map!.mask = usableMask ? decodePatrolMask(usableMask, nav.map!.w, nav.map!.h) : null
+          nav.maskCanvas = nav.map!.mask ? bakeMask(nav.map!.mask, nav.map!.w, nav.map!.h) : null
         } catch (e) {
           console.warn('[nav] 순찰 마스크 디코드 실패 — 마스크 없이 진행', errMessage(e))
-          nav.map.mask = null
+          nav.map!.mask = null
           nav.maskCanvas = null
         }
       } else if (isMappingComplete(msg)) {
