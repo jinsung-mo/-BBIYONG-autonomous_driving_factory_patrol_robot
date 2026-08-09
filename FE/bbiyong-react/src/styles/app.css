@@ -481,10 +481,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* ── 히어로: 시안은 패널 없이 배경 위에 바로 얹는다 — 유리 패널 폐기 ──
    [사용자 지침 2026-08-09] left 를 고정 34px 가 아니라 뷰포트 비례(clamp)로 둔다 —
    넓은 화면에서 텍스트가 왼쪽 벽에 붙어 비주얼과의 사이가 텅 비어 보였다.
-   top 도 42→37% 로 올려 CTA 아래(기능 카드까지)의 세로 공백을 줄인다. */
+   기능 카드가 이 블록 안으로 들어왔으므로(아래 .welcome-features 주석) 텍스트+CTA+카드
+   전체를 화면 세로 중앙(50%)에 세운다 — CTA↔카드 간격은 화면 높이와 무관하게 일정하다. */
 .welcome-hero{
-  position:absolute; left:clamp(var(--bb-sp-9), 7vw, 140px); top:37%; transform:translateY(-50%); z-index:2;
-  width:600px; max-width:calc(100% - 68px);
+  position:absolute; left:clamp(var(--bb-sp-9), 8vw, 190px); top:50%; transform:translateY(-50%); z-index:2;
+  width:700px; max-width:calc(100% - 68px);
   animation:welcomeHeroRise .55s var(--bb-ease) both;
 }
 .welcome-label{ font-size:15px; font-weight:800; letter-spacing:1.6px; color:var(--bb-hero-accent); }
@@ -510,10 +511,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* ── 기능 카드 4종: 제품 소개 문구다(실데이터·수치가 아니라 "랜딩에 더미 수치 금지"
    지침[사용자 지침 2026-08-08]과 충돌하지 않는다). 흰 카드 + 원형 라인 아이콘 + 2줄 설명. ── */
 .welcome-features{
-  /* left 는 히어로와 같은 식이어야 한다 — 어긋나면 두 덩어리가 다른 기둥에 선 것처럼 보인다.
-     bottom 38→26px: 낮은 화면(작업표시줄)에서 카드가 먼저 보이도록 여백을 줄였다. */
-  position:absolute; left:clamp(var(--bb-sp-9), 7vw, 140px); bottom:26px; z-index:2;
-  display:flex; gap:14px; list-style:none; margin:0; padding:0;
+  /* 히어로 블록 안의 흐름 요소다 [사용자 지침 2026-08-09] — 화면 하단 absolute 고정은
+     화면이 높을수록 CTA 와의 사이가 벌어졌다. 흐름에 두면 간격이 항상 같다. */
+  display:flex; gap:14px; list-style:none; margin:44px 0 0; padding:0;
 }
 .welcome-feature{
   width:160px; padding:22px 12px 20px; text-align:center;
@@ -551,7 +551,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   .welcome-hero{ position:static; transform:none; width:100%; max-width:620px; margin:0;
     animation-name:welcomeRise; }   /* 중앙정렬을 안 쓰므로 -50% 를 품은 키프레임도 안 쓴다 */
   .welcome-visual{ display:none; }
-  .welcome-features{ position:static; flex-wrap:wrap; justify-content:center; max-width:660px; }
+  .welcome-features{ flex-wrap:wrap; justify-content:center; max-width:660px; }
 }
 @media (max-width:620px){
   .welcome-wrap{ padding:var(--bb-sp-6) var(--bb-sp-6); }
@@ -805,12 +805,11 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 }
 .authflow.is-login .welcome-hero{ transform:translate(-120%,-50%); opacity:0; pointer-events:none; }
 
-/* ①′ 우측 비주얼·기능 카드 — 히어로와 함께 물러난다. 큰 사진을 transform 으로 밀면
-   페인트 비용이 크므로 opacity 페이드만 쓴다(어차피 스크림 블러가 위를 덮는다). */
-.authflow .welcome-visual,
-.authflow .welcome-features{ transition:opacity var(--fl-dur) var(--bb-ease); }
-.authflow.is-login .welcome-visual,
-.authflow.is-login .welcome-features{ opacity:0; pointer-events:none; }
+/* ①′ 배경 비주얼 — 히어로와 함께 물러난다. 큰 사진을 transform 으로 밀면
+   페인트 비용이 크므로 opacity 페이드만 쓴다(어차피 스크림 블러가 위를 덮는다).
+   (기능 카드는 히어로 블록 안으로 들어가 ① 이 함께 밀어낸다 — 별도 규칙이 없다.) */
+.authflow .welcome-visual{ transition:opacity var(--fl-dur) var(--bb-ease); }
+.authflow.is-login .welcome-visual{ opacity:0; pointer-events:none; }
 
 /* ② 스크림 — 블러를 전담한다.
    🔴 웰컴 층에 filter 를 직접 걸지 않는 이유: filter 는 조상에 containing block 을
@@ -2170,10 +2169,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    지도에만 있던 '지도/매핑' 세그먼트 때문에 지도의 씬은 다른 화면보다 58px 아래에서
    시작했다(알약 46px + 여백 12px). 나머지 셋이 그만큼 위에서 시작하니, 탭을 옮길 때마다
    같은 역할의 판이 다른 높이에 나타난다 — 슬라이드로 이으면 그 어긋남이 그대로 눈에 띈다.
-   그래서 이 줄도 머리의 일부로 올린다. 어느 탭이든 자리는 늘 비어 있고, 채울 것이 있는
-   화면(지도)만 채운다. 기준은 지도다.
-   ⚠ 지도의 세그먼트는 관리자에게만 보인다 — 줄은 권한과 무관하게 늘 자리를 지킨다. */
-.nav-subrow{flex:0 0 auto; min-height:46px; margin:0 0 6px; display:flex; align-items:center;}
+   그래서 이 줄도 머리의 일부로 올린다.
+   🔴 예약 높이(min-height:46px)는 걷어냈다 [사용자 지침 2026-08-09] — 지도 탭(관리자)
+   에서만 채워지는 줄이 나머지 탭에서 빈 띠로 남아, 낮은 화면에서 본문(카메라 영상)을
+   그만큼 잘라먹었다. 대가로 관리자가 지도 탭을 오갈 때 본문 시작 높이가 세그먼트만큼
+   변하지만, 모든 탭에 빈 띠를 두는 것보다 낮은 화면의 본문이 먼저다. */
+.nav-subrow{flex:0 0 auto; margin:0; display:flex; align-items:center;}
+.nav-subrow .map-tabs{margin-bottom:8px;}
 
 /* ── 제목 + 큰 숫자 ─────────────────────────────────────────── */
 .nav-hero{
