@@ -115,7 +115,7 @@ export default function MapPanel() {
           : enabled && showEmpty ? (
             <div className="map-empty" role="status">
               <b>아직 활성 도면이 없습니다</b>
-              <span>운영 탭에서 매핑을 시작하면 도면이 만들어집니다.</span>
+              <span>지도 탭의 '매핑'에서 맵 모델링을 시작하면 도면이 만들어집니다.</span>
             </div>
           )
           : enabled
