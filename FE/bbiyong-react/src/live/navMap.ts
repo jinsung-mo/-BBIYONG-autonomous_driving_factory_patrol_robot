@@ -330,6 +330,37 @@ const INSPECT_OFF = '#8b8f9a'
  * 이 되돌림은 그 경우를 위해 남겨 둔다 — 글자를 그릴 때만 반대로 돌려 화면 기준으로
  * 똑바로 서게 한다.
  */
+// 순찰 지점 방향(heading) 손잡이 — 지점 중심에서 이만큼(화면 픽셀) 떨어진 곳에 그린다.
+// LiveNavMap 의 히트 판정이 같은 값을 써야 손잡이를 보이는 자리에서 잡을 수 있어 내보낸다.
+export const WAYPOINT_HANDLE_PX = 34
+const WAYPOINT_ARROW_PX = 22       // 화살촉 위치(S15P11E101-790 원본 값)
+const WAYPOINT_BADGE_PX = 54       // 각도 뱃지 위치 — 손잡이 바로 바깥
+
+// yaw(radians) → 사람이 읽는 정수 도(degree). **표시 전용이다.**
+//
+// 계약(waypoints.ts 머리말)은 radians·map 프레임·반시계 + · 0 = map +X 이고, 그 값이 그대로
+// 서버·로봇으로 간다. 도로 바꾸는 곳은 화면 경계인 이 함수 하나뿐이다.
+// 0=동 · 90=북 으로 읽히도록 0~359 로 감는다 — 계약값 자체는 (-π, π] 그대로 둔다.
+export const yawToDegrees = (yaw: number) => ((Math.round((yaw * 180) / Math.PI) % 360) + 360) % 360
+
+// 각도 뱃지 — 캔버스 회전을 되돌려 똑바로 세운 알약 위에 도(degree)를 적는다.
+function drawHeadingBadge(g: any, text: string, x: number, y: number, rot: any) {
+  g.save()
+  g.translate(x, y)
+  g.rotate(-rot)
+  g.font = 'bold 10.5px system-ui, sans-serif'
+  const w = g.measureText(text).width + 11, h = 15
+  g.fillStyle = '#3ddc97'
+  g.beginPath()
+  if (g.roundRect) g.roundRect(-w / 2, -h / 2, w, h, 7)
+  else g.rect(-w / 2, -h / 2, w, h)
+  g.fill()
+  g.fillStyle = '#0b0d11'
+  g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.fillText(text, 0, 0.5)
+  g.restore()
+}
+
 function drawUprightLabel(g: any, text: string, x: any, y: any, rot: any, fill = '#0b0d11') {
   g.save()
   g.translate(x, y)
@@ -546,15 +577,23 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
       // null·undefined 는 반드시 먼저 걸러야 한다.
       if (w.yaw != null && Number.isFinite(Number(w.yaw))) {
         const a = Number(w.yaw)
-        const L = 22, hx = X + Math.cos(a) * L, hy = Y - Math.sin(a) * L
+        // map 프레임 yaw 를 화면으로 놓는다: 화면 y 는 아래로 자라므로 sin 만 부호를 뒤집는다
+        // (sy 와 같은 규칙). 반대로 화면→yaw 는 canvasToWorld 로 먼저 map 프레임에 돌려놓고 잰다.
+        const L = WAYPOINT_ARROW_PX, hx = X + Math.cos(a) * L, hy = Y - Math.sin(a) * L
+        const kx = X + Math.cos(a) * WAYPOINT_HANDLE_PX, ky = Y - Math.sin(a) * WAYPOINT_HANDLE_PX
         g.strokeStyle = '#3ddc97'; g.lineWidth = 2.5
-        g.beginPath(); g.moveTo(X, Y); g.lineTo(hx, hy); g.stroke()
+        g.beginPath(); g.moveTo(X, Y); g.lineTo(kx, ky); g.stroke()
         g.fillStyle = '#3ddc97'
         g.beginPath()
         g.moveTo(hx, hy)
         g.lineTo(hx + Math.cos(a + 2.6) * 7, hy - Math.sin(a + 2.6) * 7)
         g.lineTo(hx + Math.cos(a - 2.6) * 7, hy - Math.sin(a - 2.6) * 7)
         g.closePath(); g.fill()
+        // 잡고 돌리는 손잡이. 끝에 무언가 '쥘 것'이 보여야 돌릴 수 있다는 걸 안다.
+        g.fillStyle = '#0b0d11'; g.lineWidth = 2
+        g.beginPath(); g.arc(kx, ky, 6, 0, Math.PI * 2); g.fill(); g.stroke()
+        // 정한 방향은 숫자로도 읽을 수 있어야 한다 — 드래그 중에도 미리보기 yaw 로 함께 갱신된다.
+        drawHeadingBadge(g, `${yawToDegrees(a)}°`, X + Math.cos(a) * WAYPOINT_BADGE_PX, Y - Math.sin(a) * WAYPOINT_BADGE_PX, textRot)
       }
       g.fillStyle = '#3ddc97'
       g.beginPath(); g.arc(X, Y, 9, 0, Math.PI * 2); g.fill()
