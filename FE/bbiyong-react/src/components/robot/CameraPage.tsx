@@ -3,7 +3,6 @@ import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import ControlPanel from './ControlPanel.tsx'
-import EventLog from './EventLog.tsx'
 
 const ZOOM_MIN = 1
 const ZOOM_MAX = 2.2
@@ -12,7 +11,7 @@ const clampZoom = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Numbe
 
 // 카메라 화면 (시뮬레이션 전용).
 //
-// 좌측 위에 수동 조작, 그 아래 이벤트 로그, 우측은 전면 카메라 하나로 채운다.
+// 좌측에 수동 조작, 우측은 전면 카메라 하나로 채운다(이벤트 로그는 지도 화면으로 옮겼다).
 // 눈으로 보면서 모는 일이라 손이 가는 조작은 화면 가장자리(좌측)에 고정해 두고,
 // 봐야 하는 영상은 가장 넓은 자리를 준다 — 시선은 영상에, 손은 늘 같은 자리에.
 //
@@ -82,9 +81,8 @@ export default function CameraPage() {
       <div className="cam-stage">
         {/* aside 에서 panel 을 뗀다(S15P11E101-797) — 껍데기가 카드이면 그 안의 두 패널이
             한 장에 붙어 보인다. 카드는 자식 둘이 각자 갖는다. */}
-        <aside className="cam-side-panel" aria-label="순찰 로봇 수동 조작 및 이벤트 로그">
+        <aside className="cam-side-panel" aria-label="순찰 로봇 수동 조작">
           <ControlPanel />
-          <EventLog />
         </aside>
 
         <div className="cam-main">

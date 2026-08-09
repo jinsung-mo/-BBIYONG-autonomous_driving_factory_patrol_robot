@@ -5,6 +5,7 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import StatusPanel from './StatusPanel.tsx'
+import EventLog from './EventLog.tsx'
 import MapPanel from './MapPanel.tsx'
 import MappingTab from './MappingTab.tsx'
 
@@ -46,15 +47,12 @@ export default function MapPage({ tab }: { tab: MapTab }) {
           상태 카드 하나 높이로 주저앉았다(배포본에서 확인). 높이 사슬을 잇는다. */}
       <div className="map-view" hidden={isAdmin && tab === 'mapping'}>
         <div className="nav-stage">
-          {/* 🔴 이벤트 로그 카드를 뗐다(S15P11E101-867). 이벤트는 전용 탭이 따로 있고
-              거기서 필터·기간 조회·상세·영상까지 준다. 여기 있던 건 최근 몇 줄만 보여 주는
-              축약본이라, 같은 정보를 두 곳에서 다르게 보여 주고 있었다.
-              지도 화면이 답할 질문은 "지금 어디서 무슨 일이 벌어지는가" 이고, 그건 지도 위
-              마커와 상단 KPI(경보 이벤트 오늘 N건)가 이미 답한다 — 지나간 것을 조사하는 일은
-              이벤트 탭의 몫이다. 디자인 시스템 원본의 지도 화면에도 로그 카드가 없다.
-              ⚠ `EventLog.tsx` 파일 자체는 지우지 않는다 — 카메라 화면이 계속 쓴다. */}
-          <aside className="nav-side" aria-label="로봇 상태">
+          {/* 좌측 아래에 이벤트 로그를 둔다(S15P11E101-911, 사용자 요청 2026-08-10) —
+              카메라 화면에 있던 것을 이리로 옮겼다. 지도를 보면서 곁눈으로 '무슨 일이
+              있었나' 를 함께 확인한다. 상세·필터·영상은 전용 이벤트 탭에 따로 있다. */}
+          <aside className="nav-side" aria-label="로봇 상태 및 이벤트 로그">
             <StatusPanel />
+            <EventLog />
           </aside>
           <div className={`nav-canvas${mapDown ? ' down' : ''}`}>
             <MapPanel />
