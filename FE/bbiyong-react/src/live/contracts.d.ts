@@ -220,8 +220,21 @@ export interface MapSnapshot {
    * 순찰 지점을 찍어도 되는 칸(S15P11E101-869). 지도와 같은 flat RLE 형식이고,
    * 셀 순서도 cells 와 같은 그리드(w×h)를 가리킨다. 1=가능·0=불가.
    * 아직 안 보낼 수 있다 — 없으면 오버레이를 그리지 않는다(기존 동작 유지).
+   *
+   * 🔴 이름은 snake_case `patrol_mask`, 런 배열도 `cells` 다. MAP 패킷은 서버가
+   * DTO 로 재직렬화하지 않고 로봇 원문을 그대로 중계하므로(RobotEventListener
+   * .handleNavEvent) camelCase 로 바뀌지 않는다 — 같은 패킷의 robot_id·cells 와 같은
+   * 규칙이다. geometry 는 격자 자기검증용 사본이다(어긋나면 마스크를 버린다).
    */
-  patrolMask?: { encoding?: string, data: number[] }
+  patrol_mask?: {
+    schema?: number
+    encoding?: string
+    cells: number[]
+    geometry?: { w: number, h: number, res: number, ox: number, oy: number }
+    revision?: number
+    stamp?: number
+    clearance_m?: number
+  }
 }
 
 /** nav_bridge 포맷. ranges[i] === 0 은 무효 측정이다. */
@@ -539,8 +552,13 @@ export interface DecodedMap {
   seq: number
   /** '#' 벽 · ' ' 자유 · '.' 미탐색 (row-major, 아래→위) */
   data: string
-  /** patrolMask 디코드 결과(S15P11E101-869). 셀당 1=찍어도 됨·0=안 됨. 안 왔으면 null. */
+  /** patrol_mask 디코드 결과(S15P11E101-869). 셀당 1=찍어도 됨·0=안 됨. 안 왔으면 null. */
   mask?: Uint8Array | null
+  /**
+   * 지금 들고 있는 마스크의 patrol_mask.revision. 마스크가 바뀌어도 지도 sequence 는
+   * 오르지 않으므로(계약 §6), sequence 만 보고 건너뛰면 마스크가 영영 낡는다.
+   */
+  maskRev?: number | null
 }
 
 /** 활성 도면(floorplan.loadActivePlan). 배치 기하는 DecodedMap 과 같은 규칙이다. */

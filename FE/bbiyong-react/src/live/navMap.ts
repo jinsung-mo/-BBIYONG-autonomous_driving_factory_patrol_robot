@@ -23,17 +23,43 @@ export function decodeMapSnapshot(msg: any) {
   return { w: msg.w, h: msg.h, res: msg.res, ox: msg.ox, oy: msg.oy, seq: msg.sequence, data }
 }
 
+// MAP 패킷에서 순찰 마스크 블록을 꺼낸다(S15P11E101-869).
+//
+// 🔴 필드 이름은 MAP 패킷 원문 그대로 snake_case `patrol_mask` 다. 서버는 MAP 을 DTO 로
+// 재직렬화하지 않고 로봇 원문을 그대로 중계하므로(RobotEventListener.handleNavEvent)
+// camelCase 로 바뀌지 않는다 — 같은 패킷의 robot_id·cells 와 같은 규칙이다.
+// 첫 구현이 `patrolMask` 로 읽어 마스크가 FE 에 한 번도 도달하지 못했다.
+//
+// geometry 는 자기검증용 사본이다. 지도 격자와 어긋나면 마스크가 엉뚱한 칸을 가리키므로
+// 버린다 — 엉뚱한 칸을 막는 것은 안 막느니만 못하다.
+// 이름 판정과 격자 판정을 여기 한 곳에 모아 둔 이유는 tools/verify/check-869.mjs 가
+// 실제 로봇 패킷 모양으로 이 함수를 직접 검증할 수 있게 하기 위해서다.
+export function patrolMaskBlock(msg: any): any {
+  const raw = msg?.patrol_mask ?? msg?.patrolMask
+  if (!raw) return null
+  const g = raw.geometry
+  const aligned = !g || (g.w === msg.w && g.h === msg.h
+    && Math.abs(g.res - msg.res) < 1e-9
+    && Math.abs(g.ox - msg.ox) < 1e-9 && Math.abs(g.oy - msg.oy) < 1e-9)
+  return aligned ? raw : null
+}
+
 // patrolMask 디코드(S15P11E101-869) — decodeMapSnapshot 과 같은 flat RLE 형식이라
 // 새 디코더를 짜지 않고 같은 방식으로 편다. 셀 순서도 맵과 같은 그리드(w×h)다.
 // 크기가 안 맞으면 던진다 — decodeMapSnapshot 과 같은 이유로, 조용히 어긋난 위치를
 // 막는 것보다 버리고 이전 상태를 유지하는 편이 낫다(호출부가 catch 한다).
+//
+// 🔴 런 배열의 이름은 `cells` 다 — 지도의 `cells` 와 같은 이름·같은 형식이라는 것이
+// 계약의 요점이다(patrol_mask_contract.md §2). 처음 구현은 `data` 로 읽어서 마스크가
+// 항상 null 이었고, 그 결과 벽에 붙은 칸도 그대로 찍혔다. `data` 는 구버전 호환으로만 둔다.
 export function decodePatrolMask(mask: any, w: number, h: number): Uint8Array | null {
-  if (!mask?.data?.length) return null
+  const runs = mask?.cells ?? mask?.data
+  if (!runs?.length) return null
   const out = new Uint8Array(w * h)
   let i = 0
-  for (let k = 0; k < mask.data.length; k += 2) {
-    const v = mask.data[k] ? 1 : 0
-    const n = mask.data[k + 1]
+  for (let k = 0; k < runs.length; k += 2) {
+    const v = runs[k] ? 1 : 0
+    const n = runs[k + 1]
     out.fill(v, i, Math.min(i + n, out.length))
     i += n
   }
