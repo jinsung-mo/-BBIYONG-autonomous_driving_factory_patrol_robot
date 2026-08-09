@@ -4,6 +4,12 @@
 
 import { MAP, RS, CSn, astar, loop, PANELS, FIREC, speed } from './mapData.ts'
 
+// 열화상 센서가 물리적으로 90도 돌아 붙어 있다(S15P11E101-759). 서버는 프레임을
+// 무변환 중계하므로 되돌리는 자리는 FE 렌더뿐이다 — 지도 180도 회전(-746)과 같은 기조다.
+// 센서를 바로 달면 0 으로 바꾸면 된다. 여기 한 곳만 고치면 카메라 화면과 관제 화면이
+// 함께 따라온다(예전에는 카메라 화면 CSS 에만 걸려 있어 두 화면이 서로 달랐다).
+const THERMAL_ROT_DEG = 90
+
 // 캔버스를 부모 크기에 맞추고 2D 컨텍스트를 반환
 function fit(cv: any) {
   // 화면에서 떨어져 나간 캔버스는 그리지 않는다(부모가 없으면 크기를 잴 수 없다)
@@ -455,11 +461,32 @@ export default class Simulation {
   clearExternalFrames() { this.externalFrames = { FRONT: null, THERMAL: null } }
 
   // 캔버스를 꽉 채우되 종횡비를 유지해 그린다 (letterbox).
-  _drawFrame(g: any, img: any, Wc: any, Hc: any) {
+  //
+  // rotDeg: 센서가 물리적으로 돌아 붙어 있을 때 되돌리는 각도(S15P11E101-759).
+  // 🔴 이 회전은 **프레임에만** 건다. 예전에는 캔버스 요소 전체에 CSS transform 으로
+  // 걸었는데, 이 캔버스에는 센서 프레임 말고 우리가 직접 그린 라벨('THERMAL · …',
+  // 좌상단 10,18)도 들어 있어서 그 글자까지 같이 돌았다. 게다가 프레임이 아예 없는
+  // 시뮬 화면(이 로봇은 열화상을 생산하지 않는다)까지 통째로 돌아갔다.
+  // 돌려야 하는 것은 센서가 준 픽셀이지 캔버스가 아니다.
+  _drawFrame(g: any, img: any, Wc: any, Hc: any, rotDeg = 0) {
     g.fillStyle = '#000'; g.fillRect(0, 0, Wc, Hc)
-    const s = Math.min(Wc / img.width, Hc / img.height)
+    if (!rotDeg) {
+      const s = Math.min(Wc / img.width, Hc / img.height)
+      const w = img.width * s, h = img.height * s
+      g.drawImage(img, (Wc - w) / 2, (Hc - h) / 2, w, h)
+      return
+    }
+    // 직각으로 돌리면 프레임이 놓이는 상자의 가로·세로가 뒤바뀐다. 바꾸지 않으면 긴 변이 잘린다.
+    const quarterTurn = Math.abs(rotDeg % 180) === 90
+    const boxW = quarterTurn ? Hc : Wc
+    const boxH = quarterTurn ? Wc : Hc
+    const s = Math.min(boxW / img.width, boxH / img.height)
     const w = img.width * s, h = img.height * s
-    g.drawImage(img, (Wc - w) / 2, (Hc - h) / 2, w, h)
+    g.save()
+    g.translate(Wc / 2, Hc / 2)
+    g.rotate(rotDeg * Math.PI / 180)
+    g.drawImage(img, -w / 2, -h / 2, w, h)
+    g.restore()
   }
 
   // ---------- 로봇 상태 머신 ----------
@@ -723,7 +750,7 @@ export default class Simulation {
     // live: 로봇 열화상 프레임. HUD 최고온도는 프레임에 실려온 maxTemp를 그대로 쓴다.
     const thermal = this.externalFrames.THERMAL
     if (thermal) {
-      this._drawFrame(g, thermal.img, Wc, Hc)
+      this._drawFrame(g, thermal.img, Wc, Hc, THERMAL_ROT_DEG)
       if (typeof thermal.maxTemp === 'number') {
         this.thermalMax = 'MAX ' + thermal.maxTemp.toFixed(1) + '°C' + (thermal.maxTemp > this.tempCritical ? ' ⚠ 임계 초과' : '')
         this.thermalColor = thermal.maxTemp > this.tempCritical ? '#ff8d85' : (thermal.maxTemp > this.tempWarn ? '#ffd9a8' : '#b9ffe0')
