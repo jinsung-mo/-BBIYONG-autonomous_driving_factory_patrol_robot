@@ -156,6 +156,7 @@ export default function MapPanel() {
         {!showMapping && !showEmpty && <div className="maplegend" aria-label="지도 범례">
           <span><i className="legend-mark robot" />{displayName(ROBOT_ID)}</span>
           <span><i className="legend-mark wall" />벽</span>
+          <span><i className="legend-mark obstacle" />장애물</span>
         </div>}
         <div className="map-controls" aria-label="지도 화면 조절">
           <button

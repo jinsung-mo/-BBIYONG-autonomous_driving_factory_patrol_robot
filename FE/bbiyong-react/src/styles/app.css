@@ -2063,14 +2063,14 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 점검 지점 핀 — 3D 오브젝트가 아니라 화면에 투영된 HTML 이다. 그래서 어느 각도에서
    봐도 번호가 정면으로 읽힌다. 색은 2D 지도의 마름모 태그(#e0483f)와 맞춘다. */
 .three-insp{
-  position:absolute; left:0; top:0; margin:-11px 0 0 -11px;
-  width:22px; height:22px; border-radius:50%;
+  position:absolute; left:0; top:0; margin:-14px 0 0 -14px;
+  width:28px; height:28px; border-radius:50%;
   display:flex; align-items:center; justify-content:center;
   background:#e0483f; border:1.5px solid #fff;
   box-shadow:0 3px 8px rgba(0,0,0,.34);
   pointer-events:none; z-index:2;
 }
-.three-insp b{color:#fff; font-weight:800; font-size:11px; line-height:1;}
+.three-insp b{color:#fff; font-weight:800; font-size:13px; line-height:1;}
 /* 순찰에서 뺀 지점 — 지우지 않고 흐린다. 색만으로 알리지 않도록 회색으로 바꾼다. */
 .three-insp.off{opacity:.5; background:#8b8f9a;}
 .three-stage .mapview{z-index:3;}
@@ -2080,7 +2080,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    투영해 준다. 색: 화재=빨강(점검 핀과 같은 톤), 과열=이벤트 로그 과열색(#C9A26A).
    핀 끝(아이콘 하단 중앙)이 좌표를 짚도록 margin 으로 앵커를 옮긴다. */
 .three-alert{
-  position:absolute; left:0; top:0; margin:-24px 0 0 -13px;
+  /* 아이콘 34px 로 키움(사용자 요청 2026-08-10) — 하단 꼭짓점이 좌표(left/top)를 짚도록
+     앵커 margin 을 비례해서 옮긴다(하단≈-31, 중앙≈-17). */
+  position:absolute; left:0; top:0; margin:-31px 0 0 -17px;
   padding:0; background:none; border:0; cursor:pointer; z-index:4;
   animation:threeAlertDrop .35s ease both;
 }
@@ -2759,7 +2761,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   border-left:6px solid transparent; border-right:6px solid transparent;
   border-bottom:11px solid #e45b4f;
 }
-#pgMap .maplegend .legend-mark.obstacle{background:#59637a;}
+#pgMap .maplegend .legend-mark.obstacle{background:#59637a; border-radius:2px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.14);}
 #pgMap .maplegend .legend-mark.inspect{
   background:#e0483f; border-radius:50%; box-shadow:0 0 0 3px rgba(224,72,63,.18);
 }
