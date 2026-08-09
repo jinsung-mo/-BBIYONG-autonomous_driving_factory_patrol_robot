@@ -63,6 +63,13 @@ export function telemetryToStatus(t: any) {
     // 표시하는 쪽이 연결 여부를 알면 commGrade(ms, connected) 를 직접 부르는 편이 정확하다.
     comm: commGrade(t?.commLatencyMs).text,
     location: t?.location || null,
+    // 충전 상태 — 로봇이 배터리 % 추세로 추정해 보낸다. 아직 판단이 안 섰거나 구버전
+    // 로봇이면 필드가 없다. 그때는 false 로 낮추지 않고 null 로 남긴다: '방전 중'이라고
+    // 단정하는 것과 '모른다'는 다른 말이고, 화면도 그렇게 구분해야 한다.
+    charging: typeof t?.charging === 'boolean' ? t.charging : null,
+    minutesToFull: typeof t?.minutesToFull === 'number' && Number.isFinite(t.minutesToFull)
+      ? Math.round(t.minutesToFull)
+      : null,
   }
 }
 
