@@ -3265,6 +3265,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .map-mapping-hint{
   font-size:12px; color:var(--nx-faint,#7c8496); max-width:32em; line-height:1.7;
 }
+
+/* 렌더 예외 대체 UI (S15P11E101-897).
+   서식은 바로 위 빈 상태(.map-empty)를 그대로 쓴다 — 새 색도 새 컴포넌트도 만들지 않는다.
+   다만 .map-empty 는 `position:absolute` 라 위치 기준이 없는 평범한 블록(페이지 슬롯 등)
+   안에서는 제자리에 뜨지 않는다. 그런 자리에서만 이 한 줄로 흐름 안에 되돌린다. */
+.map-empty.eb-inline{position:relative; inset:auto; height:100%; min-height:180px;}
+
 /* 도는 고리는 '멈춰 있지 않다' 만 알린다. 진행률로 읽히지 않게 눈금을 주지 않는다. */
 .map-mapping-spin{
   width:34px; height:34px; border-radius:50%;

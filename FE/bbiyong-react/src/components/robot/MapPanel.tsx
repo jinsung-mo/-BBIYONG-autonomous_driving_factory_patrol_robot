@@ -5,6 +5,7 @@ import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import { ROBOT_ID } from '../../live/config.ts'
 import { displayName } from '../../live/robotName.ts'
 import { isFloorplan } from '../../live/floorplan.ts'
+import ErrorBoundary from '../ErrorBoundary.tsx'
 import MappingProgress from './MappingProgress.tsx'
 import LiveNavMap from './LiveNavMap.tsx'
 // 3D 지도는 three.js 뷰다(S15P11E101-712). CSS 압출판(IsoMapView)은 지우지 않고 남겨 뒀다 —
@@ -102,6 +103,14 @@ export default function MapPanel() {
   return (
     <div className="panel" id="pMap">
       <div className={`vwrap${mapDown ? ' down' : ''}`} style={{ background: '#0a0c10' }}>
+        {/* 🔴 지도 그림만 따로 감싼다(S15P11E101-897). 이 자리는 WebGL 이라 컨텍스트
+            손실·드라이버 문제로 죽을 여지가 가장 크고, 실제로 한 번 화면 전체를 지웠다
+            (S15P11E101-896: ThreeMapView 의 TypeError → 관제 화면 백지).
+            여기서 막으면 잃는 것은 그림 한 장뿐이다 — 좌측 상태 패널도, 확대·전체화면
+            버튼도, 다른 탭도 그대로 산다. '다시 시도' 는 캔버스를 새로 마운트하므로
+            죽은 WebGL 컨텍스트도 같이 버려진다.
+            `.vwrap` 이 `position:relative` 라 대체 UI 는 기본값(겹쳐 채우기)으로 둔다. */}
+        <ErrorBoundary what="지도" hint="다시 시도를 누르면 지도만 새로 그립니다. 나머지 화면은 그대로 쓸 수 있습니다.">
         {enabled && showMapping ? <MappingProgress />
           : enabled && showEmpty ? (
             <div className="map-empty" role="status">
@@ -127,6 +136,7 @@ export default function MapPanel() {
               className="map-zoom-canvas"
               style={{ transform: `scale(${zoom})` }}
             />}
+        </ErrorBoundary>
         {canIso && !showMapping && (
           <button
             type="button"

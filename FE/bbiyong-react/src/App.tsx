@@ -17,6 +17,7 @@ import CameraPage from './components/robot/CameraPage.tsx'
 import EventPage from './components/events/EventPage.tsx'
 import ConfigPage from './components/config/ConfigPage.tsx'
 import EventAlert from './components/EventAlert.tsx'
+import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { SettingsProvider } from './settings/SettingsContext.tsx'
 import SessionWatcher from './auth/SessionWatcher.tsx'
 import EventLogActivity from './auth/EventLogActivity.tsx'
@@ -101,10 +102,16 @@ function Sections({ active, isAdmin, mapTab }: { active: Section, isAdmin: boole
             슬라이드는 나가고 들어오는 두 화면이 동시에 그려져 있어야 성립한다. */}
         {order.map((key) => (
           <div key={key} className={`page-slot${active === key ? ' on' : ''}`}>
-            {key === 'live' && <MapPage tab={mapTab} />}
-            {key === 'cam' && <CameraPage />}
-            {key === 'events' && <EventPage />}
-            {key === 'config' && <ConfigPage />}
+            {/* 화면 하나가 렌더 중 죽어도 나머지 셋은 살아 있어야 한다(S15P11E101-897).
+                경계를 슬롯마다 하나씩 두는 이유가 여기 있다 — 네 화면이 한 나무에
+                같이 매달려 있어서, 경계가 없으면 어느 하나의 예외가 넷을 다 지운다.
+                `.page-slot` 은 위치 기준이 아니라 평범한 블록이라 `fill={false}` 다. */}
+            <ErrorBoundary what={`${SECTION_TITLE[key].title} 화면`} fill={false}>
+              {key === 'live' && <MapPage tab={mapTab} />}
+              {key === 'cam' && <CameraPage />}
+              {key === 'events' && <EventPage />}
+              {key === 'config' && <ConfigPage />}
+            </ErrorBoundary>
           </div>
         ))}
       </div>
@@ -177,8 +184,16 @@ function Gate() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Gate />
-    </AuthProvider>
+    // 맨 바깥 그물 (S15P11E101-897). 아래 구역 경계들이 못 잡는 자리 — 공급자·상단바·
+    // 알림처럼 화면 밖에 있는 것들 — 에서 예외가 나도 백지 대신 안내와 '다시 시도' 를 남긴다.
+    // 여기서 다시 마운트하면 AuthProvider 가 저장된 세션을 다시 읽으므로 로그인은 풀리지 않는다.
+    <ErrorBoundary
+      what="관제 화면"
+      hint="예기치 못한 오류가 발생했습니다. 다시 시도를 누르면 화면을 다시 불러옵니다."
+    >
+      <AuthProvider>
+        <Gate />
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
