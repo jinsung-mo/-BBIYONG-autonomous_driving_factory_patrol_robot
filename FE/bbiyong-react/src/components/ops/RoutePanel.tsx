@@ -1,5 +1,6 @@
 import { errMessage } from '../../live/errors.ts'
 import { ROBOT_ID } from '../../live/config.ts'
+import { playVoice } from '../../live/voice.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
@@ -118,7 +119,10 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
     try {
       const r = await startPatrol(accessToken, ROBOT_ID)
       if (!alive.current) return
-      setMsg(startPatrolMessage(r))
+      const m = startPatrolMessage(r)
+      setMsg(m)
+      // "순찰을 시작합니다"(02) — 시작에 성공했을 때만 안내한다(S15P11E101-891)
+      if ((m as any)?.kind !== 'err') playVoice('patrolStart')
     } catch (e) {
       if (alive.current) setMsg({ kind: 'err', text: `순찰을 시작하지 못했습니다 — ${errMessage(e)}` })
     } finally { if (alive.current) setBusy(false) }

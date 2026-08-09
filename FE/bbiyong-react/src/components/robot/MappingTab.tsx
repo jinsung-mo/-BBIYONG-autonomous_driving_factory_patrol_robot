@@ -5,6 +5,7 @@ import Modal from '../ui/Modal.tsx'
 import RoutePanel from '../ops/RoutePanel.tsx'
 import { useInspection } from '../../live/inspection.ts'
 import { MAPPING_STATUS } from '../../live/mapping.ts'
+import { playVoice } from '../../live/voice.ts'
 
 // 지도 페이지의 '매핑' 탭 (S15P11E101 콘솔 정리 — 운영 탭에서 이동).
 //
@@ -54,6 +55,7 @@ export default function MappingTab() {
     clearMappingComplete()
     control.startMapping()
     setRequested(true)
+    playVoice('mappingStart')   // "맵핑을 시작합니다"(01) — 버튼 클릭 제스처 직후라 재생 허용된다
   }
 
   const onStopMapping = () => {

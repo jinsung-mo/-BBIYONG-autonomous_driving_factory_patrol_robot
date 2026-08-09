@@ -4,6 +4,7 @@ import { useLive } from '../live/LiveContext.tsx'
 import { alertToToast } from '../live/mappers.ts'
 import FireFlash from './FireFlash.tsx'
 import { acknowledgeFire, fireKey, raiseFire } from '../live/fireAlarm.ts'
+import { playVoice, playFireSequence } from '../live/voice.ts'
 
 // 화재/과열 팝업 알림. 화면 상단에 배너로 뜨며, 떠 있는 동안 경보음이 반복 재생된다.
 //
@@ -18,59 +19,32 @@ import { acknowledgeFire, fireKey, raiseFire } from '../live/fireAlarm.ts'
 // 현재 편성된 순찰 로봇 — 출동 대상은 이 1대뿐 (StatusPanel의 표기와 동일)
 const ROBOT_NAME = 'orinka_01'
 
-const SOUND_REPEAT_MS = 3000 // 알림이 떠 있는 동안 경보음 반복 간격
 let uid = 0
 
-// 오디오 파일 없이 오실레이터로 경보음 생성 (화재: 높은 삐-삐-삐 / 과열: 낮은 삐-삐)
-function playAlarmBeep(kind: any) {
-  try {
-    // webkitAudioContext 는 구형 Safari 폴백이라 표준 타입에 없다. 런타임 동작은 그대로 두고
-    // 타입만 넓힌다(S15P11E101-570).
-    const w = window as any
-    const AudioCtx = w.AudioContext || w.webkitAudioContext
-    const ctx = new AudioCtx()
-    const now = ctx.currentTime
-    const freqs = kind === 'fire' ? [880, 660, 880] : [520, 440]
-    let t = now
-    freqs.forEach((freq) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = 'square'
-      osc.frequency.value = freq
-      gain.gain.setValueAtTime(0.0001, t)
-      gain.gain.exponentialRampToValueAtTime(0.22, t + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22)
-      osc.connect(gain).connect(ctx.destination)
-      osc.start(t)
-      osc.stop(t + 0.24)
-      t += 0.26
-    })
-    setTimeout(() => ctx.close(), (t - now + 0.3) * 1000)
-  } catch {
-    // 오디오 미지원/차단 환경 — 무시 (팝업은 그대로 뜬다)
-  }
-}
-
-// 떠 있는 토스트 목록에 맞춰 반복 경보음 타이머를 붙였다 뗀다.
+// 떠 있는 토스트에 맞춰 음성 안내를 재생한다 (S15P11E101-891, 이전 오실레이터 경보음 대체).
+//   화재: "화재를 발견하였습니다"(04) 1회 → "화재감지 알람"(05) 반복. [확인]으로 화재
+//         토스트가 사라지면(hasFire=false) 멈춘다.
+//   과열: "과열을 탐지했습니다"(03) 를 경보 1건당 1회. 반복하지 않는다.
 function useAlarmSound(items: any) {
-  const timers = useRef<Record<string, any>>({})
+  const fireStop = useRef<null | (() => void)>(null)
+  const heatSeen = useRef<Set<string>>(new Set())
   useEffect(() => {
-    const alive = new Set(items.map((i: any) => String(i.id)))
+    const hasFire = items.some((i: any) => i.kind === 'fire')
+    if (hasFire && !fireStop.current) fireStop.current = playFireSequence()
+    if (!hasFire && fireStop.current) { fireStop.current(); fireStop.current = null }
+
+    // 과열은 새로 뜬 경보마다 딱 한 번 안내한다. id 로 중복을 막는다.
+    const heatIds = new Set(items.filter((i: any) => i.kind === 'heat').map((i: any) => String(i.id)))
     items.forEach((i: any) => {
-      if (!timers.current[i.id]) {
-        playAlarmBeep(i.kind)
-        timers.current[i.id] = setInterval(() => playAlarmBeep(i.kind), SOUND_REPEAT_MS)
-      }
+      if (i.kind !== 'heat') return
+      const key = String(i.id)
+      if (!heatSeen.current.has(key)) { heatSeen.current.add(key); playVoice('overheat') }
     })
-    Object.keys(timers.current).forEach((k) => {
-      if (!alive.has(k)) { clearInterval(timers.current[k]); delete timers.current[k] }
-    })
+    // 사라진 과열 id 는 기억에서 지운다 — 같은 자리에서 새 경보가 오면 다시 안내해야 한다.
+    for (const key of [...heatSeen.current]) if (!heatIds.has(key)) heatSeen.current.delete(key)
   }, [items])
-  // 언마운트 시 남은 타이머 정리
-  // Object.values 가 unknown[] 을 주므로 타이머 핸들 타입을 명시한다
-  useEffect(() => () => {
-    Object.values(timers.current as Record<string, number>).forEach(clearInterval)
-  }, [])
+  // 언마운트 시 화재 반복 정리
+  useEffect(() => () => { if (fireStop.current) { fireStop.current(); fireStop.current = null } }, [])
 }
 
 function ToastList({ items, onDismiss, onAck }: any) {
