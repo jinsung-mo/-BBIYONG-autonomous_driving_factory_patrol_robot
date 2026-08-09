@@ -115,13 +115,15 @@ export default function CameraPage() {
             title={swapped ? undefined : '더블클릭하면 크게 봅니다'}
           >
             <div className={`vwrap${thermalDown ? ' down' : ''}`}>
-              {/* 센서가 90도 돌아 붙어 있어 화면에서 되돌린다(S15P11E101-759).
-                  확대와 같은 요소에 걸리는 변형이라 한 줄에 합친다 — 나누면 인라인이
-                  CSS 를 덮어 둘 중 하나가 사라진다. */}
+              {/* 🔴 센서 90도 보정(S15P11E101-759)을 여기서 뺐다. 회전을 캔버스 요소에
+                  걸면 센서 프레임뿐 아니라 그 안에 우리가 직접 그린 좌상단 라벨까지
+                  같이 돌고, 프레임이 없는 시뮬 화면도 통째로 돌아간다.
+                  이제 보정은 프레임을 그리는 자리에서 한다 — Simulation.ts 의
+                  THERMAL_ROT_DEG. 전면 카메라와 똑같이 평범한 캔버스로 둔다. */}
               <canvas
                 ref={refs.tcam}
-                className="camera-zoom-canvas thermal-rot"
-                style={{ transform: `translate(-50%, -50%) rotate(90deg) scale(${swapped ? zoom : 1})` }}
+                className="camera-zoom-canvas"
+                style={{ transform: `scale(${swapped ? zoom : 1})` }}
               />
               {!thermalDown && (
                 <span className="hud2" style={{ color: status.thermalColor }}>{status.thermalMax}</span>
