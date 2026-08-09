@@ -19,16 +19,15 @@ export default function Nav({ section, onSection }: { section: Section,
             onSection: (s: Section) => void }) {
   const { clock } = useSim()
   const { enabled } = useLive()
-  const { user, isAdmin } = useAuth()
+  const { user } = useAuth()
 
-  // 지도, 카메라, 이벤트 화면을 기본으로 제공한다. 설정은 관리자에게만 보인다.
-  // (S15P11E101 콘솔 정리) 통계 탭 삭제, 운영 탭 삭제 — 운영의 매핑·순찰 경로는 지도 탭으로,
-  // 점검 지점·임계온도는 설정으로 이동했다.
+  // 지도, 카메라, 이벤트 세 화면을 제공한다.
+  // (S15P11E101 콘솔 정리) 통계·운영 탭 삭제 — 매핑·순찰 경로는 지도 탭으로 이동했다.
+  // 설정 탭도 제거했다(2026-08-09) — 매핑/순찰 시작은 지도 탭에 있고 나머지는 쓰지 않는다.
   const tabs: Array<{ key: Section, label: string }> = [
     { key: 'live' as const, label: '지도' },
     { key: 'cam' as const, label: '카메라' },
     { key: 'events' as const, label: '이벤트' },
-    ...(isAdmin ? [{ key: 'config' as const, label: '설정' }] : []),
   ]
 
   return (

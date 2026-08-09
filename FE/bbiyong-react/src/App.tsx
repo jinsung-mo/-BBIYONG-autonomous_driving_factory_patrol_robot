@@ -15,7 +15,6 @@ import type { MapTab } from './components/robot/MapPage.tsx'
 import KpiRow from './components/robot/KpiRow.tsx'
 import CameraPage from './components/robot/CameraPage.tsx'
 import EventPage from './components/events/EventPage.tsx'
-import ConfigPage from './components/config/ConfigPage.tsx'
 import EventAlert from './components/EventAlert.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { SettingsProvider } from './settings/SettingsContext.tsx'
@@ -50,9 +49,6 @@ const SECTION_TITLE: Record<Section, { title: string, sub: string }> = {
   live: { title: '순찰 구역', sub: 'ORINCA FLEET' },
   cam: { title: '순찰 카메라 뷰', sub: 'FRONT · THERMAL' },
   events: { title: '이벤트 로그', sub: 'EVENT ARCHIVE · REALTIME ALERTS' },
-  // 알림·점검·사용자 패널은 2026-08-09 에 제거됐다(ConfigPage.tsx 주석에 복구 명령이 있다) —
-  // 화면에 없는 항목을 부제가 계속 가리키면 조작자가 그걸 찾아 헤맨다.
-  config: { title: '시스템 설정', sub: 'POWER · SYSTEM' },
 }
 
 // 고정 머리 — 제목 + KPI + 보조 줄.
@@ -85,10 +81,10 @@ function ConsoleHeader({ active, isAdmin, mapTab, onMapTab }: {
   )
 }
 
-function Sections({ active, isAdmin, mapTab }: { active: Section, isAdmin: boolean, mapTab: MapTab }) {
-  // 뷰어에게는 설정 탭이 없다(Nav.tsx 와 같은 규칙). 슬롯이 셋이 되어도 이동량 계산은
-  // 그대로다 — translateY 의 % 는 트랙 자신의 높이(= 본문 한 칸) 기준이기 때문이다.
-  const order: Section[] = isAdmin ? ['live', 'cam', 'events', 'config'] : ['live', 'cam', 'events']
+function Sections({ active, mapTab }: { active: Section, mapTab: MapTab }) {
+  // 세 화면(지도·카메라·이벤트)을 탭 순서대로 쌓는다. translateY 의 % 는 트랙 자신의
+  // 높이(= 본문 한 칸) 기준이라 슬롯 수와 무관하게 계산이 그대로다.
+  const order: Section[] = ['live', 'cam', 'events']
   // active 는 Dashboard 에서 allowed 로 이미 보정됐지만, indexOf 가 -1 이면 트랙이
   // 화면 밖으로 나가 아무것도 안 보인다. 여기서 한 번 더 바닥을 깐다.
   const index = Math.max(0, order.indexOf(active))
@@ -97,9 +93,8 @@ function Sections({ active, isAdmin, mapTab }: { active: Section, isAdmin: boole
     <div className="page-viewport">
       <div className="page-track" style={{ transform: `translateY(-${index * 100}%)` }}>
         {/* 화면 모두 마운트해 둔다. 탭을 옮겼다고 캔버스를 버리면 돌아올 때마다
-            영상과 지도가 처음부터 다시 붙는다.
-            ⚠ 설정도 이제 상시 마운트다 — 예전에는 active === 'config' 일 때만 만들었는데,
-            슬라이드는 나가고 들어오는 두 화면이 동시에 그려져 있어야 성립한다. */}
+            영상과 지도가 처음부터 다시 붙는다. 슬라이드는 나가고 들어오는 두 화면이
+            동시에 그려져 있어야 성립한다. */}
         {order.map((key) => (
           <div key={key} className={`page-slot${active === key ? ' on' : ''}`}>
             {/* 화면 하나가 렌더 중 죽어도 나머지 셋은 살아 있어야 한다(S15P11E101-897).
@@ -110,7 +105,6 @@ function Sections({ active, isAdmin, mapTab }: { active: Section, isAdmin: boole
               {key === 'live' && <MapPage tab={mapTab} />}
               {key === 'cam' && <CameraPage />}
               {key === 'events' && <EventPage />}
-              {key === 'config' && <ConfigPage />}
             </ErrorBoundary>
           </div>
         ))}
@@ -121,12 +115,13 @@ function Sections({ active, isAdmin, mapTab }: { active: Section, isAdmin: boole
 
 function Dashboard() {
   const sim = useSimulation()
+  // isAdmin 은 지도 탭의 '지도/매핑' 세그먼트 노출에만 쓴다(ConsoleHeader).
   const { isAdmin } = useAuth()
   const [section, setSection] = useState<Section>(() => (sessionStorage.getItem('section') as Section) || 'live')
   useEffect(() => { sessionStorage.setItem('section', section) }, [section])
-  // 접근 가능한 섹션으로 되돌린다. 권한 강등(관리자→뷰어)뿐 아니라, 삭제된 옛 섹션이
-  // sessionStorage 에 남아 있는 경우(통계/운영)도 지도로 보정한다.
-  const allowed: Section[] = isAdmin ? ['live', 'cam', 'events', 'config'] : ['live', 'cam', 'events']
+  // 접근 가능한 섹션으로 되돌린다. 삭제된 옛 섹션(통계/운영/설정)이 sessionStorage 에
+  // 남아 있으면 지도로 보정한다.
+  const allowed: Section[] = ['live', 'cam', 'events']
   const active: Section = allowed.includes(section) ? section : 'live'
 
   // 지도 화면의 '지도/매핑' 상태를 여기로 올린다. 세그먼트 자체는 고정된 머리에 있고
@@ -160,7 +155,7 @@ function Dashboard() {
             {/* 머리는 고정, 본문만 슬라이드 — 둘을 한 껍데기에 담아 여백·배경을 공유한다 */}
             <div className="console-shell">
               <ConsoleHeader active={active} isAdmin={isAdmin} mapTab={mapTab} onMapTab={setMapTab} />
-              <Sections active={active} isAdmin={isAdmin} mapTab={mapTab} />
+              <Sections active={active} mapTab={mapTab} />
             </div>
             </ZoneProvider>
           </FleetProvider>
