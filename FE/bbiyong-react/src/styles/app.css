@@ -252,9 +252,13 @@ canvas{display:block; width:100%; height:100%;}
   margin-top:0; flex:1 1 0; min-height:0;
   display:flex; flex-direction:column;
 }
-/* 통합 카드 안에서는 맵이 남는 공간을 다 먹는다 — 고정 높이(min 64vh)를 풀고 flex 로. */
-.mapping-canvas #pgRoute.routepanel .routemap{flex:1 1 auto; height:auto; min-height:0;}
-/* 지점 목록은 길어지면 카드 안에서만 스크롤한다 — 맵을 밀어내지 않게 상한을 준다. */
+/* 통합 카드 안에서 맵을 화면 하단(브라우저 창 끝)까지 채운다(S15P11E101-906).
+   flex:1 만으로는 카드 안 형제(제목·안내·목록·버튼)와 남는 높이를 나눠 368px 로
+   주저앉았다. 뷰포트 기반 min-height 로 맵을 창 하단까지 끌어내리고, 그만큼 아래로
+   밀려난 순찰 시작/종료 버튼·목록은 카드(#pgMap overflow:auto) 스크롤로 접근한다
+   [사용자 지침 2026-08-10]. 280px = 상단바+헤더+서브탭+카드 제목/안내 대략치. */
+.mapping-canvas #pgRoute.routepanel .routemap{flex:0 0 auto; height:auto; min-height:calc(100dvh - 280px);}
+/* 목록은 맵을 밀어내지 않게 상한을 준다 — 넘치면 카드가 스크롤된다. */
 .mapping-canvas #pgRoute.routepanel .map-list{flex:0 0 auto; max-height:22vh; overflow:auto;}
 
 /* (매핑 컨트롤은 서브탭 줄로 이동했다 — S15P11E101-904. 카드 상단 .mapping-control 규칙 제거) */
