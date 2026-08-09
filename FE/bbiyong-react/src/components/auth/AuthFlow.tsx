@@ -3,20 +3,18 @@
 //
 // ══ 왜 삼항 교체를 버렸나 ═══════════════════════════════════════════════════
 // 전에는 App.tsx 의 Gate 가 `entered ? <AuthScreen/> : <WelcomeScreen/>` 으로 둘 중
-// 하나만 렌더했다. 그 구조로는 두 가지가 원리적으로 불가능하다.
-//   ① 배경 순찰 씬이 살아남지 못한다 — 씬이 WelcomeScreen 안에 있어서 로그인으로 가는
-//      순간 언마운트되고, 돌아오면 로봇이 경로 시작점부터 다시 돈다.
-//   ② 나가는 화면이 애니메이션을 마칠 수 없다 — 교체 즉시 DOM 에서 사라지므로
-//      "왼쪽으로 밀려나며 사라진다"가 그려질 프레임 자체가 없다.
-// → 씬(PatrolScene)을 두 상태의 공통 부모인 여기로 끌어올리고, 웰컴과 로그인을 **동시에
-//   마운트**해 둔 채 CSS 클래스로만 전환한다. 나가는 쪽은 DOM 에 그대로 남아 transition 을
-//   끝까지 재생하고, 끝난 뒤에도 opacity 0 · pointer-events:none · inert 로 죽어 있다.
+// 하나만 렌더했다. 그 구조로는 나가는 화면이 애니메이션을 마칠 수 없다 — 교체 즉시
+// DOM 에서 사라지므로 "왼쪽으로 밀려나며 사라진다"가 그려질 프레임 자체가 없다.
+// → 웰컴과 로그인을 **동시에 마운트**해 둔 채 CSS 클래스로만 전환한다. 나가는 쪽은
+//   DOM 에 그대로 남아 transition 을 끝까지 재생하고, 끝난 뒤에도 opacity 0 ·
+//   pointer-events:none · inert 로 죽어 있다.
+// (원래는 배경 순찰 씬 PatrolScene 을 전환에서 살리려는 이유도 있었으나, 씬은
+//  S15P11E101-877 리디자인에서 정적 비주얼로 대체돼 사라졌다 — 구조는 그대로 유효하다.)
 //
 // ══ 데이터 흐름 ════════════════════════════════════════════════════════════
 // CTA 클릭 → goLogin() → is-login 즉시 ON(히어로 퇴장 · 스크림 · 통계 페이드)
 //          → 70ms 뒤 login-in ON(로그인 패널 등장)
 // ← 처음으로 → goWelcome() → login-in 즉시 OFF → 70ms 뒤 is-login OFF
-// 로봇 좌표는 이 전환과 무관하게 PatrolScene 안의 rAF 루프가 계속 갱신한다(리렌더 없음).
 //
 // 🔴 시차를 CSS transition-delay 로 주지 않는 이유: delay 는 켤 때와 끌 때가 대칭이라
 // 왕복에서 반대로 작동한다(들어올 때 늦어야 할 쪽이 나갈 때도 늦어진다). 방향마다
@@ -24,7 +22,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext.tsx'
-import PatrolScene from './PatrolScene.tsx'
 import WelcomeScreen from './WelcomeScreen.tsx'
 import AuthScreen from './AuthScreen.tsx'
 
@@ -78,7 +75,7 @@ export default function AuthFlow() {
 
   return (
     <div ref={rootRef} className={`authflow${isLogin ? ' is-login' : ''}${loginIn ? ' login-in' : ''}`}>
-      {/* 웰컴 층 — 씬(계속 살아 있음) + 히어로·통계(로그인에서 퇴장) */}
+      {/* 웰컴 층 — 우측 비주얼 + 히어로 + 기능 카드 (로그인에서 퇴장) */}
       <div
         ref={welcomeRef}
         className="welcome-wrap"
@@ -86,14 +83,12 @@ export default function AuthFlow() {
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' && !isLogin) goLogin() }}
       >
-        <PatrolScene />
         <WelcomeScreen onEnter={goLogin} />
       </div>
 
-      {/* 스크림 — 블러를 전담한다. 🔴 씬에 filter 를 걸지 않는 이유 두 가지:
-          ① filter 는 조상에 containing block 을 만들어 position:fixed 자식이 깨진다.
-          ② 매 프레임 transform 이 도는 씬에 blur 를 걸면 GPU 가 매 프레임 다시 흐린다.
-          스크림은 뒤(씬)만 흐리므로 씬은 원래 비용 그대로 돈다. */}
+      {/* 스크림 — 블러를 전담한다. 🔴 웰컴 층에 filter 를 직접 걸지 않는 이유:
+          filter 는 조상에 containing block 을 만들어 position:fixed 자식이 깨진다.
+          스크림은 자기 뒤만 흐리므로 웰컴 층은 건드리지 않는다. */}
       <div className="scrim" aria-hidden="true" />
 
       {/* 로그인 층 — 아래에서 올라온다. 항상 마운트돼 있고 클래스로만 여닫는다. */}

@@ -33,6 +33,12 @@
   --bb-primary-tonal:  #E4E5F5;
   --bb-primary-on-tonal:#3F4880;
 
+  /* 랜딩(웰컴) 전용 강조 파랑 — 확정 시안 수정한환영페이지.png(S15P11E101-877)의
+     헤드라인·CTA 색. 제품 프라이머리(#4C5695)와 성격이 달라(마케팅 히어로 톤)
+     별도 토큰으로 둔다 — 관제 화면 안에서는 쓰지 않는다. */
+  --bb-hero-accent:       #0056FB;
+  --bb-hero-accent-hover: #0047D6;
+
   --bb-danger:         #C07A72;
   --bb-danger-text:    #B4655C;
   --bb-danger-tint:    #F0D6D2;
