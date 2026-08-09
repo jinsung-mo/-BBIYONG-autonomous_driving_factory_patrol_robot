@@ -98,7 +98,12 @@ export function alertToToast(a: any) {
 // GET /api/events 의 한 건 → 이벤트 로그 한 줄.
 // 실시간 경보(AlertMessage)와 필드 이름이 달라(eventId/timestamp/temperature) 여기서 흡수한다.
 export function eventToLog(e: any) {
-  const kind = e?.type === 'FIRE' ? 'fire' : (e?.type === 'OVERHEAT' ? 'heat' : 'ok')
+  // PLANNER_* 는 회색('sys')으로 둔다. 다른 조용한 로그와 같이 'ok'(초록 체크)로 두면
+  // "경로 계산 중단" 줄이 "로봇 연결됨" 과 똑같이 보여 목록에서 찾을 수 없다(2026-08-10).
+  // SYSTEM(연결/해제)의 표시는 그대로 둔다 — 건드릴 이유가 없다.
+  const kind = e?.type === 'FIRE' ? 'fire'
+    : (e?.type === 'OVERHEAT' ? 'heat'
+      : (typeof e?.type === 'string' && e.type.startsWith('PLANNER_') ? 'sys' : 'ok'))
   return {
     id: `ev-${e?.eventId}`,
     eventId: e?.eventId,   // 서버 삭제(DELETE /api/events/{id}) 대상 — S15P11E101-516
@@ -123,7 +128,22 @@ export function eventToLog(e: any) {
   }
 }
 
-export const TYPE_LABEL: Record<string, string> = { FIRE: '화재 발생', OVERHEAT: '과열 감지', SYSTEM: '시스템' }
+export const TYPE_LABEL: Record<string, string> = {
+  FIRE: '화재 발생',
+  OVERHEAT: '과열 감지',
+  SYSTEM: '시스템',
+  // 조용한 시스템 로그 (2026-08-10). 경보가 아니라 "무슨 일이 있었는지" 를 남기는 줄이다.
+  PLANNER_DOWN: '경로 계산 중단',
+  PLANNER_RECOVER_STARTED: 'Nav2 재시작 중',
+  PLANNER_RECOVER_OK: 'Nav2 재시작 완료',
+  PLANNER_RECOVER_FAILED: 'Nav2 재시작 실패',
+  PLANNER_RECOVER_BUSY: 'Nav2 재시작 중복 요청',
+}
+
+/** 경보가 아닌 조용한 로그인가. 아이콘 색·연관 영상 표시 여부를 가른다. */
+export function isSystemLogType(type: any) {
+  return type === 'SYSTEM' || (typeof type === 'string' && type.startsWith('PLANNER_'))
+}
 
 // 종류 → 기본 심각도(서버가 level 을 주지 않을 때의 보정): 화재=긴급, 과열=경고.
 // 서버가 level 을 주면 그 값이 우선한다(이 함수는 폴백일 뿐이다).

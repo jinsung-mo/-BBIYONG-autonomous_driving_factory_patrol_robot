@@ -436,7 +436,11 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                   //
                   // 제목 글자색(tKey)은 종류를 그대로 따른다 — 무슨 일이었는지(화재/과열)는
                   // 해결 여부와 별개로 남아야 한다. '긴급' 뱃지도 그대로 붙는다.
-                  const iconKind = log.status === 'RESOLVED' ? 'ok' : log.kind
+                  // 🔴 예외: 조용한 시스템 로그(kind='sys' = PLANNER_*)는 status 가 늘
+                  // RESOLVED 다 — 조치 대상 카운터를 건드리지 않으려고 그렇게 저장한다
+                  // (BE EventLogService.saveSystemEvent). 여기서 초록 체크로 바꾸면
+                  // "경로 계산 중단" 이 처리 완료로 보인다. 회색 그대로 둔다.
+                  const iconKind = (log.status === 'RESOLVED' && log.kind !== 'sys') ? 'ok' : log.kind
                   const kindKey = iconKind === 'fire' || iconKind === 'heat' || iconKind === 'ok' ? iconKind : 'sub'
                   const tKey = log.kind === 'fire' || log.kind === 'heat' || log.kind === 'ok' ? log.kind : 'ink'
                   const rel = relativeDay(log.ts)
