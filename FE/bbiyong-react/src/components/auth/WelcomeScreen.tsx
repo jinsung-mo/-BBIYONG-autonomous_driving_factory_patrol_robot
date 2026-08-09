@@ -96,19 +96,23 @@ export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
             </svg>
           </button>
         </div>
-      </section>
 
-      <ul className="welcome-features" aria-label="주요 기능">
-        {FEATURES.map((f, i) => (
-          /* stagger 는 인라인 지연으로 — CSS 에 카드 수만큼 nth-child 를 늘어놓지 않는다 */
-          <li key={f.title} className="welcome-feature"
-            style={{ animationDelay: `${0.35 + i * 0.12}s` }} onAnimationEnd={clearEntryAnim}>
-            <span className="welcome-feature__ic">{f.icon}</span>
-            <strong className="welcome-feature__t">{f.title}</strong>
-            <span className="welcome-feature__d">{f.desc}</span>
-          </li>
-        ))}
-      </ul>
+        {/* 기능 카드는 히어로 블록 **안**이다 [사용자 지침 2026-08-09] — 화면 하단에
+            absolute 로 고정했더니 화면이 높을수록 CTA 와의 사이가 벌어졌다. 흐름에 두면
+            어떤 화면 높이에서도 CTA 아래 일정 간격이고, 로그인 전환 때도 히어로와 함께
+            밀려난다. */}
+        <ul className="welcome-features" aria-label="주요 기능">
+          {FEATURES.map((f, i) => (
+            /* stagger 는 인라인 지연으로 — CSS 에 카드 수만큼 nth-child 를 늘어놓지 않는다 */
+            <li key={f.title} className="welcome-feature"
+              style={{ animationDelay: `${0.35 + i * 0.12}s` }} onAnimationEnd={clearEntryAnim}>
+              <span className="welcome-feature__ic">{f.icon}</span>
+              <strong className="welcome-feature__t">{f.title}</strong>
+              <span className="welcome-feature__d">{f.desc}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
     </>
   )
 }
