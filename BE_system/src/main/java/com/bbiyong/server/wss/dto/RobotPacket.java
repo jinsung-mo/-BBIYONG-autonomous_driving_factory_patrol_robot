@@ -48,6 +48,15 @@ public class RobotPacket {
     // (canStartPatrol)는 값을 한 번도 받지 못한 채 동작하고 있었다.
     private Readiness readiness;
 
+    // 배터리 충전 상태 (S15P11E101-884). 로봇에 충전 감지 센서가 없어 배터리 %의
+    // 추세로 추정한 값이다(cloud_bridge.BatteryChargeEstimator).
+    // 둘 다 nullable 이고 그 null 에 뜻이 있다:
+    //   charging      null = "아직 판단할 표본이 없다"(로봇 기동 후 ≈4분) ≠ false("방전 중")
+    //   minutesToFull null = 상승률을 못 구했다(충전 중이 아니거나 상승이 너무 완만)
+    // 관제는 두 경우 모두 '—' 로 표시한다. 서버가 임의로 0/false 로 낮추면 안 된다.
+    private Boolean charging;
+    private Integer minutesToFull;   // 완충까지 남은 시간(분) — 추정치
+
     // 듀얼 카메라 영상 프레임 (VIDEO_FRAME) - S15P11E101-354
     private String channel;   // FRONT(RGB) | THERMAL
     private String format;    // jpeg
