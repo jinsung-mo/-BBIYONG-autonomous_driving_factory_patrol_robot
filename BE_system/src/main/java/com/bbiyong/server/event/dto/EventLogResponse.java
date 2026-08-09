@@ -25,6 +25,8 @@ public class EventLogResponse {
     private String equipmentId;
     private Double x;
     private Double y;
+    /** x,y 가 찍힌 지도 id. 관제는 이 값이 현재 활성 도면과 같을 때만 지도에 핀을 그린다. */
+    private String mapId;
     private Double confidence;
     private Double temperature;
     private Double threshold;
@@ -43,6 +45,7 @@ public class EventLogResponse {
                 .equipmentId(event.getEquipmentId())
                 .x(event.getX())
                 .y(event.getY())
+                .mapId(event.getMapId())
                 .confidence(event.getConfidence())
                 .temperature(event.getTemperature())
                 .threshold(event.getThreshold())

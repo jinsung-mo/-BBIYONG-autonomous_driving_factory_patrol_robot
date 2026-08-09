@@ -8,6 +8,7 @@ import com.bbiyong.server.event.dto.EventPageResponse;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.repository.EventLogSpecification;
 import com.bbiyong.server.common.config.AsyncConfig;
+import com.bbiyong.server.map.service.MapService;
 import com.bbiyong.server.notification.service.NotificationDispatchService;
 import com.bbiyong.server.video.dto.VideoResponses;
 import com.bbiyong.server.video.repository.VideoClipRepository;
@@ -68,6 +69,8 @@ public class EventLogService {
     private final VideoClipRepository videoClipRepository;
     private final RobotWebSocketSessionManager sessionManager;
     private final AlertBroadcastService alertBroadcastService;
+    // 경보 좌표가 '어느 지도의 좌표인지' 기록하기 위해서만 쓴다(재매핑 잔상 제거).
+    private final MapService mapService;
     private final ConcurrentHashMap<String, Instant> recentRobotAlerts = new ConcurrentHashMap<>();
 
     // 로봇 연결/해제를 SYSTEM 이벤트로 남길지(기본 on). 로봇별 마지막 연결상태를 들고 상태
@@ -81,12 +84,14 @@ public class EventLogService {
             NotificationDispatchService notificationDispatchService,
             VideoClipRepository videoClipRepository,
             RobotWebSocketSessionManager sessionManager,
-            AlertBroadcastService alertBroadcastService) {
+            AlertBroadcastService alertBroadcastService,
+            MapService mapService) {
         this.eventLogRepository = eventLogRepository;
         this.notificationDispatchService = notificationDispatchService;
         this.videoClipRepository = videoClipRepository;
         this.sessionManager = sessionManager;
         this.alertBroadcastService = alertBroadcastService;
+        this.mapService = mapService;
     }
 
     /**
@@ -361,6 +366,7 @@ public class EventLogService {
         logEntry.setThreshold(alert.threshold());
         logEntry.setX(alert.x());
         logEntry.setY(alert.y());
+        logEntry.setMapId(currentMapId());
         logEntry.setTimestamp(Instant.parse(alert.timestamp()));
         logEntry.setStatus("UNRESOLVED");
         logEntry.setSimulated("SIMULATION".equals(alert.source()));
@@ -388,6 +394,22 @@ public class EventLogService {
         // 저장이 끝난 동일 이벤트의 식별자를 STOMP에 실어 즉시 상세 조회할 수 있게 한다.
         alertBroadcastService.broadcast(alert.withEventId(savedEvent.getEventId()));
         notificationDispatchService.enqueue(savedEvent, simulationRecipientUserId);
+    }
+
+    /**
+     * 지금 활성화된 지도의 id. 좌표가 어느 지도의 것인지 남기기 위한 값이다.
+     *
+     * <p>여기서 실패해도 경보 저장은 계속돼야 한다 — 지도를 못 읽었다고 화재를
+     * 잃는 것이 훨씬 나쁘다. 실패하면 null 이고, 관제는 소속 지도를 모르는 핑으로
+     * 취급해 지도에 그리지 않는다(이벤트 이력에는 그대로 남는다).
+     */
+    private String currentMapId() {
+        try {
+            return mapService.activeMapId();
+        } catch (RuntimeException e) {
+            log.warn("활성 맵 조회 실패 — 이벤트에 mapId 없이 저장한다", e);
+            return null;
+        }
     }
 
     private DeduplicationAttempt acquireDeduplication(AlertMessage alert) {
