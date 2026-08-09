@@ -81,9 +81,14 @@ export type Capabilities = Partial<Record<
  * FE 는 상태를 조합하지 않는다 — canStartPatrol 로 버튼을 켜고 끄고, hint 를 그대로 보여준다.
  * blockedBy 는 표에 없는 새 값이 와도 깨지면 안 된다 — hint 폴백, hint 도 없으면 일반 문구.
  */
+// 🔴 ROUTE_SESSION_MISMATCH / NAV_FAILED 는 로봇이 실제로 보내는데 이 표에 없었다
+// (navigation_orchestrator.readiness). 특히 ROUTE_SESSION_MISMATCH 는 '순찰 시작'을 눌러야
+// 풀리는 사유라서, 그걸로 버튼을 잠그면 교착이다 — RoutePanel 의 SELF_CLEARING_BLOCK 참고
+// (S15P11E101-893).
 export type BlockedByReason =
   | 'MAP_SAVING' | 'MAPPING_ACTIVE' | 'NO_MAP' | 'LOCALIZATION_NOT_READY'
   | 'NAV_NOT_READY' | 'NO_ROUTE' | 'ESTOP'
+  | 'ROUTE_SESSION_MISMATCH' | 'NAV_FAILED'
 
 export interface Readiness {
   canStartPatrol: boolean
