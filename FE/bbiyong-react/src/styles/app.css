@@ -3153,7 +3153,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .v3-theme .map-list li, .v3-theme .sch-list li, .v3-theme .usr-list li, .v3-theme .eq-list li { background: #F9F9FB; border: 1px solid #E3E5EE; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
 
 /* Layout for Event Page */
-.event-page-grid { display: grid; grid-template-columns: 280px 1fr; gap: 14px; align-items: start; height: 100%; min-height: 0; }
+/* 좌측 열은 카메라·지도와 **같은 자리**여야 한다 [사용자 지침 2026-08-09].
+   종전에는 `280px` / `gap:14px` 라는 자기만의 값이 박혀 있어서, 탭을 옮기면 좌측 열의
+   폭과 본문 시작선이 60px 씩 밀렸다 — 네 화면을 세로 슬라이드로 잇는 껍데기(-875)에서는
+   그 어긋남이 "같은 자리에서 내용만 바뀐다"는 인상을 깨고 화면이 흔들려 보이게 한다.
+   `--nx-side-w`(340px) 와 gap 24px 로 맞춘다 — .nav-stage · .cam-stage 와 같은 값이다.
+   숫자를 베껴 쓰지 않고 변수를 참조하므로, 폭이 바뀌면 세 화면이 함께 따라간다. */
+.event-page-grid { display: grid; grid-template-columns: var(--nx-side-w) minmax(0,1fr); gap: 24px; align-items: start; height: 100%; min-height: 0; }
 .event-page-grid .card-v3 { padding: 16px; margin-bottom: 0; display: flex; flex-direction: column; }
 .event-page-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 
@@ -3988,6 +3994,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   }
   .nav-stage > .nav-canvas,.cam-stage > .cam-main{order:1; min-height:56vh;}
   .nav-stage > .nav-side,.cam-stage > .cam-side-panel{order:2;}
+  /* 이벤트도 같이 접는다 — 좌측 열을 카메라와 같은 폭으로 맞춘 이상, 접히는 지점도
+     같아야 한다. 여기 빠져 있어서 이벤트만 좁은 화면에서 2단을 고집했다.
+     순서는 같은 원칙: 보는 것(목록)이 위, 조건(요약·필터)이 아래. */
+  .event-page-grid{
+    display:flex; flex-direction:column; gap:16px;
+    flex:0 0 auto; min-height:0; overflow:visible; height:auto;
+  }
+  .event-page-grid > .elog-shell{order:1; min-height:56vh;}
+  .event-page-grid > .event-page-col{order:2;}
   /* 세로로 흐르므로 페이지가 스크롤되어야 한다 */
   .page.nav-page{overflow-y:auto;}
   #pgMap .nav-side > #pStatus{flex:0 0 auto;}
