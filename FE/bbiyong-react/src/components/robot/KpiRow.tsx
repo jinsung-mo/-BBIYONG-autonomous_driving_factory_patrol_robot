@@ -16,73 +16,11 @@ type Tone = 'ok' | 'warn' | 'bad' | 'none'
 
 const SIGN: Record<Tone, string> = { ok: '✓', warn: '!', bad: '⚠', none: '–' }
 
-// ── 미니 바차트 (S15P11E101-814) ──────────────────────────────────────────
-// 디자인 시스템 v3 의 서명 요소다. 핸드오프의 "구현 시 우선순위" 4번이
-// "수치 옆에는 미니 차트를, 라벨은 항상 수치보다 작고 흐리게" 인데 그동안 빠져 있었다.
-// 규격(원본 console-v3-standalone-src.html): 74×30 · 막대 2.5px · r1.2 · 간격 6px ·
-// 과거는 중립색 · 최근 3개만 상태색. 축·격자선·범례·툴팁 금지 — "추세의 인상"만 준다.
-//
-// 🔴 데이터를 지어내지 않는다. 아래 useTrend 는 **실제로 관측된 값만** 쌓는다.
-// 관측이 3개면 막대도 3개다. 있지도 않은 과거를 그리면 조작자가 그것을 믿는다 —
-// 이 파일 맨 위의 "값이 없으면 '—'" 규칙과 같은 이유다.
-const SPARK_N = 8
-const BAR_W = 2.5, BAR_GAP = 6, SPARK_H = 30, SPARK_PAD = 2
-
-/** 값이 바뀔 때마다 최근 n개를 굴려 담는다. 관측 이력이 없으면 빈 배열이다. */
-function useTrend(value: number | null, n = SPARK_N) {
-  const [hist, setHist] = useState<number[]>([])
-  useEffect(() => {
-    if (value == null || !Number.isFinite(value)) return
-    setHist((h) => (h[h.length - 1] === value ? h : [...h, value].slice(-n)))
-  }, [value, n])
-  return hist
-}
-
-// 스케일 방식 — KPI 마다 "무엇에 대한 비율인지" 가 다르므로 하나로 못 묶는다.
-//   'absolute' : 0~max 라는 절대 축이 의미 있는 값(배터리 0~100%). 축이 고정돼 있으므로
-//                34 → 33 → 34 처럼 1%p 흔들려도 막대가 거의 안 움직인다 — 그게 맞다.
-//                v/max 를 그대로 높이로 쓰면 34% 도 "낮은 편"으로 읽힌다.
-//   'relative' : 상한이 없는 값(경보 건수 — 하루에 몇 건이든 나올 수 있다). 절대 축이
-//                없으므로 관측 구간의 최소~최대로 스케일해 "지금 구간 안에서 오르내리는
-//                인상"만 준다.
-type ScaleMode = 'absolute' | 'relative'
-
-function Spark({ hist, tone, scale = 'relative', max = 100 }: {
-  hist: number[], tone: Tone, scale?: ScaleMode, max?: number,
-}) {
-  // 관측이 2개 미만이면 추세라고 부를 수 없다 — 아예 그리지 않는다.
-  if (hist.length < 2) return null
-
-  const usable = SPARK_H - SPARK_PAD * 2
-  const FLOOR = 3   // 변화가 없을 때(또는 절대 축에서 0)의 높이. 0 이면 아예 사라져 "값 없음"과 헷갈린다.
-
-  // 🔴 이전에는 항상 관측 구간의 최소~최대로 스케일했다. 그러면 배터리처럼 절대 축이
-  // 있는 값에서 34 → 33 → 34 같은 1%p 흔들림이 전체 높이로 증폭돼 막대가 들쭉날쭉해
-  // 보였다(34% 인데 막대 3개가 크게 달랐다). 배터리는 0~100 이 이미 의미 있는 축이므로
-  // absolute 로 그린다 — v/max 를 그대로 높이로 쓴다.
-  const lo = scale === 'absolute' ? 0 : Math.min(...hist)
-  const hi = scale === 'absolute' ? max : Math.max(...hist)
-  const span = hi - lo
-
-  return (
-    <svg className="kpi-spark" width={SPARK_N * BAR_GAP} height={SPARK_H} aria-hidden="true">
-      {hist.map((v, i) => {
-        const h = span > 0
-          ? FLOOR + ((v - lo) / span) * (usable - FLOOR)
-          : FLOOR
-        // 최근 3개만 상태색 — 지금 어느 쪽으로 가고 있는지가 읽혀야 한다.
-        const recent = i >= hist.length - 3
-        return (
-          <rect
-            key={i} x={i * BAR_GAP} y={SPARK_H - SPARK_PAD - h}
-            width={BAR_W} height={h} rx={BAR_W / 2}
-            className={recent ? `on ${tone}` : undefined}
-          />
-        )
-      })}
-    </svg>
-  )
-}
+// 미니 바차트(스파크라인)는 걷어냈다 [사용자 지시 2026-08-09].
+// S15P11E101-814 에서 디자인 시스템 v3 의 서명 요소로 넣었지만, 이 줄에 남은 KPI 셋 중
+// 어느 것도 추세로 읽을 값이 아니었다 — 배터리는 잔량 게이지(아래 Gauge)로 바뀌었고,
+// 로봇 상태는 값이 아니라 상태이며, 경보 건수는 숫자 하나로 충분하다.
+// 되살릴 일이 있으면 git 이력에 있다(이 커밋 이전 KpiRow.tsx 의 Spark/useTrend).
 
 /** 남은 양을 가로 막대의 **길이**로 보여 준다 — 값이 클수록 오른쪽으로 길어진다.
  *
@@ -102,9 +40,9 @@ function Gauge({ pct, tone }: { pct: number, tone: Tone }) {
   )
 }
 
-function Kpi({ value, unit, label, tone = 'none', note, trend, scale, max, gauge }: {
+function Kpi({ value, unit, label, tone = 'none', note, gauge }: {
   value: string, unit?: string, label: string, tone?: Tone, note?: string,
-  trend?: number[], scale?: ScaleMode, max?: number, gauge?: number | null,
+  gauge?: number | null,
 }) {
   return (
     <div className="kpi">
@@ -117,7 +55,6 @@ function Kpi({ value, unit, label, tone = 'none', note, trend, scale, max, gauge
       <span className={`kpi-badge ${tone}`} aria-hidden="true">{SIGN[tone]}</span>
       {/* 값이 없으면 빈 게이지조차 그리지 않는다 — 0% 로 보이면 '다 닳았다'로 읽힌다. */}
       {gauge != null && <Gauge pct={gauge} tone={tone} />}
-      {trend && <Spark hist={trend} tone={tone} scale={scale} max={max} />}
       {note && <span className="sr-only">{note}</span>}
     </div>
   )
@@ -159,12 +96,6 @@ export default function KpiRow() {
   const robotOnline = enabled ? (connected && telemetry?.status !== 'OFFLINE') : true
   const robotTone: Tone = robotOnline ? 'ok' : 'bad'
 
-  // 추세는 이 화면이 열려 있는 동안 관측한 값으로만 만든다(과거를 서버에서 끌어오지 않는다).
-  // 배터리는 텔레메트리마다, 경보는 30초 폴링마다 한 칸씩 쌓인다.
-  // 🔴 로봇 상태(ON/OFF)는 추세가 없다 — 상태이지 값이 아니다. 스파크라인을 그리지 않는다
-  // (S15P11E101-814). 그래서 이 KPI 에는 useTrend 를 아예 쓰지 않는다.
-  const alarmTrend = useTrend(alarmValue ?? null)
-
   return (
     <div className="kpis">
       {/* 배터리는 추세가 아니라 **잔량 게이지**다 — 값이 클수록 막대가 오른쪽으로 길어진다.
@@ -174,9 +105,14 @@ export default function KpiRow() {
         value={batt == null ? '—' : String(batt)} unit={batt == null ? undefined : '%'}
         label="배터리" tone={battTone} gauge={batt ?? null}
       />
+      {/* 🔴 스파크라인을 뗐다 [사용자 지시 2026-08-09] — 숫자만 있으면 된다.
+          이 값이 답해야 하는 질문은 "오늘 몇 건인가" 하나이고, 그건 숫자가 이미 답한다.
+          게다가 추세는 화면이 열려 있는 동안 30초 폴링으로만 쌓여서, 방금 들어온 사람에게는
+          막대가 한두 개뿐이고 오래 켜 둔 사람에게는 여덟 개다 — 같은 상황이 사람마다
+          다르게 보이는 그림이었다. */}
       <Kpi
         value={alarmValue == null ? '—' : String(alarmValue)} unit={alarmValue == null ? undefined : '건'}
-        label="경보 이벤트 (오늘)" tone={alarmTone} trend={alarmTrend} scale="relative"
+        label="경보 이벤트 (오늘)" tone={alarmTone}
       />
       <Kpi
         value={robotOnline ? 'ON' : 'OFF'}
