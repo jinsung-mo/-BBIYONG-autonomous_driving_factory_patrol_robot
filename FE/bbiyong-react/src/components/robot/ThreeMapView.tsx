@@ -37,7 +37,7 @@ const CAR = { w: 0.40, h: 0.26, d: 0.54 }
 const COL_WALL = new THREE.Color('hsl(214, 9%, 70%)')
 const COL_OBST = new THREE.Color('hsl(222, 14%, 55%)')
 const COL_FLOOR = new THREE.Color('#FBFBFD')
-const COL_ROBOT = new THREE.Color('#6FA487')   // 정상색
+// (COL_ROBOT 초록 몸체는 실물형 흰검 모형으로 대체돼 지웠다 — S15P11E101-899)
 const COL_HEAD = new THREE.Color('#C9A26A')    // 주의색 — 진행 방향 지시선
 // 빛기둥 색 — 옛 .iso-robot::before(app.css) 의 rgba 값을 그대로 옮긴 것이다.
 const BEAM_RGB = '61,220,151'      // 정상 — rgba(61,220,151,*)
@@ -479,24 +479,55 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
     }
 
     // 로봇 — 바닥을 달리는 물건이다. 벽 위에 띄우지 않는다(2026-08-07 의 교훈).
+    //
+    // 실물 오린카를 닮은 순찰차 모형(S15P11E101-899) — 흰 차체 + 검정 디테일.
+    // 이전의 앞뒤가 같은 초록 박스는 진행 방향이 모양으로 읽히지 않았다. 실물과 같은
+    // 자리에 전면 카메라(검정, 앞 = 로컬 -z)와 상단 라이다(검정 원통), 바퀴(검정)를
+    // 붙여 어느 각도에서도 앞이 읽힌다. 파랑 LED 는 실물 카메라의 전원 표시등이다.
     const robot = new THREE.Group()
+    const bodyMat = new THREE.MeshLambertMaterial({ color: '#F7F8FA' })   // 흰 차체
+    const darkMat = new THREE.MeshLambertMaterial({ color: '#16181d' })   // 라이다·카메라·바퀴
+    const ledMat = new THREE.MeshBasicMaterial({ color: '#3D8BFF' })      // 카메라 LED — 발광이라 Basic
+    const robotMats: (THREE.MeshLambertMaterial | THREE.MeshBasicMaterial)[] = [bodyMat, darkMat, ledMat]
+    const robotGeos: THREE.BufferGeometry[] = []
+    const part = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, rotZ = 0) => {
+      robotGeos.push(geo)
+      const m = new THREE.Mesh(geo, mat)
+      m.position.set(x, y, z)
+      if (rotZ) m.rotation.z = rotZ
+      m.castShadow = true
+      robot.add(m)
+      return m
+    }
+    // 바퀴 — 뒤가 크고 앞이 작다(실물 그대로). 차체는 바퀴 위에 얹힌다.
+    const WHEEL_R = 0.075
+    const wheelGeo = new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, 0.05, 18)
+    const casterGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.04, 14)
+    part(wheelGeo, darkMat, -(CAR.w / 2 + 0.02), WHEEL_R, CAR.d * 0.26, Math.PI / 2)
+    part(wheelGeo.clone(), darkMat, CAR.w / 2 + 0.02, WHEEL_R, CAR.d * 0.26, Math.PI / 2)
+    part(casterGeo, darkMat, -(CAR.w / 2 + 0.015), 0.045, -CAR.d * 0.3, Math.PI / 2)
+    part(casterGeo.clone(), darkMat, CAR.w / 2 + 0.015, 0.045, -CAR.d * 0.3, Math.PI / 2)
+    // 차체 — 흰 상자. 바닥에서 살짝 띄워 바퀴로 서 있는 인상을 만든다.
+    const BODY_LIFT = 0.03
     const bodyGeo = new THREE.BoxGeometry(CAR.w, CAR.h, CAR.d)
-    const bodyMat = new THREE.MeshLambertMaterial({ color: COL_ROBOT })
-    const body = new THREE.Mesh(bodyGeo, bodyMat)
-    body.position.y = CAR.h / 2
-    body.castShadow = true
-    robot.add(body)
-    // 캐노피 — 윗면 한 톤 밝게. 벽과 같은 조명 논리다.
-    const capGeo = new THREE.BoxGeometry(CAR.w * 0.72, CAR.h * 0.3, CAR.d * 0.66)
-    const capMat = new THREE.MeshLambertMaterial({ color: COL_ROBOT.clone().offsetHSL(0, 0, 0.10) })
-    const cap = new THREE.Mesh(capGeo, capMat)
-    cap.position.y = CAR.h + CAR.h * 0.15
-    cap.castShadow = true
-    robot.add(cap)
+    part(bodyGeo, bodyMat, 0, BODY_LIFT + CAR.h / 2, 0)
+    // 윗면 검정 홈 + 라이다 원통 2단 — 실물의 상단 라이다 타워.
+    const wellGeo = new THREE.BoxGeometry(CAR.w * 0.52, 0.022, CAR.d * 0.4)
+    part(wellGeo, darkMat, 0, BODY_LIFT + CAR.h + 0.011, 0)
+    const lidarBaseGeo = new THREE.CylinderGeometry(0.055, 0.07, 0.05, 20)
+    part(lidarBaseGeo, darkMat, 0, BODY_LIFT + CAR.h + 0.045, 0)
+    const lidarTopGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.075, 20)
+    part(lidarTopGeo, darkMat, 0, BODY_LIFT + CAR.h + 0.105, 0)
+    // 전면 카메라 모듈(검정) — 차체 앞(-z)에 돌출. 모양만으로 앞이 읽히는 핵심이다.
+    const camGeo = new THREE.BoxGeometry(0.17, 0.085, 0.07)
+    part(camGeo, darkMat, 0, BODY_LIFT + CAR.h * 0.42, -(CAR.d / 2 + 0.028))
+    const ledGeo = new THREE.BoxGeometry(0.02, 0.02, 0.012)
+    part(ledGeo, ledMat, -0.055, BODY_LIFT + CAR.h * 0.42, -(CAR.d / 2 + 0.066))
     // 진행 방향 지시선 — 2D 지도 마커의 노란 실선과 같은 뜻·같은 계열의 색이다.
     // 차체 로컬 -z 가 앞이다.
     const headGeo = new THREE.BoxGeometry(0.055, 0.03, CAR.d)
     const headMat = new THREE.MeshBasicMaterial({ color: COL_HEAD })
+    robotMats.push(headMat)
     const head = new THREE.Mesh(headGeo, headMat)
     head.position.set(0, 0.045, -CAR.d)
     robot.add(head)
@@ -599,12 +630,7 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
         // 로봇이 꺼져 있으면 흐린다. 지우지는 않는다 — 마지막으로 알던 자리는 남아야
         // 어디서 멈췄는지 알 수 있다.
         const off = offRef.current
-        bodyMat.opacity = off ? 0.42 : 1
-        bodyMat.transparent = off
-        capMat.opacity = off ? 0.42 : 1
-        capMat.transparent = off
-        headMat.opacity = off ? 0.42 : 1
-        headMat.transparent = off
+        for (const m of robotMats) { m.opacity = off ? 0.42 : 1; m.transparent = off }
         beamMat.map = off ? beamTexOff : beamTex
         beamMat.needsUpdate = true
       }
@@ -667,8 +693,10 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
       controls.dispose()
       apiRef.current = null
       for (const g of geos) g.dispose()
-      bodyGeo.dispose(); capGeo.dispose(); headGeo.dispose()
-      solidMat.dispose(); floorMat.dispose(); bodyMat.dispose(); capMat.dispose(); headMat.dispose()
+      for (const g of robotGeos) g.dispose()
+      headGeo.dispose()
+      solidMat.dispose(); floorMat.dispose()
+      for (const m of robotMats) m.dispose()
       beamMat.dispose(); beamTex.dispose(); beamTexOff.dispose()
       // WebGL 컨텍스트는 명시적으로 놓는다. 도면을 여러 번 갈아 끼우면 브라우저가
       // 컨텍스트 상한(보통 16개)에 걸려 가장 오래된 것부터 죽인다.
