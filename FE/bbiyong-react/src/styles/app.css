@@ -248,18 +248,24 @@ canvas{display:block; width:100%; height:100%;}
    사슬을 잇는다 — map-view 가 nav-stage 로 하던 것과 같은 처리다. */
 #pgMap > .lockfs{flex:1 1 0; min-height:0; display:flex; flex-direction:column; border:0; padding:0; margin:0;}
 .mapping-canvas{flex:1 1 0; min-height:0;}
+/* 🔴 카드는 콘텐츠(맵+형제)만큼 늘어난다(S15P11E101-907). flex:1 1 0 으로 화면에 가두면
+   맵을 크게 키웠을 때 카드가 못 늘어나 맵이 카드 밖으로 튀어나왔다(사용자 지적). 카드가
+   맵을 감싸고, 화면을 넘치는 만큼은 #pgMap(overflow:auto)이 스크롤한다. */
 .mapping-canvas > #pgRoute.routepanel{
-  margin-top:0; flex:1 1 0; min-height:0;
+  margin-top:0; flex:0 0 auto;
   display:flex; flex-direction:column;
 }
-/* 통합 카드 안에서 맵을 화면 하단(브라우저 창 끝)까지 채운다(S15P11E101-906).
-   flex:1 만으로는 카드 안 형제(제목·안내·목록·버튼)와 남는 높이를 나눠 368px 로
-   주저앉았다. 뷰포트 기반 min-height 로 맵을 창 하단까지 끌어내리고, 그만큼 아래로
-   밀려난 순찰 시작/종료 버튼·목록은 카드(#pgMap overflow:auto) 스크롤로 접근한다
-   [사용자 지침 2026-08-10]. 280px = 상단바+헤더+서브탭+카드 제목/안내 대략치. */
-.mapping-canvas #pgRoute.routepanel .routemap{flex:0 0 auto; height:auto; min-height:calc(100dvh - 280px);}
-/* 목록은 맵을 밀어내지 않게 상한을 준다 — 넘치면 카드가 스크롤된다. */
-.mapping-canvas #pgRoute.routepanel .map-list{flex:0 0 auto; max-height:22vh; overflow:auto;}
+/* 맵은 뷰포트 기반 높이로 창 하단 근처까지 크게(S15P11E101-906/907). 카드가 콘텐츠만큼
+   늘어나므로(위) 맵이 커져도 카드가 그대로 감싸 튀어나오지 않는다. 280px = 상단바+헤더+
+   서브탭+카드 제목/안내 대략치. */
+.mapping-canvas #pgRoute.routepanel .routemap{flex:0 0 auto; height:calc(100dvh - 280px); min-height:280px; margin-bottom:10px;}
+/* 목록은 길면 자체 스크롤 — 맵을 밀어내지 않는다. */
+.mapping-canvas #pgRoute.routepanel .map-list{max-height:16vh; overflow:auto;}
+/* 카드(16px)와 맵(vwrap 9px) 라운드가 어긋나 보이던 것 정리 — 맵 라운드를 카드 안쪽에 맞춘다. */
+.mapping-canvas #pgRoute.routepanel .routemap{border-radius:12px;}
+/* 매핑 맵 전체화면 버튼(S15P11E101-907) — 맵 우측 하단. 지도 탭 map-controls 와 같은 버튼. */
+#pgRoute .routemap{position:relative;}
+#pgRoute .routemap-controls{position:absolute; right:14px; bottom:14px; z-index:5; display:flex;}
 
 /* (매핑 컨트롤은 서브탭 줄로 이동했다 — S15P11E101-904. 카드 상단 .mapping-control 규칙 제거) */
 /* 빈 상태 문구가 카드 안에 또 박스로 감싸여 있었다(S15P11E101-814, 사용자 지적 2026-08-09) —
