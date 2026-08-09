@@ -32,6 +32,16 @@ public class EventLog {
     private Double x;
     private Double y;
 
+    /**
+     * x,y 가 찍힌 지도(저장 시점의 활성 맵) id. 활성 맵이 없었거나 과거 이력이면 null.
+     *
+     * <p>좌표는 map 프레임 기준인데 재매핑하면 SLAM 원점이 새로 잡힌다 — 어느 지도의
+     * 좌표인지 모르면 관제가 이전 지도의 화재를 새 도면 위에 그리게 된다. 이력 자체는
+     * 지우지 않고(감사 기록·이벤트 영상), 지도에 그릴지를 이 값으로 가른다.
+     */
+    @Column(length = 36)
+    private String mapId;
+
     private Double confidence;  // FIRE 전용
     private Double temperature;
     private Double threshold;   // OVERHEAT 전용 — 로봇 판정 임계 온도(℃)

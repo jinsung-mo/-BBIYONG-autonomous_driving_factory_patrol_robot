@@ -5,6 +5,7 @@ import com.bbiyong.server.event.dto.AlertMessage;
 import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.event.service.EventLogService;
 import com.bbiyong.server.event.service.AlertBroadcastService;
+import com.bbiyong.server.map.service.MapService;
 import com.bbiyong.server.notification.service.NotificationDispatchService;
 import com.bbiyong.server.video.repository.VideoClipRepository;
 import com.bbiyong.server.wss.RobotWebSocketSessionManager;
@@ -35,9 +36,11 @@ class EventSavedNotifyTests {
     private final VideoClipRepository videoClipRepository = mock(VideoClipRepository.class);
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
     private final AlertBroadcastService alertBroadcastService = mock(AlertBroadcastService.class);
+    private final MapService mapService = mock(MapService.class);
 
     private final EventLogService service = new EventLogService(
-            eventLogRepository, notificationDispatchService, videoClipRepository, sessionManager, alertBroadcastService);
+            eventLogRepository, notificationDispatchService, videoClipRepository, sessionManager,
+            alertBroadcastService, mapService);
 
     private RobotPacket firePacket(String robotId) {
         RobotPacket p = new RobotPacket();
@@ -89,6 +92,36 @@ class EventSavedNotifyTests {
         service.handleFireEvent(new RobotFireEvent(this, firePacket(null)));
 
         verify(sessionManager, never()).sendCommand(any(), any());
+    }
+
+    /**
+     * 경보 좌표는 map 프레임 값이라 '어느 지도의 좌표인지' 를 함께 남겨야 한다.
+     * 재매핑하면 원점이 새로 잡히므로, 이 값이 없으면 관제가 이전 지도의 화재를
+     * 새 도면 위에 그린다.
+     */
+    @Test
+    void tagsFireEventWithActiveMapId() {
+        when(mapService.activeMapId()).thenReturn("map-abc");
+        ArgumentCaptor<EventLog> saved = ArgumentCaptor.forClass(EventLog.class);
+        when(eventLogRepository.save(any(EventLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.handleFireEvent(new RobotFireEvent(this, firePacket("orinka_01")));
+
+        verify(eventLogRepository).save(saved.capture());
+        assertThat(saved.getValue().getMapId()).isEqualTo("map-abc");
+    }
+
+    /** 활성 지도가 없어도 화재는 저장돼야 한다 — 지도보다 경보가 중요하다. */
+    @Test
+    void savesFireEventEvenWhenNoActiveMap() {
+        when(mapService.activeMapId()).thenThrow(new IllegalStateException("활성 맵 없음"));
+        ArgumentCaptor<EventLog> saved = ArgumentCaptor.forClass(EventLog.class);
+        when(eventLogRepository.save(any(EventLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.handleFireEvent(new RobotFireEvent(this, firePacket("orinka_01")));
+
+        verify(eventLogRepository).save(saved.capture());
+        assertThat(saved.getValue().getMapId()).isNull();
     }
 
     @Test

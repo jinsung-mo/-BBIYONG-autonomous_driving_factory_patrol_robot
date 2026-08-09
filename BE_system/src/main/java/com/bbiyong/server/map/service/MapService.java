@@ -103,6 +103,19 @@ public class MapService {
         return MapResponses.Detail.of(artifact);
     }
 
+    /**
+     * 현재 활성 맵의 id. 활성 맵이 없으면 null 이다.
+     *
+     * <p>{@link #getActive()} 와 달리 없다고 404 를 던지지 않는다 — 이벤트 저장 경로가
+     * 이 값을 쓰기 때문이다. 지도가 아직 없다고 화재 경보가 저장되지 않으면 안 된다.
+     */
+    @Transactional(readOnly = true)
+    public String activeMapId() {
+        return mapRepository.findFirstByActiveTrueOrderByCreatedAtDesc()
+                .map(MapArtifact::getId)
+                .orElse(null);
+    }
+
     /** 맵 이미지 파일 로드. */
     @Transactional(readOnly = true)
     public StoredFile loadImage(String id) {
