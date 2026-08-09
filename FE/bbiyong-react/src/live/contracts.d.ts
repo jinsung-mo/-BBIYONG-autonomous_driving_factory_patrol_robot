@@ -38,10 +38,27 @@ export type RobotStatus =
 
 export type EstopState = 'RELEASED' | 'ENGAGED'
 
-/** 이벤트 종류. SYSTEM 은 EventLog 주석에만 있고 실제 생성 지점은 아직 없다. */
-export type EventType = 'FIRE' | 'OVERHEAT' | 'SYSTEM'
+/**
+ * 이벤트 종류.
+ *
+ * SYSTEM 은 로봇 연결/해제 로그가 쓴다.
+ *
+ * PLANNER_* 는 **조용한 시스템 로그**다(2026-08-10). 경로 계산 서버(Nav2 planner)가
+ * 죽었을 때 남는다. 🔴 화재·과열과 등급이 다르다 — 서버가 /topic/alerts 로 방송하지
+ * 않으므로 토스트도 경보음도 뜨지 않고, 이벤트 목록에만 나타난다.
+ * PLANNER_DOWN 행에서만 '복구' 버튼이 뜬다(EventDetailModal).
+ *
+ * 서버의 EventLog.type 은 enum 이 아니라 자유 문자열이므로 여기 없는 값이 올 수 있다 —
+ * 목록·상세 모두 모르는 type 을 그대로 흘려보낸다(mappers.eventToLog 의 kind 폴백).
+ */
+export type EventType =
+  | 'FIRE' | 'OVERHEAT' | 'SYSTEM'
+  | 'PLANNER_DOWN'
+  | 'PLANNER_RECOVER_STARTED' | 'PLANNER_RECOVER_OK'
+  | 'PLANNER_RECOVER_FAILED' | 'PLANNER_RECOVER_BUSY'
 
-export type EventLevel = 'CRITICAL' | 'WARNING'
+/** INFO 는 조용한 로그(연결/해제·PLANNER_*)의 등급이다. 경보 통계·알림에 세지 않는다. */
+export type EventLevel = 'CRITICAL' | 'WARNING' | 'INFO'
 
 export type EventStatus = 'UNRESOLVED' | 'RESOLVED'
 
@@ -387,6 +404,16 @@ export type ControlCommandBody =
 export type ControlCommand = ControlCommandBody & { robot_id: string }
 
 // ---------------------------------------------------------------- REST
+
+/**
+ * POST /api/robots/{robotId}/recover/nav2 — Nav2 재기동 하달 결과.
+ * result 는 하달까지의 결과이지 복구의 성패가 아니다(재기동은 수십 초 걸린다).
+ */
+export interface RobotRecoveryResult {
+  result: 'ACCEPTED' | 'IN_PROGRESS' | 'OFFLINE' | 'INVALID'
+  delivered: boolean
+  message: string
+}
 
 /** POST /api/auth/login */
 export interface LoginResponse {

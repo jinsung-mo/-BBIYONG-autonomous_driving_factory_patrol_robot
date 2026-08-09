@@ -3,7 +3,8 @@ import { displayName, withDisplayNames } from '../live/robotName.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { errMessage, errStatus } from '../live/errors.ts'
 import { EVENT_STATUS_LABEL, LEVEL_LABEL, updateEventStatus } from '../live/events.ts'
-import { TYPE_LABEL } from '../live/mappers.ts'
+import { isSystemLogType, TYPE_LABEL } from '../live/mappers.ts'
+import { recoverMessage, recoverNav2 } from '../live/robots.ts'
 import {
   clipText, clipTime, fetchEventDetail, fetchEventVideos, loadThumbUrl, loadVideoUrl, releaseUrl,
 } from '../live/videos.ts'
@@ -31,6 +32,8 @@ export default function EventDetailModal({
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)
+  // Nav2 복구 확인 모달. 누르기 전에 반드시 한 번 받는다 — 주행이 끊기는 조작이다.
+  const [confirming, setConfirming] = useState(false)
 
   // 재생 중인 클립과 그 objectURL. 다른 클립을 고르면 이전 것을 돌려준다.
   const [playing, setPlaying] = useState<string | null>(null)
@@ -114,7 +117,32 @@ export default function EventDetailModal({
     } finally { if (alive.current) setBusy(false) }
   }
 
+  // Nav2 복구. planner 가 죽었다는 로그(PLANNER_DOWN)에서만 뜬다.
+  //
+  // 🔴 이것은 로봇의 Nav2 를 통째로 내렸다 올린다 — 그 사이 주행이 불가능하고 순찰 중이면
+  //    순찰이 끊긴다. 그래서 확인 모달을 한 번 거치고, 자동 재시도를 붙이지 않는다.
+  //    응답은 "하달됐다" 까지만 말한다. 성패는 뒤이어 이벤트 목록에 뜨는
+  //    PLANNER_RECOVER_OK / PLANNER_RECOVER_FAILED 로 확인한다.
+  const onRecover = async () => {
+    if (busy) return
+    setConfirming(false)
+    setBusy(true); setMsg(null)
+    try {
+      const r = await recoverNav2(accessToken, detail?.robotId || undefined)
+      if (!alive.current) return
+      setMsg(recoverMessage(r))
+    } catch (e) {
+      if (alive.current) {
+        setMsg({ kind: 'err', text: errStatus(e) === 403
+          ? '복구는 관제 권한이 필요합니다.'
+          : `복구 요청을 보내지 못했습니다 — ${errMessage(e)}` })
+      }
+    } finally { if (alive.current) setBusy(false) }
+  }
+
   const resolved = detail?.status === 'RESOLVED'
+  const recoverable = detail?.type === 'PLANNER_DOWN'
+  const systemLog = isSystemLogType(detail?.type)
   const num = (v: any, unit: string, digits = 1) =>
     (typeof v === 'number' && Number.isFinite(v) ? `${v.toFixed(digits)}${unit}` : null)
   const hasMeaningfulLocation = detail?.x != null && detail?.y != null
@@ -128,7 +156,8 @@ export default function EventDetailModal({
       {detail && (
         <>
           <div className="evd-head">
-            <b className={detail.type === 'FIRE' ? 'fire' : 'heat'}>
+            {/* 조용한 로그(SYSTEM·PLANNER_*)는 경고색을 주지 않는다 — 경보로 읽힌다. */}
+            <b className={detail.type === 'FIRE' ? 'fire' : (systemLog ? undefined : 'heat')}>
               {TYPE_LABEL[detail.type] || detail.type}
             </b>
             {detail.level === 'CRITICAL' && <span className="tag crit">{LEVEL_LABEL.CRITICAL}</span>}
@@ -152,9 +181,10 @@ export default function EventDetailModal({
 
           {msg && <div className={`form-msg ${msg.kind}`} id="evdMsg">{msg.text}</div>}
 
-          {/* 로봇 연결/해제 같은 SYSTEM 이벤트는 카메라 녹화와 무관하다 — 연관 영상 섹션을
-              통째로 감춘다(사용자 요청 2026-08-10). type 은 EventDetail(=EventLog) 에 보장된다. */}
-          {detail?.type !== 'SYSTEM' && (
+          {/* 로봇 연결/해제 같은 SYSTEM 이벤트와 PLANNER_* 시스템 로그는 카메라 녹화와
+              무관하다 — 연관 영상 섹션을 통째로 감춘다(사용자 요청 2026-08-10).
+              type 은 EventDetail(=EventLog) 에 보장된다. */}
+          {!systemLog && (
             <>
               <h4 className="evd-h">연관 영상 <span className="k">{videos.length}건</span></h4>
               {videos.length === 0 && (
@@ -187,6 +217,15 @@ export default function EventDetailModal({
           {canOperate && (
             <div className="form-actions">
               <button type="button" className="btn-ghost" onClick={onClose}>닫기</button>
+              {recoverable && (
+                <button
+                  type="button" id="btnEvdRecover" className="btn-ghost" disabled={busy}
+                  title="로봇의 Nav2 를 다시 시작합니다 — 그 사이 주행이 멈춥니다"
+                  onClick={() => setConfirming(true)}
+                >
+                  {busy ? '요청 중…' : '복구'}
+                </button>
+              )}
               <button
                 type="button" id="btnEvdStatus" className="btn-primary" disabled={busy}
                 onClick={() => onStatus(resolved ? 'UNRESOLVED' : 'RESOLVED')}
@@ -196,6 +235,29 @@ export default function EventDetailModal({
             </div>
           )}
         </>
+      )}
+
+      {/* 🔴 누르기 전에 반드시 확인을 받는다. 복구는 Nav2 를 통째로 내렸다 올리는 동작이라
+          그 사이 주행이 불가능하고, 순찰 중이면 순찰이 끊긴다. 경고를 버튼 옆 title 이
+          아니라 이 화면에 글로 적는 이유다 — title 은 터치 환경에서 보이지 않는다. */}
+      {confirming && (
+        <Modal title="Nav2 를 다시 시작할까요?" onClose={() => setConfirming(false)} width={440}>
+          <p className="cfg-help" style={{ marginBottom: 10 }}>
+            로봇의 경로 계산 서버를 통째로 내렸다 올립니다.
+          </p>
+          <ul className="cfg-help" style={{ margin: '0 0 12px 18px', lineHeight: 1.8 }}>
+            <li>재시작이 끝날 때까지 <b>로봇이 움직일 수 없습니다.</b></li>
+            <li><b>순찰 중이라면 순찰이 중단됩니다.</b> 복구 후 다시 시작해야 합니다.</li>
+            <li>보통 1분 내외가 걸리며, 진행 상황은 이 이벤트 목록에 남습니다.</li>
+          </ul>
+          <div className="gotor">
+            <button type="button" className="btn-text" onClick={() => setConfirming(false)}>취소</button>
+            <button type="button" id="btnEvdRecoverOk" className="btn-filled" disabled={busy}
+              onClick={onRecover}>
+              재시작
+            </button>
+          </div>
+        </Modal>
       )}
     </Modal>
   )
