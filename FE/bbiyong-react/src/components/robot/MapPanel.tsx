@@ -135,7 +135,8 @@ export default function MapPanel() {
             aria-pressed={iso}
             title={iso ? '위에서 내려다보기' : '입체로 보기'}
           >
-            {iso ? '입체' : '평면'}
+            {/* 라벨은 지금 보고 있는 상태다(S15P11E101-889) — '입체/평면' 을 '3D/2D' 로만 바꾼다. */}
+            {iso ? '3D' : '2D'}
           </button>
         )}
         {mapDown && !showMapping && <span className="nodata">SLAM 맵 데이터 없음</span>}
