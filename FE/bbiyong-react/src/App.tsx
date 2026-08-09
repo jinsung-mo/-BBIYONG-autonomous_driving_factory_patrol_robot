@@ -11,6 +11,8 @@ import AuthFlow from './components/auth/AuthFlow.tsx'
 import Nav from './components/Nav.tsx'
 import RobotPage from './components/robot/RobotPage.tsx'
 import MapPage from './components/robot/MapPage.tsx'
+import type { MapTab } from './components/robot/MapPage.tsx'
+import KpiRow from './components/robot/KpiRow.tsx'
 import CameraPage from './components/robot/CameraPage.tsx'
 import EventPage from './components/events/EventPage.tsx'
 import ConfigPage from './components/config/ConfigPage.tsx'
@@ -32,16 +34,81 @@ import EventLogActivity from './auth/EventLogActivity.tsx'
 //
 // 실서버 화면은 지금 배치를 그대로 둔다 — 운영 중인 화면을 시연용 개편과 한 번에
 // 바꾸지 않는다(S15P11E101-646 이후 계속 지켜 온 원칙).
-function Sections({ active, isAdmin }: { active: Section, isAdmin: boolean }) {
+//
+// 화면 전환은 세로 슬라이드다. 네 화면을 탭 순서대로 위→아래로 쌓아 두고, 활성 화면의
+// 인덱스만큼 트랙을 끌어올린다 — 카메라를 누르면 카메라가 아래에서 올라오며 지도를 위로
+// 밀어내고, 지도를 다시 누르면 그 반대로 되돌아온다.
+// 위치를 눈으로 보여 주는 것이 목적이므로 순서는 상단 탭(Nav.tsx)과 반드시 같아야 한다.
+//
+// 🔴 움직이는 것은 본문뿐이다. 제목·KPI·보조 줄은 아래 ConsoleHeader 로 끌어올려 고정한다 —
+// 화면마다 하나씩 들고 있으면 탭을 옮길 때 머리까지 같이 밀려 올라가고, 그러면 '틀 안에서
+// 내용이 바뀐다'가 아니라 '화면이 통째로 굴러간다'로 보인다.
+
+// 화면별 제목. 머리가 공유물이 되었으니 문구도 한곳에 모은다.
+const SECTION_TITLE: Record<Section, { title: string, sub: string }> = {
+  live: { title: '순찰 구역', sub: 'ORINCA FLEET' },
+  cam: { title: '순찰 카메라 뷰', sub: 'FRONT · THERMAL' },
+  events: { title: '이벤트 로그', sub: 'EVENT ARCHIVE · REALTIME ALERTS' },
+  // 알림·점검·사용자 패널은 2026-08-09 에 제거됐다(ConfigPage.tsx 주석에 복구 명령이 있다) —
+  // 화면에 없는 항목을 부제가 계속 가리키면 조작자가 그걸 찾아 헤맨다.
+  config: { title: '시스템 설정', sub: 'POWER · SYSTEM' },
+}
+
+// 고정 머리 — 제목 + KPI + 보조 줄.
+// `page v3-theme` 를 그대로 다는 이유는 app.css `.nav-shell` 주석에 적어 두었다(서식이
+// 전부 그 스코프에 걸려 있다). 보조 줄은 지도에서만 채워지고, 나머지 탭에서는 빈 채로
+// 자리만 지킨다 — 그래야 아래 본문이 시작하는 높이가 네 화면 모두 같다.
+function ConsoleHeader({ active, isAdmin, mapTab, onMapTab }: {
+  active: Section, isAdmin: boolean,
+  mapTab: MapTab, onMapTab: (t: MapTab) => void,
+}) {
+  const { title, sub } = SECTION_TITLE[active]
   return (
-    <>
-      {/* 화면 모두 마운트해 둔다. 탭을 옮겼다고 캔버스를 버리면 돌아올 때마다
-          영상과 지도가 처음부터 다시 붙는다. */}
-      <div hidden={active !== 'live'}><MapPage /></div>
-      <div hidden={active !== 'cam'}><CameraPage /></div>
-      <div hidden={active !== 'events'}><EventPage /></div>
-      {isAdmin && active === 'config' && <ConfigPage />}
-    </>
+    <header className="nav-shell page on v3-theme">
+      <div className="nav-hero">
+        <div className="nav-title">
+          <h2>{title}</h2>
+          <span className="nav-sub">{sub}</span>
+        </div>
+        <KpiRow />
+      </div>
+      <div className="nav-subrow">
+        {active === 'live' && isAdmin && (
+          <div className="map-tabs" role="tablist" aria-label="지도 또는 매핑">
+            <button type="button" role="tab" aria-selected={mapTab === 'map'} className={mapTab === 'map' ? 'on' : ''} onClick={() => onMapTab('map')}>지도</button>
+            <button type="button" role="tab" aria-selected={mapTab === 'mapping'} className={mapTab === 'mapping' ? 'on' : ''} onClick={() => onMapTab('mapping')}>매핑</button>
+          </div>
+        )}
+      </div>
+    </header>
+  )
+}
+
+function Sections({ active, isAdmin, mapTab }: { active: Section, isAdmin: boolean, mapTab: MapTab }) {
+  // 뷰어에게는 설정 탭이 없다(Nav.tsx 와 같은 규칙). 슬롯이 셋이 되어도 이동량 계산은
+  // 그대로다 — translateY 의 % 는 트랙 자신의 높이(= 본문 한 칸) 기준이기 때문이다.
+  const order: Section[] = isAdmin ? ['live', 'cam', 'events', 'config'] : ['live', 'cam', 'events']
+  // active 는 Dashboard 에서 allowed 로 이미 보정됐지만, indexOf 가 -1 이면 트랙이
+  // 화면 밖으로 나가 아무것도 안 보인다. 여기서 한 번 더 바닥을 깐다.
+  const index = Math.max(0, order.indexOf(active))
+
+  return (
+    <div className="page-viewport">
+      <div className="page-track" style={{ transform: `translateY(-${index * 100}%)` }}>
+        {/* 화면 모두 마운트해 둔다. 탭을 옮겼다고 캔버스를 버리면 돌아올 때마다
+            영상과 지도가 처음부터 다시 붙는다.
+            ⚠ 설정도 이제 상시 마운트다 — 예전에는 active === 'config' 일 때만 만들었는데,
+            슬라이드는 나가고 들어오는 두 화면이 동시에 그려져 있어야 성립한다. */}
+        {order.map((key) => (
+          <div key={key} className={`page-slot${active === key ? ' on' : ''}`}>
+            {key === 'live' && <MapPage tab={mapTab} />}
+            {key === 'cam' && <CameraPage />}
+            {key === 'events' && <EventPage />}
+            {key === 'config' && <ConfigPage />}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -54,6 +121,10 @@ function Dashboard() {
   // sessionStorage 에 남아 있는 경우(통계/운영)도 지도로 보정한다.
   const allowed: Section[] = isAdmin ? ['live', 'cam', 'events', 'config'] : ['live', 'cam', 'events']
   const active: Section = allowed.includes(section) ? section : 'live'
+
+  // 지도 화면의 '지도/매핑' 상태를 여기로 올린다. 세그먼트 자체는 고정된 머리에 있고
+  // 그 결과를 그리는 것은 트랙 안의 지도 화면이라, 둘의 공통 부모가 이 값을 들어야 한다.
+  const [mapTab, setMapTab] = useState<MapTab>('map')
 
   // 상단바는 페이지 밖에 있어 페이지 배경을 물려받지 못한다. 문서 뿌리에 표시를
   // 달아 배경을 뿌리로 올리고 상단바는 비운다 — 가로로 남는 흰 띠가 사라진다.
@@ -79,7 +150,11 @@ function Dashboard() {
             <Nav section={active} onSection={setSection} />
             {/* 화재/과열 발생 팝업 알림 — 어느 탭에 있든 항상 최상단에 떠 있음 */}
             <EventAlert />
-            <Sections active={active} isAdmin={isAdmin} />
+            {/* 머리는 고정, 본문만 슬라이드 — 둘을 한 껍데기에 담아 여백·배경을 공유한다 */}
+            <div className="console-shell">
+              <ConsoleHeader active={active} isAdmin={isAdmin} mapTab={mapTab} onMapTab={setMapTab} />
+              <Sections active={active} isAdmin={isAdmin} mapTab={mapTab} />
+            </div>
             </ZoneProvider>
           </FleetProvider>
         </LiveProvider>

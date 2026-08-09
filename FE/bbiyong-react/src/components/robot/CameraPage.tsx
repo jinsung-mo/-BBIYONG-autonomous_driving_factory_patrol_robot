@@ -4,7 +4,6 @@ import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import ControlPanel from './ControlPanel.tsx'
 import EventLog from './EventLog.tsx'
-import KpiRow from './KpiRow.tsx'
 
 const ZOOM_MIN = 1
 const ZOOM_MAX = 2.2
@@ -80,14 +79,6 @@ export default function CameraPage() {
 
   return (
     <section id="pgCam" className="page on sim-skin nav-page v3-theme">
-      <div className="nav-hero">
-        <div className="nav-title">
-          <h2>순찰 카메라 뷰</h2>
-          <span className="nav-sub">FRONT · THERMAL</span>
-        </div>
-        <KpiRow />
-      </div>
-
       <div className="cam-stage">
         {/* aside 에서 panel 을 뗀다(S15P11E101-797) — 껍데기가 카드이면 그 안의 두 패널이
             한 장에 붙어 보인다. 카드는 자식 둘이 각자 갖는다. */}
