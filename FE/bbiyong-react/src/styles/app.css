@@ -2241,21 +2241,13 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .kpi-badge.warn{background:var(--nx-warning);}
 .kpi-badge.bad{background:var(--nx-danger-vivid);}
 .kpi-badge.none{background:var(--nx-neutral); color:var(--nx-muted);}
-/* 미니 바차트 (S15P11E101-814) — 디자인 시스템 v3 의 서명 요소.
-   핸드오프 "구현 시 우선순위" 4번: "수치 옆에는 미니 차트를".
-   과거 막대는 중립, 최근 3개만 상태색. 축·격자선·범례·툴팁 없음 —
-   값을 읽는 것이 아니라 "추세의 인상"만 주는 요소다.
-   색은 --bb-* 가 아니라 이 코드베이스가 실제로 쓰는 --nx-* 를 쓴다.
-   (v3 토큰 전면 도입은 별건이다 — 여기서 두 체계를 섞으면 상태색이 화면마다 갈린다.) */
-.kpi-spark{display:block; margin-top:10px; flex:0 0 auto; overflow:visible;}
-.kpi-spark rect{fill:var(--nx-neutral);}
-.kpi-spark rect.on.ok{fill:var(--nx-accent);}
-.kpi-spark rect.on.warn{fill:var(--nx-warning);}
-.kpi-spark rect.on.bad{fill:var(--nx-danger-vivid);}
-.kpi-spark rect.on.none{fill:var(--nx-muted);}
-/* 배터리 잔량 게이지 — 값이 클수록 채움이 오른쪽으로 길어진다(스파크라인과 정반대 문법이다:
-   스파크라인은 폭이 늘 꽉 차 있고 높이만 변해서, 33% 인데도 "거의 다 찼다"로 읽혔다).
-   폭은 스파크라인(74px)과 같게 맞춰 KPI 사이 세로 리듬이 흔들리지 않게 한다. */
+/* 미니 바차트(.kpi-spark)는 걷어냈다 [사용자 지시 2026-08-09] — S15P11E101-814 에서
+   디자인 시스템 v3 의 서명 요소로 넣었지만, 이 줄에 남은 KPI 셋 중 어느 것도 추세로
+   읽을 값이 아니었다(배터리는 잔량 게이지로, 로봇 상태는 값이 아닌 상태, 경보는 건수 하나).
+   마크업이 사라졌으므로 규칙도 같이 지운다 — 안 쓰는 선택자를 남기면 다음 사람이
+   "어딘가 쓰이겠지" 하고 건드리지 못한다. */
+/* 배터리 잔량 게이지 — 값이 클수록 채움이 오른쪽으로 길어진다.
+   폭 74px 은 예전 스파크라인과 같은 값이다. KPI 사이 세로 리듬을 그대로 두려고 유지한다. */
 .kpi-gauge{
   width:74px; height:8px; margin-top:10px; flex:0 0 auto;
   border-radius:999px; background:var(--nx-neutral); overflow:hidden;
@@ -2266,7 +2258,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .kpi-gauge > i.bad{background:var(--nx-danger-vivid);}
 @media (prefers-reduced-motion: reduce){ .kpi-gauge > i{transition:none;} }
 /* 좁은 화면에서는 접는다 — 폭이 통째로 필요한데 그보다 숫자가 먼저다 */
-@media (max-width:1180px){ .kpi-spark, .kpi-gauge{display:none;} }
+@media (max-width:1180px){ .kpi-gauge{display:none;} }
 /* 낮은 화면(작업표시줄이 보이는 FHD 노트북 등)에서는 머리를 눌러 본문을 지킨다
    (S15P11E101-880) — 본문은 overflow:hidden 이라 잘리면 스크롤로도 못 본다.
    제목·KPI 는 크기만 줄고 구성은 그대로다. */
@@ -2276,7 +2268,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   .kpi-num .unit{font-size:16px;}
   .kpi-label{margin-top:5px; font-size:13px;}
   .kpi-badge{margin-top:6px;}
-  .kpi-spark,.kpi-gauge{margin-top:7px;}
+  .kpi-gauge{margin-top:7px;}
   .nav-hero{margin-bottom:6px;}
   .kpis{padding-bottom:4px;}
 }

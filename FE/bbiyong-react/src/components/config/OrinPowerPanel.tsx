@@ -36,7 +36,9 @@ function statusOf(v: number, warn: number, danger: number): Tone {
 const HIST_LEN = 20
 
 /** 실제로 관측된 값만 쌓는다 — 값이 없으면(undefined/NaN) 이력을 늘리지 않는다.
- *  관측이 3개면 막대도 3개다. 있지도 않은 과거를 그리지 않는다(KpiRow.useTrend 와 같은 원칙). */
+ *  관측이 3개면 막대도 3개다. 있지도 않은 과거를 그리지 않는다.
+ *  (KpiRow 에도 같은 원칙의 useTrend 가 있었지만 2026-08-09 에 스파크라인과 함께 제거됐다 —
+ *   여기 부하 그래프는 '추세를 보는 것' 자체가 목적이라 그대로 둔다.) */
 function useNumHistory(value: number | null, n = HIST_LEN) {
   const [hist, setHist] = useState<number[]>([])
   useEffect(() => {
