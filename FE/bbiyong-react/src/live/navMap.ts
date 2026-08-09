@@ -153,7 +153,7 @@ export function followPose(view: any, cv: any, pose: any, k = 1) {
 export function fitView(view: any, cv: any, m: any) {
   if (!cv.width || !cv.height) return false
   const w = m.w * m.res, h = m.h * m.res
-  view.s = Math.min(cv.width / w, cv.height / h) * 0.88
+  view.s = Math.min(cv.width / w, cv.height / h) * 0.96   // 여백 12→4% (S15P11E101-911: 화면을 더 채운다)
   view.x = cv.width / 2 - (m.ox + w / 2) * view.s
   view.y = cv.height / 2 + (m.oy + h / 2) * view.s
   view.init = true
@@ -246,6 +246,28 @@ export function isMasked(mask: Uint8Array | null | undefined, m: any, x: any, y:
   const row = Math.floor(dy / m.res)
   if (col < 0 || row < 0 || col >= m.w || row >= m.h) return false
   return mask[row * m.w + col] === 0
+}
+
+// 이 좌표가 '매핑된 자유공간'(흰색, ' ')인지(S15P11E101-911). 순찰 지점을 검은 벽('#')이나
+// 아직 탐색 못 한 칸('.') — 즉 벽 바깥 — 에 찍지 못하게 막는 데 쓴다. bakeMap 과 같은 규약:
+// data 는 아래→위 순서 문자열이고 32(' ')=자유, 35('#')=벽, 그 외=미탐색이다.
+// 좌표 축 변환은 insideMap/isMasked 와 동일하게 originYaw 를 되돌린다.
+// 원본 격자 문자열(m.data)이 없으면 판정할 수 없으므로 통과시킨다(기존 동작 유지).
+export function isFree(m: any, x: any, y: any) {
+  if (typeof m?.data !== 'string' || !insideMap(m, x, y)) return true
+  let dx = x - m.ox
+  let dy = y - m.oy
+  const yaw = Number(m.oyaw) || 0
+  if (yaw) {
+    const c = Math.cos(-yaw), s2 = Math.sin(-yaw)
+    const rx = dx * c - dy * s2
+    const ry = dx * s2 + dy * c
+    dx = rx; dy = ry
+  }
+  const col = Math.floor(dx / m.res)
+  const row = Math.floor(dy / m.res)
+  if (col < 0 || row < 0 || col >= m.w || row >= m.h) return false
+  return m.data.charCodeAt(row * m.w + col) === 32   // ' ' 자유공간만 허용
 }
 
 // 맵 + 궤적 + 스캔 + 로봇 — nav.html 그대로
@@ -428,15 +450,27 @@ export function drawNav(g: any, cv: any, nav: any, view: any, headingUp = false,
     const yaw = Number(bg.oyaw) || 0
     const wpx = bg.w * bg.res * view.s
     const hpx = bg.h * bg.res * view.s
+    // 원본 격자(매핑 중)는 맵 경계에 딱 붙어, 경계 근처 벽이 배경(회색 미탐색 영역) 밖
+    // 바닥색으로 삐져나와 보였다(사용자 지적 2026-08-10). 배경 이미지와 같은 변환으로
+    // 맵보다 큰 회색 판을 먼저 깔아 벽을 감싼다 — 미탐색 셀(rgba 60,.35)과 같은 톤이라
+    // 자연스럽게 이어진다. 도면(isPlan)은 자기 흰 배경이 있어 패딩하지 않는다. */
+    const pad = bg.isPlan ? 0 : Math.max(wpx, hpx) * 0.10
+    const drawBg = (dx: number, dy: number) => {
+      if (pad > 0) {
+        g.fillStyle = 'rgba(60,60,60,.35)'
+        g.fillRect(dx - pad, dy - pad, wpx + pad * 2, hpx + pad * 2)
+      }
+      g.drawImage(bg.img, dx, dy, wpx, hpx)
+    }
     if (yaw) {
       const ax = sx(bg.ox), ay = sy(bg.oy)      // 좌하단 = 회전축
       g.save()
       g.translate(ax, ay)
       g.rotate(-yaw)                            // 화면 y 는 아래로 자라므로 부호를 뒤집는다
-      g.drawImage(bg.img, 0, -hpx, wpx, hpx)
+      drawBg(0, -hpx)
       g.restore()
     } else {
-      g.drawImage(bg.img, sx(bg.ox), sy(bg.oy + bg.h * bg.res), wpx, hpx)
+      drawBg(sx(bg.ox), sy(bg.oy + bg.h * bg.res))
     }
   }
 
