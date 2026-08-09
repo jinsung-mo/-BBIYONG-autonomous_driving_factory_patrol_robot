@@ -453,6 +453,12 @@ export interface EventLog {
   message?: string
   timestamp?: string
   status?: EventStatus
+  /**
+   * 이 이벤트가 찍힌 지도(활성 맵)의 id. 서버가 저장 시점에 붙인다.
+   * x,y 는 그 지도의 map 프레임 좌표라, 다른 지도 위에 그리면 엉뚱한 자리를 가리킨다.
+   * 이 필드가 없는 과거 이력은 소속 지도를 알 수 없다(= 지도에 그리지 않는다).
+   */
+  mapId?: string
 }
 
 /** GET /api/events — Spring Page 를 감싼 응답. */
@@ -593,6 +599,10 @@ export interface PlanLayer {
   id: string
   name?: string
   kind: MapKind | string
+  /** FLOORPLAN 이 파생된 원본 RAW 맵 id. 경보 핀의 지도 소속 판정에 함께 쓴다. */
+  sourceMapId?: string
+  /** 이 도면이 만들어진 시각(ISO). mapId 가 없는 이벤트를 가려내는 폴백 기준선. */
+  createdAt?: string
   img: HTMLImageElement
   /** objectURL — 교체·해제 시 revoke 해야 한다 */
   url: string
