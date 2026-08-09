@@ -35,6 +35,13 @@ public class RobotPacket {
     private Integer commLatencyMs;   // 통신 왕복 지연(ms)
     private Double inferenceFps;     // YOLO 추론 FPS
 
+    // Orin 부하·전력 (S15P11E101-814).
+    // 🔴 이 클래스에 필드가 없으면 로봇이 보내도 값이 사라진다 — 클래스 선언의
+    // @JsonIgnoreProperties(ignoreUnknown = true) 가 모르는 필드를 조용히 버리고,
+    // 관제로 나가는 payload 는 이 객체를 그대로 직렬화한 것이기 때문이다
+    // (RobotEventListener.handleTelemetryEvent). 그래서 "로봇만 고치면 되는" 일이 아니다.
+    private OrinPower orinPower;
+
     // 듀얼 카메라 영상 프레임 (VIDEO_FRAME) - S15P11E101-354
     private String channel;   // FRONT(RGB) | THERMAL
     private String format;    // jpeg
@@ -55,5 +62,23 @@ public class RobotPacket {
         private Double x;
         private Double y;
         private Double yaw;
+    }
+
+    /**
+     * Orin 모듈의 부하·전력 (S15P11E101-814). 로봇의 tegrastats 한 줄에서 나온다.
+     *
+     * <p>세 값 모두 nullable 이다. 로봇은 못 읽은 값을 넣지 않고 통째로 생략하며,
+     * 관제도 값이 없으면 그래프를 그리지 않고 '—' 로 둔다 — 없는 수치를 그리면
+     * 조작자가 그것을 믿는다.
+     *
+     * <p>cpuCores 는 평균이 아니라 <b>코어별 원값</b>이다. 평균을 서버에서 미리 내면
+     * 코어 편중(한 코어만 77%, 나머지 40%대)이 사라져 관제가 판단할 근거를 잃는다.
+     */
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class OrinPower {
+        private java.util.List<Double> cpuCores;  // 코어별 사용률 %(꺼진 코어는 빠진다)
+        private Double gpuPercent;                // GR3D_FREQ %
+        private Integer vddInMw;                  // 모듈 전체 입력 전력 mW (peak 25,000)
     }
 }
