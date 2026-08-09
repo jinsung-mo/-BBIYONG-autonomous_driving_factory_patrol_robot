@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLive } from '../../live/LiveContext.tsx'
 import { useAuth } from '../../auth/AuthContext.tsx'
 import Modal from '../ui/Modal.tsx'
@@ -22,8 +22,6 @@ export default function MappingTab() {
   const [confirming, setConfirming] = useState(false)
   const [requested, setRequested] = useState(false)   // START_MAPPING 발행 후 로봇 반응 대기
   const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)
-  // 매핑 완료를 이미 저장했는지. 완료 이벤트가 재렌더로 여러 번 읽혀도 SAVE_MAP 을 한 번만 보낸다.
-  const savedRef = useRef(false)
 
   // 실시간 맵 진행 상황 — /topic/nav 의 MAP 스냅샷을 그대로 본다
   useEffect(() => onNavUpdate((n: any) => setNav(n?.map ? { ...n.map } : null)), [onNavUpdate])
@@ -35,19 +33,9 @@ export default function MappingTab() {
   // 로봇이 매핑에 들어갔거나 끝났으면 '대기 중' 딱지는 역할이 끝났다
   useEffect(() => { if (running || mappingComplete) setRequested(false) }, [running, mappingComplete])
 
-  // 매핑 완료 시 자동 저장 — 로봇이 붙인 이름, 없으면 시각 기반 기본 이름으로 SAVE_MAP.
-  // 서버가 정제 도면(FLOORPLAN)을 만들어 활성 맵으로 지정하면 지도(3D)에 자동 반영된다.
-  useEffect(() => {
-    if (!mappingComplete) { savedRef.current = false; return }
-    if (savedRef.current) return
-    savedRef.current = true
-    const suggested = (mappingComplete.name || '').trim()
-    const mapName = suggested
-      || `map_${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`
-    setMsg({ kind: 'ok', text: `매핑 완료 — '${mapName}' 이름으로 자동 저장합니다. 서버가 정제 도면(FLOORPLAN)을 만들어 활성 맵으로 지정하면 지도에 반영됩니다.` })
-    control.saveMap(mapName)
-    clearMappingComplete()
-  }, [mappingComplete, control, clearMappingComplete])
+  // 🔴 FE 의 매핑 완료 자동 저장(SAVE_MAP + 시각 기반 이름 짓기)은 걷어냈다
+  // [사용자 지침 2026-08-09] — 저장·도면 생성은 로봇/서버 쪽 흐름이 맡고,
+  // 화면은 '매핑 완료' 사실만 알린다. 완료 표시는 다음 매핑 시작 때 지워진다(onStart).
 
   const onStart = () => {
     setConfirming(false)
@@ -106,7 +94,7 @@ export default function MappingTab() {
             )}
             {phase === 'complete' && (
               <div className="mapstat done" id="mapPhase">
-                <i /> <b>매핑 완료 — 자동으로 저장합니다.</b> 서버가 정제 도면(FLOORPLAN)을 만들어 활성 맵으로 지정하면 지도에 반영됩니다.
+                <i /> <b>매핑 완료</b>
               </div>
             )}
 
