@@ -111,10 +111,12 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
   // 지도 클릭 — 서버에 바로 1건 추가한다(POST). 목록만 늘려 두면 새로고침에 사라진다.
   // reason='masked' 는 순찰 마스크로 막힌 칸(S15P11E101-869) — 로봇이 회전 여유까지 계산해
   // 판정한 결과라 맵 바깥 안내와는 다른 문구로 알린다.
-  const onPick = async (p: any, reason?: 'outside' | 'masked') => {
+  const onPick = async (p: any, reason?: 'outside' | 'occupied' | 'masked') => {
     if (!p) {
       setMsg(reason === 'masked'
         ? { kind: 'warn', text: '이 자리는 회전 여유가 없어 순찰 지점으로 찍을 수 없습니다.' }
+        : reason === 'occupied'
+        ? { kind: 'warn', text: '벽 안쪽/미탐색 영역에는 지정할 수 없습니다. 매핑된 흰색 통로 안을 클릭하세요.' }
         : { kind: 'warn', text: '맵 바깥은 지정할 수 없습니다. 회색으로 칠해진 영역 안을 클릭하세요.' })
       return
     }
