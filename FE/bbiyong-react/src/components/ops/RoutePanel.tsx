@@ -51,7 +51,7 @@ const BLOCKED_HINT: Record<string, string> = {
 const SELF_CLEARING_BLOCK = 'ROUTE_SESSION_MISMATCH'
 
 export default function RoutePanel({ inspection = null }: { inspection?: any } = {}) {
-  const { enabled, connected, mapping, telemetry } = useLive()
+  const { enabled, connected, mapping, telemetry, control, robotOnline } = useLive()
   const { accessToken } = useAuth()
 
   const [route, setRoute] = useState<import('../../live/contracts.d.ts').Waypoint[]>([])
@@ -127,6 +127,8 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
   }, [enabled, accessToken])
   useResourceSync('patrol-route', refresh)
 
+  const offline = !enabled || !connected
+
   // 순찰 시작 — 반드시 /start 로 한다(S15P11E101-625).
   // 로봇이 경로에 저장맵 세션 ID 를 stamp 하므로, 활성 맵이 바뀐 뒤 예전 경로로 autonomy 를
   // 요청하면 거절된다. 경로 재하달과 시작이 한 요청 안에서 붙어 나가야 세션이 맞는다.
@@ -145,7 +147,34 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
     } finally { if (alive.current) setBusy(false) }
   }
 
-  const offline = !enabled || !connected
+  // 순찰 종료(S15P11E101-895) — 이 버튼은 '잠깐 멈춤'이 아니라 **제동**이다.
+  //
+  // `SET_MODE mode=disabled` 는 로봇에서 navigation_orchestrator.set_mode('disabled') 로 가고,
+  // 그건 ① _disarm_manual() ② _set_control('disabled') ③ _terminate_locked() 를 한다.
+  // ②는 정본 정지 명령인 `control_command stop` 을 실행하며, 제어 파일의 **estop 이 True 가
+  // 되어야만** 성공으로 친다(_set_control_once: `expected_estop = mode == 'disabled'`).
+  // ③은 순찰 프로세스 자체를 죽인다. 즉 바퀴 출력까지 잠기는 정지다 —
+  // FE 비상정지 버튼이 부르는 control.estop() 과 **완전히 같은 명령**이다(LiveContext:
+  // `estop: () => send('/app/control/mode', { command:'SET_MODE', mode:'disabled' })`,
+  // S15P11E101-732). 그래서 안내 문구를 '멈춤'이 아니라 제동으로 적는다.
+  //
+  // 되돌릴 수 있다 — '순찰 시작'이 _set_control('autonomy')(=`arm`)로 estop 을 스스로 푼다.
+  // (로봇 readiness 주석: "estop 은 차단 사유가 아니다 — 순찰 시작이 스스로 제어를 잡는다")
+  // 그래서 확인 대화상자는 넣지 않았다. 시연 중 멈춰야 하는 순간에 한 번 더 묻는 것이 더 위험하고,
+  // 되돌리는 비용이 '순찰 시작' 한 번이라 되돌릴 수 없는 조작이 아니다.
+  //
+  // STOMP publish 는 응답이 없다 — 그래서 "멈췄습니다"가 아니라 "보냈습니다"라고 쓴다.
+  // 실제 정지는 텔레메트리 status 가 AUTO_PATROL 에서 빠지는 것으로 확인한다.
+  const onStop = () => {
+    if (offline) return
+    control.setMode('disabled')
+    // 서버에는 붙었는데 로봇 세션이 없으면 BE 가 로그만 남기고 버린다(RobotControlStompController).
+    // FE 로는 아무 응답도 오지 않으므로 보낸 쪽에서 말해 주지 않으면 멈춘 줄 안다.
+    setMsg(robotOnline === false
+      ? { kind: 'warn', text: '로봇이 오프라인이라 정지 명령이 전달되지 않았습니다 — 로봇 상태를 확인하세요.' }
+      : { kind: 'ok', text: '순찰 종료를 보냈습니다 — 로봇이 멈추고 바퀴 출력이 잠깁니다. 다시 순찰 시작을 누르면 풀립니다.' })
+  }
+
   // 매핑 중에는 경로를 건드리지 못하게 잠근다(S15P11E101-763).
   // 지금 그리는 지도는 옛 지도와 좌표가 다르다 — 그 위에 옛 지점을 얹으면 엉뚱한 자리를
   // 가리키고, 그대로 순찰을 시작하면 로봇이 없는 길로 간다.
@@ -179,6 +208,16 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
       : (hardBlocked
         ? (readiness.hint || BLOCKED_HINT[readiness.blockedBy ?? ''] || '지금은 순찰을 시작할 수 없습니다.')
         : null))
+
+  // 순찰 중인가 — 로봇 브리지가 patrol 프로세스 실행 여부로 낸 값이다
+  // (cloud_bridge.infer_status: patrol_running 이면 AUTO_PATROL). 버튼을 **잠그는 데는 쓰지
+  // 않고**(위 주석 참고) 무슨 일이 일어날지 알리는 데만 쓴다.
+  const patrolling = telemetry?.status === 'AUTO_PATROL'
+  const stopHint = offline
+    ? '로봇과 연결이 끊겼습니다.'
+    : (patrolling
+      ? '순찰을 멈추고 바퀴 출력을 잠급니다. 다시 순찰 시작을 누르면 풀립니다.'
+      : '지금은 순찰 중으로 보이지 않습니다 — 눌러도 안전합니다. 정지 상태를 다시 확정합니다.')
 
   return (
     <div className="card-v3" id="pgRoute">
@@ -234,12 +273,17 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
         >
           순찰 시작
         </button>
-        {/* 순찰 종료(S15P11E101-868) — 로봇 연동은 아직 없다. 눌러도 아무 일도 일어나지
-            않는데, 눌리기만 하면 조작자를 속이는 셈이라 disabled + 안내문으로 명확히 알린다. */}
+        {/* 순찰 종료(S15P11E101-895) — -868 의 '로봇 연동 대기' 는 낡은 설명이었다.
+            FE control.setMode · BE /app/control/mode · 로봇 set_mode('disabled') 3단이 이미 다 있다.
+
+            🔴 비활성 조건을 `offline` 하나로 둔다. '순찰 중일 때만 활성' 으로 좁히지 않는다 —
+            순찰 여부는 텔레메트리에서 **추정한** 값이고(cloud_bridge.infer_status → patrol_running),
+            그 값이 늦거나 끊기면 **움직이는 로봇을 멈출 수 없게 된다.** 정지 수단을 추정 상태로
+            잠그는 것이 바로 -893 이 났던 방식이다. 정지는 언제 눌러도 안전하다(이미 멈춰 있으면
+            멈춘 상태를 다시 확정할 뿐이다). */}
         <button
           type="button" id="btnStopPatrol" className="btn-outlined"
-          disabled
-          title="로봇 연동 대기 — 아직 순찰 종료 명령을 보내지 않습니다"
+          onClick={onStop} disabled={offline} title={stopHint}
         >
           순찰 종료
         </button>
@@ -250,7 +294,8 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
         </p>
       )}
       <p className="cfg-help" style={{ marginTop: 6, marginBottom: 0 }}>
-        <b>순찰 종료</b>는 로봇 연동 대기 중입니다 — 지금은 눌러도 아무 동작도 하지 않습니다.
+        <b>순찰 종료</b>는 로봇을 즉시 멈추고 바퀴 출력을 잠급니다 — 비상정지와 같은 제동입니다.
+        다시 <b>순찰 시작</b>을 누르면 잠금이 풀리고 순찰이 이어집니다.
       </p>
     </div>
   )
