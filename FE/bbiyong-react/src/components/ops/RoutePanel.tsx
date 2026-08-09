@@ -50,7 +50,13 @@ const BLOCKED_HINT: Record<string, string> = {
 // 나머지 사유(매핑 중·지도 저장 중·위치 미확인 등)는 시작을 눌러도 해소되지 않으므로 그대로 막는다.
 const SELF_CLEARING_BLOCK = 'ROUTE_SESSION_MISMATCH'
 
-export default function RoutePanel({ inspection = null }: { inspection?: any } = {}) {
+// title/mappingControl 은 매핑 탭 통합용(S15P11E101-904) — 매핑 컨트롤 박스를 이 패널
+// 상단에 얹고, 카드가 화면을 다 채우며 맵을 크게 보여 준다. 안 주면 기존 '순찰 경로' 그대로.
+export default function RoutePanel({ inspection = null, title, mappingControl }: {
+  inspection?: any,
+  title?: string,
+  mappingControl?: import('react').ReactNode,
+} = {}) {
   const { enabled, connected, mapping, telemetry, control, robotOnline } = useLive()
   const { accessToken } = useAuth()
 
@@ -220,8 +226,10 @@ export default function RoutePanel({ inspection = null }: { inspection?: any } =
       : '지금은 순찰 중으로 보이지 않습니다 — 눌러도 안전합니다. 정지 상태를 다시 확정합니다.')
 
   return (
-    <div className="card-v3" id="pgRoute">
-      <h3 style={{ margin: 0, marginBottom: '12px' }}>순찰 경로 <span className="k">PATROL ROUTE</span></h3>
+    <div className="card-v3 routepanel" id="pgRoute">
+      <h3 style={{ margin: 0, marginBottom: '12px' }}>{title || '순찰 경로'} <span className="k">{title ? 'LIVE MAPPING · PATROL' : 'PATROL ROUTE'}</span></h3>
+      {/* 매핑 컨트롤(맵 모델링 시작/중단 + 진행 상태) — 매핑 탭에서 주입한다(S15P11E101-904). */}
+      {mappingControl}
       {!enabled && <p className="cfg-help">시뮬레이션 모드에서는 실제 맵이 없어 지점을 찍을 수 없습니다. 실서버 모드로 로그인하세요.</p>}
       {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
       {enabled && (

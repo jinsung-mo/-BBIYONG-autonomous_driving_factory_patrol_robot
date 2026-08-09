@@ -54,67 +54,61 @@ export default function MappingTab() {
 
   const offline = !enabled || !connected
 
+  // 매핑 컨트롤 — 예전에는 좌측 별도 카드였다(S15P11E101-904). 순찰 경로 패널 상단에
+  // 얹어 한 카드로 합치고, 맵이 화면을 크게 차지하게 한다. 시작/중단 버튼 한 줄 +
+  // 진행 상태 한 줄로 얇게 둔다.
+  const mappingControl = (
+    <div className="mapping-control">
+      <div className="mapping-control-head">
+        <span className="mapping-control-title">2D 맵 모델링 <span className="k">SLAM MAPPING</span></span>
+        <div className="mapping-actions">
+          <button
+            type="button" id="btnStartMapping" className="btn-filled"
+            onClick={() => setConfirming(true)}
+            disabled={offline || phase === 'running' || phase === 'requested'}
+          >
+            {phase === 'running' ? '매핑 진행 중…' : '맵 모델링 시작'}
+          </button>
+          {(phase === 'running' || phase === 'requested') && (
+            <button
+              type="button" id="btnStopMapping" className="btn-tonal" style={{ color: '#B4655C' }}
+              onClick={onStopMapping} disabled={offline}
+            >
+              매핑 중단
+            </button>
+          )}
+        </div>
+      </div>
+      {phase === 'requested' && (
+        <div className="mapstat wait" id="mapPhase"><i /> 시작 명령을 보냈습니다 — 로봇이 매핑에 들어가면 진행 상황이 표시됩니다.</div>
+      )}
+      {phase === 'running' && (
+        <div className="mapstat run" id="mapPhase"><i /> 매핑 진행 중 — 로봇이 자율 주행하며 맵을 넓히고 있습니다.</div>
+      )}
+      {phase === 'complete' && (
+        <div className="mapstat done" id="mapPhase"><i /> <b>매핑 완료</b></div>
+      )}
+      {enabled && connected && !nav && phase === 'idle' && (
+        <p className="cfg-help" style={{ marginTop: 8, marginBottom: 0 }}>아직 맵을 받지 못했습니다. 로봇의 라이다·SLAM 노드가 올라오면 여기에 진행 상황이 뜹니다.</p>
+      )}
+      {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
+    </div>
+  )
+
   return (
     <fieldset className="lockfs" disabled={locked}>
-      <div className="nav-stage">
-        <aside className="nav-side" aria-label="매핑 제어">
-          <div className="card-v3">
-            <h3 style={{ margin: 0, marginBottom: '12px' }}>2D 맵 모델링 <span className="k">SLAM MAPPING</span></h3>
-            {!enabled && <p className="cfg-help">시뮬레이션 모드에서는 실제 맵이 없습니다. 실서버 모드로 로그인하면 진행 상황이 표시됩니다.</p>}
-            {enabled && !connected && <p className="cfg-help">실서버 연결 대기 중입니다.</p>}
-
-            <div className="gotor mapping-actions">
-              <button
-                type="button" id="btnStartMapping" className="btn-filled"
-                onClick={() => setConfirming(true)}
-                disabled={offline || phase === 'running' || phase === 'requested'}
-              >
-                {phase === 'running' ? '매핑 진행 중…' : '맵 모델링 시작'}
-              </button>
-              {(phase === 'running' || phase === 'requested') && (
-                <button
-                  type="button" id="btnStopMapping" className="btn-tonal" style={{ color: '#B4655C' }}
-                  onClick={onStopMapping}
-                  disabled={offline}
-                >
-                  매핑 중단
-                </button>
-              )}
-            </div>
-
-            {phase === 'requested' && (
-              <div className="mapstat wait" id="mapPhase">
-                <i /> 시작 명령을 보냈습니다 — 로봇이 매핑에 들어가면 여기에 진행 상황이 표시됩니다.
-              </div>
-            )}
-            {phase === 'running' && (
-              <div className="mapstat run" id="mapPhase">
-                <i /> 매핑 진행 중 — 로봇이 자율 주행하며 맵을 넓히고 있습니다.
-              </div>
-            )}
-            {phase === 'complete' && (
-              <div className="mapstat done" id="mapPhase">
-                <i /> <b>매핑 완료</b>
-              </div>
-            )}
-
-            {enabled && connected && !nav && phase === 'idle' && (
-              <p className="cfg-help">아직 맵을 받지 못했습니다. 로봇의 라이다·SLAM 노드가 올라오면 여기에 진행 상황이 뜹니다.</p>
-            )}
-            {/* 도면 메타 정보(갱신 번호·격자·해상도·포함 면적·원점) 블록 제거(S15P11E101-814) —
-                조작자에게 필요 없는 정보였다. 나중에 이 자리에 무엇을 넣을지는 별도로 정한다. */}
-
-            {msg && <div className={`form-msg ${msg.kind}`} id="mapMsg">{msg.text}</div>}
-          </div>
-        </aside>
-
-        <div className="nav-canvas">
-          <RoutePanel inspection={{
+      {/* 단일 카드가 화면을 다 채운다(S15P11E101-904) — 좌측 별도 카드를 없애고
+          매핑 컨트롤을 순찰 경로 패널 상단에 통합했다. */}
+      <div className="nav-canvas mapping-canvas">
+        <RoutePanel
+          title="실시간 매핑/순찰 모니터링"
+          mappingControl={mappingControl}
+          inspection={{
             candidates: inspection.candidates,
             points: inspection.points,
             selectedId: null,
-          }} />
-        </div>
+          }}
+        />
       </div>
 
       {confirming && (
