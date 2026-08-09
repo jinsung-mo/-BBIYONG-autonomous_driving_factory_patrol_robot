@@ -115,6 +115,9 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
   const [pending, setPending] = useState<any>(null)   // 삭제 확인 대기 중인 행
   const [removing, setRemoving] = useState(false)
   const [delErr, setDelErr] = useState<string | null>(null)
+  // 선택 삭제(S15P11E101-884) — 체크한 행(eventId)들을 한 번의 확인으로 지운다.
+  const [checked, setChecked] = useState<Set<number>>(new Set())
+  const [bulkOpen, setBulkOpen] = useState(false)
   // 해결 처리 중인 행과 그 결과 안내(S15P11E101-593)
   const [resolving, setResolving] = useState<number | null>(null)
   const [resolveErr, setResolveErr] = useState<string | null>(null)
@@ -162,7 +165,9 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
   }, [enabled, accessToken, filter, level, statusF, startDate, endDate, multi, byRobot, selected])
 
   // 필터가 바뀌면 처음부터 다시 받는다. 구간이 모순이면 조회하지 않는다.
+  // 선택도 비운다 — 새 목록에 없는 id 가 선택으로 남으면 유령을 지우려 든다.
   useEffect(() => {
+    setChecked(new Set())
     if (!enabled) { setHistory([]); setMore(false); setError(null); return }
     if (rangeInvalid) { setHistory([]); setMore(false); setError('시작일이 종료일보다 늦습니다.'); return }
     load(0, true)
@@ -211,18 +216,25 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
     setResolving(log.eventId); setResolveErr(null)
     try {
       const updated = await updateEventStatus(log.eventId, next, accessToken)
-      // 서버가 갱신된 EventLog 를 돌려준다 — 목록을 다시 받지 않고 그 행만 바꾼다.
+      // 서버가 갱신된 EventLog 를 돌려준다 — 목록을 다시 받지 않고 화면에서만 반영한다.
       // 전체 재조회는 스크롤 위치와 '더 보기'로 쌓아 둔 페이지를 날린다.
       //
-      // 조건이 '미해결'인 상태에서 해결하면 이 행은 더 이상 조건에 맞지 않지만 남겨 둔다 —
-      // 즉시 사라지면 방금 무엇을 눌렀는지 확인할 수 없다. 다음 조회 때 자연히 빠진다.
-      setHistory((prev) => {
-        const nextLog = { ...eventToLog(updated), _touched: true }
-        const found = prev.some((l) => l.eventId === log.eventId)
-        return found
-          ? prev.map((l) => (l.eventId === log.eventId ? { ...l, ...nextLog } : l))
-          : [nextLog, ...prev]
-      })
+      // 해결(RESOLVED)한 행은 목록에서 바로 내린다 [사용자 지침 2026-08-09] —
+      // 처리한 경보가 계속 쌓여 있으면 남은 일이 얼마나 되는지 읽기 어렵다.
+      // 서버 기록은 남으므로 '해결됨' 필터로 조회하면 다시 볼 수 있다.
+      // 되돌리기(UNRESOLVED)는 그 반대라 행을 남기고 상태만 바꾼다.
+      if (next === 'RESOLVED') {
+        setHistory((prev) => prev.filter((l) => l.eventId !== log.eventId))
+        if (log.live) dismissAlert(log.id)
+      } else {
+        setHistory((prev) => {
+          const nextLog = { ...eventToLog(updated), _touched: true }
+          const found = prev.some((l) => l.eventId === log.eventId)
+          return found
+            ? prev.map((l) => (l.eventId === log.eventId ? { ...l, ...nextLog } : l))
+            : [nextLog, ...prev]
+        })
+      }
       // 요약 띠의 미해결 건수도 같이 바뀌어야 한다. 30초 주기를 기다리면 두 수치가 어긋나 보인다.
       reloadFleet()
     } catch (e) {
@@ -246,6 +258,44 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
     } catch (e) {
       setDelErr(errMessage(e))
     } finally { setRemoving(false) }
+  }
+
+  // 선택 일괄 삭제(S15P11E101-884). 서버에 일괄 API 가 없어 한 건씩 지운다 —
+  // 도중에 실패하면 지운 것까지만 화면에서 내리고, 남은 선택은 그대로 두고 알린다.
+  const onBulkDelete = async () => {
+    if (removing || checked.size === 0) return
+    setRemoving(true); setDelErr(null)
+    const done: number[] = []
+    try {
+      for (const id of checked) {
+        await deleteEvent(id, accessToken)
+        done.push(id)
+      }
+      setBulkOpen(false)
+      setChecked(new Set())
+    } catch (e) {
+      setDelErr(errMessage(e))
+      setChecked((prev) => { const n = new Set(prev); for (const id of done) n.delete(id); return n })
+    } finally {
+      if (done.length) {
+        const gone = new Set(done)
+        setHistory((prev) => prev.filter((l) => !gone.has(l.eventId)))
+        // 같은 이벤트의 실시간 행도 닫는다 — 남겨 두면 지웠는데 한 줄이 되살아난 것처럼 보인다
+        for (const l of liveRows) if (l.eventId != null && gone.has(l.eventId)) dismissAlert(l.id)
+        reloadFleet()
+      }
+      setRemoving(false)
+    }
+  }
+
+  // 선택 대상은 서버에 저장된 행(eventId 있는 행)뿐이다 — 저장 전 실시간 행은 지울 것이 없다.
+  const selectable = sortedRows.filter((l) => l.eventId != null)
+  const allChecked = selectable.length > 0 && selectable.every((l) => checked.has(l.eventId))
+  const toggleAll = () => {
+    setChecked(allChecked ? new Set() : new Set(selectable.map((l) => l.eventId as number)))
+  }
+  const toggleOne = (id: number) => {
+    setChecked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   }
 
   return (
@@ -332,6 +382,21 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                     ? <><b className="mono">{totalCount}</b>건 중 <b className="mono">{rows.length}</b>건 표시</>
                     : <><b className="mono">{totalCount}</b>건</>)}
               </span>
+              {/* 선택 삭제(S15P11E101-884) — 화면에 보이는 저장 행 전체 선택 + 일괄 삭제.
+                  삭제 권한이 있는 사람에게만 보인다(개별 삭제 버튼과 같은 조건). */}
+              {canOperate && (
+                <label className="elog-selall" title="화면에 보이는 기록 전체 선택">
+                  <input type="checkbox" checked={allChecked} disabled={selectable.length === 0}
+                    onChange={toggleAll} aria-label="이벤트 전체 선택" />
+                  전체 선택
+                </label>
+              )}
+              {canOperate && checked.size > 0 && (
+                <button type="button" className="elog-bulkdel"
+                  onClick={() => { setDelErr(null); setBulkOpen(true) }}>
+                  선택 삭제 ({checked.size})
+                </button>
+              )}
               <select
                 className="elog-sort" aria-label="정렬 순서" value={canSortAsc ? sortOrder : 'desc'}
                 disabled={!canSortAsc}
@@ -366,6 +431,10 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                   const rel = relativeDay(log.ts)
                   return (
                     <li key={log.id} className={`logrow elog-card ${log.kind} ${detailId === log.eventId ? 'sel' : ''}`}>
+                      {canOperate && log.eventId != null && (
+                        <input type="checkbox" className="elog-pick" checked={checked.has(log.eventId)}
+                          onChange={() => toggleOne(log.eventId)} aria-label={`선택 — ${log.msg}`} />
+                      )}
                       <i className={`elog-card-icon c-${kindKey}`} aria-hidden="true"><KindIcon kind={iconKind} /></i>
                       <div className="elog-card-body">
                         <div className="elog-card-title-row">
@@ -493,6 +562,21 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
             <button type="button" className="dbtn" onClick={() => setPending(null)}>취소</button>
             <button type="button" id="btnDeleteEvent" className="dbtn stop" onClick={onDelete} disabled={removing}>
               {removing ? '삭제 중…' : '삭제'}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {/* 선택 일괄 삭제 확인(S15P11E101-884) — 단건 삭제와 같은 문법의 모달이다 */}
+      {bulkOpen && (
+        <Modal title="선택한 이벤트를 삭제할까요?" onClose={() => setBulkOpen(false)} width={400}>
+          <p className="cfg-help" style={{ marginBottom: 10 }}>
+            선택한 <b>{checked.size}건</b>을 <b>서버에서 영구 삭제</b>합니다. 되돌릴 수 없습니다.
+          </p>
+          {delErr && <div className="form-msg err">삭제하지 못했습니다 — {delErr}</div>}
+          <div className="gotor">
+            <button type="button" className="dbtn" onClick={() => setBulkOpen(false)}>취소</button>
+            <button type="button" className="dbtn stop" onClick={onBulkDelete} disabled={removing}>
+              {removing ? '삭제 중…' : `${checked.size}건 삭제`}
             </button>
           </div>
         </Modal>

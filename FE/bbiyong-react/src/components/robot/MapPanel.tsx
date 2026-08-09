@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState, lazy, Suspense } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
+import { ROBOT_ID } from '../../live/config.ts'
+import { displayName } from '../../live/robotName.ts'
 import { isFloorplan } from '../../live/floorplan.ts'
 import MappingProgress from './MappingProgress.tsx'
 import LiveNavMap from './LiveNavMap.tsx'
@@ -117,8 +119,9 @@ export default function MapPanel() {
                 </Suspense>
               )
               /* 🔴 `follow` 는 -855(평면 로봇표시·추종)가 더한 것이다. 3D 뷰를 얹으면서
-                 지우지 않도록 병합 때 살렸다 — 2D 평면 뷰의 로봇 추종 기능이다. */
-              : <LiveNavMap zoomFactor={zoom} planOnly follow inspection={{ points: inspectionPoints }} lightFloor />)
+                 지우지 않도록 병합 때 살렸다 — 2D 평면 뷰의 로봇 추종 기능이다.
+                 나침반은 끈다 [사용자 지침 2026-08-09] — 정제 도면이 축 정렬이라 정보가 없다. */
+              : <LiveNavMap zoomFactor={zoom} planOnly follow inspection={{ points: inspectionPoints }} lightFloor compass={false} />)
           : <canvas
               ref={refs.map2d}
               className="map-zoom-canvas"
@@ -136,9 +139,10 @@ export default function MapPanel() {
           </button>
         )}
         {mapDown && !showMapping && <span className="nodata">SLAM 맵 데이터 없음</span>}
-        {/* 범례는 실제 도면에 보이는 것만 남긴다(S15P11E101 콘솔 정리) — 벽·로봇. */}
+        {/* 범례는 실제 도면에 보이는 것만 남긴다(S15P11E101 콘솔 정리) — 벽·로봇.
+            로봇 라벨은 표시명이다(S15P11E101-879) — '오린카'는 계약 id 계열의 옛 호칭. */}
         {!showMapping && !showEmpty && <div className="maplegend" aria-label="지도 범례">
-          <span><i className="legend-mark robot" />오린카</span>
+          <span><i className="legend-mark robot" />{displayName(ROBOT_ID)}</span>
           <span><i className="legend-mark wall" />벽</span>
         </div>}
         <div className="map-controls" aria-label="지도 화면 조절">

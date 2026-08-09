@@ -4335,6 +4335,21 @@ button.elog-card-title{ cursor:pointer; }
 #pgEvents.v3-theme .elog-count b{ font-size:15px; color:#232733; font-weight:700; margin-right:2px; }
 #pgEvents.v3-theme .elog-sort{ width:auto; padding:6px 10px; font-size:11.5px; }
 
+/* 선택 삭제(S15P11E101-884) — 전체 선택 토글은 건수 옆, 삭제 버튼은 정렬 앞.
+   toolbar 가 space-between 이라 가운데 요소는 margin 으로 좌측 덩어리에 붙인다. */
+.elog-selall{
+  display:flex; align-items:center; gap:6px; margin-left:14px; margin-right:auto;
+  font-size:12px; color:#5A6072; cursor:pointer; user-select:none;
+}
+.elog-bulkdel{
+  margin-right:10px; padding:6px 12px; border:0; border-radius:8px; cursor:pointer;
+  font-family:inherit; font-size:11.5px; font-weight:700;
+  background:#F0D6D2; color:#B4655C;
+}
+.elog-bulkdel:hover{ background:#E8C4BE; }
+/* 카드 행의 선택 체크박스 — 아이콘 왼쪽에 정렬한다 */
+.elog-card .elog-pick{ align-self:center; margin:0 2px 0 0; flex:0 0 auto; cursor:pointer; }
+
 /* ── 상세 모달 v3 스킨 ────────────────────────────────────────────
    Modal 은 body 로 포털되어 #pgEvents/.v3-theme 조상 스코프 밖에서 그려진다 —
    그래서 이 화면 전용 규칙이 하나도 닿지 못해 "v3 미적용" 상태였다.
