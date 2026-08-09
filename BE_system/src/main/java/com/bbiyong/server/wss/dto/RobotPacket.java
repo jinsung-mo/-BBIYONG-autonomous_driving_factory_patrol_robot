@@ -42,6 +42,12 @@ public class RobotPacket {
     // (RobotEventListener.handleTelemetryEvent). 그래서 "로봇만 고치면 되는" 일이 아니다.
     private OrinPower orinPower;
 
+    // 순찰/매핑 시작 가능 여부 (S15P11E101-869). 로봇이 2026-08-08 부터 보내고 있었지만
+    // 이 클래스에 필드가 없어 **서버에서 통째로 버려지고 있었다** — 위 orinPower 주석이
+    // 경고한 그 함정에 그대로 걸린 두 번째 사례다. 그동안 관제의 순찰 시작 버튼 게이트
+    // (canStartPatrol)는 값을 한 번도 받지 못한 채 동작하고 있었다.
+    private Readiness readiness;
+
     // 듀얼 카메라 영상 프레임 (VIDEO_FRAME) - S15P11E101-354
     private String channel;   // FRONT(RGB) | THERMAL
     private String format;    // jpeg
@@ -80,5 +86,30 @@ public class RobotPacket {
         private java.util.List<Double> cpuCores;  // 코어별 사용률 %(꺼진 코어는 빠진다)
         private Double gpuPercent;                // GR3D_FREQ %
         private Integer vddInMw;                  // 모듈 전체 입력 전력 mW (peak 25,000)
+    }
+
+    /**
+     * 순찰/매핑을 지금 시작할 수 있는가 (S15P11E101-869).
+     * 로봇 {@code navigation_orchestrator.NavigationOrchestrator.readiness()} 가 만든다.
+     *
+     * <p>판단을 <b>로봇이 한다</b>는 것이 이 객체의 요점이다. 관제가 매핑 상태·경로 길이·
+     * 로컬라이즈 여부를 조합해 추론하면 조건이 하나 늘 때마다 어긋난다. 그래서 서버도
+     * 여기서 값을 가공하지 않고 그대로 중계한다.
+     *
+     * <p>{@code blockedBy} 는 열거형으로 두지 않았다. 로봇이 표에 없는 새 사유를 추가해도
+     * (예: ROUTE_SESSION_MISMATCH · NAV_FAILED) 역직렬화가 깨지면 안 되기 때문이다 —
+     * 모르는 값이 오면 관제는 {@code hint} 문장을 그대로 보여 준다.
+     */
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Readiness {
+        private Boolean canStartPatrol;
+        private Boolean canStartMapping;
+        /** 차단 사유 코드. 시작 가능하면 null 이다. */
+        private String blockedBy;
+        /** 로봇이 만든 사용자 문장. 서버·관제가 다시 만들지 않는다. */
+        private String hint;
+        /** 잠시 뒤 다시 시도해 보라는 권고(초). 없을 수 있다. */
+        private Integer retryAfterSec;
     }
 }
