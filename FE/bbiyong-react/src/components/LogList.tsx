@@ -83,7 +83,16 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
   const [detailId, setDetailId] = useState<number | null>(null)
   // 카드 목록 정렬 — 서버는 정렬 파라미터를 받지 않으므로(events.ts) 이미 받아 온
   // 목록(최신순으로 쌓인다)을 화면에서만 뒤집는다. 데이터를 다시 받지 않는다.
+  //
+  // 🔴 그래서 **뒤에 안 받아 온 페이지가 남아 있으면 '오래된순'을 고를 수 없게 막는다.**
+  // 20건만 받은 상태에서 뒤집으면 "전체에서 가장 오래된 것"이 아니라 "받아 온 20건 중
+  // 가장 오래된 것"이 맨 위에 온다. 조작자는 그걸 구별할 방법이 없으므로 그대로 두면
+  // 화면이 거짓말을 한다. 서버가 정렬 파라미터를 주기 시작하면 이 제약은 없앨 수 있다.
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+  // 서버가 알려 주는 **전체** 건수. 화면에 쌓인 개수(rows.length)와 다르다 —
+  // 500건 중 20건만 받은 상태에서 "20건"이라고 쓰면 전체가 20건인 줄 안다.
+  // 모르면 null 로 두고 '—' 를 쓴다(없는 수치를 지어내지 않는다).
+  const [totalCount, setTotalCount] = useState<number | null>(null)
 
   const load = useCallback(async (nextPage: any, reset: any) => {
     if (!enabled || !accessToken) return
@@ -105,6 +114,7 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
       setHistory((prev) => (reset ? rows : [...prev, ...rows]))
       setPage(nextPage)
       setMore(nextPage + 1 < (res?.totalPages ?? 0))
+      setTotalCount(typeof res?.totalElements === 'number' ? res.totalElements : null)
     } catch (e) {
       setError(errMessage(e))
     } finally {
@@ -151,7 +161,9 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
     ...history,
   ]
   // 화면에서만 순서를 뒤집는다 — rows 자체(최신순으로 쌓인다)는 그대로 두고 보여줄 때만 바꾼다.
-  const sortedRows = sortOrder === 'asc' ? [...rows].reverse() : rows
+  // 안 받아 온 페이지가 남아 있으면(more) 뒤집어도 "전체에서 오래된 것"이 아니므로 뒤집지 않는다.
+  const canSortAsc = !more
+  const sortedRows = (sortOrder === 'asc' && canSortAsc) ? [...rows].reverse() : rows
 
   // 해결 처리 — 되돌릴 수 있으므로(같은 API 로 UNRESOLVED 로 되돌린다) 확인을 받지 않는다.
   // 삭제와 달리 복구되는 동작이라 확인 모달을 두면 야간 경보를 한 건씩 닫는 일이 번거로워진다.
@@ -268,8 +280,19 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
 
             {/* 목록 위 헤더 — 좌: 총 건수, 우: 정렬. 목록 자체와 별도 행으로 둔다(S15P11E101-814). */}
             <div className="elog-toolbar">
-              <span className="elog-count"><b className="mono">{rows.length}</b>건</span>
-              <select className="elog-sort" aria-label="정렬 순서" value={sortOrder}
+              {/* 총 건수는 서버가 준 전체(totalElements)를 쓴다. 화면에 쌓인 개수가 아니다 —
+                  더 받을 게 남아 있으면 "N건 중 M건 표시"로 둘을 구별해 보여 준다. */}
+              <span className="elog-count">
+                {totalCount == null
+                  ? <><b className="mono">{rows.length}</b>건</>
+                  : (more
+                    ? <><b className="mono">{totalCount}</b>건 중 <b className="mono">{rows.length}</b>건 표시</>
+                    : <><b className="mono">{totalCount}</b>건</>)}
+              </span>
+              <select
+                className="elog-sort" aria-label="정렬 순서" value={canSortAsc ? sortOrder : 'desc'}
+                disabled={!canSortAsc}
+                title={canSortAsc ? undefined : '이전 기록을 모두 불러온 뒤에 바꿀 수 있습니다'}
                 onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}>
                 <option value="desc">최신순</option>
                 <option value="asc">오래된순</option>
