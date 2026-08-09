@@ -203,6 +203,9 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
   const unlocalized = !!telemetry?.location && !isMapFrame(telemetry.location)
 
   const [grid, setGrid] = useState<PlanGrid | null>(null)
+  // 씬을 새로 세울 때마다 올라간다. <canvas> 의 key 로 써서 **캔버스 자체를 새로 만든다** —
+  // 이유는 아래 씬 이펙트의 정리 단계에 있는 forceContextLoss() 다(자세한 설명은 그쪽 주석).
+  const [sceneSeq, setSceneSeq] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [follow, setFollow] = useState(false)
@@ -236,6 +239,8 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
     setBusy(true); setError(null)
     try {
       setGrid(buildPlanGrid(plan.img))
+      // 같은 커밋에서 함께 올린다 — 새 격자가 화면에 붙을 때 캔버스도 같이 새것이 된다.
+      setSceneSeq((n) => n + 1)
     } catch (e) {
       setGrid(null); setError(errMessage(e))
     } finally {
@@ -667,6 +672,19 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
       beamMat.dispose(); beamTex.dispose(); beamTexOff.dispose()
       // WebGL 컨텍스트는 명시적으로 놓는다. 도면을 여러 번 갈아 끼우면 브라우저가
       // 컨텍스트 상한(보통 16개)에 걸려 가장 오래된 것부터 죽인다.
+      //
+      // 🔴 forceContextLoss() 를 부른 캔버스는 **다시 살아나지 않는다**.
+      //    WEBGL_lose_context 로 잃은 컨텍스트는 restoreContext() 전까지 죽은 채고, 같은
+      //    <canvas> 에 getContext() 를 다시 불러도 브라우저는 그 죽은 컨텍스트를 그대로
+      //    돌려준다(캔버스 하나당 컨텍스트는 하나다 — 실측 확인).
+      //    매핑이 끝나 도면이 교체되면 이 이펙트가 다시 도는데, 캔버스가 같은 것이면
+      //    새 WebGLRenderer 가 **생성 도중 예외를 던진다** — 죽은 컨텍스트에서는
+      //    getShaderPrecisionFormat() 이 null 을 돌려주고, three 의 WebGLCapabilities 가
+      //    그것의 .precision 을 읽다 TypeError 가 난다.
+      //    이 앱에는 에러 경계가 없어서 그 예외는 React 루트 전체를 걷어낸다 —
+      //    그래서 화면이 통째로 하얘지고, 새로고침(=새 캔버스)해야 돌아왔다.
+      //    그래서 위 <canvas> 에 key={sceneSeq} 를 걸어 씬마다 캔버스를 새로 만든다 —
+      //    여기서 죽이는 것은 화면에서 이미 떨어져 나간 옛 캔버스다.
       renderer.dispose()
       renderer.forceContextLoss()
     }
@@ -733,7 +751,9 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
       role="img"
       aria-label="순찰 구역 3D 지도 — 드래그로 회전, 휠 또는 +/− 로 확대, 방향키로 회전"
     >
-      <canvas ref={canvasRef} className="three-canvas" />
+      {/* 🔴 key 는 씬 일련번호다 — 지도가 바뀔 때마다 캔버스 DOM 을 새로 만들기 위한 것이다.
+          같은 캔버스를 재사용하면 매핑 완료 후 흰 화면이 된다(아래 씬 이펙트의 정리 주석 참조). */}
+      <canvas key={sceneSeq} ref={canvasRef} className="three-canvas" />
 
       {/* 확정 점검 지점(S15P11E101-787). 운영 탭에서 승인한 AprilTag 지점을 3D 씬 위에
           띄운다 — 2D 운영 지도의 마름모 태그와 같은 자리를 짚어 준다. 번호는 순찰이
