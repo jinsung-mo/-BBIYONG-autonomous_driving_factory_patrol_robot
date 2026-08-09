@@ -267,7 +267,11 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
             </div>
           </div>
 
-          <div className="card-v3">
+          {/* 🔴 바깥 껍질은 배경 없이 둔다(elog-shell) [사용자 지적 2026-08-09].
+              `.card-v3` 는 흰 배경 + 그림자인데 개별 이벤트도 흰 카드라, 흰 위에 흰이
+              얹혀 카드 경계가 사라졌다. 목록을 카드로 만든 이유 자체가 무효가 된다.
+              배경은 한 겹만 갖는다 — 여기서는 개별 행이 그 한 겹이다. */}
+          <div className="card-v3 elog-shell">
             <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '9px' }}>
               <b style={{ fontSize: '15px' }}>전체 이벤트</b>
               <span className="mono" style={{ fontSize: '10px', letterSpacing: '1px', color: '#A8ADBC' }}>

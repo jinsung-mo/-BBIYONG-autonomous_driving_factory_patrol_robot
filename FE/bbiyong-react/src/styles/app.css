@@ -4188,6 +4188,17 @@ button.elog-card-title{ cursor:pointer; }
 /* 해결·삭제·닫기 — 기존 .logact 그대로(호버로만 드러남), 세로 중앙에 놓기만 한다 */
 #pgEvents.v3-theme .elog-card-actions{ flex:none; display:flex; gap:4px; align-self:center; }
 
+/* 🔴 목록을 감싸는 바깥 껍질에서 배경을 걷는다 [사용자 지적 2026-08-09].
+   `.card-v3` 는 흰 배경 + 그림자인데 개별 이벤트 행도 흰 카드라, **흰 위에 흰**이 얹혀
+   행 경계가 사라졌다. 목록을 카드로 만든 이유(행마다 독립된 덩어리로 읽히게 한다)가
+   통째로 무효가 된다. 배경은 한 겹만 갖는다 — 이 화면에서 그 한 겹은 개별 행이다.
+
+   좌우 padding 도 0 으로 둔다. 껍질이 안 보이는데 안쪽 여백만 남으면 행들이 이유 없이
+   가운데로 좁아 보인다. 위아래 여백은 남겨 제목·툴바와 목록이 붙지 않게 한다. */
+#pgEvents.v3-theme .card-v3.elog-shell{
+  background:none; box-shadow:none; border-radius:0;
+  padding-inline:0;
+}
 /* 목록 위 헤더 행 — 좌: 총 건수, 우: 정렬(S15P11E101-814) */
 #pgEvents.v3-theme .elog-toolbar{
   display:flex; align-items:center; justify-content:space-between;
