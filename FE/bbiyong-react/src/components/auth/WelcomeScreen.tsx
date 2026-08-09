@@ -2,9 +2,9 @@
 // 확정 시안: 수정한환영페이지.png (S15P11E101-877)
 //
 // 🔴 이전 판(v3 "플로팅 씬" — PatrolScene 아이소메트릭 순찰 씬 + 유리 히어로 패널,
-// welcome-v5-B2)은 이 시안으로 통째로 폐기됐다. 우측 비주얼은 시안에서 잘라 낸 정적
-// 이미지(assets/welcome-hero.png) 한 장이다 — 로봇 제품 컷과 "2D 도면 매핑" 카드,
-// 공장 원경이 함께 구워져 있어 여기서 다시 그리지 않는다.
+// welcome-v5-B2)은 이 시안으로 통째로 폐기됐다. 배경은 텍스트 없는 정적 이미지
+// (assets/welcome-hero.png, 좌측이 비어 있는 풀 배경) 한 장을 cover 로 깔고
+// [사용자 지침 2026-08-09], 텍스트·CTA·기능 카드는 전부 그 앞에 띄운다.
 //
 // 하단 기능 카드 4종은 제품 소개 문구다 — 실데이터·수치가 아니므로 "로그인 전 랜딩에
 // 더미 수치 금지" 지침[사용자 지침 2026-08-08]과 충돌하지 않는다.
@@ -66,7 +66,7 @@ const FEATURES = [
 export default function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
   return (
     <>
-      {/* 우측 비주얼 — 장식이다. 내용은 히어로 텍스트가 전부 말하므로 보조기기에는 숨긴다. */}
+      {/* 배경 비주얼 — 장식이다. 내용은 히어로 텍스트가 전부 말하므로 보조기기에는 숨긴다. */}
       <img
         className="welcome-visual" src={heroImg} alt="" aria-hidden="true"
         draggable={false} onAnimationEnd={clearEntryAnim}
