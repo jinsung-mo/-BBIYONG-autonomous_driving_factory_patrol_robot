@@ -34,7 +34,7 @@ export default function StatusPanel() {
 
   return (
     <div className="panel" id="pStatus">
-      <h3>순찰 로봇 상태 <span className="k">ORINCA FLEET</span></h3>
+      <h3>순찰 로봇 상태</h3>
       <div className="stat-card">
         <div className="rid">{name} <span className={`pillm ${modeClass}`}>{modeText}</span></div>
         {/* 시뮬레이션 화면에서는 배터리를 대표 지표로 세운다 — 막대보다 멀리서 읽힌다.
