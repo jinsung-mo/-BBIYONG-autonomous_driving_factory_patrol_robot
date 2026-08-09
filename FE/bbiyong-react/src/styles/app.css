@@ -257,12 +257,7 @@ canvas{display:block; width:100%; height:100%;}
 /* 지점 목록은 길어지면 카드 안에서만 스크롤한다 — 맵을 밀어내지 않게 상한을 준다. */
 .mapping-canvas #pgRoute.routepanel .map-list{flex:0 0 auto; max-height:22vh; overflow:auto;}
 
-/* 매핑 컨트롤 — 제목 옆에 버튼을 붙인 한 줄 + 상태 한 줄로 얇게. */
-.mapping-control{margin-bottom:12px;}
-.mapping-control-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
-.mapping-control-title{font-size:13px; font-weight:700; color:#232733;}
-.mapping-control-title .k{margin-left:6px; font-weight:600; font-size:10px; letter-spacing:1px; color:#9199AE;}
-.mapping-control .mapping-actions{display:flex; gap:8px; margin:0;}
+/* (매핑 컨트롤은 서브탭 줄로 이동했다 — S15P11E101-904. 카드 상단 .mapping-control 규칙 제거) */
 /* 빈 상태 문구가 카드 안에 또 박스로 감싸여 있었다(S15P11E101-814, 사용자 지적 2026-08-09) —
    지도만 자기 프레임(테두리/배경)을 갖고, 나머지는 "순찰 경로" 카드 배경 위에 그대로
    얹는다. 배경·테두리·둥근 모서리를 걷고 위 여백(margin-top)만 남겨 목록·버튼 줄과의
@@ -2211,9 +2206,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .console-shell{
   height:calc(100dvh - 76px); overflow:hidden;
   display:flex; flex-direction:column;
-  /* 하단 패딩 32→20 (S15P11E101-880) — 머리 아래 빈 띠와 합쳐져 작업표시줄이 보이는
-     낮은 화면에서 본문(카메라 영상 등) 하단을 잘라먹었다. */
-  padding:16px 32px 20px;
+  /* 상단 패딩 16→10 · 하단 20 (S15P11E101-904/880) — 헤더 위 공백을 줄여 본문을 끌어올린다. */
+  padding:10px 32px 20px;
   background:var(--nx-bg); color:var(--nx-text);
 }
 /* 🔴 머리에 `page v3-theme` 를 그대로 단다. 제목·KPI 의 v3 서식은 전부
@@ -2270,7 +2264,14 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    46px = 알약 버튼 min-height 40 + .map-tabs padding 3×2. 값을 바꾸려면 그 둘을 함께 봐야 한다.
    아래 여백(margin-bottom)은 **줄 자신이** 갖는다 — 예전에는 .map-tabs 가 갖고 있어서
    세그먼트가 없는 탭에서는 간격도 같이 사라졌다(토글과 아래 컴포넌트가 붙어 보이던 원인). */
-.nav-subrow{flex:0 0 auto; margin:0 0 10px; min-height:36px; display:flex; align-items:center;}
+.nav-subrow{flex:0 0 auto; margin:0 0 8px; min-height:32px; display:flex; align-items:center;}
+/* 맵 모델링 컨트롤 — 서브탭 줄 오른쪽 끝(S15P11E101-904). 세그먼트가 없어도(비관리자
+   시나리오는 없지만) margin-left:auto 로 항상 우측에 붙는다. */
+.subrow-mapctl{margin-left:auto; display:flex; align-items:center; gap:8px;}
+.subrow-mapctl .btn-filled,.subrow-mapctl .btn-tonal{padding:7px 16px; font-size:13px;}
+.subrow-mapstat{font-size:12px; font-weight:600;}
+.subrow-mapstat.done{color:#3E7C57;}
+.subrow-mapstat.wait{color:#8a5300;}
 
 /* ── 제목 + 큰 숫자 ─────────────────────────────────────────── */
 .nav-hero{
@@ -2743,9 +2744,10 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 #pgMap .map-view{flex:1 1 0; min-height:0; display:flex; flex-direction:column;}
 #pgMap .map-view[hidden]{display:none;}
 .nav-subrow .map-tabs button{
-  border:0; border-radius:999px; padding:11px 26px; min-height:40px; min-width:84px; cursor:pointer;
+  /* 높이 축소 40→32 (S15P11E101-904) — 서브탭 줄을 얇게 해 아래 맵을 더 크게 */
+  border:0; border-radius:999px; padding:6px 20px; min-height:32px; min-width:76px; cursor:pointer;
   background:transparent; color:var(--bb-body, #5a6274);
-  font:inherit; font-size:14px; font-weight:600;
+  font:inherit; font-size:13px; font-weight:600;
 }
 .nav-subrow .map-tabs button.on{ background:var(--bb-ink, #1b1f27); color:#fff; font-weight:700; }
 .map-zoom-canvas,.camera-zoom-canvas{

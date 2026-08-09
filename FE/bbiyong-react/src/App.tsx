@@ -16,6 +16,8 @@ import KpiRow from './components/robot/KpiRow.tsx'
 import CameraPage from './components/robot/CameraPage.tsx'
 import EventPage from './components/events/EventPage.tsx'
 import EventAlert from './components/EventAlert.tsx'
+import Modal from './components/ui/Modal.tsx'
+import { useMappingControl } from './live/useMappingControl.ts'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { SettingsProvider } from './settings/SettingsContext.tsx'
 import SessionWatcher from './auth/SessionWatcher.tsx'
@@ -60,6 +62,10 @@ function ConsoleHeader({ active, isAdmin, mapTab, onMapTab }: {
   mapTab: MapTab, onMapTab: (t: MapTab) => void,
 }) {
   const { title, sub } = SECTION_TITLE[active]
+  // 맵 모델링 컨트롤은 서브탭 줄 오른쪽에 둔다(S15P11E101-904). 로직은 훅에 있고
+  // 여기서는 버튼·확인 모달만 그린다. 매핑 서브탭일 때만 노출한다.
+  const mapping = useMappingControl()
+  const showMapping = active === 'live' && isAdmin && mapTab === 'mapping'
   return (
     <header className="nav-shell page on v3-theme">
       <div className="nav-hero">
@@ -76,7 +82,34 @@ function ConsoleHeader({ active, isAdmin, mapTab, onMapTab }: {
             <button type="button" role="tab" aria-selected={mapTab === 'mapping'} className={mapTab === 'mapping' ? 'on' : ''} onClick={() => onMapTab('mapping')}>매핑</button>
           </div>
         )}
+        {showMapping && (
+          <div className="subrow-mapctl">
+            {mapping.phase === 'complete' && <span className="subrow-mapstat done">매핑 완료</span>}
+            {mapping.phase === 'requested' && <span className="subrow-mapstat wait">시작 대기…</span>}
+            {(mapping.phase === 'running' || mapping.phase === 'requested') && (
+              <button type="button" id="btnStopMapping" className="btn-tonal" style={{ color: '#B4655C' }}
+                onClick={mapping.onStopMapping} disabled={mapping.offline}>매핑 중단</button>
+            )}
+            <button type="button" id="btnStartMapping" className="btn-filled"
+              onClick={() => mapping.setConfirming(true)}
+              disabled={mapping.offline || mapping.phase === 'running' || mapping.phase === 'requested'}>
+              {mapping.phase === 'running' ? '매핑 진행 중…' : '맵 모델링 시작'}
+            </button>
+          </div>
+        )}
       </div>
+      {showMapping && mapping.confirming && (
+        <Modal title="맵 모델링을 시작할까요?" onClose={() => mapping.setConfirming(false)} width={420}>
+          <p className="cfg-help" style={{ marginBottom: 12 }}>
+            로봇이 <b>순찰을 멈추고</b> 공장 안을 자율 주행하며 새 2D 맵을 만듭니다.
+            주행 경로에 사람이나 장애물이 없는지 확인한 뒤 시작하세요.
+          </p>
+          <div className="gotor">
+            <button type="button" className="btn-text" onClick={() => mapping.setConfirming(false)}>취소</button>
+            <button type="button" id="btnStartMappingOk" className="btn-filled" onClick={mapping.onStart}>시작</button>
+          </div>
+        </Modal>
+      )}
     </header>
   )
 }
