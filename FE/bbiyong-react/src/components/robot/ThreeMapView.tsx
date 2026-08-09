@@ -357,6 +357,12 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
     if (alertSel != null && !alertPins.some((p) => p.id === alertSel)) setAlertSel(null)
   }, [alertPins, alertSel])
 
+  // 수신 자세 표본 버퍼(S15P11E101-895) — 스냅샷 보간용. 최신 표본만 좇는 지수 보간은
+  // 수신(1~3Hz) 직후 빠르게 도착해 다음 수신까지 서 있는 stop-and-go 가 됐다 — 로봇이
+  // 뚝뚝 끊겨 보이고, 이동 중에는 방향도 반 박자 계단식으로 틀어져 2D 와 달라 보였다.
+  // 대신 표본 사이를 실제 시간축으로 따라가면 위치·방향이 로봇의 실제 궤적 그대로 흐른다.
+  const poseBufRef = useRef<{ x: number, y: number, yaw: number, at: number }[]>([])
+
   // 목표 자세를 옮긴다. 자리를 계산하는 식은 한 곳에 둔다.
   const aim = (x: number, y: number, yaw: number) => {
     const p = planRef.current
@@ -365,6 +371,9 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
     // 씬 픽셀 공간은 격자 셀이 아니라 도면 이미지 픽셀이다(S15P11E101-789).
     const px = worldToScenePx(p as any, x, y, { w: g.w, h: g.h })
     targetRef.current = { x: px.x, y: px.y, yaw: Number.isFinite(yaw) ? yaw : 0 }
+    const buf = poseBufRef.current
+    buf.push({ ...targetRef.current, at: performance.now() })
+    if (buf.length > 4) buf.shift()   // 보간에는 최근 두 표본이면 충분하다 — 오래 쌓을 이유가 없다
   }
 
   // 1순위: /topic/nav 의 자세. 3Hz 로 오고 스캔과 같은 시점이라 가장 정확하다.
@@ -387,12 +396,12 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
   }, [telemetry])
 
   // 도면이 바뀌면 이전 자세는 다른 좌표계의 값이다 — 버린다.
-  useEffect(() => { targetRef.current = null; shownRef.current = null }, [plan])
+  useEffect(() => { targetRef.current = null; shownRef.current = null; poseBufRef.current = [] }, [plan])
 
   // 위치를 믿을 수 없으면 로봇을 아예 지운다(S15P11E101-773).
   // 흐리게 두지 않는다 — 흐린 마커도 '저기 있다' 로 읽힌다. 모르면 안 그린다.
   useEffect(() => {
-    if (unlocalized) { targetRef.current = null; shownRef.current = null }
+    if (unlocalized) { targetRef.current = null; shownRef.current = null; poseBufRef.current = [] }
   }, [unlocalized])
 
   // ── 씬 ──────────────────────────────────────────────────────────────
@@ -570,25 +579,40 @@ export default function ThreeMapView({ zoomFactor = 1, points = [] }: { zoomFact
     const tick = () => {
       raf = requestAnimationFrame(tick)
 
-      // 로봇 자세 보간. 텔레메트리는 1~3Hz 라 받은 값을 그대로 찍으면 초당 한두 번
-      // 순간이동한다 — 받은 값은 목표로 두고 매 프레임 그쪽으로 다가간다.
-      // yaw 는 -π ~ π 를 오가므로 짧은 쪽으로 감는다.
+      // 로봇 자세 — 스냅샷 보간(S15P11E101-895). 수신(1~3Hz) 표본 사이를 실제 시간축으로
+      // 따라간다: 표시 시점을 최근 수신 간격만큼 뒤로 물리면, 다음 표본이 도착할 즈음
+      // 직전 구간을 다 걸어 로봇이 멈췄다 튀지 않는다 — 위치도 방향도 실제 궤적처럼 흐른다.
+      // (예전 지수 보간(k=0.18)은 수신 직후 목표에 빨리 붙고 다음 수신까지 서 있어
+      //  stop-and-go 로 끊겨 보였고, 이동 중 방향이 계단식이라 2D 와 어긋나 보였다.)
       const t = targetRef.current
       if (!t) {
         robot.visible = false
         shownRef.current = null
       } else {
-        if (!shownRef.current) shownRef.current = { ...t }
-        else {
-          const c = shownRef.current
-          const k = 0.18
-          c.x += (t.x - c.x) * k
-          c.y += (t.y - c.y) * k
-          let d = t.yaw - c.yaw
-          while (d > Math.PI) d -= Math.PI * 2
-          while (d < -Math.PI) d += Math.PI * 2
-          c.yaw += d * k
+        const buf = poseBufRef.current
+        const last = buf[buf.length - 1]
+        const prev = buf[buf.length - 2]
+        // 표시 지연 = 최근 수신 간격(150ms~1.2s 클램프). 간격보다 덜 물리면 구간을 다
+        // 걷기 전에 표본이 바닥나 멈칫하고, 너무 물리면 화면이 로봇을 그만큼 늦게 따라간다.
+        const gap = prev ? Math.min(1200, Math.max(150, last.at - prev.at)) : 333
+        const rt = performance.now() - gap
+        // rt 를 감싸는 두 표본을 찾아 선형 보간한다. 못 찾으면(수신이 끊겼으면) 마지막
+        // 표본에 그대로 선다 — 없는 미래를 지어내 외삽하지 않는다.
+        let pose = { x: last.x, y: last.y, yaw: last.yaw }
+        for (let i = buf.length - 1; i > 0; i--) {
+          const b = buf[i - 1]
+          const a = buf[i]
+          if (rt >= b.at && rt <= a.at) {
+            const f = a.at === b.at ? 1 : (rt - b.at) / (a.at - b.at)
+            let dy = a.yaw - b.yaw
+            while (dy > Math.PI) dy -= Math.PI * 2   // yaw 는 -π~π 를 오간다 — 짧은 쪽으로 감는다
+            while (dy < -Math.PI) dy += Math.PI * 2
+            pose = { x: b.x + (a.x - b.x) * f, y: b.y + (a.y - b.y) * f, yaw: b.yaw + dy * f }
+            break
+          }
         }
+        if (rt < (buf[0]?.at ?? 0)) pose = { x: buf[0].x, y: buf[0].y, yaw: buf[0].yaw }
+        shownRef.current = pose
         const v = shownRef.current
         robot.visible = true
         robot.position.set(px(v.x), 0, pz(v.y))
