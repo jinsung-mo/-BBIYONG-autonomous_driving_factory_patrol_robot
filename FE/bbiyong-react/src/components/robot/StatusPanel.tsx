@@ -25,6 +25,13 @@ export default function StatusPanel() {
   // 계산은 batteryRuntime.ts 한 곳에 모아 뒀다 — 여기서는 그 결과만 표시한다.
   const runtimeMin = estimateRuntimeMinutes(batt ?? null)
 
+  // 충전 상태·완충 ETA 는 로봇이 배터리 % 추세로 추정해 보낸다(FE 는 계산하지 않는다).
+  // null 은 '모른다' 이지 '방전 중'이 아니다 — 판단이 설 때까지(≈4분) 로봇이 필드를
+  // 비우고, 구버전 로봇은 영영 안 보낸다. 두 경우 모두 '—' 로 둔다.
+  const charging = live ? live.charging : null
+  const chargingText = charging == null ? '—' : (charging ? '충전 중' : '방전 중')
+  const minutesToFull = live ? live.minutesToFull : null
+
   return (
     <div className="panel" id="pStatus">
       <h3>순찰 로봇 상태 <span className="k">ORINCA FLEET</span></h3>
@@ -41,6 +48,8 @@ export default function StatusPanel() {
           <RadialGauge value={batt} label="배터리" caption="BATTERY" />
         )}
         <div className="kv"><span>남은 기동 시간</span><b className="num">{runtimeMin == null ? '—' : `${runtimeMin} 분`}</b></div>
+        <div className="kv"><span>충전 상태</span><b className="num">{chargingText}</b></div>
+        <div className="kv"><span>완충까지</span><b className="num">{minutesToFull == null ? '—' : `${minutesToFull} 분`}</b></div>
       </div>
     </div>
   )

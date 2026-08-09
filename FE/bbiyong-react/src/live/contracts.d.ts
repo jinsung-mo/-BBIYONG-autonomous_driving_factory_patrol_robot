@@ -140,6 +140,19 @@ export interface RobotTelemetry {
   readiness?: Readiness
   /** Orin CPU/GPU/전력(S15P11E101-814). 아직 안 보낼 수 있다 — 없으면 '—'. */
   orinPower?: OrinPowerTelemetry
+  /**
+   * 충전 중인가(S15P11E101-884). 로봇에 충전 감지 센서가 없어 배터리 %의 **추세**로
+   * 추정한 값이다(cloud_bridge.BatteryChargeEstimator). 판단할 표본이 모이기 전(≈4분)에는
+   * 로봇이 필드를 생략하고, 서버 DTO(RobotPacket)를 거치며 null 로 내려온다 —
+   * 그때는 '충전 중'도 '방전 중'도 아닌 '—' 다.
+   * 🔴 false 와 null 은 다른 뜻이다. `!charging` 으로 뭉뚱그리지 말 것.
+   */
+  charging?: boolean | null
+  /**
+   * 완충까지 남은 시간(분). 상승률에서 낸 추정치라 상승률을 못 구하면 로봇이 생략한다
+   * (충전 중이 아니면 항상 없다). 없으면 '—' — 0 이나 임의 값으로 채우지 않는다.
+   */
+  minutesToFull?: number | null
 }
 
 /** /topic/alerts — 로봇이 확정한 화재·과열. AlertMessage record 그대로. */
