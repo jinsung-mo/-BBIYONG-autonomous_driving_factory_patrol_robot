@@ -45,7 +45,46 @@ function relativeDay(ts: string | null | undefined): string | null {
 }
 
 // 이벤트 종류별 카드 아이콘 타일 — 색은 기존 c-fire/c-heat/c-ok 팔레트를 그대로 쓴다.
-const KIND_ICON: Record<string, string> = { fire: '▲', heat: '◉', ok: '●' }
+// 이벤트 종류 아이콘 (S15P11E101-814) [사용자 지침 2026-08-09].
+//
+// 종전에는 글자였다 — 화재 ▲, 과열 ◉, 그 외 ●. 도형만으로는 무엇인지 읽히지 않아
+// 색으로만 구분되는 셈이었고, 색은 적록색맹에게 근거가 되지 못한다.
+//
+// 화재·과열은 형태가 뜻을 갖는 자리라 SVG 로 그린다(불꽃 / 온도계). 글꼴에 있는
+// 기호를 쓰면 환경마다 모양과 굵기가 달라지고, 이모지는 이 코드베이스가 쓰지 않는다.
+//
+// 🔴 그 외(초록)는 새로 만들지 않고 **상단 KPI 배지의 체크(✓)를 그대로 쓴다**
+// (KpiRow.tsx 의 SIGN.ok). 같은 화면에서 "정상"을 뜻하는 기호가 둘이면 둘 중 하나는
+// 다른 뜻이라고 읽힌다 — 기호는 화면 전체에서 하나여야 한다.
+const OK_SIGN = '✓'   // KpiRow.tsx SIGN.ok 와 같은 문자. 바꾸려면 두 곳을 함께 본다.
+
+function KindIcon({ kind }: { kind: string }) {
+  if (kind === 'fire') {
+    return (
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+        fill="none" stroke="currentColor" strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round">
+        {/* 불꽃 — 바깥 윤곽과 안쪽 심지 두 겹으로 그려야 작은 크기에서도 불로 읽힌다 */}
+        <path d="M12 2.7c.9 2.6 2.6 3.8 4 5.6a7.5 7.5 0 1 1-11.6 4.4C4.9 9 7.7 7.4 9 4.6c.9 1.7 1.4 2.6 2.2 3.3.4-1.9.5-3.6.8-5.2Z" />
+        <path d="M12 21a3.6 3.6 0 0 1-1.6-6.9c.6 1 1.2 1.5 2 2 .3-.9.4-1.7.5-2.6 1.3 1.1 2.7 2.6 2.7 4.1A3.6 3.6 0 0 1 12 21Z" />
+      </svg>
+    )
+  }
+  if (kind === 'heat') {
+    return (
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+        fill="none" stroke="currentColor" strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round">
+        {/* 온도계 — 구근 + 기둥 + 눈금. 눈금이 있어야 '온도'로 읽힌다(원만 있으면 점) */}
+        <path d="M14 14.8V5a2 2 0 1 0-4 0v9.8a4 4 0 1 0 4 0Z" />
+        <path d="M12 16.6v-5" />
+        <path d="M16.8 7.2h2.6M16.8 10.4h1.6" />
+      </svg>
+    )
+  }
+  // 정상·해결 등 — 상단 KPI 배지와 같은 체크
+  return <span aria-hidden="true">{OK_SIGN}</span>
+}
 
 /** @param {{ variant?: string, simple?: boolean }} props 리스트에 붙일 CSS 클래스 및 간소화 여부 */
 export default function LogList({ variant = 'elog', simple = false }: { variant?: string, simple?: boolean }) {
@@ -316,7 +355,7 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
                   const rel = relativeDay(log.ts)
                   return (
                     <li key={log.id} className={`logrow elog-card ${log.kind} ${detailId === log.eventId ? 'sel' : ''}`}>
-                      <i className={`elog-card-icon c-${kindKey}`} aria-hidden="true">{KIND_ICON[log.kind] || '●'}</i>
+                      <i className={`elog-card-icon c-${kindKey}`} aria-hidden="true"><KindIcon kind={log.kind} /></i>
                       <div className="elog-card-body">
                         <div className="elog-card-title-row">
                           {log.eventId != null
