@@ -716,7 +716,12 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
       // 로봇이 없으면 아무것도 몰지 않는다 — 없는 자리를 좇지 않는다.
       const v2 = shownRef.current
       if (followRef.current && v2) {
-        const d = camera.position.distanceTo(controls.target)
+        // 로봇을 크게 보는 추종 거리로 빠르게 당긴다(S15P11E101-911). 예전에는 현재 거리를
+        // 그대로 유지해서, 개요(먼 거리)에서 네비게이션을 켜면 먼 채로 따라가 '느린 줌인'
+        // 처럼 보였다. 목표 거리로 프레임당 30%씩 좁혀 몇 프레임 만에 줌인을 끝낸다.
+        const FOLLOW_DIST = fitDist * 0.42 / Math.max(0.2, zoomFactorRef.current)
+        const cur = camera.position.distanceTo(controls.target)
+        const d = Math.abs(cur - FOLLOW_DIST) < 0.02 ? FOLLOW_DIST : cur + (FOLLOW_DIST - cur) * 0.3
         controls.target.set(px(v2.x), WALL_H3 * 0.5, pz(v2.y))
         // 차체 앞 방향(월드). rotation.y = θ 일 때 로컬 -z 는 (-sin θ, 0, -cos θ) 다.
         const th = robot.rotation.y
