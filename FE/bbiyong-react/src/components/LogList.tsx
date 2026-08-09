@@ -97,7 +97,10 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
   const [filter, setFilter] = useState('ALL')
   // 심각도·해결 상태·기간 — 서버가 쿼리로 받아 거른다(관제센터 확장)
   const [level, setLevel] = useState('')
-  const [statusF, setStatusF] = useState('')
+  // 기본은 '미해결'만 본다(사용자 요청 2026-08-10). 예전엔 전체('')라, 해결 처리해 화면에서
+  // 내린 이벤트가 재조회(필터 변경·목록 갱신) 시 RESOLVED 로 다시 딸려 올라왔다. 해결한 건
+  // 기본 목록에서 빠지고, '해결됨'·'상태 전체'를 골라야 다시 보인다.
+  const [statusF, setStatusF] = useState('UNRESOLVED')
   // 조회 구간 — 시작일~종료일(YYYY-MM-DD)을 직접 고른다(S15P11E101 콘솔 정리).
   // 예전엔 시작=프리셋 / 종료=자유 입력이라 '오늘' + 어제 종료 같은 모순 조회가 가능했다.
   const [startDate, setStartDate] = useState('')

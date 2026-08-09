@@ -109,8 +109,9 @@ export function eventToLog(e: any) {
     ts: e?.timestamp || null,
     kind,
     type: e?.type || 'SYSTEM',
-    // 심각도·해결 상태는 필터와 행 표시에 함께 쓴다(관제센터 확장)
-    level: e?.level || null,
+    // 심각도·해결 상태는 필터와 행 표시에 함께 쓴다(관제센터 확장).
+    // 서버 level 이 없으면 종류로 보정한다(사용자 요청 2026-08-10): 화재=긴급, 과열=경고.
+    level: e?.level || severityOf(e?.type),
     status: e?.status || null,
     robotId: e?.robotId || null,
     equipmentId: e?.equipmentId || null,
@@ -124,6 +125,14 @@ export function eventToLog(e: any) {
 
 export const TYPE_LABEL: Record<string, string> = { FIRE: '화재 발생', OVERHEAT: '과열 감지', SYSTEM: '시스템' }
 
+// 종류 → 기본 심각도(서버가 level 을 주지 않을 때의 보정): 화재=긴급, 과열=경고.
+// 서버가 level 을 주면 그 값이 우선한다(이 함수는 폴백일 뿐이다).
+function severityOf(type: any): 'CRITICAL' | 'WARNING' | null {
+  if (type === 'FIRE') return 'CRITICAL'
+  if (type === 'OVERHEAT') return 'WARNING'
+  return null
+}
+
 // AlertMessage → 이벤트 로그 한 줄 (LogList 공용 형태)
 export function alertToLog(a: any) {
   return {
@@ -135,7 +144,7 @@ export function alertToLog(a: any) {
     ts: a?.timestamp || null,
     kind: a?.type === 'FIRE' ? 'fire' : (a?.type === 'OVERHEAT' ? 'heat' : (a?.level === 'CRITICAL' ? 'heat' : 'ok')),
     type: a?.type || 'SYSTEM',
-    level: a?.level || null,
+    level: a?.level || severityOf(a?.type),
     // 방금 들어온 경보는 아직 아무도 처리하지 않았다 — 해결 상태 필터에서 미해결로 잡힌다
     status: 'UNRESOLVED',
     // 실시간 행은 서버 쿼리를 거치지 않으므로 로봇·설비 필터를 화면에서 적용한다
