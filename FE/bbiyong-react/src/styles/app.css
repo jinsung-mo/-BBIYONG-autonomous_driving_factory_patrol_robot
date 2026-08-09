@@ -2044,6 +2044,49 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .three-insp.off{opacity:.5; background:#8b8f9a;}
 .three-stage .mapview{z-index:3;}
 
+/* ── 화재/과열 경보 마커 + 말풍선 (S15P11E101-883) ─────────────────────
+   점검 핀(.three-insp)과 같은 HTML 오버레이 문법 — 렌더 루프가 left/top 을 매 프레임
+   투영해 준다. 색: 화재=빨강(점검 핀과 같은 톤), 과열=이벤트 로그 과열색(#C9A26A).
+   핀 끝(아이콘 하단 중앙)이 좌표를 짚도록 margin 으로 앵커를 옮긴다. */
+.three-alert{
+  position:absolute; left:0; top:0; margin:-24px 0 0 -13px;
+  padding:0; background:none; border:0; cursor:pointer; z-index:4;
+  animation:threeAlertDrop .35s ease both;
+}
+.three-alert svg{ display:block; filter:drop-shadow(0 3px 6px rgba(0,0,0,.32)); }
+.three-alert.fire{ color:#E0483F; }
+.three-alert.heat{ color:#C9A26A; }
+@keyframes threeAlertDrop{ from{opacity:0; transform:translateY(-8px);} to{opacity:1; transform:none;} }
+@media (prefers-reduced-motion: reduce){ .three-alert{ animation:none; } }
+
+.three-alert-pop{
+  position:absolute; left:0; top:0; z-index:5; width:252px;
+  transform:translate(-50%, calc(-100% - 32px));   /* 마커 위에 뜬다 — 기준점은 마커와 동일 */
+  background:#fff; border-radius:12px; box-shadow:0 12px 32px rgba(35,39,51,.24);
+  padding:10px 12px 12px; text-align:left;
+}
+.three-alert-pop::after{   /* 꼬리 — 마커를 가리킨다 */
+  content:''; position:absolute; left:50%; bottom:-7px; margin-left:-7px;
+  border:7px solid transparent; border-bottom:0; border-top-color:#fff;
+}
+.three-alert-pop__head{ display:flex; align-items:center; gap:8px; }
+.three-alert-pop__head b{ font-size:13.5px; letter-spacing:-.2px; }
+.three-alert-pop__head b.fire{ color:#a52216; }
+.three-alert-pop__head b.heat{ color:#8a5200; }
+.three-alert-pop__head .mono{ margin-left:auto; font-size:11.5px; color:#7C8296; }
+.three-alert-pop__x{
+  background:none; border:0; cursor:pointer; padding:0 0 0 4px;
+  font-size:16px; line-height:1; color:#7C8296;
+}
+.three-alert-pop__x:hover{ color:#232733; }
+.three-alert-pop__sub{ margin-top:4px; font-size:12px; color:#5A6072; }
+.three-alert-video{ position:relative; margin-top:8px; border-radius:8px; overflow:hidden; background:#0a0c10; }
+.three-alert-video canvas{ display:block; width:100%; height:auto; }
+.three-alert-video span{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:11.5px; color:#9aa1b2;
+}
+
 .iso-reset{left:auto; right:10px; top:8px; bottom:auto;}
 /* 방향 전환·도면 종류 버튼과 겹치지 않게 — 그 둘은 좌하단·우하단이다 */
 .iso-stage .mapview{z-index:2;}
