@@ -48,8 +48,9 @@ import EventLogActivity from './auth/EventLogActivity.tsx'
 
 // 화면별 제목. 머리가 공유물이 되었으니 문구도 한곳에 모은다.
 const SECTION_TITLE: Record<Section, { title: string, sub: string }> = {
-  live: { title: '순찰 구역', sub: 'ORINCA FLEET' },
-  cam: { title: '순찰 카메라 뷰', sub: 'FRONT · THERMAL' },
+  // 영문 부제(ORINCA FLEET / FRONT · THERMAL)는 제거했다(사용자 요청 2026-08-10).
+  live: { title: '순찰 구역', sub: '' },
+  cam: { title: '순찰 카메라 뷰', sub: '' },
   events: { title: '이벤트 로그', sub: 'EVENT ARCHIVE · REALTIME ALERTS' },
 }
 

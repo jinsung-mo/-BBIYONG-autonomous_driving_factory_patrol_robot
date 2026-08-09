@@ -362,13 +362,14 @@ export default function LogList({ variant = 'elog', simple = false }: { variant?
               배경은 한 겹만 갖는다 — 여기서는 개별 행이 그 한 겹이다. */}
           <div className="card-v3 elog-shell">
             <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '9px' }}>
-              <b style={{ fontSize: '15px' }}>전체 이벤트</b>
-              <span className="mono" style={{ fontSize: '10px', letterSpacing: '1px', color: '#A8ADBC' }}>
-                EVENT LOG · {filter}
-              </span>
-              <span style={{ marginLeft: 'auto', fontSize: '11.5px', color: '#A8ADBC' }}>
-                {startDate || endDate ? `${startDate || '처음'} ~ ${endDate || '오늘'}` : '전체 기간'}
-              </span>
+              <b style={{ fontSize: '17px' }}>전체 이벤트</b>
+              {/* 'EVENT LOG · ALL' 영문 라벨과 '전체 기간' 표기는 제거했다(사용자 요청 2026-08-10).
+                  기간을 실제로 좁혀 조회 중일 때만 그 구간을 우측에 보여 준다. */}
+              {(startDate || endDate) && (
+                <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#A8ADBC' }}>
+                  {`${startDate || '처음'} ~ ${endDate || '오늘'}`}
+                </span>
+              )}
             </div>
 
             {/* 목록 위 헤더 — 좌: 총 건수, 우: 정렬. 목록 자체와 별도 행으로 둔다(S15P11E101-814). */}

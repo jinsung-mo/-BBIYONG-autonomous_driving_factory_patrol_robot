@@ -152,31 +152,37 @@ export default function EventDetailModal({
 
           {msg && <div className={`form-msg ${msg.kind}`} id="evdMsg">{msg.text}</div>}
 
-          <h4 className="evd-h">연관 영상 <span className="k">{videos.length}건</span></h4>
-          {videos.length === 0 && (
-            <div className="cfg-note" id="evdNoVideo">이 이벤트에 저장된 영상이 없습니다.</div>
-          )}
+          {/* 로봇 연결/해제 같은 SYSTEM 이벤트는 카메라 녹화와 무관하다 — 연관 영상 섹션을
+              통째로 감춘다(사용자 요청 2026-08-10). type 은 EventDetail(=EventLog) 에 보장된다. */}
+          {detail?.type !== 'SYSTEM' && (
+            <>
+              <h4 className="evd-h">연관 영상 <span className="k">{videos.length}건</span></h4>
+              {videos.length === 0 && (
+                <div className="cfg-note" id="evdNoVideo">이 이벤트에 저장된 영상이 없습니다.</div>
+              )}
 
-          {videoUrl && (
-            // controls 만 준다 — 자동 재생은 야간 관제에서 소리로 놀라게 할 수 있다
-            <video className="evd-video" id="evdVideo" src={videoUrl} controls preload="metadata" />
-          )}
+              {videoUrl && (
+                // controls 만 준다 — 자동 재생은 야간 관제에서 소리로 놀라게 할 수 있다
+                <video className="evd-video" id="evdVideo" src={videoUrl} controls preload="metadata" />
+              )}
 
-          <ul className="evd-clips" id="evdClips">
-            {videos.map((v) => (
-              <li key={v.id} className={playing === v.id ? 'on' : ''}>
-                <button type="button" className="evd-clip" disabled={busy} onClick={() => onPlay(v)}>
-                  {thumbs[v.id]
-                    ? <img src={thumbs[v.id]} alt="" />
-                    : <span className="evd-noimg">▶</span>}
-                  <span className="evd-clipmeta">
-                    <b>{clipText(v)}</b>
-                    <span className="mono">{clipTime(v.startedAt)}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+              <ul className="evd-clips" id="evdClips">
+                {videos.map((v) => (
+                  <li key={v.id} className={playing === v.id ? 'on' : ''}>
+                    <button type="button" className="evd-clip" disabled={busy} onClick={() => onPlay(v)}>
+                      {thumbs[v.id]
+                        ? <img src={thumbs[v.id]} alt="" />
+                        : <span className="evd-noimg">▶</span>}
+                      <span className="evd-clipmeta">
+                        <b>{clipText(v)}</b>
+                        <span className="mono">{clipTime(v.startedAt)}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {canOperate && (
             <div className="form-actions">

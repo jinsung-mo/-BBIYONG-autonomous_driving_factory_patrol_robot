@@ -100,7 +100,7 @@
 }
 html,body{height:100%;}
 #root{height:100%;}
-body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--ink); font-size:13px;}
+body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--ink); font-size:14.5px;}
 button{font:inherit; cursor:pointer;}
 canvas{display:block; width:100%; height:100%;}
 .mono{font-family:Consolas,'Courier New',monospace;}
@@ -333,8 +333,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   grid-template-areas:"status cam right" "status control right"; gap:12px; height:100%;}
 .panel{background:var(--dk-panel); border:1px solid var(--dk-line); border-radius:12px; padding:13px; min-height:0; display:flex; flex-direction:column;}
 /* 헤더는 flex — 우측 끝에 서브시스템 상태 배지를 밀어 붙이기 위함 */
-.panel h3{display:flex; align-items:center; gap:6px; font-size:12px; letter-spacing:1px; color:var(--dk-sub); margin-bottom:10px; text-transform:uppercase;}
-.panel h3 .k{color:var(--dk-ink); font-size:13px; letter-spacing:0;}
+.panel h3{display:flex; align-items:center; gap:6px; font-size:13.5px; letter-spacing:1px; color:var(--dk-sub); margin-bottom:10px; text-transform:uppercase;}
+.panel h3 .k{color:var(--dk-ink); font-size:14.5px; letter-spacing:0;}
 #pStatus{grid-area:status;} #pCam{grid-area:cam;} #pControl{grid-area:control;}
 /* 우측 열: 열화상 + 2D 맵을 50/50 동일 높이로 */
 .b-right{grid-area:right; display:flex; flex-direction:column; gap:12px; min-height:0;}
@@ -368,7 +368,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .pillm{margin-left:auto; font-size:11px; font-weight:800; padding:3px 10px; border-radius:999px; background:rgba(61,220,151,.14); color:var(--dk-green); border:1px solid rgba(61,220,151,.4);}
 .pillm.emg{background:rgba(255,86,72,.14); color:var(--dk-red); border-color:rgba(255,86,72,.45);}
 .pillm.man{background:rgba(245,166,35,.14); color:var(--dk-amber); border-color:rgba(245,166,35,.45);}
-.kv{display:flex; justify-content:space-between; align-items:center; font-size:12px; line-height:1.4; padding:7px 0; color:var(--dk-sub);}
+.kv{display:flex; justify-content:space-between; align-items:center; font-size:13.5px; line-height:1.4; padding:7px 0; color:var(--dk-sub);}
 .kv b{color:var(--dk-ink); font-weight:600;}
 /* 숫자는 폭이 고정된 자형으로 — 값이 바뀔 때 자릿수가 흔들리지 않는다 */
 .kv b.num{font-family:Consolas,'Courier New',monospace; font-variant-numeric:tabular-nums; text-align:right;}
@@ -390,7 +390,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .env span{font-size:10px; color:var(--dk-sub);}
 /* ul 기본 padding-left(40px)를 지워 항목 너비를 위 상태·환경 박스와 맞춘다 */
 .elog{flex:1; overflow:auto; margin-top:10px; padding-left:0; list-style:none;}
-.elog li{list-style:none; padding:7px 8px; border-radius:8px; background:var(--dk-panel2); border:1px solid var(--dk-line); margin-bottom:6px; font-size:11.5px; display:flex; gap:8px;}
+.elog li{list-style:none; padding:7px 8px; border-radius:8px; background:var(--dk-panel2); border:1px solid var(--dk-line); margin-bottom:6px; font-size:13px; display:flex; gap:8px;}
 .elog li .t{color:var(--dk-sub); font-family:Consolas,monospace; white-space:nowrap;}
 .elog li.fire b{color:var(--dk-red);} .elog li.heat b{color:var(--dk-amber);} .elog li.ok b{color:var(--dk-green);}
 /* 이벤트 종류 필터 */
@@ -1348,7 +1348,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* ---- 상태 카드 ---- */
 .sim-skin .stat-card{border-radius:15px; padding:14px 15px 10px; margin-bottom:12px;
   background:var(--dk-panel2); border-color:var(--dk-line);}
-.sim-skin .stat-card .rid{font-size:15px; margin-bottom:2px;}
+.sim-skin .stat-card .rid{font-size:16.5px; margin-bottom:2px;}
 .sim-skin .pillm{font-size:10.5px; padding:4px 11px;}
 .sim-skin .kv{padding:8px 0; font-size:12px; border-top:1px solid var(--dk-line);}
 .sim-skin .kv:first-of-type{border-top:0;}
@@ -2520,7 +2520,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 지도 상태 패널 안의 이벤트 로그 제목과 동일한 실제 타이포 값. */
 #pgCam #pEvents > h3,
 #pgMap #pEvents > h3{
-  font-size:14px; font-weight:800; letter-spacing:.35px; color:var(--dk-ink);
+  font-size:16px; font-weight:800; letter-spacing:.35px; color:var(--dk-ink);
 }
 #pgCam #pEvents > h3.event-title,
 #pgMap #pEvents > h3.event-title{margin-top:0;}
