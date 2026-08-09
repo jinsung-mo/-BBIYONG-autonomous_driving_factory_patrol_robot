@@ -468,10 +468,14 @@ export default class Simulation {
   // 좌상단 10,18)도 들어 있어서 그 글자까지 같이 돌았다. 게다가 프레임이 아예 없는
   // 시뮬 화면(이 로봇은 열화상을 생산하지 않는다)까지 통째로 돌아갔다.
   // 돌려야 하는 것은 센서가 준 픽셀이지 캔버스가 아니다.
-  _drawFrame(g: any, img: any, Wc: any, Hc: any, rotDeg = 0) {
+  // cover=true 면 검은 여백(letterbox) 없이 패널을 꽉 채운다(S15P11E101-892) —
+  // 종횡비는 유지하되 남는 변을 잘라 낸다. 캔버스가 스스로 경계 밖을 잘라 주므로
+  // 별도 클립이 필요 없다. 기본은 종전대로 letterbox(contain)다.
+  _drawFrame(g: any, img: any, Wc: any, Hc: any, rotDeg = 0, cover = false) {
     g.fillStyle = '#000'; g.fillRect(0, 0, Wc, Hc)
+    const pick = cover ? Math.max : Math.min
     if (!rotDeg) {
-      const s = Math.min(Wc / img.width, Hc / img.height)
+      const s = pick(Wc / img.width, Hc / img.height)
       const w = img.width * s, h = img.height * s
       g.drawImage(img, (Wc - w) / 2, (Hc - h) / 2, w, h)
       return
@@ -480,7 +484,7 @@ export default class Simulation {
     const quarterTurn = Math.abs(rotDeg % 180) === 90
     const boxW = quarterTurn ? Hc : Wc
     const boxH = quarterTurn ? Wc : Hc
-    const s = Math.min(boxW / img.width, boxH / img.height)
+    const s = pick(boxW / img.width, boxH / img.height)
     const w = img.width * s, h = img.height * s
     g.save()
     g.translate(Wc / 2, Hc / 2)
@@ -611,7 +615,7 @@ export default class Simulation {
     // live: 로봇이 보내온 실제 전면 카메라 프레임 (YOLO 오버레이는 로봇 쪽에서 이미 합성됨)
     const front = this.externalFrames.FRONT
     if (front) {
-      this._drawFrame(g, front.img, Wc, Hc)
+      this._drawFrame(g, front.img, Wc, Hc, 0, true)   // cover — 검은 여백 없이 꽉 채운다(S15P11E101-892)
       g.fillStyle = 'rgba(180,230,255,.75)'; g.font = '10px Consolas,monospace'
       g.fillText('FRONT · LIVE', 10, Hc - 12)
       return
@@ -750,7 +754,7 @@ export default class Simulation {
     // live: 로봇 열화상 프레임. HUD 최고온도는 프레임에 실려온 maxTemp를 그대로 쓴다.
     const thermal = this.externalFrames.THERMAL
     if (thermal) {
-      this._drawFrame(g, thermal.img, Wc, Hc, THERMAL_ROT_DEG)
+      this._drawFrame(g, thermal.img, Wc, Hc, THERMAL_ROT_DEG, true)   // cover — 검은 여백 없이 꽉 채운다(S15P11E101-892)
       if (typeof thermal.maxTemp === 'number') {
         this.thermalMax = 'MAX ' + thermal.maxTemp.toFixed(1) + '°C' + (thermal.maxTemp > this.tempCritical ? ' ⚠ 임계 초과' : '')
         this.thermalColor = thermal.maxTemp > this.tempCritical ? '#ff8d85' : (thermal.maxTemp > this.tempWarn ? '#ffd9a8' : '#b9ffe0')
