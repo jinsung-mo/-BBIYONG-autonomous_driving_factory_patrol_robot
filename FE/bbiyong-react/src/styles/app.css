@@ -240,6 +240,29 @@ canvas{display:block; width:100%; height:100%;}
 #pgRoute .routemap{flex:0 0 auto; height:min(64vh, 640px); margin-bottom:10px; background:#ffffff;}
 #pgRoute .routemap canvas{width:100%; height:100%; display:block;}
 #pgRoute{margin-top:14px;}
+
+/* ── 매핑 탭 통합 레이아웃(S15P11E101-904) ────────────────────────────
+   좌측 별도 카드를 없애고 순찰 경로 패널 하나가 화면을 다 채운다. 맵(routemap)이
+   남는 세로 공간을 flex 로 크게 먹고, 매핑 컨트롤·목록·버튼은 필요한 높이만 쓴다.
+   🔴 fieldset(.lockfs)이 #pgMap(세로 flex)의 flex 항목이라, 남는 높이를 받도록
+   사슬을 잇는다 — map-view 가 nav-stage 로 하던 것과 같은 처리다. */
+#pgMap > .lockfs{flex:1 1 0; min-height:0; display:flex; flex-direction:column; border:0; padding:0; margin:0;}
+.mapping-canvas{flex:1 1 0; min-height:0;}
+.mapping-canvas > #pgRoute.routepanel{
+  margin-top:0; flex:1 1 0; min-height:0;
+  display:flex; flex-direction:column;
+}
+/* 통합 카드 안에서는 맵이 남는 공간을 다 먹는다 — 고정 높이(min 64vh)를 풀고 flex 로. */
+.mapping-canvas #pgRoute.routepanel .routemap{flex:1 1 auto; height:auto; min-height:0;}
+/* 지점 목록은 길어지면 카드 안에서만 스크롤한다 — 맵을 밀어내지 않게 상한을 준다. */
+.mapping-canvas #pgRoute.routepanel .map-list{flex:0 0 auto; max-height:22vh; overflow:auto;}
+
+/* 매핑 컨트롤 — 제목 옆에 버튼을 붙인 한 줄 + 상태 한 줄로 얇게. */
+.mapping-control{margin-bottom:12px;}
+.mapping-control-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+.mapping-control-title{font-size:13px; font-weight:700; color:#232733;}
+.mapping-control-title .k{margin-left:6px; font-weight:600; font-size:10px; letter-spacing:1px; color:#9199AE;}
+.mapping-control .mapping-actions{display:flex; gap:8px; margin:0;}
 /* 빈 상태 문구가 카드 안에 또 박스로 감싸여 있었다(S15P11E101-814, 사용자 지적 2026-08-09) —
    지도만 자기 프레임(테두리/배경)을 갖고, 나머지는 "순찰 경로" 카드 배경 위에 그대로
    얹는다. 배경·테두리·둥근 모서리를 걷고 위 여백(margin-top)만 남겨 목록·버튼 줄과의
@@ -2247,7 +2270,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    46px = 알약 버튼 min-height 40 + .map-tabs padding 3×2. 값을 바꾸려면 그 둘을 함께 봐야 한다.
    아래 여백(margin-bottom)은 **줄 자신이** 갖는다 — 예전에는 .map-tabs 가 갖고 있어서
    세그먼트가 없는 탭에서는 간격도 같이 사라졌다(토글과 아래 컴포넌트가 붙어 보이던 원인). */
-.nav-subrow{flex:0 0 auto; margin:0 0 16px; min-height:46px; display:flex; align-items:center;}
+.nav-subrow{flex:0 0 auto; margin:0 0 10px; min-height:36px; display:flex; align-items:center;}
 
 /* ── 제목 + 큰 숫자 ─────────────────────────────────────────── */
 .nav-hero{
@@ -2306,14 +2329,10 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 @media (prefers-reduced-motion: reduce){ .kpi-gauge > i{transition:none;} }
 /* 좁은 화면에서는 접는다 — 폭이 통째로 필요한데 그보다 숫자가 먼저다 */
 @media (max-width:1180px){ .kpi-gauge{display:none;} }
-/* 낮은 화면(작업표시줄이 보이는 FHD 노트북 등)에서는 머리를 눌러 본문을 지킨다
-   (S15P11E101-880) — 본문은 overflow:hidden 이라 잘리면 스크롤로도 못 본다.
-   제목·KPI 는 크기만 줄고 구성은 그대로다. */
+/* 낮은 화면(작업표시줄이 보이는 FHD 노트북 등)에서 머리 여백을 더 좁힌다(S15P11E101-880).
+   글자 크기는 이제 기본이 이미 3/4 로 작아졌으므로(S15P11E101-904) 여기서 더 줄이지 않는다 —
+   더 줄이면 기본(24px)보다 커지는 역전이 났었다. 여백만 손본다. */
 @media (max-height:920px){
-  .nav-title h2{font-size:30px;}
-  .kpi-num{font-size:30px;}
-  .kpi-num .unit{font-size:16px;}
-  .kpi-label{margin-top:5px; font-size:13px;}
   .kpi-badge{margin-top:6px;}
   .kpi-gauge{margin-top:7px;}
   .nav-hero{margin-bottom:6px;}
@@ -3302,9 +3321,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 데이터가 조밀한 화면이라 세로로 흐르게 둔다 — 한 화면에 가두면 카드가 잘린다 */
 .page.v3-theme.nav-page{overflow:auto;}
 
-/* 제목 — 화면 예시 기준 40px. 32px 로는 페이지의 주인이 되지 못한다. */
+/* 제목 — 헤더를 3/4 로 줄였다(S15P11E101-904): 40→30px. 그만큼 아래 본문(flex:1)이 커진다. */
 .page.v3-theme .nav-title h2{
-  font-size:40px; font-weight:800; letter-spacing:-1.4px; line-height:1; color:#232733;
+  font-size:30px; font-weight:800; letter-spacing:-1.05px; line-height:1; color:#232733;
 }
 .page.v3-theme .nav-title .nav-sub{
   font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:1.6px;
@@ -3315,15 +3334,15 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
    지금은 Gothic 400 이라 숫자가 문장처럼 읽혔다. */
 .page.v3-theme .kpi-num{
   font-family:'IBM Plex Mono',monospace; font-weight:700; letter-spacing:-1px;
-  font-size:32px; color:#232733;
+  font-size:24px; color:#232733;   /* 3/4 축소 32→24 (S15P11E101-904) */
 }
 .page.v3-theme .kpi-num .unit{
   font-family:'Gothic A1','Malgun Gothic',system-ui,sans-serif;
-  font-weight:500; font-size:15px; color:#7C8296; letter-spacing:0;
+  font-weight:500; font-size:12px; color:#7C8296; letter-spacing:0;
 }
 .page.v3-theme .kpi-label{
   font-size:11px; font-weight:500; color:#B6BAC7; letter-spacing:0;
-  padding-bottom:8px; border-bottom:1px dotted #C9CCDA;
+  padding-bottom:6px; border-bottom:1px dotted #C9CCDA;
 }
 /* 상태는 배경 칠이 아니라 점 하나로 알린다. 기호는 스크린리더용으로만 남긴다 —
    색만으로 알리지 않으려면 글자가 있어야 하는데, v3 는 점만 쓰기 때문이다. */
@@ -3489,9 +3508,9 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   background:transparent; color:#232733;
   font-family:'Gothic A1','Malgun Gothic',system-ui,sans-serif;
 }
-/* 제목 — 다른 화면과 같은 크기·굵기 */
+/* 제목 — 다른 화면과 같은 크기·굵기 (3/4 축소 40→30 · S15P11E101-904) */
 #pgMap.v3-theme .nav-title h2,#pgCam.v3-theme .nav-title h2{
-  font-size:40px; font-weight:800; letter-spacing:-1.4px; line-height:1; color:#232733;
+  font-size:30px; font-weight:800; letter-spacing:-1.05px; line-height:1; color:#232733;
 }
 #pgMap.v3-theme .nav-title .nav-sub,#pgCam.v3-theme .nav-title .nav-sub{
   font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:1.6px;
@@ -3500,16 +3519,16 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* KPI — 네 화면과 같은 규칙(mono 숫자 · 점선 밑줄 라벨) */
 #pgMap.v3-theme .kpi-num,#pgCam.v3-theme .kpi-num{
   font-family:'IBM Plex Mono',monospace; font-weight:700; letter-spacing:-1px;
-  font-size:32px; color:#232733;
+  font-size:24px; color:#232733;   /* 3/4 축소 32→24 (S15P11E101-904) */
 }
 #pgMap.v3-theme .kpi-num .unit,#pgCam.v3-theme .kpi-num .unit{
   font-family:'Gothic A1','Malgun Gothic',system-ui,sans-serif;
-  font-weight:500; font-size:15px; color:#5A6072;
+  font-weight:500; font-size:12px; color:#5A6072;
 }
 #pgMap.v3-theme .kpi-label,#pgCam.v3-theme .kpi-label{
   font-size:11px; font-weight:500; color:#666B7D; letter-spacing:0;
   display:inline-block; width:fit-content;
-  padding-bottom:8px; border-bottom:1px dotted #C9CCDA;
+  padding-bottom:6px; border-bottom:1px dotted #C9CCDA;
 }
 #pgMap.v3-theme .kpi-badge.ok,#pgCam.v3-theme .kpi-badge.ok{background:#74A98D;}
 #pgMap.v3-theme .kpi-badge.warn,#pgCam.v3-theme .kpi-badge.warn{background:#C9A26A;}
