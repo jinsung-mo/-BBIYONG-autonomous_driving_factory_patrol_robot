@@ -100,7 +100,7 @@
 }
 html,body{height:100%;}
 #root{height:100%;}
-body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--ink); font-size:14.5px;}
+body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--ink); font-size:15px;}
 button{font:inherit; cursor:pointer;}
 canvas{display:block; width:100%; height:100%;}
 .mono{font-family:Consolas,'Courier New',monospace;}
@@ -117,16 +117,16 @@ canvas{display:block; width:100%; height:100%;}
    여기 있던 `background:#101319` 는 한 번도 적용되지 않는 어두운 값이라 걷어냈다. */
 #nav{display:flex; align-items:center; gap:14px; padding:10px 18px; color:#e6e9ef;
   position:relative; z-index:50;}
-#nav .logo{font-size:16px; font-weight:800; letter-spacing:1px; color:#fff;}
+#nav .logo{font-size:18px; font-weight:800; letter-spacing:1px; color:#fff;}
 #nav .logo b{color:#ff6a5f;}
 #nav .sp{flex:1;}
 /* 섹션 탭 — 관제 / 운영 / 설정 (S15P11E101-475) */
 .navtabs{display:flex; gap:4px; margin-left:18px;}
-.navtabs button{padding:6px 14px; border-radius:8px; border:1px solid transparent; background:transparent;
-  color:#8b93a3; font-size:12.5px; font-weight:700;}
+.navtabs button{padding:7px 16px; border-radius:8px; border:1px solid transparent; background:transparent;
+  color:#8b93a3; font-size:14.5px; font-weight:700;}
 .navtabs button:hover{color:#dfe4ec;}
 .navtabs button.on{background:#1a2030; border-color:#3a445a; color:#dfe4ec;}
-#nav .navrole{font-size:11px; font-weight:700; color:#8b93a3; border:1px solid #3a445a;
+#nav .navrole{font-size:12.5px; font-weight:700; color:#8b93a3; border:1px solid #3a445a;
   border-radius:999px; padding:3px 9px; margin-right:6px;}
 
 /* 운영·설정 화면 */
@@ -169,7 +169,7 @@ canvas{display:block; width:100%; height:100%;}
 /* 우측만 스크롤한다 — 좌측 목록은 늘 제자리에 있어야 어디를 보고 있는지 잃지 않는다. */
 #pgConfig .cfg-canvas{overflow-y:auto; padding-right:4px;}
 #pgConfig .cfg-canvas > :not(.cfg-wide){max-width:880px;}
-.cfg-help{font-size:12px; color:var(--dk-sub); line-height:1.6; margin-bottom:12px;}
+.cfg-help{font-size:14px; color:var(--dk-sub); line-height:1.6; margin-bottom:12px;}
 
 /* Orin 전력 모드(S15P11E101-814) — 저성능/고성능 토글 + 부하 그래프. .card-v3 는 밝은
    v3 테마 카드라 위 .cfg-help(어두운 테마 --dk-sub)와 달리 --bb-* 토큰만 쓴다. */
@@ -210,7 +210,7 @@ canvas{display:block; width:100%; height:100%;}
 .opw-spark i.st-ok{background:var(--bb-ok);}
 .opw-spark i.st-warn{background:var(--bb-warn);}
 .opw-spark i.st-danger{background:var(--bb-danger);}
-.cfg-note{font-size:11.5px; color:var(--dk-sub); line-height:1.7; margin-top:10px;
+.cfg-note{font-size:13px; color:var(--dk-sub); line-height:1.7; margin-top:10px;
   background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:9px; padding:9px 11px;}
 .cfg-note .kv{padding:3px 0;}
 .section-page .form-row input{width:100%; background:var(--dk-panel2); color:var(--dk-ink);
@@ -321,7 +321,7 @@ canvas{display:block; width:100%; height:100%;}
 @keyframes mapstat-pulse{0%,100%{opacity:1;} 50%{opacity:.25;}}
 @media (prefers-reduced-motion:reduce){.mapstat.run i{animation:none;}}
 .form-msg.warn{background:rgba(245,166,35,.14); color:var(--dk-amber); border:1px solid rgba(245,166,35,.4);}
-#nav .clock{font-size:13px; color:#c6cdd9;}
+#nav .clock{font-size:14px; color:#c6cdd9;}
 /* 실서버 모드에서 사용할 수 없는 조작(미연결 · 로봇 프로토콜 미지원) */
 button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .page{display:none; height:calc(100vh - 56px); overflow:auto;}
@@ -990,7 +990,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .usermenu{position:relative;}
 .usermenu-btn{display:flex; align-items:center; gap:8px; padding:4px 10px 4px 4px; border-radius:999px; border:1px solid #2a3040; background:#1a2030; color:#dfe4ec;}
 .usermenu-av{width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,#2f6fd0,#7ea8ea); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:11px;}
-.usermenu-nm{font-size:12px; font-weight:600; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.usermenu-nm{font-size:14px; font-weight:600; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .usermenu-caret{font-size:10px; color:#8b93a3;}
 .usermenu-drop{position:absolute; right:0; top:calc(100% + 8px); min-width:184px; background:#14171d; border:1px solid #2a3040; border-radius:10px; padding:6px; z-index:60; box-shadow:0 16px 40px rgba(0,0,0,.5);}
 .usermenu-info{padding:8px 10px 10px; border-bottom:1px solid #262b34; margin-bottom:6px; display:flex; flex-direction:column; gap:2px;}
@@ -1072,7 +1072,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .fleet{margin-top:12px;}
 .fleet-h{display:flex; align-items:center; gap:6px; font-size:12px; letter-spacing:1px;
   color:var(--dk-sub); margin-bottom:8px; text-transform:uppercase;}
-.fleet-h .k{color:var(--dk-ink); font-size:13px; letter-spacing:0;}
+.fleet-h .k{color:var(--dk-ink); font-size:14px; letter-spacing:0;}
 .fleet-list{list-style:none; padding:0; margin:0;}
 .fleet-list li{margin-bottom:6px;}
 .fleet-list li.off{opacity:.65;}
@@ -1170,7 +1170,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .evd-meta{margin-top:0;}
 .evd-h{font-size:12px; letter-spacing:1px; color:var(--dk-sub); text-transform:uppercase;
   margin:14px 0 8px;}
-.evd-h .k{color:var(--dk-ink); font-size:12px; letter-spacing:0;}
+.evd-h .k{color:var(--dk-ink); font-size:13px; letter-spacing:0;}
 /* 영상은 모달 폭을 넘지 않게. 세로가 길어지면 모달이 스크롤된다. */
 .evd-video{width:100%; max-height:46vh; border-radius:9px; background:#05070a;
   border:1px solid var(--dk-line); display:block;}
@@ -2141,8 +2141,8 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   backdrop-filter:blur(10px) saturate(1.2); -webkit-backdrop-filter:blur(10px) saturate(1.2);
 }
 #pgMap .vwrap .mapview-seg button{
-  border:0; border-radius:999px; padding:5px 12px; cursor:pointer;
-  background:transparent; color:#5A6072; font:inherit; font-size:12px; font-weight:600;
+  border:0; border-radius:999px; padding:6px 14px; cursor:pointer;
+  background:transparent; color:#5A6072; font:inherit; font-size:13.5px; font-weight:600;
 }
 #pgMap .vwrap .mapview-seg button.on{ background:#232733; color:#fff; }
 
@@ -2295,7 +2295,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 /* 맵 모델링 컨트롤 — 서브탭 줄 오른쪽 끝(S15P11E101-904). 세그먼트가 없어도(비관리자
    시나리오는 없지만) margin-left:auto 로 항상 우측에 붙는다. */
 .subrow-mapctl{margin-left:auto; display:flex; align-items:center; gap:8px;}
-.subrow-mapctl .btn-filled,.subrow-mapctl .btn-tonal{padding:7px 16px; font-size:13px;}
+.subrow-mapctl .btn-filled,.subrow-mapctl .btn-tonal{padding:8px 18px; font-size:14px;}
 .subrow-mapstat{font-size:12px; font-weight:600;}
 .subrow-mapstat.done{color:#3E7C57;}
 .subrow-mapstat.wait{color:#8a5300;}
@@ -2787,7 +2787,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   /* 높이 축소 40→32 (S15P11E101-904) — 서브탭 줄을 얇게 해 아래 맵을 더 크게 */
   border:0; border-radius:999px; padding:6px 20px; min-height:32px; min-width:76px; cursor:pointer;
   background:transparent; color:var(--bb-body, #5a6274);
-  font:inherit; font-size:13px; font-weight:600;
+  font:inherit; font-size:14.5px; font-weight:600;
 }
 .nav-subrow .map-tabs button.on{ background:var(--bb-ink, #1b1f27); color:#fff; font-weight:700; }
 .map-zoom-canvas,.camera-zoom-canvas{
@@ -3229,14 +3229,14 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
   margin-bottom: 16px;
 }
 .v3-theme .card-v3 h3 { font-size: 14px; font-weight: 700; color: #232733; margin-bottom: 12px; display:flex; align-items: center; gap: 6px; }
-.v3-theme .card-v3 h3 .k { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #A8ADBC; font-weight: 500; }
-.v3-theme p.cfg-help { font-size: 12.5px; line-height: 1.7; color: #7C8296; }
+.v3-theme .card-v3 h3 .k { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #A8ADBC; font-weight: 500; }
+.v3-theme p.cfg-help { font-size: 14px; line-height: 1.7; color: #7C8296; }
 
 /* Buttons */
-.v3-theme .btn-filled { padding: 9px 18px; border-radius: 20px; border: 0; background: #4C5695; color: #fff; font-weight: 600; font-size: 12.5px; font-family: inherit; cursor: pointer; transition: background 0.15s; }
+.v3-theme .btn-filled { padding: 10px 20px; border-radius: 20px; border: 0; background: #4C5695; color: #fff; font-weight: 600; font-size: 14.5px; font-family: inherit; cursor: pointer; transition: background 0.15s; }
 .v3-theme .btn-filled:hover:not(:disabled) { background: #3F4880; }
 .v3-theme .btn-filled:disabled { opacity: 0.5; cursor: not-allowed; }
-.v3-theme .btn-tonal { padding: 9px 18px; border-radius: 20px; border: 0; background: #E4E5F5; color: #3F4880; font-weight: 600; font-size: 12.5px; font-family: inherit; cursor: pointer; transition: background 0.15s; }
+.v3-theme .btn-tonal { padding: 10px 20px; border-radius: 20px; border: 0; background: #E4E5F5; color: #3F4880; font-weight: 600; font-size: 14.5px; font-family: inherit; cursor: pointer; transition: background 0.15s; }
 .v3-theme .btn-tonal:hover:not(:disabled) { background: #D9DAF0; }
 .v3-theme .btn-tonal:disabled { opacity: 0.5; cursor: not-allowed; }
 .v3-theme .btn-text { padding: 9px 18px; border-radius: 20px; border: 0; background: transparent; color: #5A6072; font-weight: 600; font-size: 12.5px; font-family: inherit; cursor: pointer; transition: background 0.15s; }
@@ -3244,7 +3244,7 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .v3-theme .btn-text:disabled { opacity: 0.5; cursor: not-allowed; }
 /* outlined — 되돌리기 어려운 일(danger 글자색), filled 가 이미 화면에 하나 있을 때 그 다음으로 무거운 동작에 쓴다.
    순찰 종료(S15P11E101-868)처럼 '위험/되돌리기' 계열이지만 filled 는 화면당 하나 규칙을 지켜야 할 때. */
-.v3-theme .btn-outlined { padding: 8px 17px; border-radius: 20px; border: 1px solid #C4C6D4; background: transparent; color: var(--bb-danger-text); font-weight: 600; font-size: 12.5px; font-family: inherit; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.v3-theme .btn-outlined { padding: 9px 19px; border-radius: 20px; border: 1px solid #C4C6D4; background: transparent; color: var(--bb-danger-text); font-weight: 600; font-size: 14.5px; font-family: inherit; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
 .v3-theme .btn-outlined:hover:not(:disabled) { background: #FBF6F5; border-color: var(--bb-danger-text); }
 .v3-theme .btn-outlined:disabled { opacity: 0.5; cursor: not-allowed; }
 
