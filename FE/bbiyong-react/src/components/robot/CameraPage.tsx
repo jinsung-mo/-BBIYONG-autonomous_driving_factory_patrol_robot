@@ -102,8 +102,8 @@ export default function CameraPage() {
                 className="camera-zoom-canvas"
                 style={{ transform: `scale(${swapped ? 1 : zoom})` }}
               />
-              <span className="hud">{status.rcamHud}</span>
-              <span className="rec">● REC 00:00</span>
+              {/* HUD(MODE …)·REC 표시는 제거했다 [사용자 지침 2026-08-09] — 실제 녹화 상태가
+                  아닌 장식이라 영상을 가렸다. */}
               {camDown && <span className="nodata">전면 카메라 영상 없음</span>}
             </div>
           </div>
