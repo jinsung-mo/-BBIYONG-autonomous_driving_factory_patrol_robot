@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useLive } from './LiveContext.tsx'
+import { useAuth } from '../auth/AuthContext.tsx'
 import { MAPPING_STATUS } from './mapping.ts'
+import { replaceWaypoints } from './waypoints.ts'
+import { resetInspection } from './inspection.ts'
+import { ROBOT_ID } from './config.ts'
 import { playVoice } from './voice.ts'
 
 // 매핑(2D 맵 모델링) 제어 상태·핸들러 (S15P11E101-904).
@@ -22,6 +26,7 @@ export interface MappingControl {
 
 export function useMappingControl(): MappingControl {
   const { enabled, connected, control, telemetry, mapping, mappingComplete, clearMappingComplete } = useLive()
+  const { accessToken } = useAuth()
   const [confirming, setConfirming] = useState(false)
   const [requested, setRequested] = useState(false)   // START_MAPPING 발행 후 로봇 반응 대기
   const [msg, setMsg] = useState<{ kind: string, text: string } | null>(null)
@@ -37,6 +42,11 @@ export function useMappingControl(): MappingControl {
     setConfirming(false)
     setMsg(null)
     clearMappingComplete()
+    // 새 맵은 좌표계가 바뀌어 옛 맵 기준 순찰/점검 지점이 무의미해진다(S15P11E101-911) —
+    // 매핑 시작 시 초기화한다. 순찰 지점은 빈 배열 PUT(replaceWaypoints)으로 서버에서 전량
+    // 삭제, 점검 지점은 저장 없는 relay 라 로컬 스토어만 비운다.
+    replaceWaypoints([], accessToken, ROBOT_ID).catch(() => { /* 실패해도 매핑 시작은 진행 */ })
+    resetInspection()
     control.startMapping()
     setRequested(true)
     playVoice('mappingStart')   // "맵핑을 시작합니다"(01) — 버튼 클릭 제스처 직후라 재생 허용된다
