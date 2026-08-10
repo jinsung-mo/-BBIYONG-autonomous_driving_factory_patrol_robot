@@ -103,6 +103,13 @@ const subscribeStore = (fn: () => void) => {
   return () => { storeListeners.delete(fn) }
 }
 
+// 점검 지점 로컬 스토어를 비운다(S15P11E101-911). 새 매핑을 시작하면 좌표계가 바뀌어
+// 옛 맵 기준 점검 지점은 무의미하므로 초기화한다. 서버는 저장하지 않는 relay 라 REST 삭제가
+// 아니라 이 로컬 스토어만 비우면 된다 — 로봇이 새 스냅샷을 보내면 그때 다시 채워진다.
+export function resetInspection() {
+  setState((s) => (s.candidates.length || s.points.length ? { candidates: [], points: [] } : s))
+}
+
 /**
  * 명령을 로컬 상태에 적용한다. 두 경로가 같은 함수를 쓴다:
  *   1) 내가 보낸 명령의 낙관적 반영 — 왕복을 기다리는 동안 화면이 조용하면 한 번 더 누른다
