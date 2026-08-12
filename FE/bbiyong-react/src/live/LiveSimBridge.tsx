@@ -23,9 +23,12 @@ export default function LiveSimBridge(): null {
   const { actions } = useSim()
   const { enabled, connected, telemetry, onVideoFrame, control, driveMode } = useLive()
 
-  // 채널별로 Image 하나를 재사용한다 (프레임마다 새로 만들면 GC 부담이 크다)
+  // 채널별 최신 프레임 / 디코드 진행 여부 / 화면에 올라간 ImageBitmap
   // `${ch}_maxTemp` 키도 함께 담으므로 인덱스 시그니처가 필요하다
   const imgs = useRef<Record<string, any>>({ FRONT: null, THERMAL: null })
+  const pending = useRef<Record<string, any>>({})   // 디코드 대기 중인 **최신 한 장**
+  const busy = useRef<Record<string, boolean>>({})  // 디코드 진행 중 여부
+  const bitmaps = useRef<Record<string, any>>({})   // 직전 ImageBitmap (close 대상)
 
   // ---- 위치 ----
   useEffect(() => {
@@ -44,24 +47,91 @@ export default function LiveSimBridge(): null {
       actions.setExternalFrame('FRONT', canvas, undefined)
     })
 
+    // 🔴 [S15P11E101] 30fps 1080p 에서 프레임이 사라지던 원인과 처방.
+    //
+    // 종전 코드는 채널당 Image 하나를 재사용하며 `img.src = data:image/jpeg;base64,...`
+    // 를 매 프레임 재대입했다. HTML 명세상 **src 를 다시 넣으면 진행 중이던 로드가
+    // 취소되고 onload 는 영영 안 불린다.** 한 장 처리(93KB base64 파싱 + JPEG 디코드)가
+    // 프레임 간격 33ms 를 넘는 순간 모든 프레임이 다음 프레임에 의해 취소돼,
+    // 네트워크로는 29.4fps 가 멀쩡히 도착하는데 화면은 몇 fps 만 갱신된다.
+    // 취소된 작업도 CPU 는 이미 썼으므로 느려질수록 더 느려지는 악순환이다.
+    //
+    // 처방은 두 가지다:
+    //   ① createImageBitmap — 디코드가 메인스레드를 막지 않는다. data URL 을 안 거치므로
+    //      93KB base64 문자열 파싱도 사라진다(atob 는 네이티브라 훨씬 싸다).
+    //   ② in-flight 가드 — 디코드 중이면 새 프레임을 시작하지 않고 **최신 한 장만**
+    //      들고 있다가 끝나면 그걸 처리한다.
+    // 핵심은 드랍이 없어지는 게 아니라 **드랍이 통제되는 것**이다. 종전에는 브라우저가
+    // 무작위로 취소해 어느 프레임이 살아남을지 알 수 없었지만, 이제는 항상 가장 최신
+    // 프레임을 그리고 중간 것만 버린다 — 라이브 관제 화면에서 원하는 동작이 정확히 이것이다.
+    const hasBitmap = typeof createImageBitmap === 'function'
+
+    const b64ToBlob = (b64: string, mime: string) => {
+      const bin = atob(b64)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      return new Blob([bytes], { type: mime })
+    }
+
+    const pump = (channel: string) => {
+      if (busy.current[channel]) return
+      const next = pending.current[channel]
+      if (!next) return
+      pending.current[channel] = null
+      busy.current[channel] = true
+      createImageBitmap(next.blob).then((bmp: any) => {
+        // 직전 비트맵은 명시적으로 닫는다 — ImageBitmap 은 GC 를 기다리면 GPU 메모리가 샌다.
+        // close 와 setExternalFrame 이 같은 동기 블록이라 rAF 가 끼어들어 닫힌 걸 그릴 수 없다.
+        const prev = bitmaps.current[channel]
+        if (prev && typeof prev.close === 'function') prev.close()
+        bitmaps.current[channel] = bmp
+        actions.setExternalFrame(channel, bmp, next.maxTemp)
+      }).catch(() => {
+        /* 손상 프레임 한 장은 버리고 다음 장으로 간다 — 스트림을 끊지 않는다 */
+      }).finally(() => {
+        busy.current[channel] = false
+        pump(channel)   // 대기 중 최신 프레임이 있으면 이어서
+      })
+    }
+
     const off = onVideoFrame((channel: any, frame: any) => {
       if (frame instanceof Uint8Array) {
         decoder.push(frame)
         return
       }
       if (!frame?.data) return
-      let img = imgs.current[channel]
-      if (!img) {
-        img = new Image()
-        img.onload = () => actions.setExternalFrame(channel, img, imgs.current[`${channel}_maxTemp`])
-        imgs.current[channel] = img
-      }
-      imgs.current[`${channel}_maxTemp`] = frame.maxTemp
       const fmt = frame.format || 'jpeg'
-      img.src = `data:image/${fmt};base64,${frame.data}`
+
+      if (!hasBitmap) {
+        // 폴백: createImageBitmap 이 없는 브라우저. 종전 경로 그대로다.
+        let img = imgs.current[channel]
+        if (!img) {
+          img = new Image()
+          img.onload = () => actions.setExternalFrame(channel, img, imgs.current[`${channel}_maxTemp`])
+          imgs.current[channel] = img
+        }
+        imgs.current[`${channel}_maxTemp`] = frame.maxTemp
+        img.src = `data:image/${fmt};base64,${frame.data}`
+        return
+      }
+
+      // 대기 슬롯은 항상 한 칸이다. 밀리면 **덮어써서** 최신 것만 남긴다.
+      pending.current[channel] = {
+        blob: b64ToBlob(frame.data, `image/${fmt}`),
+        maxTemp: frame.maxTemp,
+      }
+      pump(channel)
     })
 
-    return () => { off(); decoder.close(); actions.clearExternalFrames() }
+    return () => {
+      off(); decoder.close(); actions.clearExternalFrames()
+      // 남은 비트맵 정리 — 언마운트 후에도 살아 있으면 GPU 메모리가 잡힌 채 남는다.
+      for (const k of Object.keys(bitmaps.current)) {
+        const b = bitmaps.current[k]
+        if (b && typeof b.close === 'function') b.close()
+      }
+      bitmaps.current = {}; pending.current = {}; busy.current = {}
+    }
   }, [enabled, onVideoFrame, actions])
 
   // ---- 키보드 WASD → DRIVE 발행 ----
