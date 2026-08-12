@@ -42,9 +42,11 @@ export default function DetectionOverlay({ videoRef, latency }: Props) {
   const bufRef = useRef<DetectionsMessage[]>([])
   const lagRef = useRef<number>(HLS_LAG_FALLBACK_S)
 
-  // 실측 지연이 오면 그것을 쓴다. 상수보다 정확하고, 네트워크가 나빠져 지연이 늘어도
-  // 박스가 따라간다. 터무니없는 값은 무시한다(재생 시작 직후에 0 이나 큰 값이 튄다).
-  if (latency != null && latency > 0.5 && latency < 60) lagRef.current = latency
+  // 지연 값이 오면 그것을 쓴다. 상수보다 정확하고, 네트워크가 나빠져 지연이 늘어도
+  // 박스가 따라간다. 하한을 0 으로 둔 것은 WebRTC(~0.3s) 전환 때문이다 — 종전 HLS 는
+  // 6초여서 0.5 미만을 스타트업 튐으로 걸렀지만, 이제 sub-second 가 정상값이다.
+  // 상한(60초)은 그대로 터무니없는 값 방어.
+  if (latency != null && latency >= 0 && latency < 60) lagRef.current = latency
 
   useEffect(() => {
     if (!onDetections) return undefined
