@@ -13,6 +13,7 @@ import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Map;
@@ -37,10 +38,11 @@ class EventSavedNotifyTests {
     private final RobotWebSocketSessionManager sessionManager = mock(RobotWebSocketSessionManager.class);
     private final AlertBroadcastService alertBroadcastService = mock(AlertBroadcastService.class);
     private final MapService mapService = mock(MapService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
     private final EventLogService service = new EventLogService(
             eventLogRepository, notificationDispatchService, videoClipRepository, sessionManager,
-            alertBroadcastService, mapService);
+            alertBroadcastService, mapService, eventPublisher);
 
     private RobotPacket firePacket(String robotId) {
         RobotPacket p = new RobotPacket();
