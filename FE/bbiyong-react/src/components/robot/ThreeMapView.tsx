@@ -428,7 +428,20 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
       if (!pos) continue
       pins.push(mk(a, `lv${a._id}`, Number.isFinite(eid) ? eid : null, pos))
     }
-    return pins
+    // 겹쳤을 때 **화재가 위에 보여야 한다** — 더 위중한 경보다.
+    //
+    // 과열과 화재는 좌표가 같아지는 일이 흔하다: 둘 다 위치가 없으면 로봇 pose 로
+    // 폴백하므로(toScene 의 anchored), 같은 자리에서 과열 뒤 화재가 나면 마커가
+    // 화면상 정확히 포개져 하나가 다른 하나를 완전히 가린다.
+    //
+    // z-index 를 쓰지 않는 이유: `.three-alert` 은 fire·heat 가 **둘 다 z-index:4** 라
+    // 지금도 위아래를 정하는 것은 DOM 순서다. 게다가 이 지도 위의 층은 이미
+    // 2(점검핀)·3(맵 캔버스)·4(경보)·5(말풍선)·6(뷰 세그먼트)로 차 있어서, 화재만
+    // 올리려다 말풍선이나 컨트롤과 같은 층이 되기 쉽다. 순서를 바꾸는 쪽이 다른
+    // 층을 하나도 건드리지 않는다.
+    //
+    // sort 는 안정 정렬이므로 같은 종류끼리의 기존 순서(서버 이력 → 실시간)는 유지된다.
+    return pins.sort((a, b) => Number(a.kind === 'fire') - Number(b.kind === 'fire'))
   }, [alerts, unresolvedEvents, equipments, plan, grid, anchored])
   const alertPinsRef = useRef(alertPins)
   alertPinsRef.current = alertPins
