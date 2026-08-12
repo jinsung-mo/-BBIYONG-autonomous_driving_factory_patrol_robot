@@ -452,7 +452,11 @@ export default class Simulation {
     if (!pose) this.botResume()
   }
 
-  // live 모드 카메라 프레임. img는 디코딩이 끝난 HTMLImageElement.
+  // live 모드 카메라 프레임. img 는 **디코딩이 끝난 그릴 수 있는 것**이면 된다 —
+  // drawImage 에 그대로 넘기고 .width/.height 만 읽으므로 다음 셋 다 들어온다:
+  //   ImageBitmap        mjpeg 경로 (LiveSimBridge 의 createImageBitmap)
+  //   HTMLCanvasElement  h264 경로 (H264VideoDecoder 가 캔버스를 준다)
+  //   HTMLImageElement   createImageBitmap 이 없는 브라우저의 폴백
   setExternalFrame(channel: any, img: any, maxTemp: any) {
     if (channel !== 'FRONT' && channel !== 'THERMAL') return
     this.externalFrames[channel] = img ? { img, maxTemp } : null
