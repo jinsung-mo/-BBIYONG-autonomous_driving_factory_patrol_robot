@@ -146,6 +146,17 @@ export function LiveProvider({ children }: any) {
   // 캔버스에는 시뮬 화면이 그대로 남아 실데이터처럼 보인다(S15P11E101-462).
   const [videoSeen, setVideoSeen] = useState<Record<string, boolean>>({ FRONT: false, THERMAL: false })
 
+  // 🆕 [2026-08-12] 검출 박스(DETECTIONS).
+  //
+  // 왜 별도 메시지인가: 전면 영상이 HLS 로 옮겨가면서 **프레임에 메타데이터를 실을 수
+  // 없게 됐다.** 종전에는 로봇이 박스를 JPEG 픽셀에 그려 보냈지만, MJPEG 패스스루는
+  // 카메라 원본을 그대로 흘리므로 그 자리가 없다.
+  //
+  // 영상 프레임과 같은 이유로 state 가 아니라 ref 에 둔다 — 4Hz 라 state 로 올려도
+  // 무리는 아니지만, 구독자가 오버레이 캔버스 하나뿐이라 리렌더를 만들 이유가 없다.
+  const detRef = useRef<import('./contracts.d.ts').DetectionsMessage | null>(null)
+  const detListeners = useRef(new Set<(det: import('./contracts.d.ts').DetectionsMessage) => void>())
+
   const telemetryRef = useRef<import('./contracts.d.ts').RobotTelemetry | null>(null)
 
   // 실시간 SLAM 맵(가이드 §5). NAV_LIVE 가 3Hz 로 오고 scan 배열이 커서 영상 프레임과 같은
@@ -316,6 +327,20 @@ export function LiveProvider({ children }: any) {
       videoListeners.current.forEach((fn) => fn(ch, frame))
     })
 
+    // 🆕 [2026-08-12] 검출 박스. 영상과 같은 토픽으로 오되 type 으로 갈린다.
+    //
+    // 🔴 box 는 **src_w x src_h 기준 픽셀 절대좌표**다. 받는 쪽이 반드시 src_w/src_h 로
+    //    환산해야 한다 — 로봇 추론은 640x360, 영상은 1280x720 이라 고정 상수로 나누면
+    //    정확히 2배 어긋난다(실측 확인).
+    // 🔴 빈 dets 도 온다. 그래야 "불이 꺼졌다"를 알고 박스를 지운다.
+    const offDet = subscribe(`/topic/video/${ROBOT_ID}`, (msg: any) => {
+      if (msg instanceof Uint8Array || msg?.type !== 'DETECTIONS') return
+      detRef.current = msg
+      detListeners.current.forEach((fn) => {
+        try { fn(msg) } catch (e) { console.warn('[det] 구독자 오류 — 나머지는 계속', e) }
+      })
+    })
+
     // 실시간 SLAM 맵 — 한 토픽에 MAP/NAV_LIVE 두 종류가 오고 type 으로 갈린다(가이드 §1).
     const offNav = subscribe(`/topic/nav/${ROBOT_ID}`,
       /** @param {import('./contracts').MapSnapshot | import('./contracts').NavLive | import('./contracts').MappingMessage} msg */ (msg: any) => {
@@ -467,7 +492,7 @@ export function LiveProvider({ children }: any) {
 
     return () => {
       clearInterval(flush)
-      offRobots(); offAlerts(); offMapping(); offVideo(); offNav()
+      offRobots(); offAlerts(); offMapping(); offVideo(); offDet(); offNav()
       offOwnership(); offDenied(); offState()
       disconnect()
     }
@@ -613,6 +638,13 @@ export function LiveProvider({ children }: any) {
     if (cur.FRONT) fn('FRONT', cur.FRONT)
     if (cur.THERMAL) fn('THERMAL', cur.THERMAL)
     return () => videoListeners.current.delete(fn)
+  }, [])
+
+  // 검출 박스 구독. onVideoFrame 과 같은 관례 — 등록 즉시 최신 것 1회 전달.
+  const onDetections = useCallback((fn: (det: import('./contracts.d.ts').DetectionsMessage) => void) => {
+    detListeners.current.add(fn)
+    if (detRef.current) { try { fn(detRef.current) } catch { /* 무시 */ } }
+    return () => detListeners.current.delete(fn)
   }, [])
 
   // 맵 캔버스가 구독한다. 구독 시점에 이미 받아둔 맵이 있으면 즉시 1회 전달해 공백을 막는다.
@@ -781,7 +813,7 @@ export function LiveProvider({ children }: any) {
     enabled, connected, lastError, authError, hasToken: !!accessToken,
     dataSource, setDataSource, toggleDataSource,
     telemetry, alerts, dismissAlert,
-    onVideoFrame, onNavUpdate, videoSeen, control, robotId: ROBOT_ID,
+    onVideoFrame, onDetections, onNavUpdate, videoSeen, control, robotId: ROBOT_ID,
     speed, setSpeed,
     mappingComplete, clearMappingComplete, robotOnline,
     mappingPhase, mapping: mappingPhase === PHASE_MAPPING || (mappingPhase == null && telemetry?.status === 'MAPPING'),
@@ -791,7 +823,7 @@ export function LiveProvider({ children }: any) {
     plan, planError,
     ownership: ownershipView, controlOwnership, mySessionId,
   }), [enabled, connected, lastError, authError, accessToken, dataSource, setDataSource,
-      toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onNavUpdate,
+      toggleDataSource, telemetry, alerts, dismissAlert, onVideoFrame, onDetections, onNavUpdate,
       videoSeen, control, speed, setSpeed, mappingComplete, clearMappingComplete, robotOnline,
       mappingPhase, mappingStarting, resetMappingView, driveMode, setDriveMode, plan, planError,
       ownershipView, controlOwnership, mySessionId])

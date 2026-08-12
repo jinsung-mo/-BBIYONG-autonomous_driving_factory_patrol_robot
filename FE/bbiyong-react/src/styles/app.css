@@ -350,7 +350,23 @@ button:disabled, input:disabled{opacity:.4; cursor:not-allowed;}
 .vwrap .rec{right:10px; bottom:8px; font-size:10px; color:#ff9a92;}
 /* 로봇 서브시스템이 죽은 패널 — 흐리게 덮고 '데이터 없음'을 명시한다.
    특히 열화상은 로봇이 생산하지 않아, 시뮬 화면이 실데이터로 오인되면 안 된다. */
-.vwrap.down > canvas{opacity:.12; filter:grayscale(1);}
+/* 🔴 [2026-08-12] `> canvas` 만으로는 <video> 에 안 먹는다. 전면 영상이 HLS 로
+   옮겨가면서 <canvas> 가 <video> 로 바뀌었다 — 넓히지 않으면 **카메라가 죽어도
+   화면이 멀쩡해 보인다**(2026-08-12 의 고장 다섯 건이 전부 그 형태였다). */
+.vwrap.down > :is(canvas,video){opacity:.12; filter:grayscale(1);}
+/* 검출 박스도 같이 흐려야 한다 — 영상만 흐리고 박스가 선명하면
+   "안 보이는데 불이 났다"로 읽힌다. */
+.vwrap.down > .det-overlay{opacity:.12;}
+
+/* ── 전면 카메라 <video> 와 검출 박스 오버레이 ──────────────────────────
+   <canvas> 에는 전역 width/height 규칙이 걸려 있지만 <video> 에는 안 걸린다.
+   object-fit:cover 로 검은 여백 없이 채운다(종전 Simulation._drawFrame 의 cover 와 동일).
+   .vwrap 이 이미 overflow:hidden 이라 잘라내기는 공짜다. */
+.vwrap > video{display:block; width:100%; height:100%; object-fit:cover; background:#05070a;}
+/* 박스는 영상 바로 위. 라벨(z-index 4)·PiP(5)·지도도구(7) 아래에 둔다.
+   🔴 pointer-events 를 끄지 않으면 더블클릭 판 교체가 이 캔버스에 먹혀 동작하지 않는다. */
+.vwrap > .det-overlay{position:absolute; inset:0; width:100%; height:100%;
+  pointer-events:none; z-index:2;}
 .vwrap.down .hud,.vwrap.down .hud2,.vwrap.down .rec{display:none;}
 .vwrap .nodata{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
   font-size:12px; font-weight:700; letter-spacing:.5px; color:var(--dk-sub); text-align:center; padding:0 12px;}

@@ -177,6 +177,45 @@ export interface RobotTelemetry {
   minutesToFull?: number | null
 }
 
+/**
+ * 화재·연기 검출 하나. 로봇 YOLO(yolo11n/s firesmoke) 출력이다.
+ *
+ * 🔴 `box` 는 **`DetectionsMessage.src_w x src_h` 기준 픽셀 절대좌표** `[x1,y1,x2,y2]` 다.
+ *    정규화(0~1)도 아니고 영상 해상도 기준도 아니다 — 로봇 추론은 640x360 인데 영상은
+ *    1280x720 이라 **고정 상수로 나누면 정확히 2배 어긋난다**(실측 확인).
+ *    반드시 `box[0] / src_w * 표시폭` 으로 환산한다.
+ */
+export interface Detection {
+  /** 0=smoke, 1=fire (로봇 엔진 클래스 고정값) */
+  cls?: number
+  name?: string
+  /** 0~1 */
+  conf?: number
+  box?: number[]
+}
+
+/**
+ * 검출 박스 묶음. `/topic/video/{robotId}` 에 `type:'DETECTIONS'` 로 온다.
+ *
+ * 왜 영상과 별도인가: 전면 영상이 HLS(H.264 세그먼트)로 옮겨가면서 **프레임에 메타데이터를
+ * 실을 수 없게 됐다.** 종전에는 로봇이 박스를 JPEG 픽셀에 직접 그려 보냈다.
+ *
+ * 🔴 `dets` 가 빈 배열로도 온다 — 그래야 "이제 안 보인다"를 알고 박스를 지운다.
+ * 🔴 `captureTs` 로 **영상 시각에 맞춰 늦춰서** 그려야 한다. 이 메시지는 WS 로 즉시 오는데
+ *    영상은 HLS 라 약 6초 늦다(config.HLS_LAG_FALLBACK_S).
+ */
+export interface DetectionsMessage {
+  type?: 'DETECTIONS'
+  robot_id?: string
+  /** 촬영 시각(epoch 초). 영상 타임라인 정합의 기준. */
+  captureTs?: number
+  /** 박스 좌표의 기준 해상도 */
+  src_w?: number
+  src_h?: number
+  dets?: Detection[]
+  seq?: number
+}
+
 /** /topic/alerts — 로봇이 확정한 화재·과열. AlertMessage record 그대로. */
 export interface AlertMessage {
   /** 저장 완료된 이벤트 이력 식별자. 있으면 즉시 상세·영상을 조회할 수 있다. */
@@ -781,6 +820,7 @@ export interface LiveContextValue {
   alerts: LiveAlertMessage[]
   dismissAlert: (id: number) => void
   onVideoFrame: (fn: (ch: 'FRONT' | 'THERMAL', frame: any) => void) => () => void
+  onDetections: (fn: (det: DetectionsMessage) => void) => () => void
   onNavUpdate: (fn: (nav: NavState) => void) => () => void
   videoSeen: Record<string, boolean>
   control: {

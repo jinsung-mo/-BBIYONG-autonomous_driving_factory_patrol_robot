@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, MutableRefObject } from 'react'
 import { HLS_URL } from '../../live/config.ts'
 
 // 전면 카메라 HLS 재생.
@@ -27,13 +27,21 @@ export type HlsHealth = 'loading' | 'playing' | 'stalled' | 'error'
 /** 치명 오류 후 재접속 간격. 라이브는 세그먼트가 곧 사라지므로 재시도가 정상 경로다. */
 const RETRY_MS = 3000
 
-export default function HlsVideo({ src = HLS_URL, className, style, onHealth }: {
+export default function HlsVideo({ src = HLS_URL, className, style, onHealth, videoRef: outerRef }: {
   src?: string,
   className?: string,
   style?: CSSProperties,
   onHealth?: (health: HlsHealth) => void,
+  /**
+   * 🆕 [2026-08-12] 이 <video> 를 밖에서 참조해야 하는 경우에 넘긴다(선택).
+   * 검출 박스 오버레이(DetectionOverlay)가 표시 영역과 videoWidth/Height 를 읽어
+   * 좌표를 환산하는 데 쓴다 — 박스는 이 영상 위에 정확히 겹쳐야 한다.
+   * 안 넘기면 종전과 동일하게 동작한다.
+   */
+  videoRef?: MutableRefObject<HTMLVideoElement | null>,
 }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const innerRef = useRef<HTMLVideoElement | null>(null)
+  const videoRef = outerRef ?? innerRef
   // onHealth 를 ref 에 담는 이유: 의존성에 넣으면 부모가 인라인 함수를 넘길 때마다 effect 가
   // 재실행돼 스트림이 끊긴다.
   const healthRef = useRef(onHealth)

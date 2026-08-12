@@ -52,6 +52,7 @@
  *   --thermal-hz N      (1)      열화상 송신률
  *   --stall-seconds N   (0)      N초마다 열화상을 끊었다 재개한다(0=안 끊음). stale 판정 시험
  *   --stage-seconds N   (15)     status 를 다음 단계로 넘기는 간격
+ *   --det-hz N          (4)      검출 박스 송신률(0=끔)
  *   --no-stage-cycle             status 를 AUTO_PATROL 로 고정
  *   --legacy-front               🔴 FRONT 를 WS 로 보낸다(계약과 다름, 옛 동작 재현용)
  *   --fps N             (5)      --legacy-front 일 때의 FRONT 송신률
@@ -413,6 +414,61 @@ if (thermal.frames.length) {
   log(`🔴 열화상 샘플을 못 읽었다 (${THERMAL_PATH}) — ${thermal.error}`)
   log('   열화상 발행을 건너뛴다. 지금 WS 로 오는 유일한 영상 경로가 이것이므로 샘플이 필요하다.')
   log('   레인 A 에 요청: 라이브 cloud_bridge.build_thermal() 결과 3프레임을 JSON 으로.')
+}
+
+// ── 검출 박스 (DETECTIONS) ─────────────────────────────────────────────────
+//
+// 🔴 [2026-08-12] FRONT 가 HLS 로 가면서 프레임에 박스를 실을 수 없게 됐다.
+//    종전에는 로봇이 JPEG 픽셀에 cv2.rectangle 로 그려 보냈다. 이제 별도 메시지다.
+//
+// 🔴 함정을 **일부러 재현한다**: src_w/src_h 를 실물 cam.json 값(640x360)으로 둔다.
+//    영상은 1280x720 이므로 FE 가 고정 상수로 나누면 정확히 2배 어긋난다. 하네스가
+//    실물과 같은 함정을 갖고 있어야 "우리 화면에서는 맞는데 실기에서 틀린" 일이 없다.
+//
+// 🔴 captureTs 는 **지금 시각**이다. FE 는 이것을 HLS 지연(약 6초)만큼 늦춰서 꺼내야
+//    한다. 그냥 그리면 불이 화면에 나타나기 전에 박스가 먼저 뜬다.
+//
+// dets 는 합성이다 — 실물 cam.json 의 dets 가 비어 있어(촬영 당시 불이 없었다) 그대로
+// 쓰면 오버레이가 한 번도 안 그려진다. 기준 해상도만 실물을 따르고 상자는 움직이게 만든다.
+const DET_HZ = Number(opt('det-hz', 4))
+const DET_SRC_W = Number(cam.src_w ?? 640)
+const DET_SRC_H = Number(cam.src_h ?? 360)
+let detSeq = 0
+
+function buildDetections() {
+  detSeq += 1
+  const t = Date.now() / 1000
+  const phase = (t % 8) / 8
+  // 8초 중 2초는 빈 목록 — "불이 꺼지면 박스가 지워지는가"를 시험한다.
+  const dets = phase > 0.75 ? [] : [(() => {
+    const cx = DET_SRC_W * (0.5 + 0.25 * Math.cos(phase * 2 * Math.PI))
+    const cy = DET_SRC_H * (0.5 + 0.25 * Math.sin(phase * 2 * Math.PI))
+    const w = DET_SRC_W * 0.18
+    const h = DET_SRC_H * 0.22
+    return {
+      cls: phase < 0.4 ? 1 : 0,
+      name: phase < 0.4 ? 'fire' : 'smoke',
+      conf: 0.62 + 0.3 * Math.abs(Math.sin(phase * Math.PI)),
+      box: [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2].map((v) => Math.round(v * 10) / 10),
+    }
+  })()]
+  return {
+    source: 'robot',
+    type: 'DETECTIONS',
+    robot_id: ROBOT_ID,
+    captureTs: t,
+    src_w: DET_SRC_W,
+    src_h: DET_SRC_H,
+    dets,
+    seq: detSeq,
+  }
+}
+
+if (DET_HZ > 0) {
+  setInterval(() => publish(`/topic/video/${ROBOT_ID}`, buildDetections()),
+    Math.max(1000 / DET_HZ, 1))
+  log(`DETECTIONS ${DET_HZ}Hz · 기준 ${DET_SRC_W}x${DET_SRC_H} (영상 1280x720 과 2배 차이 — 정규화 확인용)`)
+  log('  captureTs 는 지금 시각이다 — FE 가 HLS 지연만큼 늦춰 꺼내는지 확인하라')
 }
 
 setInterval(() => publish('/topic/robots', buildTelemetry()), 500)

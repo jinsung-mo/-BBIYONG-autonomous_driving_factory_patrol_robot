@@ -18,6 +18,15 @@ export const REST_BASE = env.VITE_REST_BASE_URL || 'https://i15e101.p.ssafy.io'
 //    여전히 JWT 로 보호되는 WS 를 타므로, 영상만 공개 수준이라는 점을 알고 있어야 한다.
 export const HLS_URL = env.VITE_HLS_URL || 'https://i15e101.p.ssafy.io/hls/live.m3u8'
 
+// 🔴 검출 박스를 영상 시각에 맞추는 지연 보정(초).
+//
+// DETECTIONS 는 WebSocket 으로 즉시 오는데 영상은 HLS 라 약 6초 늦다. 보정하지 않고
+// 그리면 **불이 화면에 나타나기 전에 박스가 먼저 뜬다** — 조작자가 "저기 불이 있다"고
+// 믿는데 화면에는 아직 아무것도 없는 상태가 된다.
+//
+// 로봇이 프레임마다 captureTs(촬영 시각)를 실어 보내므로, 그것을 이 값만큼 늦춰서 꺼낸다.
+export const HLS_LAG_FALLBACK_S = Number(env.VITE_HLS_LAG_S ?? 6)
+
 // 현재 편성된 순찰 로봇 1대. 제어 payload의 robot_id / 영상 토픽 경로에 쓰인다.
 export const ROBOT_ID = env.VITE_ROBOT_ID || 'orinka_01'
 
