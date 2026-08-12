@@ -54,8 +54,20 @@ const BLOCKED_HINT: Record<string, string> = {
 // 매핑 직후 순찰이 영구 잠긴다. 핀을 지웠다 다시 찍어도 안 풀리는 이유도 같다: 핀 추가는
 // 서버 DB 에만 쓰고 로봇의 경로 파일은 건드리지 않으므로 stamp 가 그대로다.
 //
+// 🔴 [2026-08-12] `NO_ROUTE` 도 같은 부류다 — 로봇이 경로를 **아예 안 들고 있는** 경우다.
+// 위 stamp 와 똑같은 이유로 교착한다: 핀 추가(`POST /api/patrol-route/points`)는 서버 DB 에만
+// 쓰고 로봇에는 내려보내지 않는다. 로봇에 경로가 닿는 길은 /apply 와 /start 뿐인데 '경로 적용'
+// 버튼을 뗀 뒤 UI 에서 /apply 를 부르는 곳이 없다 — 그래서 이 사유로 잠그면 **지점을 몇 개
+// 찍어도 영구 교착**이다. 2026-08-12 시연에서 실제로 막혔다: 로봇은 scouting READY 인데
+// `blockedBy=NO_ROUTE` 하나로 버튼만 잠겨, 핀을 다시 찍어도 화면은 계속 '지점을 먼저 찍으세요'
+// 였다(로봇이 옳다 — 로봇에는 정말 경로가 없었다). /start 가 SET_PATROL_ROUTE 를 먼저 보내므로
+// 이 사유도 누르는 순간 스스로 풀린다.
+//
+// 🔴 단, '화면에도 지점이 없는' 진짜 NO_ROUTE 는 여전히 막아야 한다. 그건 아래
+// `staleRoute && !route.length` 가 그대로 처리한다 — 이 Set 에 넣어도 그 보호는 안 사라진다.
+//
 // 나머지 사유(매핑 중·지도 저장 중·위치 미확인 등)는 시작을 눌러도 해소되지 않으므로 그대로 막는다.
-const SELF_CLEARING_BLOCK = 'ROUTE_SESSION_MISMATCH'
+const SELF_CLEARING_BLOCKS = new Set(['ROUTE_SESSION_MISMATCH', 'NO_ROUTE'])
 
 // 확대/축소 — 지도 탭 MapPanel 과 같은 값·문법(S15P11E101-911).
 const ZOOM_MIN = 0.7
@@ -275,22 +287,30 @@ export default function RoutePanel({ inspection = null, title, mappingControl }:
   // `canStartPatrol:true` 인 채로 로봇이 사라지면 버튼이 계속 눌리는 상태가 된다.
   // 로봇은 자기가 끊긴 것을 알릴 수 없으므로(끊겼으니까) 이 한 가지는 FE 만 알 수 있다.
   //
-  // 단, 로봇이 준 사유가 '시작을 눌러야 풀리는' 것이면(SELF_CLEARING_BLOCK 주석 참고) 잠그지
+  // 단, 로봇이 준 사유가 '시작을 눌러야 풀리는' 것이면(SELF_CLEARING_BLOCKS 주석 참고) 잠그지
   // 않는다. 잠그면 해소 수단이 없어져 교착이다(S15P11E101-893). 대신 무엇이 일어날지 알린다.
-  const staleRoute = (readiness?.blockedBy ?? '') === SELF_CLEARING_BLOCK
-  // 화면에 지점이 하나도 없으면 보낼 경로가 없다 — 로봇이 옛 경로를 들고 있어 NO_ROUTE 로
-  // 오지 않을 뿐이므로, 이때는 FE 가 대신 막고 '지점을 찍으라'고 말한다.
+  const blockedBy = readiness?.blockedBy ?? ''
+  const staleRoute = SELF_CLEARING_BLOCKS.has(blockedBy)
+  // 화면에 지점이 하나도 없으면 보낼 경로가 없다 — 로봇이 옛 경로를 들고 있으면 NO_ROUTE 로
+  // 오지도 않고, 로봇이 NO_ROUTE 를 보내와도 위에서 self-clearing 으로 풀어 뒀으므로,
+  // 두 경우 다 이때는 FE 가 대신 막고 '지점을 찍으라'고 말한다.
   const hardBlocked = !!readiness && !readiness.canStartPatrol && !staleRoute
   const startDisabled = offline || busy
     || (readiness ? (hardBlocked || (staleRoute && !route.length)) : (mapping || !route.length))
+  // 🔴 self-clearing 두 사유는 '다음에 할 일'이 서로 다르다 — 뭉뚱그리면 지도를 바꾼 적도
+  //    없는데 '지도가 바뀌었습니다'가 뜬다. NO_ROUTE 는 지도가 아니라 하달이 안 된 것이다.
   const startHint = offline
     ? '로봇과 연결이 끊겼습니다.'
     : (staleRoute
-      ? (route.length
-        ? '지도가 바뀌었습니다 — 순찰 시작을 누르면 지금 찍은 지점으로 다시 적용하고 출발합니다.'
-        : '지도가 바뀌었습니다 — 지도를 클릭해 순찰 지점을 다시 찍으세요.')
+      ? (blockedBy === 'NO_ROUTE'
+        ? (route.length
+          ? '로봇에 경로가 없습니다 — 순찰 시작을 누르면 지금 찍은 지점을 로봇에 보내고 출발합니다.'
+          : (readiness?.hint || BLOCKED_HINT.NO_ROUTE))
+        : (route.length
+          ? '지도가 바뀌었습니다 — 순찰 시작을 누르면 지금 찍은 지점으로 다시 적용하고 출발합니다.'
+          : '지도가 바뀌었습니다 — 지도를 클릭해 순찰 지점을 다시 찍으세요.'))
       : (hardBlocked
-        ? (readiness.hint || BLOCKED_HINT[readiness.blockedBy ?? ''] || '지금은 순찰을 시작할 수 없습니다.')
+        ? (readiness.hint || BLOCKED_HINT[blockedBy] || '지금은 순찰을 시작할 수 없습니다.')
         : null))
 
   // 순찰 중인가 — 로봇 브리지가 patrol 프로세스 실행 여부로 낸 값이다
