@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
+import { useWhep } from '../../live/useWhep.ts'
+import { WEBRTC_LAG_S } from '../../live/config.ts'
 import ControlPanel from './ControlPanel.tsx'
-import HlsVideo from './HlsVideo.tsx'
 import DetectionOverlay from './DetectionOverlay.tsx'
-import type { HlsHealth } from './HlsVideo.tsx'
 
 const ZOOM_MIN = 1
 const ZOOM_MAX = 2.2
@@ -29,20 +29,14 @@ export default function CameraPage() {
   // 어느 판을 크게 볼지. 화재를 의심할 때는 열이 오르는 자리를 크게 봐야 한다.
   const [swapped, setSwapped] = useState(false)
 
-  // 🔴 [2026-08-12] 전면 카메라의 '영상 없음' 판정을 videoSeen.FRONT 에서 HLS 재생 상태로
-  //    바꾼다. 영상이 WebSocket 을 떠났으므로 `videoSeen.FRONT` 는 **영원히 false** 가 됐고,
-  //    그대로 두면 HLS 가 멀쩡히 재생되는 동안에도 "전면 카메라 영상 없음" 이 계속 떠 있다.
+  // 🔴 [2026-08-13] 전면 카메라를 HLS(6초) → WebRTC(WHEP, ~0.3초)로 전환.
+  //    영상이 WebSocket 을 떠난 뒤 `videoSeen.FRONT` 는 영원히 false 라 못 쓴다.
+  //    WHEP 재생 여부(camPlaying)가 곧 전면 카메라 생존 신호다.
+  //    videoRef 는 검출 박스 오버레이(DetectionOverlay)가 표시 영역·해상도를 읽는 데 공유한다.
   //    열화상은 여전히 WS 로 오므로 videoSeen.THERMAL 은 그대로 쓴다.
-  const [hlsHealth, setHlsHealth] = useState<HlsHealth>('loading')
-  // 검출 박스 오버레이가 이 <video> 의 표시 영역·해상도를 읽어 좌표를 환산한다.
-  const frontVideoRef = useRef<HTMLVideoElement | null>(null)
+  const { videoRef: frontVideoRef, playing: camPlaying } = useWhep(enabled)
 
-  const camDown = enabled && (
-    isDown(capOf(telemetry, CAP_KEYS.camera))
-    // 'stalled' 는 '없음'으로 치지 않는다 — 세그먼트 경계나 순단으로 흔히 뜨고, 그때마다
-    // 영상 위에 문구를 덮으면 깜빡인다. 재접속에 실패한 'error' 만 없음으로 본다.
-    || hlsHealth === 'error'
-  )
+  const camDown = enabled && !camPlaying
   const thermalDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.thermal)) || !videoSeen.THERMAL)
 
   useEffect(() => {
@@ -111,20 +105,22 @@ export default function CameraPage() {
             title={swapped ? '더블클릭하면 크게 봅니다' : undefined}
           >
             <div className={`vwrap${camDown ? ' down' : ''}`}>
-              {/* 🔴 라이브는 HLS <video>, 시뮬레이션은 종전 캔버스다.
+              {/* 🔴 라이브는 WebRTC <video>(WHEP), 시뮬레이션은 종전 캔버스다.
                   시뮬은 Simulation.drawRcam() 이 가짜 카메라를 그 캔버스에 그리므로 남겨야
-                  한다 — 라이브에서만 영상 경로가 HLS 로 바뀐 것이다. */}
+                  한다 — 라이브에서만 영상 경로가 WebRTC 로 바뀐 것이다. */}
               {enabled ? (
                 <>
-                  <HlsVideo
+                  <video
+                    ref={frontVideoRef}
                     className="camera-zoom-canvas"
-                    style={{ transform: `scale(${swapped ? 1 : zoom})` }}
-                    onHealth={setHlsHealth}
-                    videoRef={frontVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ transform: `scale(${swapped ? 1 : zoom})`, objectFit: 'cover', width: '100%', height: '100%' }}
                   />
-                  {/* 🔴 박스는 영상보다 약 6초 앞서 도착한다(WS 즉시 vs HLS 지연).
-                      DetectionOverlay 가 captureTs 로 시각을 맞춰 꺼낸다. */}
-                  <DetectionOverlay videoRef={frontVideoRef} />
+                  {/* 박스는 WS 로 즉시 온다. WebRTC 영상은 ~0.3초 지연이라 그만큼만 늦춰
+                      맞춘다(WEBRTC_LAG_S) — HLS 6초와 달리 사실상 실시간 정합이다. */}
+                  <DetectionOverlay videoRef={frontVideoRef} latency={WEBRTC_LAG_S} />
                 </>
               ) : (
                 <canvas

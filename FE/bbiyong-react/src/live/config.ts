@@ -27,6 +27,15 @@ export const HLS_URL = env.VITE_HLS_URL || 'https://i15e101.p.ssafy.io/hls/live.
 // 로봇이 프레임마다 captureTs(촬영 시각)를 실어 보내므로, 그것을 이 값만큼 늦춰서 꺼낸다.
 export const HLS_LAG_FALLBACK_S = Number(env.VITE_HLS_LAG_S ?? 6)
 
+// 🆕 [2026-08-13] 전면 카메라를 HLS(6초) → WebRTC(WHEP, ~0.3초)로 전환.
+// WebRTC 는 세그먼트 버퍼링이 없어 지연이 sub-second 다. 검출 박스도 그만큼만 늦춘다
+// (HLS_LAG_FALLBACK_S 6초를 그대로 쓰면 박스가 영상보다 6초 뒤처진다).
+export const WEBRTC_LAG_S = Number(env.VITE_WEBRTC_LAG_S ?? 0.3)
+
+// 실시간 영상(WebRTC/WHEP) mediamtx 경로. REST_BASE/webrtc/{WHEP_PATH}/whep 로 연결한다.
+// 현재 배포 경로명은 'robot2'. 서버 경로를 로봇ID로 개명하면 env(VITE_WHEP_PATH)로 맞춘다.
+export const WHEP_PATH = env.VITE_WHEP_PATH || 'robot2'
+
 // 현재 편성된 순찰 로봇 1대. 제어 payload의 robot_id / 영상 토픽 경로에 쓰인다.
 export const ROBOT_ID = env.VITE_ROBOT_ID || 'orinka_01'
 
