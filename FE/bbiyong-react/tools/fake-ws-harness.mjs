@@ -9,11 +9,25 @@
  *
  * 무엇을 흉내내나
  *   BE → FE 방향만. 즉 STOMP over WebSocket 서버로서 아래 목적지에 MESSAGE 를 밀어 넣는다.
- *     /topic/video/{robotId}   VIDEO_FRAME  (실제 720p JPEG 을 base64 로)
+ *     /topic/video/{robotId}   VIDEO_FRAME  channel:"THERMAL" (32x24 PNG)
  *     /topic/robots            TELEMETRY    (2Hz, status 를 사이클로 돌린다)
  *     /topic/alerts            EVENT_FIRE · EVENT_SYSTEM
  *   로봇 → BE 방향은 흉내내지 않는다. FE 가 소비하는 것은 **BE 가 재직렬화한 RobotPacket**
  *   이므로, 그 모양만 맞으면 된다.
+ *
+ * 🔴 [2026-08-12 계약 변경] FRONT 카메라는 WS 로 오지 않는다
+ *   로봇이 `ORINCAR_VIDEO_TRANSPORT=off` 로 전환했고 FRONT 는 HLS(nginx 정적)로 나간다
+ *   (적용 확인: `[bridge] transport=off`, Orin TX 12.3 → 8.2 Mbps).
+ *   그래서 **WS 로 오는 영상은 열화상 하나뿐**이다. FRONT 발행은 `--legacy-front` 뒤로
+ *   물려 뒀다 — 옛 동작을 재현해야 할 때만 쓴다. 기본으로 켜 두면 하네스가 계약과 다른
+ *   것을 가르치게 된다.
+ *
+ * 열화상에서 놓치기 쉬운 것 (레인 A 가 실물 샘플과 함께 알려준 것)
+ *   · `pixels` 는 온도가 아니라 **온도 × 10 의 int** 다
+ *   · 센서가 뒤집혀 달려 있어 로봇이 **180° 회전(_rotate_cw180)해서 보낸다**
+ *   · `ir.json` 에 **시각 필드가 없다** — `build_thermal` 은 신선도를 판정하지 않는다.
+ *     그래서 FE 는 **도착 간격으로만** 신선도를 알 수 있다. 로봇이 멈추면 화면은 조용히
+ *     옛 프레임을 유지한다 → `--stall-seconds` 로 그 상황을 만들어 시험할 수 있다.
  *
  * 왜 의존성이 없나
  *   `ws` 를 devDependency 로 넣으면 package-lock.json 이 크게 흔들린다. 개발 도구 하나 때문에
@@ -34,10 +48,14 @@
  * 인자
  *   --port N            (8099)   수신 포트
  *   --robot-id S        (orinka_01)
- *   --fps N             (5)      VIDEO_FRAME 송신률. 로봇의 현재 상한과 같은 값이 기본
- *   --frame PATH        (samples/frame_720p.jpg)  실제 로봇 프레임
+ *   --thermal PATH      (samples/thermal_sample.json)  열화상 실물 샘플
+ *   --thermal-hz N      (1)      열화상 송신률
+ *   --stall-seconds N   (0)      N초마다 열화상을 끊었다 재개한다(0=안 끊음). stale 판정 시험
  *   --stage-seconds N   (15)     status 를 다음 단계로 넘기는 간격
  *   --no-stage-cycle             status 를 AUTO_PATROL 로 고정
+ *   --legacy-front               🔴 FRONT 를 WS 로 보낸다(계약과 다름, 옛 동작 재현용)
+ *   --fps N             (5)      --legacy-front 일 때의 FRONT 송신률
+ *   --frame PATH        (samples/frame_720p.jpg)  --legacy-front 일 때의 FRONT 프레임
  */
 
 import { createServer } from 'node:http'
@@ -63,15 +81,57 @@ const PORT = Number(opt('port', 8099))
 const ROBOT_ID = opt('robot-id', 'orinka_01')
 const FPS = Number(opt('fps', 5))
 const FRAME_PATH = opt('frame', join(HERE, 'samples', 'frame_720p.jpg'))
+const THERMAL_PATH = opt('thermal', join(HERE, 'samples', 'thermal_sample.json'))
+const THERMAL_HZ = Number(opt('thermal-hz', 1))
 const STAGE_SECONDS = Number(opt('stage-seconds', 15))
 const STAGE_CYCLE = !flag('no-stage-cycle')
+const LEGACY_FRONT = flag('legacy-front')
+// 열화상을 주기적으로 끊는다 — ir.json 에 시각 필드가 없어 FE 는 도착 간격으로만 신선도를
+// 판정할 수 있다. 그 판정 로직을 시험할 수단이 없으면 "조용히 옛 프레임 유지"를 못 잡는다.
+const STALL_SECONDS = Number(opt('stall-seconds', 0))
 
 // ── 픽스처 ──────────────────────────────────────────────────────────────────
 // 실제 로봇에서 뜬 것이다. 합성 데이터로 바꾸지 말 것 — 크기와 dets 모양이 실제여야
 // 처리량·좌표 문제가 여기서 재현된다.
-const frameBytes = readFileSync(FRAME_PATH)
-const frameB64 = frameBytes.toString('base64')
 const cam = JSON.parse(readFileSync(join(HERE, 'samples', 'cam.json'), 'utf8'))
+
+// FRONT 픽스처는 --legacy-front 일 때만 읽는다. 계약상 더 이상 오지 않는 경로이므로
+// 기본 실행에서 이 파일에 의존하지 않는다.
+let frameB64 = null
+let frameBytes = null
+if (LEGACY_FRONT) {
+  frameBytes = readFileSync(FRAME_PATH)
+  frameB64 = frameBytes.toString('base64')
+}
+
+/**
+ * 열화상 실물 샘플. 레인 A 가 라이브 `cloud_bridge.build_thermal()` 을 그대로 호출해 뽑은
+ * 것이라 필드가 손대지지 않았다 — **합성으로 대체하지 말 것.** 합성으로는 온도 스케일
+ * (×10 int)·180° 회전·시각 필드 부재를 재현할 수 없다.
+ *
+ * 파일 모양을 세 가지로 받아 준다(샘플 파일의 최상위 구조를 확정하기 전이라 방어적으로 둔다):
+ *   [ {...}, {...} ]            프레임 배열
+ *   { frames: [ ... ] }         메타와 함께
+ *   { ...단일 프레임... }        한 장
+ * `contract` 같은 부가 필드는 무시한다.
+ */
+function loadThermalFrames(path) {
+  let raw
+  try {
+    raw = JSON.parse(readFileSync(path, 'utf8'))
+  } catch (err) {
+    return { frames: [], error: err.code === 'ENOENT' ? '파일 없음' : String(err.message) }
+  }
+  const frames = Array.isArray(raw) ? raw
+    : Array.isArray(raw?.frames) ? raw.frames
+      : (raw && typeof raw === 'object' && raw.data) ? [raw]
+        : []
+  const usable = frames.filter((f) => typeof f?.data === 'string' && f.data.length > 0)
+  if (!usable.length) return { frames: [], error: '프레임을 못 찾았다(data 필드가 있는 객체가 없다)' }
+  return { frames: usable, error: null, contract: raw?.contract }
+}
+
+const thermal = loadThermalFrames(THERMAL_PATH)
 
 // ── WebSocket 최소 구현 ─────────────────────────────────────────────────────
 /** 서버 → 클라이언트 텍스트 프레임. 마스킹하지 않는다(서버는 마스킹 금지). */
@@ -208,6 +268,22 @@ function buildVideoFrame() {
   }
 }
 
+let thermalIdx = 0
+let thermalSeq = 0
+let thermalMuted = false
+
+/**
+ * 열화상 프레임. 실물 샘플의 필드를 **그대로** 내보낸다 — 특히 `maxTemp` 는 캔버스 HUD 의
+ * `MAX xx.x°C` 에 직접 쓰이므로 하네스가 값을 만들어내면 안 된다.
+ *
+ * `seq` 만 덮어쓴다: 샘플 3장을 돌려 쓰면 seq 가 되돌아가는데 실제 로봇의 seq 는 단조
+ * 증가한다. 되돌아가는 seq 는 별도로 시험할 일이고 기본 동작에서 재현하면 안 된다.
+ */
+function buildThermalFrame() {
+  const src = thermal.frames[thermalIdx++ % thermal.frames.length]
+  return { ...src, robot_id: ROBOT_ID, seq: ++thermalSeq }
+}
+
 function buildTelemetry() {
   battery = Math.max(5, battery - 0.01)
   const t = Date.now() / 1000
@@ -299,7 +375,33 @@ http.on('upgrade', (req, socket) => {
 const log = (m) => console.log(`[harness ${new Date().toTimeString().slice(0, 8)}] ${m}`)
 
 // ── 송신 루프 ───────────────────────────────────────────────────────────────
-setInterval(() => publish(`/topic/video/${ROBOT_ID}`, buildVideoFrame()), Math.max(1000 / FPS, 1))
+// 🔴 FRONT 는 기본으로 보내지 않는다 — 계약상 WS 로 오지 않는다(HLS 로 이동).
+if (LEGACY_FRONT) {
+  log('⚠ --legacy-front: FRONT 를 WS 로 보낸다. 2026-08-12 계약과 다르다 — 옛 동작 재현용이다')
+  setInterval(() => publish(`/topic/video/${ROBOT_ID}`, buildVideoFrame()), Math.max(1000 / FPS, 1))
+}
+
+if (thermal.frames.length) {
+  setInterval(() => {
+    if (thermalMuted) return
+    publish(`/topic/video/${ROBOT_ID}`, buildThermalFrame())
+  }, Math.max(1000 / THERMAL_HZ, 1))
+  if (STALL_SECONDS > 0) {
+    setInterval(() => {
+      thermalMuted = !thermalMuted
+      log(thermalMuted
+        ? `열화상 송신 중단 ${STALL_SECONDS}초 — FE 의 stale 판정을 시험한다(화면이 조용히 옛 프레임을 유지하는지)`
+        : '열화상 송신 재개')
+    }, STALL_SECONDS * 1000)
+  }
+} else {
+  // 🔴 합성 데이터로 대체하지 않는다. 온도 스케일(×10 int)·180° 회전·시각 필드 부재를
+  //    합성으로는 재현할 수 없고, 틀린 것을 가르치는 하네스는 없는 것보다 나쁘다.
+  log(`🔴 열화상 샘플을 못 읽었다 (${THERMAL_PATH}) — ${thermal.error}`)
+  log('   열화상 발행을 건너뛴다. 지금 WS 로 오는 유일한 영상 경로가 이것이므로 샘플이 필요하다.')
+  log('   레인 A 에 요청: 라이브 cloud_bridge.build_thermal() 결과 3프레임을 JSON 으로.')
+}
+
 setInterval(() => publish('/topic/robots', buildTelemetry()), 500)
 
 if (STAGE_CYCLE) {
@@ -324,16 +426,36 @@ if (STAGE_CYCLE) {
 }
 
 // 30초마다 실제로 얼마를 밀어냈는지 남긴다 — 로봇의 [video:mjpeg] 로그와 같은 목적이다.
-let sentAtLastLog = 0
+let frontAtLastLog = 0
+let thermalAtLastLog = 0
 setInterval(() => {
-  const n = videoSeq - sentAtLastLog
-  sentAtLastLog = videoSeq
-  const mb = (n * Buffer.byteLength(frameB64) * 1.0) / 1024 / 1024
-  log(`최근 30초 ${n}프레임 × 구독자 (${(n / 30).toFixed(1)} fps) · 프레임당 ${(frameB64.length / 1024).toFixed(0)}KB(base64) · 약 ${(mb / 30 * 8).toFixed(1)} Mbps/구독자`)
+  const parts = []
+  if (LEGACY_FRONT) {
+    const n = videoSeq - frontAtLastLog
+    frontAtLastLog = videoSeq
+    const kb = frameB64 ? frameB64.length / 1024 : 0
+    parts.push(`FRONT ${n}장 (${(n / 30).toFixed(1)} fps · 장당 ${kb.toFixed(0)}KB · 약 ${(n * kb * 8 / 30 / 1024).toFixed(1)} Mbps/구독자)`)
+  }
+  if (thermal.frames.length) {
+    const n = thermalSeq - thermalAtLastLog
+    thermalAtLastLog = thermalSeq
+    parts.push(`THERMAL ${n}장 (${(n / 30).toFixed(1)} fps)${thermalMuted ? ' · 지금 중단 중' : ''}`)
+  }
+  if (parts.length) log(`최근 30초 — ${parts.join(' · ')}`)
 }, 30000)
 
 http.listen(PORT, () => {
   log(`듣는 중 — STOMP ws://localhost:${PORT}/ws/control`)
-  log(`프레임 ${FRAME_PATH} (${(frameBytes.length / 1024).toFixed(0)}KB raw → ${(frameB64.length / 1024).toFixed(0)}KB base64) · ${FPS}fps`)
+  if (thermal.frames.length) {
+    const f0 = thermal.frames[0]
+    log(`열화상 ${thermal.frames.length}장 · format=${f0.format} · maxTemp=${f0.maxTemp} · data ${f0.data.length}자 · ${THERMAL_HZ}Hz`)
+    if (thermal.contract) log(`샘플의 contract 메모: ${JSON.stringify(thermal.contract)}`)
+  }
+  if (LEGACY_FRONT) {
+    log(`FRONT(옛 경로) ${FRAME_PATH} — ${(frameBytes.length / 1024).toFixed(0)}KB raw → ${(frameB64.length / 1024).toFixed(0)}KB base64 · ${FPS}fps`)
+  } else {
+    log('FRONT 는 보내지 않는다 — HLS 로 이동했다(계약 2026-08-12). 옛 동작이 필요하면 --legacy-front')
+  }
+  if (STALL_SECONDS > 0) log(`열화상을 ${STALL_SECONDS}초마다 끊는다 — stale 판정 시험용`)
   log(`FE 를 이렇게 띄운다: VITE_WS_URL=ws://localhost:${PORT}/ws/control npm run dev`)
 })
