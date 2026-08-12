@@ -19,8 +19,10 @@ import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotCautionEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
 import com.bbiyong.server.wss.event.RobotSystemLogEvent;
+import com.bbiyong.server.video.event.EventClipRequestedEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -71,6 +73,7 @@ public class EventLogService {
     private final AlertBroadcastService alertBroadcastService;
     // 경보 좌표가 '어느 지도의 좌표인지' 기록하기 위해서만 쓴다(재매핑 잔상 제거).
     private final MapService mapService;
+    private final ApplicationEventPublisher eventPublisher;
     private final ConcurrentHashMap<String, Instant> recentRobotAlerts = new ConcurrentHashMap<>();
 
     // 로봇 연결/해제를 SYSTEM 이벤트로 남길지(기본 on). 로봇별 마지막 연결상태를 들고 상태
@@ -85,13 +88,15 @@ public class EventLogService {
             VideoClipRepository videoClipRepository,
             RobotWebSocketSessionManager sessionManager,
             AlertBroadcastService alertBroadcastService,
-            MapService mapService) {
+            MapService mapService,
+            ApplicationEventPublisher eventPublisher) {
         this.eventLogRepository = eventLogRepository;
         this.notificationDispatchService = notificationDispatchService;
         this.videoClipRepository = videoClipRepository;
         this.sessionManager = sessionManager;
         this.alertBroadcastService = alertBroadcastService;
         this.mapService = mapService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -390,6 +395,17 @@ public class EventLogService {
 
         // 이벤트 클립 연결을 위해 로봇에 생성된 eventId 를 회신한다(블랙박스 파이프라인). (S15P11E101-588)
         notifyRobotEventSaved(savedEvent);
+
+        // 서버 측 사건 클립 — HLS 세그먼트에서 잘라낸다(EventClipService).
+        // 🔴 위 EVENT_SAVED 회신과 **경로가 다르다.** 로봇 파이프라인은 h264 세그먼트를 입력으로
+        //    쓰는데 MJPEG 패스스루(2026-08-11) 이후 그 입력이 끊겨 있어 로봇은 올리지 못한다.
+        //    둘은 배타적이지 않다 — 로봇이 다시 올릴 수 있게 되면 같은 eventId 에 클립이 둘
+        //    붙고 관제는 목록으로 보여 준다(GET /api/events/{eventId}/video).
+        // 리스너는 예약만 하고 즉시 반환한다. 사건 **이후** 구간의 세그먼트가 아직 없으므로
+        // 실제 절단은 몇 초 뒤에 일어난다.
+        eventPublisher.publishEvent(new EventClipRequestedEvent(
+                this, savedEvent.getEventId(), savedEvent.getRobotId(),
+                savedEvent.getType(), savedEvent.getTimestamp()));
 
         // 저장이 끝난 동일 이벤트의 식별자를 STOMP에 실어 즉시 상세 조회할 수 있게 한다.
         alertBroadcastService.broadcast(alert.withEventId(savedEvent.getEventId()));

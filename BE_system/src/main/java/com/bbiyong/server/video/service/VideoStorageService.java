@@ -35,6 +35,15 @@ public class VideoStorageService {
     }
 
     /**
+     * 저장 루트. 서버가 <b>직접 만든</b> 파일(HLS 에서 잘라낸 사건 클립 등)을 여기에 써야
+     * {@link #load(String)} 가 같은 기준으로 찾을 수 있다. {@code store} 는 MultipartFile
+     * 만 받으므로 업로드가 아닌 경로에는 이 값이 필요하다.
+     */
+    public Path baseDir() {
+        return baseDir;
+    }
+
+    /**
      * 업로드 파일을 {@code baseDir/prefix/<uuid><ext>} 로 저장하고 baseDir 기준 상대 경로를 반환한다.
      *
      * @param prefix 하위 분류 디렉터리(예: robotId). null/blank 이면 루트에 저장.
