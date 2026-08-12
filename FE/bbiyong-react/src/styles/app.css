@@ -4502,3 +4502,79 @@ button.elog-card-title{ cursor:pointer; }
 .evd-modal .form-msg.ok{ background:var(--bb-ok-tint); color:var(--bb-ok-text); }
 .evd-modal .form-msg.err{ background:var(--bb-danger-tint); color:var(--bb-danger-text); }
 .evd-modal .cfg-help{ color:var(--bb-body); font-family:var(--bb-font); }
+
+/* ── 사용설명서(HelpGuide) — 안전감시 담당자(50대) 대상 큰 글씨·쉬운 안내(S15P11E101-911) ── */
+/* 상단 바의 '사용설명서' 버튼 — 눈에 잘 띄게 강조 테두리 */
+.nav-help-btn{
+  display:inline-flex; align-items:center; gap:7px; margin-right:12px;
+  padding:7px 14px; border-radius:999px; cursor:pointer;
+  background:rgba(76,86,149,.14); color:#cfd4ee; border:1px solid rgba(120,130,190,.5);
+  font:inherit; font-size:14.5px; font-weight:700; white-space:nowrap;
+}
+.nav-help-btn:hover{ background:rgba(76,86,149,.28); color:#fff; }
+.nav-help-btn svg{ flex:0 0 auto; }
+:root[data-theme="light"] .nav-help-btn{ color:#3f4880; background:rgba(76,86,149,.10); border-color:rgba(76,86,149,.35); }
+:root[data-theme="light"] .nav-help-btn:hover{ background:rgba(76,86,149,.18); color:#2c336a; }
+
+/* 모달 본문 — 넓고 높게. 화면이 작아도 스크롤로 다 보이게 */
+.modal.help-guide{ width:min(92vw, 860px); }
+.help-guide .modal-body{ padding:0; }
+.help-layout{ display:flex; min-height:0; max-height:72vh; }
+
+/* 왼쪽 목차 — 큰 버튼 */
+.help-nav{
+  flex:0 0 210px; display:flex; flex-direction:column; gap:6px;
+  padding:16px 12px; background:#F4F5FA; border-right:1px solid #E3E5EF;
+  border-bottom-left-radius:inherit;
+}
+.help-nav-btn{
+  display:flex; align-items:center; gap:11px; width:100%; text-align:left;
+  padding:13px 14px; border-radius:12px; border:1px solid transparent; cursor:pointer;
+  background:transparent; color:#3A4056; font:inherit; font-size:15.5px; font-weight:700;
+}
+.help-nav-btn:hover{ background:#E9EBF5; }
+.help-nav-btn.on{ background:#4C5695; color:#fff; }
+.help-nav-ico{ display:inline-flex; flex:0 0 auto; }
+
+/* 오른쪽 본문 — 큰 글씨, 넉넉한 줄간격 */
+.help-body{ flex:1 1 auto; min-width:0; overflow:auto; padding:22px 26px 26px; color:#2A2F3D; }
+.help-h{ font-size:22px; font-weight:800; color:#232733; margin:2px 0 14px; letter-spacing:-.3px; }
+.help-lead{ font-size:17px; line-height:1.75; margin:0 0 18px; color:#2A2F3D; }
+.help-lead b, .help-steps b, .help-tip b, .help-card b{ color:#3F4880; }
+
+/* 개요 카드 3개 */
+.help-cards{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin:6px 0 18px; }
+.help-card{ background:#F7F8FC; border:1px solid #E7E9F3; border-radius:14px; padding:15px 15px 13px; }
+.help-card-ico{ display:inline-flex; color:#4C5695; margin-bottom:8px; }
+.help-card-title{ display:block; font-size:16px; color:#232733; margin-bottom:5px; }
+.help-card p{ margin:0; font-size:15px; line-height:1.65; }
+
+/* 단계 목록 — 번호를 크게, 항목 간격 넉넉히 */
+.help-steps{ margin:0 0 16px; padding-left:0; list-style:none; counter-reset:help; }
+.help-steps > li{
+  position:relative; padding:4px 0 14px 44px; margin:0; font-size:16.5px; line-height:1.7;
+  counter-increment:help;
+}
+.help-steps > li::before{
+  content:counter(help); position:absolute; left:0; top:2px;
+  width:30px; height:30px; border-radius:50%; background:#4C5695; color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800;
+}
+.help-steps.help-steps-lg > li{ font-size:17.5px; }
+.help-steps ul{ margin:8px 0 0; padding-left:20px; }
+.help-steps ul li{ font-size:15.5px; line-height:1.6; margin:3px 0; }
+
+/* 안내(팁) 박스 */
+.help-tip{
+  font-size:15.5px; line-height:1.7; margin:6px 0 0; padding:13px 15px;
+  background:#EEF0FA; border-left:4px solid #4C5695; border-radius:8px; color:#333A4D;
+}
+.help-tip-warn{ background:#FBF1E9; border-left-color:#C9822A; }
+
+/* 좁은 화면 — 목차를 위로 접어 가로 스크롤 */
+@media (max-width:680px){
+  .help-layout{ flex-direction:column; max-height:78vh; }
+  .help-nav{ flex:0 0 auto; flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid #E3E5EF; }
+  .help-nav-btn{ white-space:nowrap; }
+  .help-cards{ grid-template-columns:1fr; }
+}

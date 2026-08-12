@@ -1,9 +1,15 @@
+import { useEffect, useState } from 'react'
 import { useSim } from '../SimContext.ts'
 import { useLive } from '../live/LiveContext.tsx'
 import type { Section } from '../live/contracts.d.ts'
 import { useAuth } from '../auth/AuthContext.tsx'
 import { roleText } from '../auth/roles.ts'
 import UserMenu from './auth/UserMenu.tsx'
+import HelpGuide from './HelpGuide.tsx'
+
+// 처음 접속한 사용자에게는 설명서를 한 번 자동으로 띄운다(S15P11E101-911) — 관제센터
+// 안전감시 담당자가 무엇을 보는 화면인지 바로 이해하도록. 이후에는 상단 버튼으로만 연다.
+const HELP_SEEN_KEY = 'bbiyong.help.seen'
 
 // 데이터 소스(시뮬/실서버)는 로그인 화면에서 선택한다.
 // 세션 중 전환은 토큰과 어긋날 수 있어(로그인한 모드가 JWT 보유 여부를 결정) 상단에서 제거했다.
@@ -20,6 +26,18 @@ export default function Nav({ section, onSection }: { section: Section,
   const { clock } = useSim()
   const { enabled } = useLive()
   const { user } = useAuth()
+  const [helpOpen, setHelpOpen] = useState(false)
+
+  // 첫 접속이면 설명서를 자동으로 한 번 연다. localStorage 에 표시가 없을 때만.
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(HELP_SEEN_KEY)) setHelpOpen(true)
+    } catch { /* localStorage 차단 환경 — 자동 노출만 생략한다 */ }
+  }, [])
+  const closeHelp = () => {
+    setHelpOpen(false)
+    try { localStorage.setItem(HELP_SEEN_KEY, '1') } catch { /* 무시 */ }
+  }
 
   // 지도, 카메라, 이벤트 세 화면을 제공한다.
   // (S15P11E101 콘솔 정리) 통계·운영 탭 삭제 — 매핑·순찰 경로는 지도 탭으로 이동했다.
@@ -50,9 +68,17 @@ export default function Nav({ section, onSection }: { section: Section,
         ))}
       </div>
       <div className="sp" />
+      {/* 사용설명서 — 눈에 잘 띄게 상단에 상시 배치(안전감시 담당자용). */}
+      <button type="button" className="nav-help-btn" onClick={() => setHelpOpen(true)} aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 013.9-2c1 .6 1.1 1.8.4 2.6-.6.7-1.8.9-1.8 2.1" /><path d="M12 17h.01" />
+        </svg>
+        사용설명서
+      </button>
       {user && <span className="navrole">{roleText(user.role)}</span>}
       <div className="clock mono">{clock}</div>
       <UserMenu />
+      {helpOpen && <HelpGuide onClose={closeHelp} />}
     </nav>
   )
 }
