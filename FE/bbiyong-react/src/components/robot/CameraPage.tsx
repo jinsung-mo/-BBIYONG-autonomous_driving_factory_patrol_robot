@@ -3,6 +3,8 @@ import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import ControlPanel from './ControlPanel.tsx'
+import HlsVideo from './HlsVideo.tsx'
+import type { HlsHealth } from './HlsVideo.tsx'
 
 const ZOOM_MIN = 1
 const ZOOM_MAX = 2.2
@@ -26,7 +28,18 @@ export default function CameraPage() {
   // 어느 판을 크게 볼지. 화재를 의심할 때는 열이 오르는 자리를 크게 봐야 한다.
   const [swapped, setSwapped] = useState(false)
 
-  const camDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.camera)) || !videoSeen.FRONT)
+  // 🔴 [2026-08-12] 전면 카메라의 '영상 없음' 판정을 videoSeen.FRONT 에서 HLS 재생 상태로
+  //    바꾼다. 영상이 WebSocket 을 떠났으므로 `videoSeen.FRONT` 는 **영원히 false** 가 됐고,
+  //    그대로 두면 HLS 가 멀쩡히 재생되는 동안에도 "전면 카메라 영상 없음" 이 계속 떠 있다.
+  //    열화상은 여전히 WS 로 오므로 videoSeen.THERMAL 은 그대로 쓴다.
+  const [hlsHealth, setHlsHealth] = useState<HlsHealth>('loading')
+
+  const camDown = enabled && (
+    isDown(capOf(telemetry, CAP_KEYS.camera))
+    // 'stalled' 는 '없음'으로 치지 않는다 — 세그먼트 경계나 순단으로 흔히 뜨고, 그때마다
+    // 영상 위에 문구를 덮으면 깜빡인다. 재접속에 실패한 'error' 만 없음으로 본다.
+    || hlsHealth === 'error'
+  )
   const thermalDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.thermal)) || !videoSeen.THERMAL)
 
   useEffect(() => {
@@ -95,11 +108,22 @@ export default function CameraPage() {
             title={swapped ? '더블클릭하면 크게 봅니다' : undefined}
           >
             <div className={`vwrap${camDown ? ' down' : ''}`}>
-              <canvas
-                ref={refs.rcam}
-                className="camera-zoom-canvas"
-                style={{ transform: `scale(${swapped ? 1 : zoom})` }}
-              />
+              {/* 🔴 라이브는 HLS <video>, 시뮬레이션은 종전 캔버스다.
+                  시뮬은 Simulation.drawRcam() 이 가짜 카메라를 그 캔버스에 그리므로 남겨야
+                  한다 — 라이브에서만 영상 경로가 HLS 로 바뀐 것이다. */}
+              {enabled ? (
+                <HlsVideo
+                  className="camera-zoom-canvas"
+                  style={{ transform: `scale(${swapped ? 1 : zoom})` }}
+                  onHealth={setHlsHealth}
+                />
+              ) : (
+                <canvas
+                  ref={refs.rcam}
+                  className="camera-zoom-canvas"
+                  style={{ transform: `scale(${swapped ? 1 : zoom})` }}
+                />
+              )}
               {/* HUD(MODE …)·REC 표시는 제거했다 [사용자 지침 2026-08-09] — 실제 녹화 상태가
                   아닌 장식이라 영상을 가렸다. */}
               {camDown && <span className="nodata">전면 카메라 영상 없음</span>}

@@ -10,6 +10,14 @@ const env = import.meta.env
 export const WS_URL = env.VITE_WS_URL || 'wss://i15e101.p.ssafy.io/ws/control'
 export const REST_BASE = env.VITE_REST_BASE_URL || 'https://i15e101.p.ssafy.io'
 
+// 전면 카메라 HLS. 2026-08-12 에 영상이 WebSocket 을 떠났다 —
+// Orin /video.mjpg → AWS ffmpeg → H.264/HLS → nginx 정적.
+// 확인됨: HTTP 200 · application/vnd.apple.mpegurl · CORS * · 인증 없음 ·
+//         세그먼트 2초(EXT-X-TARGETDURATION:2) · MEDIA-SEQUENCE 진행.
+// 🔴 인증이 없으므로 이 URL 은 링크를 아는 사람이면 볼 수 있다. 열화상·텔레메트리는
+//    여전히 JWT 로 보호되는 WS 를 타므로, 영상만 공개 수준이라는 점을 알고 있어야 한다.
+export const HLS_URL = env.VITE_HLS_URL || 'https://i15e101.p.ssafy.io/hls/live.m3u8'
+
 // 현재 편성된 순찰 로봇 1대. 제어 payload의 robot_id / 영상 토픽 경로에 쓰인다.
 export const ROBOT_ID = env.VITE_ROBOT_ID || 'orinka_01'
 
