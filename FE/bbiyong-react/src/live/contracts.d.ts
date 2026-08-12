@@ -100,8 +100,11 @@ export type Capabilities = Partial<Record<
  */
 // 🔴 ROUTE_SESSION_MISMATCH / NAV_FAILED 는 로봇이 실제로 보내는데 이 표에 없었다
 // (navigation_orchestrator.readiness). 특히 ROUTE_SESSION_MISMATCH 는 '순찰 시작'을 눌러야
-// 풀리는 사유라서, 그걸로 버튼을 잠그면 교착이다 — RoutePanel 의 SELF_CLEARING_BLOCK 참고
+// 풀리는 사유라서, 그걸로 버튼을 잠그면 교착이다 — RoutePanel 의 SELF_CLEARING_BLOCKS 참고
 // (S15P11E101-893).
+// 🔴 [2026-08-12] NO_ROUTE 도 같은 성질이다. 로봇에 경로가 없을 때 오는데, 핀 추가는 서버 DB
+// 에만 쓰이므로 화면에 지점이 있어도 이 사유가 유지된다 — /start 가 SET_PATROL_ROUTE 를 먼저
+// 보내 스스로 풀리므로 SELF_CLEARING_BLOCKS 에 함께 들어 있다.
 export type BlockedByReason =
   | 'MAP_SAVING' | 'MAPPING_ACTIVE' | 'NO_MAP' | 'LOCALIZATION_NOT_READY'
   | 'NAV_NOT_READY' | 'NO_ROUTE' | 'ESTOP'
