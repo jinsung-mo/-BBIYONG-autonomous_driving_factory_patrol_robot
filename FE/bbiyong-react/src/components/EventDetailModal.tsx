@@ -145,8 +145,6 @@ export default function EventDetailModal({
   const systemLog = isSystemLogType(detail?.type)
   const num = (v: any, unit: string, digits = 1) =>
     (typeof v === 'number' && Number.isFinite(v) ? `${v.toFixed(digits)}${unit}` : null)
-  const hasMeaningfulLocation = detail?.x != null && detail?.y != null
-    && (detail.x !== 0 || detail.y !== 0)
 
   return (
     <Modal title="이벤트 상세" onClose={onClose} width={620} className="modal-v3 evd-modal">
@@ -170,11 +168,11 @@ export default function EventDetailModal({
             <div>{clipTime(detail.timestamp)} · {displayName(detail.robotId) || '로봇 미상'}</div>
             {detail.message && <div>{withDisplayNames(detail.message)}</div>}
             <div className="mono">
+              {/* 좌표(x, y) m 표기는 제거했다(사용자 요청 2026-08-11) — 조작자에게 의미가 없다. */}
               {[
                 detail.equipmentId,
                 num(detail.temperature, '℃'),
                 detail.threshold != null ? `임계 ${num(detail.threshold, '℃')}` : null,
-                hasMeaningfulLocation ? `(${detail.x?.toFixed(2)}, ${detail.y?.toFixed(2)}) m` : null,
               ].filter(Boolean).join(' · ') || '추가 정보 없음'}
             </div>
           </div>
