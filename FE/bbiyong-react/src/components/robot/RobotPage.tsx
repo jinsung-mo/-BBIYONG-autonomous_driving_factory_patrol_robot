@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useSettings } from '../../settings/SettingsContext.tsx'
 import { useLive } from '../../live/LiveContext.tsx'
@@ -9,6 +9,7 @@ import ControlPanel from './ControlPanel.tsx'
 import MapPanel from './MapPanel.tsx'
 import CapBadge from './CapBadge.tsx'
 import HlsVideo from './HlsVideo.tsx'
+import DetectionOverlay from './DetectionOverlay.tsx'
 import type { HlsHealth } from './HlsVideo.tsx'
 
 // 순찰 로봇 관제 (다크 테마) — 단일 화면
@@ -33,6 +34,8 @@ export default function RobotPage() {
   // 🔴 [2026-08-12] CameraPage 와 같은 이유로 videoSeen.FRONT 를 쓰지 않는다 — 영상이
   //    WebSocket 을 떠나 그 값이 영원히 false 다. HLS 재생 상태로 판정한다.
   const [hlsHealth, setHlsHealth] = useState<HlsHealth>('loading')
+  // 검출 박스 오버레이가 이 <video> 의 표시 영역·해상도를 읽어 좌표를 환산한다.
+  const frontVideoRef = useRef<HTMLVideoElement | null>(null)
   const camDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.camera)) || hlsHealth === 'error')
   const thermalDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.thermal)) || !videoSeen.THERMAL)
 
@@ -52,7 +55,14 @@ export default function RobotPage() {
           </h3>
           <div className={`vwrap${camDown ? ' down' : ''}`}>
             {/* 라이브는 HLS, 시뮬레이션은 종전 캔버스(Simulation.drawRcam 이 그린다) */}
-            {enabled ? <HlsVideo onHealth={setHlsHealth} /> : <canvas ref={refs.rcam} />}
+            {enabled ? (
+              <>
+                <HlsVideo onHealth={setHlsHealth} videoRef={frontVideoRef} />
+                {/* 🔴 박스는 영상보다 약 6초 앞서 도착한다(WS 즉시 vs HLS 지연).
+                    DetectionOverlay 가 captureTs 로 시각을 맞춰 꺼낸다. */}
+                <DetectionOverlay videoRef={frontVideoRef} />
+              </>
+            ) : <canvas ref={refs.rcam} />}
             {/* HUD·REC 는 시뮬 화면의 장식이다. 라이브에서는 REC 가 실제 녹화 상태가 아니고
                 (녹화는 AWS 의 HLS 세그먼트 보관이다) HUD 도 시뮬 상태 문자열이라 내지 않는다. */}
             {!enabled && <span className="hud">{status.rcamHud}</span>}

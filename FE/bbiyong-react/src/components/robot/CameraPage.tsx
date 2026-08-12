@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useLive } from '../../live/LiveContext.tsx'
 import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
 import ControlPanel from './ControlPanel.tsx'
 import HlsVideo from './HlsVideo.tsx'
+import DetectionOverlay from './DetectionOverlay.tsx'
 import type { HlsHealth } from './HlsVideo.tsx'
 
 const ZOOM_MIN = 1
@@ -33,6 +34,8 @@ export default function CameraPage() {
   //    그대로 두면 HLS 가 멀쩡히 재생되는 동안에도 "전면 카메라 영상 없음" 이 계속 떠 있다.
   //    열화상은 여전히 WS 로 오므로 videoSeen.THERMAL 은 그대로 쓴다.
   const [hlsHealth, setHlsHealth] = useState<HlsHealth>('loading')
+  // 검출 박스 오버레이가 이 <video> 의 표시 영역·해상도를 읽어 좌표를 환산한다.
+  const frontVideoRef = useRef<HTMLVideoElement | null>(null)
 
   const camDown = enabled && (
     isDown(capOf(telemetry, CAP_KEYS.camera))
@@ -112,11 +115,17 @@ export default function CameraPage() {
                   시뮬은 Simulation.drawRcam() 이 가짜 카메라를 그 캔버스에 그리므로 남겨야
                   한다 — 라이브에서만 영상 경로가 HLS 로 바뀐 것이다. */}
               {enabled ? (
-                <HlsVideo
-                  className="camera-zoom-canvas"
-                  style={{ transform: `scale(${swapped ? 1 : zoom})` }}
-                  onHealth={setHlsHealth}
-                />
+                <>
+                  <HlsVideo
+                    className="camera-zoom-canvas"
+                    style={{ transform: `scale(${swapped ? 1 : zoom})` }}
+                    onHealth={setHlsHealth}
+                    videoRef={frontVideoRef}
+                  />
+                  {/* 🔴 박스는 영상보다 약 6초 앞서 도착한다(WS 즉시 vs HLS 지연).
+                      DetectionOverlay 가 captureTs 로 시각을 맞춰 꺼낸다. */}
+                  <DetectionOverlay videoRef={frontVideoRef} />
+                </>
               ) : (
                 <canvas
                   ref={refs.rcam}
