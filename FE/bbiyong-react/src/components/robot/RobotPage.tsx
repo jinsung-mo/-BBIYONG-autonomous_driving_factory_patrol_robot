@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSim } from '../../SimContext.ts'
 import { useSettings } from '../../settings/SettingsContext.tsx'
 import { useLive } from '../../live/LiveContext.tsx'
@@ -8,6 +8,8 @@ import StatusPanel from './StatusPanel.tsx'
 import ControlPanel from './ControlPanel.tsx'
 import MapPanel from './MapPanel.tsx'
 import CapBadge from './CapBadge.tsx'
+import HlsVideo from './HlsVideo.tsx'
+import type { HlsHealth } from './HlsVideo.tsx'
 
 // 순찰 로봇 관제 (다크 테마) — 단일 화면
 export default function RobotPage() {
@@ -28,7 +30,10 @@ export default function RobotPage() {
   // 그 패널을 흐리게 하고 안내를 덮는다. 캔버스에는 시뮬 화면이 남아 있어서,
   // 덮지 않으면 목업이 실데이터로 보인다 — 이번 작업의 핵심이다(S15P11E101-462).
   // 열화상은 로봇이 아예 생산하지 않아 항상 여기에 해당한다.
-  const camDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.camera)) || !videoSeen.FRONT)
+  // 🔴 [2026-08-12] CameraPage 와 같은 이유로 videoSeen.FRONT 를 쓰지 않는다 — 영상이
+  //    WebSocket 을 떠나 그 값이 영원히 false 다. HLS 재생 상태로 판정한다.
+  const [hlsHealth, setHlsHealth] = useState<HlsHealth>('loading')
+  const camDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.camera)) || hlsHealth === 'error')
   const thermalDown = enabled && (isDown(capOf(telemetry, CAP_KEYS.thermal)) || !videoSeen.THERMAL)
 
   return (
@@ -46,9 +51,12 @@ export default function RobotPage() {
             <CapBadge capKey={CAP_KEYS.camera} />
           </h3>
           <div className={`vwrap${camDown ? ' down' : ''}`}>
-            <canvas ref={refs.rcam} />
-            <span className="hud">{status.rcamHud}</span>
-            <span className="rec">● REC 00:00</span>
+            {/* 라이브는 HLS, 시뮬레이션은 종전 캔버스(Simulation.drawRcam 이 그린다) */}
+            {enabled ? <HlsVideo onHealth={setHlsHealth} /> : <canvas ref={refs.rcam} />}
+            {/* HUD·REC 는 시뮬 화면의 장식이다. 라이브에서는 REC 가 실제 녹화 상태가 아니고
+                (녹화는 AWS 의 HLS 세그먼트 보관이다) HUD 도 시뮬 상태 문자열이라 내지 않는다. */}
+            {!enabled && <span className="hud">{status.rcamHud}</span>}
+            {!enabled && <span className="rec">● REC 00:00</span>}
             {camDown && <span className="nodata">전면 카메라 영상 없음</span>}
           </div>
         </div>
