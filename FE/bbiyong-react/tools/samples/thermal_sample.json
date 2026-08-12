@@ -1,0 +1,65 @@
+{
+  "source": "live Orin cloud_bridge.build_thermal()",
+  "generatedAt": "2026-08-12T16:41:54+0900",
+  "contract": {
+    "grid": "MLX90640 32x24. ir.json 의 pixels 는 **온도(°C) x 10 의 int**",
+    "rotation": "_rotate_cw180 — 센서가 뒤집혀 달려 있어 180도 회전해서 보낸다",
+    "png": "_encode_thermal_png — 업스케일 없이 32x24 원본 크기 그대로",
+    "fe": "채널이 Uint8Array 가 아니면 {channel, format, data, maxTemp} 를 기대하고 `data:image/${format};base64,${data}` 로 그린다. maxTemp 는 캔버스 HUD 'MAX xx.x°C' 에 그대로 쓰인다.",
+    "freshness": "build_thermal 은 신선도를 판정하지 않는다. 호출부(thermal_sender)가 파일 mtime 으로 판단한다 — ir.json 에는 't' 필드가 없다."
+  },
+  "fields": [
+    "channel",
+    "data",
+    "format",
+    "maxTemp",
+    "robot_id",
+    "seq",
+    "source",
+    "type"
+  ],
+  "frames": [
+    {
+      "_capturedAtEpoch": 1786520511.639,
+      "_note": "실제 cloud_bridge.build_thermal() 출력. 필드를 하나도 안 고쳤다.",
+      "payload": {
+        "source": "robot",
+        "type": "VIDEO_FRAME",
+        "robot_id": "orinka_01",
+        "channel": "THERMAL",
+        "format": "png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAYCAIAAAAUMWhjAAACs0lEQVR4nF3VW67iMBAEUO8HIRBzNaAAAgGC/e9oKjlDKbr+sDp2P6vLnfF+vy+Xy/1+Px6P9tvtttvtrtfrcVmHw+HPss7n8zRNj8cjCqxer1f2nMcwQm5ZReG8rHyO+7Jydzqdsuduv9/TjsbPsnLFu1TiN3s07W4jP59P8bInj+hHc+Q0LujxK+vIOSFPy0o6Ms2uDicRchshnzlPgPglx3wo5O+y1BEhF9dlxXsUXMV1TuIuObHPit+WnsPIUPp8PvaRi+Cbj9yllOATpxHi18l2u82uBzFuGN4BkgzIvAOKPBJcAEVwmhhOIqfh7KH/XFbsBWiM4q555LnJ8RgX8bjZbPKdCuCePd4RKUJi3JZVvz3hHQtaYnY9H2Vh+7muMedaAiI26uA3cs71TGwsQNOEH3LhQifFuH5XSkRBbMZxvjQjn2UaZNLbWHkugz0uX74L1aTDC3DoJFjBcVimYna5NPcgiQfiPpDuSo5lbqWvIJEEEKmPNoaiNtcIcwBKp2VFT6+KBkzBmpL7Dng0XbTB28w5DD310QnT3pYPXMhLQdnr3UPLLaatubR+kv97UIaZGVLu/OoUg4lIUgFdx1TBYT4H4BEHnJoNXLiVsvelcKlUsMNZ7ro907TvYvqudYukhpSdboXO1AsLmp/MxAt3ZxZhWN9Fq/klSzMncIeVGMYwDzkHoIrnWRQW6UHzLe48tnDpY4hWC4zlyV3pRjKF+X8QjfVs8Ix5Wf+qyqXOfXX4KUGsacVvlD3VATVhYU2pEHfKK6j06N+ts0SVZbmCRudi8bX/Yldfhspaisz0wyd9mc0/HBMDLPrJBsQS1/+CTl5PpEJf5VQmlbnJ4RMWZ/d3bIEFRH0top3o/7I/6uyZKOXIMOhLOPNWvZjXh6Jp7Js4jiCot2ISyzWG/wAQCh0S2f3wBAAAAABJRU5ErkJggg==",
+        "seq": 1,
+        "maxTemp": 23.1
+      }
+    },
+    {
+      "_capturedAtEpoch": 1786520513.163,
+      "_note": "실제 cloud_bridge.build_thermal() 출력. 필드를 하나도 안 고쳤다.",
+      "payload": {
+        "source": "robot",
+        "type": "VIDEO_FRAME",
+        "robot_id": "orinka_01",
+        "channel": "THERMAL",
+        "format": "png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAYCAIAAAAUMWhjAAAC0UlEQVR4nF3VW04zSwxF4Z4QAkEEKBclSiJAwPzHc1b647eiUw8ld7XLt73tWvb7/eVyeX9/3263u93u8/Mz4e3trb1fLy8vHbYfDofz+dze58fHx35dyR22+/v9/Z3c+fF4PJ1OHbYvWXfaRxoJOXt6eiK8vr7mqQviSOd6vaafkEV302n3l+mUC9TfpftJKeVQ1G/rynomip2b3brO67qsi5y/jHa3k+QsJGfk6+vL+XK4W6xnKD25Z3qz2ShIF67ryhblMk7onD/Wu1INU0tOWJ6fn4uxna20E/rMUyY6eXx8BA+XqjSQtHOfnB2BppBpuS6ZUOh+S2qzLhcSHh4egDQIn9aVcoUGdXLn4wMM2byBXJWf16XQ/SZPThRK6LiuyUAF5CG+5Hah5Ft+N5DjTLYwMotoI5ztupgQ+D1bcoBgbCVPNshWWH8gYwskGVX0HCMoi8rafbyUseQQHUhY5OKtD2DLOf50B3o6jgMxwoCyMOWHu+TYJcsbTcGy+7fU9D4uFRAB05NBn0WqPk5Qlp2/DNIog9xMl+ph4fAx3B+ySujn5wcpVU/IZRDC0/wLJLEKvBpNRLCdPDTURCqmuT6xh1y//miKvzNPcOaeyz4J9xVQH9jKQCfN7BLrksSHEcSzOtixTeCgUxOln6oySq5EKtZa5lTJ0KaEdNPMJXlwM8SdmZE/41MGJiDLizqUnWD/B4bQQKrLIDE+9BpzMzlwBHEWYXJAD+yD7bATMAIfzCeOsUiuBhBdhgODLXmeKuVGQUkMl3BUHN2SDcCHeEtHzQnf6tDCh3n2dJNSqA9hJhqmzJs6wg1kT4eopwM9y4M8nZnSsBV7uznagsG8mmbBgjPup81ud4YJ8BhuqA9Zx2JOXe1dMUvgfANZpfzA93k0BucZR/dDafJoyXu476lwcaHHhEhn/gzCRaoz+vz9/b2frMP3mV3Fp8OF8h8ZGCuXoQ87LgAAAABJRU5ErkJggg==",
+        "seq": 2,
+        "maxTemp": 23.5
+      }
+    },
+    {
+      "_capturedAtEpoch": 1786520513.663,
+      "_note": "실제 cloud_bridge.build_thermal() 출력. 필드를 하나도 안 고쳤다.",
+      "payload": {
+        "source": "robot",
+        "type": "VIDEO_FRAME",
+        "robot_id": "orinka_01",
+        "channel": "THERMAL",
+        "format": "png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAYCAIAAAAUMWhjAAACsklEQVR4nF2V7YrCQAxF531kEapYWVsqbVHB93+fPTPHvQzmR0inyc3nZMq6rvf7/Xq9ns/neZ6naRrH8bcjzsdGy7LA0UT/8XjAseUQKw6nRsiYeLjvO7yg5ykCP263G9r64BMZQff80hL+fD6B27YNFHGRVUZGWd/v97vwDTRKp9PJSC+XCxoGhcGlEehoro0Mhb8GhIA+3JxQhpMivGaAZ5Xg/h6GwU8IWWP9AaGanPDNUmf6A5Qo1SHRgr2gcIGGRlaGtFQwdyxNF3tk7BGsPgogvl4vE7WSnNQSYW/3DPx4PIJrMxBMwkqKbpik7qEFSHtM1GFBKIb804gohDscDjYDjj9O8NTbO2982hLUUjqbrz/kYuygG7WtNvyMk2b2NkPBX9H5q0v+9jooIBfn2ngN0GmzDtY3DYR/3YBwzq0+tnCSgANVMLOfOkw1VfU2QGatMDfKXDpvdkgQ1VSoGXgVDRByYCArY69yH7dGVt8x5RfnqPVlNNDqAG3XgEmJ4tiY2fJP1FB7K5CeW3Hn1emKWnWgfyMNCnKamQ0hotW3LPM/qWPq6nhp6j1IggjuE2O3N5Ke+g0hiqnoDEEHmtjCuirskj6SsqOV6FyNpmxmtsFlZ/jOjFDOiGhFxNz1CMJlirKEHQ8dgG6fcnv7nShyMaPUUbfJJv5ym74uh54y3Ppw0j43WVyz83dfd9HTZE58RrIzVIvsvNhLt2fJCDs/edRyD4TIekmH4zUvWvaoHf7cA98AJ8/fgVZ2uYtrD7R03rNN87q5o8wV28+6tkppfUYt5U4qcJ6B/mbZsFyO+DDQktcqa130Pgk3hLORUPpm2G28ethv8hJotX1k8gpaH8csGYBCEvruF1yea5y5dOs29dSXPYOffZeFzF+eQ0uf0dwb2QYQgdNx1hfyH9R1I0uvbgpsAAAAAElFTkSuQmCC",
+        "seq": 3,
+        "maxTemp": 23.4
+      }
+    }
+  ]
+}

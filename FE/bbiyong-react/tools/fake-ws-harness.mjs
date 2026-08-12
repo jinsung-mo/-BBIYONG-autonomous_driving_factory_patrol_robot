@@ -109,11 +109,13 @@ if (LEGACY_FRONT) {
  * 것이라 필드가 손대지지 않았다 — **합성으로 대체하지 말 것.** 합성으로는 온도 스케일
  * (×10 int)·180° 회전·시각 필드 부재를 재현할 수 없다.
  *
- * 파일 모양을 세 가지로 받아 준다(샘플 파일의 최상위 구조를 확정하기 전이라 방어적으로 둔다):
- *   [ {...}, {...} ]            프레임 배열
- *   { frames: [ ... ] }         메타와 함께
- *   { ...단일 프레임... }        한 장
- * `contract` 같은 부가 필드는 무시한다.
+ * 실제 샘플의 구조는 이렇다 — 각 프레임이 **메타로 한 겹 감싸여 있다**:
+ *   { contract:{…}, fields:[…], frames:[ { _capturedAtEpoch, _note, payload:{…} }, … ] }
+ * 그래서 `payload` 를 벗겨내야 한다. 초안 로더는 `data` 를 최상위에서 찾다가 실물을 못 읽었다.
+ *
+ * 최상위·프레임 양쪽을 몇 가지 모양으로 받아 준다(샘플 형식이 또 바뀌어도 조용히 죽지 않게):
+ *   최상위: [ … ] · { frames:[ … ] } · { …단일… }
+ *   프레임: { payload:{ …data… } } · { …data… }
  */
 function loadThermalFrames(path) {
   let raw
@@ -122,13 +124,24 @@ function loadThermalFrames(path) {
   } catch (err) {
     return { frames: [], error: err.code === 'ENOENT' ? '파일 없음' : String(err.message) }
   }
-  const frames = Array.isArray(raw) ? raw
+  const list = Array.isArray(raw) ? raw
     : Array.isArray(raw?.frames) ? raw.frames
-      : (raw && typeof raw === 'object' && raw.data) ? [raw]
+      : (raw && typeof raw === 'object') ? [raw]
         : []
-  const usable = frames.filter((f) => typeof f?.data === 'string' && f.data.length > 0)
-  if (!usable.length) return { frames: [], error: '프레임을 못 찾았다(data 필드가 있는 객체가 없다)' }
-  return { frames: usable, error: null, contract: raw?.contract }
+  // 메타 껍데기를 벗긴다. 촬영 시각(_capturedAtEpoch)은 실제 간격을 보여주는 데만 쓴다.
+  const usable = []
+  const capturedAt = []
+  for (const item of list) {
+    const p = (item && typeof item.payload === 'object') ? item.payload : item
+    if (typeof p?.data === 'string' && p.data.length > 0) {
+      usable.push(p)
+      if (typeof item?._capturedAtEpoch === 'number') capturedAt.push(item._capturedAtEpoch)
+    }
+  }
+  if (!usable.length) {
+    return { frames: [], error: 'data 필드를 가진 프레임을 못 찾았다(payload 로 감싸인 구조인지 확인)' }
+  }
+  return { frames: usable, error: null, contract: raw?.contract, capturedAt }
 }
 
 const thermal = loadThermalFrames(THERMAL_PATH)
@@ -448,8 +461,20 @@ http.listen(PORT, () => {
   log(`듣는 중 — STOMP ws://localhost:${PORT}/ws/control`)
   if (thermal.frames.length) {
     const f0 = thermal.frames[0]
-    log(`열화상 ${thermal.frames.length}장 · format=${f0.format} · maxTemp=${f0.maxTemp} · data ${f0.data.length}자 · ${THERMAL_HZ}Hz`)
-    if (thermal.contract) log(`샘플의 contract 메모: ${JSON.stringify(thermal.contract)}`)
+    const temps = thermal.frames.map((f) => f.maxTemp).join(', ')
+    log(`열화상 ${thermal.frames.length}장 · format=${f0.format} · data ${f0.data.length}자 · ${THERMAL_HZ}Hz`)
+    log(`  maxTemp: ${temps} — 캔버스 HUD 'MAX xx.x°C' 에 그대로 쓰인다`)
+    // 실제 촬영 간격을 보여 준다. 균일하지 않다(실측 1.52s · 0.50s) — FE 가 균일 도착을
+    // 가정하면 안 된다는 증거다. 하네스는 기본으로 --thermal-hz 로 균일하게 보낸다.
+    if (thermal.capturedAt?.length > 1) {
+      const gaps = thermal.capturedAt.slice(1).map((t, i) => (t - thermal.capturedAt[i]).toFixed(2))
+      log(`  실제 촬영 간격: ${gaps.join('s, ')}s (균일하지 않다)`)
+    }
+    // 🔴 이 샘플은 회전 정리 **전에** 뜬 것이다 — 로봇의 _rotate_cw180 이 아직 들어 있다.
+    //    FE 의 THERMAL_ROT_DEG=90 과 합쳐 화면에서는 270° 가 된다. 레인 A 가 로봇 쪽 회전을
+    //    0 으로 내리면(합의 2026-08-12) 그때부터 FE 90° 만 남는다. 방향이 이상해 보이면
+    //    하네스가 아니라 이 시차 때문이다.
+    log('  ⚠ 이 샘플은 로봇 회전 정리 전(_rotate_cw180 포함) — FE 90° 와 합쳐 270° 로 보인다')
   }
   if (LEGACY_FRONT) {
     log(`FRONT(옛 경로) ${FRAME_PATH} — ${(frameBytes.length / 1024).toFixed(0)}KB raw → ${(frameB64.length / 1024).toFixed(0)}KB base64 · ${FPS}fps`)
