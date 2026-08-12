@@ -8,6 +8,10 @@ services:
       - "127.0.0.1:8081:8080"
     volumes:
       - /opt/bbiyong/data:/app/data
+      # 사건 클립의 재료. orincar-hls.service 의 ffmpeg 이 2초 세그먼트를 여기에 쌓고
+      # orincar-hls-prune.timer 가 15분 롤링으로 유지한다(delete_segments 를 쓰지 않는다).
+      # 🔴 **읽기 전용이다.** 서버는 자를 뿐이고, 라이브 송출 파일을 건드려서는 안 된다.
+      - /var/www/hls:/hls:ro
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/bbiyong
       - SPRING_DATASOURCE_USERNAME=user
@@ -16,6 +20,11 @@ services:
       - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQLDialect
       # MySQL 은 동시 커넥션을 지원하므로 풀을 확장(SQLite 기본 1 대신)
       - DB_POOL_SIZE=10
+      # 🔴 영상 저장 경로를 **바인드 마운트 안으로** 옮긴다. 기본값(video-store)은 컨테이너
+      #    내부 경로라 컨테이너를 다시 만들면 클립이 전부 사라진다 — DB 에는 video_clips 행이
+      #    남고 파일만 없어져 관제에서 재생만 실패하는, 가장 알아채기 어려운 형태가 된다.
+      #    (지금까지 클립이 하나도 없어 실제 손실은 없었다.)
+      - BBIYONG_VIDEO_STORAGE_DIR=/app/data/video-store
       - BBIYONG_MAIL_USERNAME=${BBIYONG_MAIL_USERNAME:?BBIYONG_MAIL_USERNAME is required}
       - BBIYONG_MAIL_PASSWORD=${BBIYONG_MAIL_PASSWORD:?BBIYONG_MAIL_PASSWORD is required}
       # 필수 시크릿(fail-fast): 미설정 시 compose 기동 자체가 실패한다. (S15P11E101-715)
