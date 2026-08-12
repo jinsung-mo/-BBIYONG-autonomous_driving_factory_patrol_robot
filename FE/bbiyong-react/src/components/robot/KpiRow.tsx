@@ -60,6 +60,33 @@ function Kpi({ value, unit, label, tone = 'none', note, gauge }: {
   )
 }
 
+// 로봇 단계 — 타일에 들어갈 짧은 라벨과 스크린리더용 전체 문장.
+//
+// 왜 필요한가: 여태 이 KPI 는 'ON' / 'OFF' 두 값뿐이었다. 그래서 부팅 중·매핑 중·지도
+// 저장 중·위치추정 전환 중·순찰 중이 **전부 'ON' 하나로 뭉개졌고**, 브리지가 아직 안 뜬
+// 부팅 구간은 'OFF'(연결 끊김)로만 보였다. 무인 사이클에서 조작자는 "멈춘 것"과 "진행
+// 중인 것"을 구별할 수 없었다. (재설계 노트 §08 '관제에서 안 보이는 것')
+//
+// 값 집합은 docs/계약_2026-08-12_관제_프로토콜_확장제안.md 항목 1 과 같다. 🔴 로봇이 아직
+// MAPPING·AUTO_PATROL 외에는 보내지 않으므로 나머지는 당장 나타나지 않는다 — **받는 쪽을
+// 먼저 만들어 두는 것이 의도다.** 로봇이 붙는 순간 화면이 따라온다.
+//
+// 짧은 라벨을 쓰는 이유: 이 자리는 큰 숫자용 슬롯이라 '위치추정 전환 중' 같은 문장이 들어가면
+// 줄바꿈으로 타일이 깨진다. 전체 문장은 note(sr-only)로 보낸다.
+const STAGE: Record<string, { short: string, full: string, tone: Tone }> = {
+  BOOT: { short: '부팅', full: '부팅 중 — 클럭·전력·장치를 준비하고 있다', tone: 'warn' },
+  READY: { short: '준비', full: '노드·TF·토픽 준비 완료. 지시를 기다린다', tone: 'ok' },
+  MAPPING: { short: '매핑', full: '지도를 작성하고 있다', tone: 'ok' },
+  SAVING: { short: '저장', full: '지도를 저장하고 있다', tone: 'ok' },
+  LOCALIZING: { short: '위치추정', full: '위치추정으로 전환 중 — 초기위치를 주입하고 있다', tone: 'warn' },
+  AUTO_PATROL: { short: '순찰', full: '자율 순찰 중', tone: 'ok' },
+  APPROACH: { short: '접근', full: '화재 후보 지점으로 접근하고 있다', tone: 'warn' },
+  VERIFY: { short: '확인', full: '근접 확인 중 — 열화상으로 교차검증하고 있다', tone: 'warn' },
+  EVENT: { short: '이벤트', full: '이벤트 처리 중 — 클립을 기록·업로드하고 있다', tone: 'warn' },
+  DEGRADED: { short: '중단', full: '자동 진행이 멈췄다 — 관제 확인이 필요하다', tone: 'bad' },
+  MANUAL_CONTROL: { short: '수동', full: '수동 조작 중', tone: 'warn' },
+}
+
 export default function KpiRow() {
   const { status } = useSim()
   const { enabled, connected, telemetry } = useLive()
@@ -93,8 +120,29 @@ export default function KpiRow() {
   const alarmValue = enabled ? todayCount : simAlarms
   const alarmTone: Tone = alarmValue == null ? 'none' : alarmValue > 0 ? 'bad' : 'none'
 
-  const robotOnline = enabled ? (connected && telemetry?.status !== 'OFFLINE') : true
-  const robotTone: Tone = robotOnline ? 'ok' : 'bad'
+  // 로봇 단계. 표시 규칙 네 가지 —
+  //  · 연결 안 됨            → 'OFF'
+  //  · 연결됐지만 status 미수신 → '연결'. 🔴 'ON' 이라고 쓰면 "정상 운행 중"으로 읽힌다.
+  //                              브리지만 붙고 스택은 아직인 구간이 실제로 존재한다
+  //  · 아는 단계             → 짧은 라벨
+  //  · 모르는 단계           → **원문 그대로**. 로봇이 표에 없는 값을 추가해도 화면이 깨지지
+  //                              않는다(readiness.blockedBy 가 쓰는 것과 같은 방식이다)
+  const rawStatus = enabled ? String(telemetry?.status || '') : ''
+  const robotOnline = enabled ? (connected && rawStatus !== 'OFFLINE') : true
+  const stage = STAGE[rawStatus]
+  const stageValue = !robotOnline ? 'OFF'
+    : stage ? stage.short
+      : rawStatus ? rawStatus
+        : (enabled ? '연결' : 'ON')
+  const stageNote = !robotOnline ? '로봇과 연결되지 않았다'
+    : stage ? stage.full
+      : rawStatus ? `알 수 없는 단계: ${rawStatus}`
+        : (enabled ? '연결됨 — 아직 단계 정보를 받지 못했다' : '시뮬레이션 동작 중')
+  // 시뮬레이션은 종전대로 ok 를 유지한다(단계 값이 없으므로 표에서 못 찾는다).
+  // 라이브에서 모르는 단계는 중립으로 둔다 — 모르는 것을 정상이라고 칠하지 않는다.
+  const robotTone: Tone = !robotOnline ? 'bad'
+    : stage ? stage.tone
+      : (enabled ? 'none' : 'ok')
 
   return (
     <div className="kpis">
@@ -114,9 +162,11 @@ export default function KpiRow() {
         value={alarmValue == null ? '—' : String(alarmValue)} unit={alarmValue == null ? undefined : '건'}
         label="경보 이벤트 (오늘)" tone={alarmTone}
       />
+      {/* 단계를 보여 준다 — 종전에는 ON/OFF 뿐이라 부팅·매핑·저장·순찰이 모두 'ON' 이었다.
+          전체 문장은 note(sr-only)로 보낸다: 타일은 큰 숫자용 슬롯이라 긴 문장이 들어가면 깨진다. */}
       <Kpi
-        value={robotOnline ? 'ON' : 'OFF'}
-        label="로봇 상태" tone={robotTone}
+        value={stageValue}
+        label="로봇 상태" tone={robotTone} note={stageNote}
       />
     </div>
   )
