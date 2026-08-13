@@ -281,24 +281,18 @@ public final class FloorPlanRenderer {
             if (Math.abs(contourArea(c)) < obstacleMinArea) {
                 continue;
             }
-            // 장애물은 '덩어리'다(S15P11E101). SLAM 은 로봇이 본 표면만 occupied 로 찍고
-            // 가려진 뒷면·내부는 unknown 이라, 윤곽이 열린 호(C자)로 남아 이전의 approxPolyDP+
-            // 직각스냅 채움은 속이 빈 프레임이 됐다. 최소회전사각(minAreaRect)으로 점들의 전체
-            // 범위를 감싸면 윤곽이 열려 있어도 항상 솔리드 사각형으로 채워진다.
-            RotatedRect box = minAreaRect(c);
-            Point2f corners = new Point2f(4);
-            box.points(corners);
-            Mat quad = new Mat(4, 1, CV_32SC2);
-            IntRawIndexer qi = quad.createIndexer();
-            for (int k = 0; k < 4; k++) {
-                Point2f p = corners.position(k);
-                qi.put(k, 0, 0, Math.round(p.x()));
-                qi.put(k, 0, 1, Math.round(p.y()));
-            }
-            qi.release();
-            drawContours(obstOut, new MatVector(quad), -1, new Scalar(255), -1, 8, new Mat(), Integer.MAX_VALUE, null);
-            corners.close();
-            quad.release();
+            // 관측된 윤곽을 그대로 솔리드로 채운다(approxPolyDP 로 톱니만 다듬음).
+            // findContours(RETR_EXTERNAL) 는 외곽 폐곡선을 주므로, drawContours(-1) 채움은
+            // 얇은 셸이라도 그 안쪽까지 솔리드로 메운다.
+            //
+            // 종전에는 minAreaRect 로 점 전체를 감싸 '항상 직사각형'으로 채웠다. 뒷면 미관측으로
+            // 뻥 뚫린 셸을 솔리드로 만드는 이점은 있었으나, L자(ㄴ)처럼 오목한 장애물의 패인
+            // 부분까지 직사각형이 덮어 형상을 뭉갰다(S15P11E101). 실제 맵은 로봇이 장애물 주위를
+            // 돌며 여러 면을 스캔해 셸이 충분히 닫히므로, 형상 보존(윤곽 채움)이 실데이터에 맞다.
+            Mat obstApprox = new Mat();
+            approxPolyDP(c, obstApprox, polyEpsilon, true);
+            drawContours(obstOut, new MatVector(obstApprox), -1, new Scalar(255), -1, 8, new Mat(), Integer.MAX_VALUE, null);
+            obstApprox.release();
         }
         inner.release();
         obst.release();
