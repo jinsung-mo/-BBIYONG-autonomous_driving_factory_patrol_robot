@@ -19,6 +19,9 @@ const SRC = {
 
 export type VoiceName = keyof typeof SRC
 
+// 안내·경보 음량(0~1). 기본 0.5 = 최대 대비 절반. env(VITE_VOICE_VOLUME)로 조절.
+const VOLUME = Math.min(1, Math.max(0, Number(import.meta.env.VITE_VOICE_VOLUME ?? 0.5)))
+
 // 클립마다 Audio 하나를 재사용한다 — 새로 만들면 디코드가 반복돼 시작이 늦다.
 const cache = new Map<VoiceName, HTMLAudioElement>()
 function el(name: VoiceName): HTMLAudioElement {
@@ -28,6 +31,8 @@ function el(name: VoiceName): HTMLAudioElement {
     a.preload = 'auto'
     cache.set(name, a)
   }
+  // 재사용 요소라도 매번 맞춰 둔다 — 외부에서 바뀌었더라도 일관 음량 유지.
+  a.volume = VOLUME
   return a
 }
 
