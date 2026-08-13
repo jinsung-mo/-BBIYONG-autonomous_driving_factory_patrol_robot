@@ -101,6 +101,7 @@ public class EventLogService {
 
     /**
      * 경보(이벤트) 상태 전이(UNRESOLVED | ACKNOWLEDGED | RESOLVED). 관제사가 경보 확인/처리완료를 표시한다.
+     * 상태 변경 시 /topic/events/status 로 실시간 브로드캐스트하여 모든 관제 클라이언트에 즉시 반영된다.
      *
      * @throws ResponseStatusException 허용되지 않은 status(400) 또는 미존재 이벤트(404)
      */
@@ -114,7 +115,12 @@ public class EventLogService {
         EventLog event = eventLogRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."));
         event.setStatus(normalized);
-        return eventLogRepository.save(event);
+        EventLog savedEvent = eventLogRepository.save(event);
+
+        // 상태 변경을 실시간으로 브로드캐스트 (모든 관제 클라이언트에 즉시 반영)
+        alertBroadcastService.broadcastStatusChange(eventId, normalized);
+
+        return savedEvent;
     }
 
     /**
