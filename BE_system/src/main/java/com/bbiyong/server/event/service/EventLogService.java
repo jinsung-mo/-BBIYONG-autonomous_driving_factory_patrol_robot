@@ -52,7 +52,7 @@ public class EventLogService {
 
     // ACKNOWLEDGED(확인됨·조치 진행 중) 포함 — API 문서와 일치. (S15P11E101-715)
     private static final Set<String> ALLOWED_STATUS = Set.of("UNRESOLVED", "ACKNOWLEDGED", "RESOLVED");
-    private static final Duration ALERT_DEDUP_WINDOW = Duration.ofMinutes(1);
+    private static final Duration ALERT_DEDUP_WINDOW = Duration.ofMinutes(10);
 
     /**
      * 로봇이 올릴 수 있는 조용한 시스템 로그 코드. 이 값이 그대로 이벤트의 {@code type} 이
@@ -481,7 +481,7 @@ public class EventLogService {
      * 만료된 dedup 엔트리를 주기적으로 제거한다. 제거 로직이 없으면 임의 robot_id 로
      * 경보를 주입하는 공격/오동작 시 맵이 무한히 자라는 메모리 릭이 된다. (S15P11E101-715)
      */
-    @Scheduled(fixedDelay = 60_000)
+    @Scheduled(fixedDelay = 300_000)  // 5분마다 실행 (ALERT_DEDUP_WINDOW가 10분이므로)
     void sweepExpiredDeduplicationEntries() {
         Instant cutoff = Instant.now().minus(ALERT_DEDUP_WINDOW);
         recentRobotAlerts.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
