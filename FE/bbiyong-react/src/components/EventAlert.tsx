@@ -86,7 +86,7 @@ function LiveAlerts() {
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(() => new Set())
   // 매 렌더마다 새 배열이 되면 경보음 타이머 동기화 effect가 불필요하게 재실행된다
   const items = useMemo(() => alerts
-    .filter((a: any) => !dismissedAlertIds.has(a._id) && a.type !== 'SYSTEM')
+    .filter((a: any) => !dismissedAlertIds.has(a._id) && a.type !== 'SYSTEM' && a.status !== 'RESOLVED')
     .map((a: any) => ({ id: a._id, ...alertToToast(a) })), [alerts, dismissedAlertIds])
 
   // 화재 경보가 오면 미확인 상태로 올린다. 같은 경보를 두 번 올리지 않는 판단은

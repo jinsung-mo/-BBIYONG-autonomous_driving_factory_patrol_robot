@@ -286,6 +286,21 @@ export function LiveProvider({ children }: any) {
       setAlerts((prev) => [...prev, { ...msg, _id: ++alertUid }])
     })
 
+    // 🆕 [2026-08-13] 이벤트 상태 변경 (S15P11E101-event-resolution).
+    // PATCH /api/events/{eventId} 로 상태가 바뀌면 /topic/events/status 로 브로드캐스트된다.
+    // 모든 관제 클라이언트가 즉시 동기화되어 해결된 이벤트의 핑이 사라진다.
+    const offEventStatus = subscribe('/topic/events/status', (msg: any) => {
+      if (!msg?.eventId) return
+      const { eventId, status } = msg
+
+      // alerts 상태에서 eventId 가 일치하는 항목의 status 를 갱신한다.
+      // RESOLVED 된 이벤트는 목록에서 제거할 수도 있지만, 일단 상태만 업데이트해서
+      // 컴포넌트 단에서 필터링할 수 있게 둔다.
+      setAlerts((prev) => prev.map((alert: any) =>
+        alert.eventId === eventId ? { ...alert, status } : alert
+      ))
+    })
+
     // 매핑 토픽(S15P11E101-482 · 510 · 524). 두 종류가 온다 —
     //   EVENT_MAPPING_COMPLETE : 로봇 원문 relay (매핑이 끝났다)
     //   FLOORPLAN_READY        : 서버가 정제 도면을 만들어 활성화했다
@@ -492,7 +507,7 @@ export function LiveProvider({ children }: any) {
 
     return () => {
       clearInterval(flush)
-      offRobots(); offAlerts(); offMapping(); offVideo(); offDet(); offNav()
+      offRobots(); offAlerts(); offEventStatus(); offMapping(); offVideo(); offDet(); offNav()
       offOwnership(); offDenied(); offState()
       disconnect()
     }

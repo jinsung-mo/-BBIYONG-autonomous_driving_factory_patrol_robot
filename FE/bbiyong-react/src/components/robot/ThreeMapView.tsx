@@ -422,6 +422,8 @@ export default function ThreeMapView({ zoomFactor = 1, points = [], follow = fal
     for (const a of alerts as any[]) {
       if (a?.type !== 'FIRE' && a?.type !== 'OVERHEAT') continue
       if (!onCurrentMap(a, plan)) continue        // 재매핑 전에 들어와 메모리에 남은 경보
+      // 🆕 [2026-08-13] RESOLVED된 이벤트는 핑에서 제거 (S15P11E101-event-resolution).
+      if (a?.status === 'RESOLVED') continue
       const eid = Number(a.eventId)
       if (Number.isFinite(eid) && serverEventIds.has(eid)) continue   // 서버에 이미 반영됨
       const pos = toScene(a, a._id)
