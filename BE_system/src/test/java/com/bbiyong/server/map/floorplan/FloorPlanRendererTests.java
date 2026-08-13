@@ -92,12 +92,13 @@ class FloorPlanRendererTests {
     }
 
     /**
-     * 열린 윤곽(C자) 장애물을 솔리드로 채운다(S15P11E101).
-     * SLAM 은 로봇이 본 표면만 occupied 로 찍어 장애물 뒷면이 열린 채 들어온다. 이전에는
-     * 그 열린 윤곽을 그대로 채워 속이 빈 프레임이 됐다 — minAreaRect 로 감싸 솔리드가 돼야 한다.
+     * 오목한 장애물(L자·ㄴ)의 형상을 보존한다 — 패인 부분을 직사각형으로 덮지 않는다. (S15P11E101)
+     * SLAM 은 로봇이 본 표면만 occupied 로 찍지만, 장애물 주위를 돌며 스캔하면 셸이 닫혀 실제
+     * 형상이 들어온다. 종전 minAreaRect 강제 채움은 L 의 오목부까지 사각형으로 뭉갰다 — 이제
+     * 관측 윤곽을 그대로 채워 팔(arm)은 솔리드로, 오목 노치는 배경으로 남긴다.
      */
     @Test
-    void fillsHollowObstacleAsSolid() {
+    void preservesConcaveLShapedObstacle() {
         int w = 60, h = 40;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < h; y++) {
@@ -109,18 +110,24 @@ class FloorPlanRendererTests {
         for (int x = 8; x <= 52; x++) for (int y : new int[]{6, 7, 33, 34}) img.setRGB(x, y, WALL);
         for (int y = 6; y <= 34; y++) for (int x : new int[]{8, 9, 51, 52}) img.setRGB(x, y, WALL);
 
-        // 장애물을 'C자'(오른쪽 열림)로만 찍는다 — 앞면(위/아래/왼쪽)만 스캔되고 뒷면은 미탐색.
-        for (int x = 24; x <= 34; x++) { img.setRGB(x, 14, WALL); img.setRGB(x, 15, WALL); img.setRGB(x, 25, WALL); img.setRGB(x, 26, WALL); }
-        for (int y = 14; y <= 26; y++) { img.setRGB(24, y, WALL); img.setRGB(25, y, WALL); }
-        // 오른쪽(x=33,34 열) 및 내부는 채우지 않는다 → 열린 윤곽 + 빈 속
+        // L자(ㄴ): 왼쪽 세로 팔 + 아래 가로 팔. 오른쪽 위(노치)는 free 로 남긴다.
+        for (int y = 14; y <= 26; y++) for (int x = 24; x <= 28; x++) img.setRGB(x, y, WALL); // 세로 팔
+        for (int y = 22; y <= 26; y++) for (int x = 24; x <= 38; x++) img.setRGB(x, y, WALL); // 가로 팔
 
         FloorPlanRenderer.Result r = new FloorPlanRenderer().renderPlan(img);
         BufferedImage out = r.image();
         double[] t = r.rawToOut();
 
-        // 장애물 내부 중심 — 윤곽이 열려 있어도 솔리드로 채워져 중회색이어야 한다.
-        int[] center = toOut(t, 29, 20);
-        assertThat(isObstacleGray(out, center[0], center[1])).isTrue();
+        // 세로 팔·가로 팔 내부는 솔리드로 채워져 중회색
+        int[] vArm = toOut(t, 26, 20);
+        assertThat(isObstacleGray(out, vArm[0], vArm[1])).isTrue();
+        int[] hArm = toOut(t, 34, 24);
+        assertThat(isObstacleGray(out, hArm[0], hArm[1])).isTrue();
+
+        // 🔴 오목 노치(오른쪽 위)는 장애물이 아니어야 한다 — minAreaRect 였다면 여기까지 사각형이
+        //    덮었다. 형상 보존이 되면 배경(중회색 아님)으로 남는다.
+        int[] notch = toOut(t, 34, 17);
+        assertThat(isObstacleGray(out, notch[0], notch[1])).isFalse();
     }
 
     @Test
