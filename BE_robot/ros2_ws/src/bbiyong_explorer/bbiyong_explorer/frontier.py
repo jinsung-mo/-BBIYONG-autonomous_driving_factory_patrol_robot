@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import atan2, ceil, cos, hypot, pi, sin
 from typing import Iterable, Sequence
 
@@ -157,58 +157,16 @@ def detect_frontier_clusters(
     """Find frontiers and put each goal safely back inside known free space."""
     reachable = reachable_free_cells(grid, robot_cell, free_threshold)
     clearance_cells = max(0, ceil(min_obstacle_clearance_m / grid.resolution))
+    clearance_offsets = tuple(
+        (offset_x, offset_y)
+        for offset_y in range(-clearance_cells, clearance_cells + 1)
+        for offset_x in range(-clearance_cells, clearance_cells + 1)
+        if hypot(offset_x, offset_y) * grid.resolution
+        <= min_obstacle_clearance_m + 1e-9
+    )
     standoff_cells = max(0.0, goal_standoff_m / grid.resolution)
     openness_cells = max(1, ceil(openness_radius_m / grid.resolution))
     wall_search_cells = max(1, ceil(wall_search_radius_m / grid.resolution))
-
-    def make_integral(predicate) -> list[int]:
-        """Build a summed-area table for constant-time rectangular queries."""
-        stride = grid.width + 1
-        integral = [0] * (stride * (grid.height + 1))
-        for y in range(grid.height):
-            row_sum = 0
-            source_offset = y * grid.width
-            target_offset = (y + 1) * stride
-            previous_offset = y * stride
-            for x in range(grid.width):
-                row_sum += int(predicate((x, y), grid.data[source_offset + x]))
-                integral[target_offset + x + 1] = (
-                    integral[previous_offset + x + 1] + row_sum
-                )
-        return integral
-
-    def rectangle_sum(
-        integral: Sequence[int],
-        min_x: int,
-        min_y: int,
-        max_x: int,
-        max_y: int,
-    ) -> int:
-        """Return the inclusive rectangle sum, clipped to the map."""
-        min_x = max(0, min_x)
-        min_y = max(0, min_y)
-        max_x = min(grid.width - 1, max_x)
-        max_y = min(grid.height - 1, max_y)
-        if min_x > max_x or min_y > max_y:
-            return 0
-        stride = grid.width + 1
-        left = min_x
-        right = max_x + 1
-        top = min_y
-        bottom = max_y + 1
-        return (
-            integral[bottom * stride + right]
-            - integral[top * stride + right]
-            - integral[bottom * stride + left]
-            + integral[top * stride + left]
-        )
-
-    occupied_integral = make_integral(
-        lambda _cell, value: value >= occupied_threshold
-    )
-    invalid_free_integral = make_integral(
-        lambda cell, value: cell not in reachable or not (0 <= value <= free_threshold)
-    )
 
     # Label connected occupied components once. Long connected components are
     # treated as structural wall candidates; small islands remain ordinary
@@ -240,31 +198,23 @@ def detect_frontier_clusters(
             occupied_component[cell] = component_id
 
     def has_clearance(cell: Cell) -> bool:
-        if clearance_cells == 0:
-            return True
-        return rectangle_sum(
-            occupied_integral,
-            cell[0] - clearance_cells,
-            cell[1] - clearance_cells,
-            cell[0] + clearance_cells,
-            cell[1] + clearance_cells,
-        ) == 0
+        """Require circular Euclidean clearance from occupied cell centers."""
+        return not any(
+            (cell[0] + offset_x, cell[1] + offset_y) in occupied_cells
+            for offset_x, offset_y in clearance_offsets
+        )
 
     def has_known_free_clearance(cell: Cell) -> bool:
-        """Require the complete robot-clearance box to be known free space."""
-        min_x = cell[0] - clearance_cells
-        min_y = cell[1] - clearance_cells
-        max_x = cell[0] + clearance_cells
-        max_y = cell[1] + clearance_cells
-        if min_x < 0 or min_y < 0 or max_x >= grid.width or max_y >= grid.height:
-            return False
-        return rectangle_sum(
-            invalid_free_integral,
-            min_x,
-            min_y,
-            max_x,
-            max_y,
-        ) == 0
+        """Require the complete circular clearance area to be known free."""
+        for offset_x, offset_y in clearance_offsets:
+            neighbor = (cell[0] + offset_x, cell[1] + offset_y)
+            if (
+                not grid.contains(neighbor)
+                or neighbor not in reachable
+                or not (0 <= grid.value(neighbor) <= free_threshold)
+            ):
+                return False
+        return True
 
     def obstacle_clearance(cell: Cell) -> float:
         """Measure local openness, capped so distant walls do not dominate."""
@@ -349,10 +299,15 @@ def detect_frontier_clusters(
             tangent,
         )
 
+    # (2026-08-07) has_clearance(cell) used to gate frontier-cell membership
+    # itself. A frontier cell touches unknown space, so by definition it sits
+    # right next to the obstacle it borders -- this gate almost always failed
+    # and killed the cluster before the goal-projection logic below ever ran.
+    # Safety is unaffected: the actual goal_cell is independently vetted for
+    # clearance via safe_candidates/has_known_free_clearance further down.
     frontier_cells = {
         cell
         for cell in reachable
-        if has_clearance(cell)
         if any(
             grid.contains(neighbor) and grid.value(neighbor) < 0
             for neighbor in _neighbors4(cell)
@@ -618,6 +573,110 @@ def frontier_score(
     )
 
 
+def project_wall_standoff_cluster(
+    grid: GridSpec,
+    cluster: FrontierCluster,
+    robot_position: Point,
+    *,
+    target_wall_distance_m: float,
+    wall_distance_tolerance_m: float,
+    min_obstacle_clearance_m: float,
+    free_threshold: int = 20,
+    occupied_threshold: int = 65,
+) -> FrontierCluster | None:
+    """Project a reachable, circularly clear goal onto the robot-facing wall side."""
+    if cluster.wall_point is None:
+        return None
+    robot_cell = grid.world_to_cell(robot_position)
+    if robot_cell is None:
+        return None
+    reachable = reachable_free_cells(grid, robot_cell, free_threshold)
+    occupied_points = [
+        grid.cell_to_world((x, y))
+        for y in range(grid.height)
+        for x in range(grid.width)
+        if grid.value((x, y)) >= occupied_threshold
+    ]
+    if not occupied_points:
+        return None
+
+    wall_point = cluster.wall_point
+    direction_x = robot_position[0] - wall_point[0]
+    direction_y = robot_position[1] - wall_point[1]
+    direction_length = hypot(direction_x, direction_y)
+    if direction_length <= 1e-9:
+        old_goal = grid.cell_to_world(cluster.goal_cell)
+        direction_x = old_goal[0] - wall_point[0]
+        direction_y = old_goal[1] - wall_point[1]
+        direction_length = hypot(direction_x, direction_y)
+    if direction_length <= 1e-9:
+        return None
+    desired = (
+        wall_point[0] + target_wall_distance_m * direction_x / direction_length,
+        wall_point[1] + target_wall_distance_m * direction_y / direction_length,
+    )
+    wall_cell = grid.world_to_cell(wall_point)
+    if wall_cell is None:
+        return None
+
+    tolerance = max(grid.resolution, wall_distance_tolerance_m)
+    # Search the whole stand-off annulus around the wall instead of a small
+    # window on the wall-to-robot ray.  Candidates stay ranked by distance to
+    # that ray point, so the ideal approach still wins whenever it is viable;
+    # a pinched ray now falls back to another point at the same wall distance
+    # instead of discarding an otherwise reachable wall.
+    search_cells = max(1, ceil(
+        (target_wall_distance_m + tolerance + grid.resolution) / grid.resolution
+    ))
+    candidates: list[tuple[float, float, Cell, float]] = []
+    for y in range(
+        max(0, wall_cell[1] - search_cells),
+        min(grid.height, wall_cell[1] + search_cells + 1),
+    ):
+        for x in range(
+            max(0, wall_cell[0] - search_cells),
+            min(grid.width, wall_cell[0] + search_cells + 1),
+        ):
+            cell = (x, y)
+            if cell not in reachable or not (0 <= grid.value(cell) <= free_threshold):
+                continue
+            point = grid.cell_to_world(cell)
+            wall_distance = hypot(
+                point[0] - wall_point[0],
+                point[1] - wall_point[1],
+            )
+            wall_error = abs(wall_distance - target_wall_distance_m)
+            if wall_error > tolerance:
+                continue
+            obstacle_clearance = min(
+                hypot(point[0] - occupied[0], point[1] - occupied[1])
+                for occupied in occupied_points
+            )
+            if obstacle_clearance + 1e-9 < min_obstacle_clearance_m:
+                continue
+            candidates.append(
+                (
+                    hypot(point[0] - desired[0], point[1] - desired[1]),
+                    wall_error,
+                    cell,
+                    obstacle_clearance,
+                )
+            )
+    if not candidates:
+        return None
+    _, _, goal_cell, obstacle_clearance = min(candidates)
+    goal_point = grid.cell_to_world(goal_cell)
+    return replace(
+        cluster,
+        goal_cell=goal_cell,
+        wall_distance_m=hypot(
+            goal_point[0] - wall_point[0],
+            goal_point[1] - wall_point[1],
+        ),
+        obstacle_clearance_m=obstacle_clearance,
+    )
+
+
 def select_perimeter_frontier(
     grid: GridSpec,
     clusters: Sequence[FrontierCluster],
@@ -634,9 +693,11 @@ def select_perimeter_frontier(
     blacklist_radius: float = 0.5,
     min_frontier_distance: float = 0.4,
     require_exterior: bool = True,
+    prefer_farthest_wall: bool = False,
+    enforce_wall_distance: bool = True,
 ) -> FrontierCluster | None:
     """Select a frontier that continues a stable wall contour."""
-    candidates: list[tuple[float, float, FrontierCluster]] = []
+    candidates: list[tuple[float, float, float, FrontierCluster]] = []
     tolerance = max(0.05, wall_distance_tolerance_m)
     for cluster in clusters:
         if (
@@ -664,7 +725,7 @@ def select_perimeter_frontier(
         # A score penalty alone still allows an attractive but physically
         # invalid goal beside a wall. Keep wall-follow goals inside an explicit
         # distance band; Nav2 remains responsible for the final path check.
-        if wall_error > tolerance:
+        if enforce_wall_distance and wall_error > tolerance:
             continue
         continuation_gap = (
             hypot(
@@ -673,6 +734,10 @@ def select_perimeter_frontier(
             )
             if previous_wall_point is not None
             else 0.0
+        )
+        wall_range = hypot(
+            cluster.wall_point[0] - robot_position[0],
+            cluster.wall_point[1] - robot_position[1],
         )
         score = (
             1.5 * cluster.size * grid.resolution
@@ -683,13 +748,20 @@ def select_perimeter_frontier(
             - 2.0 * wall_error / tolerance
             - 1.5 * continuation_gap
         )
-        candidates.append((score, continuation_gap, cluster))
+        candidates.append((score, continuation_gap, wall_range, cluster))
 
     if previous_wall_point is not None:
         nearby = [candidate for candidate in candidates if candidate[1] <= 1.5]
         if nearby:
             candidates = nearby
-    return max(candidates, key=lambda item: item[0])[2] if candidates else None
+    if not candidates:
+        return None
+    if prefer_farthest_wall:
+        # Boundary acquisition is intentionally range-first: attempt the
+        # farthest visible structural wall, using the normal perimeter score
+        # only to break ties between candidates on that wall.
+        return max(candidates, key=lambda item: (item[2], item[0]))[3]
+    return max(candidates, key=lambda item: item[0])[3]
 
 
 def select_frontier(

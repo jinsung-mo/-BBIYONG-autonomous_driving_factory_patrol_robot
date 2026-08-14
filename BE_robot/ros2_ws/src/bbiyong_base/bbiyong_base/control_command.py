@@ -1,106 +1,107 @@
-"""Atomic operator arm/stop commands for the BBIYONG command mux."""
+"""Confirmed operator arm/stop commands through the persistent state bridge."""
 
 from __future__ import annotations
 
-import json
-import os
-from pathlib import Path
 import sys
-from time import monotonic, time
 
 import rclpy
-from geometry_msgs.msg import Twist
 from rclpy.node import Node
-from std_msgs.msg import Bool, String
+from std_srvs.srv import SetBool, Trigger
 
 
 class ControlCommand(Node):
     def __init__(self) -> None:
         super().__init__("bbiyong_control_command")
-        self.mode_publisher = self.create_publisher(
-            String, "/bbiyong/control_mode", 10
+        self.autonomy_client = self.create_client(
+            SetBool, "/bbiyong/set_autonomy"
         )
-        self.estop_publisher = self.create_publisher(Bool, "/bbiyong/estop", 10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, "/cmd_vel", 10)
-        self.declare_parameter("control_file", "/tmp/bbiyong_control.json")
-        self.control_file = Path(
-            str(self.get_parameter("control_file").value)
-        ).expanduser()
+        self.manual_client = self.create_client(
+            Trigger, "/bbiyong/set_manual"
+        )
 
-    def _write_control(self, mode: str, estop: bool) -> None:
-        sequence = 1
-        try:
-            previous = json.loads(self.control_file.read_text(encoding="utf-8"))
-            sequence = int(previous.get("seq", 0)) + 1
-        except (OSError, ValueError, TypeError):
-            pass
-        payload = {
-            "schemaVersion": 1,
-            "seq": sequence,
-            "mode": mode,
-            "estop": estop,
-            "updatedAt": time(),
-        }
-        self.control_file.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.control_file.with_name(self.control_file.name + ".tmp")
-        temporary.write_text(json.dumps(payload), encoding="utf-8")
-        os.replace(temporary, self.control_file)
-
-    def wait_for_arm_subscribers(self, timeout_sec: float) -> bool:
-        """Require both the mux and explorer before publishing any arm state."""
-        deadline = monotonic() + timeout_sec
-        while monotonic() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.1)
-            if (
-                self.mode_publisher.get_subscription_count() >= 2
-                and self.estop_publisher.get_subscription_count() >= 2
-            ):
-                return True
-        return False
-
-    def arm(self) -> bool:
-        if not self.wait_for_arm_subscribers(20.0):
+    def _request(self, arm: bool, timeout_sec: float) -> bool:
+        action = "arm autonomy" if arm else "stop"
+        if not self.autonomy_client.wait_for_service(timeout_sec=timeout_sec):
             self.get_logger().error(
-                "Arm refused: command mux and frontier explorer were not both discovered"
+                f"{action} refused: control-state bridge service unavailable"
             )
             return False
-        mode = String(data="autonomy")
-        released = Bool(data=False)
-        self._write_control("autonomy", False)
-        for _ in range(20):
-            self.mode_publisher.publish(mode)
-            self.estop_publisher.publish(released)
-            rclpy.spin_once(self, timeout_sec=0.1)
-        self.get_logger().info("Nav2 autonomy armed")
+
+        request = SetBool.Request()
+        request.data = arm
+        future = self.autonomy_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
+        if not future.done():
+            self.get_logger().error(
+                f"{action} failed: control-state bridge confirmation timed out"
+            )
+            return False
+        try:
+            response = future.result()
+        except Exception as exc:
+            self.get_logger().error(f"{action} failed: {exc}")
+            return False
+        if response is None or not response.success:
+            message = "no response" if response is None else response.message
+            self.get_logger().error(f"{action} refused: {message}")
+            return False
+        self.get_logger().info(response.message)
         return True
 
-    def stop(self) -> None:
-        stopped = Bool(data=True)
-        disabled = String(data="disabled")
-        zero = Twist()
-        self._write_control("disabled", True)
-        for _ in range(20):
-            self.estop_publisher.publish(stopped)
-            self.mode_publisher.publish(disabled)
-            self.cmd_vel_publisher.publish(zero)
-            rclpy.spin_once(self, timeout_sec=0.05)
-        self.get_logger().warning("software emergency stop sent")
+    def arm(self) -> bool:
+        return self._request(True, 20.0)
+
+    def stop(self) -> bool:
+        return self._request(False, 5.0)
+
+    def manual(self) -> bool:
+        timeout_sec = 5.0
+        if not self.manual_client.wait_for_service(timeout_sec=timeout_sec):
+            self.get_logger().error(
+                "manual refused: control-state bridge service unavailable"
+            )
+            return False
+
+        future = self.manual_client.call_async(Trigger.Request())
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
+        if not future.done():
+            self.get_logger().error(
+                "manual failed: control-state bridge confirmation timed out"
+            )
+            return False
+        try:
+            response = future.result()
+        except Exception as exc:
+            self.get_logger().error(f"manual failed: {exc}")
+            return False
+        if response is None or not response.success:
+            message = "no response" if response is None else response.message
+            self.get_logger().error(f"manual refused: {message}")
+            return False
+        self.get_logger().info(response.message)
+        return True
 
 
 def main(args=None) -> None:
     command_args = sys.argv[1:] if args is None else args
-    if len(command_args) != 1 or command_args[0] not in {"arm", "stop"}:
-        print("usage: ros2 run bbiyong_base control_command {arm|stop}", file=sys.stderr)
+    if len(command_args) != 1 or command_args[0] not in {"arm", "manual", "stop"}:
+        print(
+            "usage: ros2 run bbiyong_base control_command {arm|manual|stop}",
+            file=sys.stderr,
+        )
         raise SystemExit(2)
 
     rclpy.init()
     node = ControlCommand()
     try:
         if command_args[0] == "arm":
-            if not node.arm():
-                raise SystemExit(1)
+            success = node.arm()
+        elif command_args[0] == "manual":
+            success = node.manual()
         else:
-            node.stop()
+            success = node.stop()
+        if not success:
+            raise SystemExit(1)
     finally:
         node.destroy_node()
         if rclpy.ok():

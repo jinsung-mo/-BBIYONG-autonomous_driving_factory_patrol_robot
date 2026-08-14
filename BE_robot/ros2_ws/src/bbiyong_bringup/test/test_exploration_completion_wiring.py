@@ -23,6 +23,16 @@ def test_map_saver_success_and_final_failure_request_process_exit():
     assert save_source.count("self._request_exit(1)") >= 2
 
 
+def test_map_saver_ignores_stale_completed_sample_until_current_mission_starts():
+    source = (
+        PACKAGE / "bbiyong_bringup" / "exploration_map_saver.py"
+    ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    completed_source = ast.get_source_segment(source, _function(tree, "_completed"))
+    assert "self._completion_armed = True" in completed_source
+    assert "not self._completion_armed" in completed_source
+
+
 def test_map_saver_main_owns_shutdown_after_worker_finishes():
     source = (
         PACKAGE / "bbiyong_bringup" / "exploration_map_saver.py"

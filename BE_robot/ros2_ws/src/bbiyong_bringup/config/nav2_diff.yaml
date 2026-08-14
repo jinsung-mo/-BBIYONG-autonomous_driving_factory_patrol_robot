@@ -16,7 +16,14 @@ amcl:
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
-    alpha4: 0.2
+    # 🔴 alpha4 0.2 -> 0.05 [2026-08-08]. alpha4 는 **회전이 만드는 병진 잡음**이다.
+    #    nav2 의 DifferentialMotionModel 은 delta_trans=0(제자리 회전)일 때도
+    #    delta_trans_hat = 0 - N(0, sqrt(alpha4*d_theta^2)) 로 입자를 흩뿌린다.
+    #    이 로봇은 **주행 시간의 30%가 제자리 회전**이라(229초 세션 실측) 직격이다.
+    #    캐스터 스크럽 때문에 회전->병진 오차가 실제로 있으므로 0 으로 두지는 않는다.
+    #    ⚠️ update_min_a 를 올려서 해결하려 하지 말 것 — 잡음 분산이 alpha4*Theta*d_theta
+    #       라 업데이트를 성기게 하면 총 잡음이 오히려 늘어난다.
+    alpha4: 0.05
     alpha5: 0.2
     base_frame_id: base_link
     beam_skip_distance: 0.5
@@ -25,7 +32,6 @@ amcl:
     do_beamskip: false
     global_frame_id: map
     lambda_short: 0.1
-    laser_likelihood_max_dist: 2.0
     laser_max_range: 9.5
     laser_min_range: 0.12
     laser_model_type: likelihood_field
@@ -35,19 +41,34 @@ amcl:
     odom_frame_id: odom
     pf_err: 0.05
     pf_z: 0.99
-    recovery_alpha_fast: 0.0
-    recovery_alpha_slow: 0.0
+    # 🔴 0.0 -> 표준값 [2026-08-08]. 둘 다 0 이면 **랜덤 입자 주입(복구)이 완전히
+    #    비활성**이다. 입자 가중치가 떨어져도 새 가설을 만들지 않으므로, 한 번 틀린
+    #    위치에 수렴하면 스스로 빠져나올 수 없다.
+    #    2026-08-07 야간에 2.66m 오차가 40분 넘게 유지된 것은 '표류'가 아니라 '고착'이었다.
+    #    ⚠️ 반드시 아래 측정모델 조정(sigma_hit/z_rand)과 **함께** 적용할 것.
+    #       관대한 측정모델 상태에서 복구만 켜면 엉뚱한 가설로 점프할 수 있다.
+    recovery_alpha_fast: 0.1
+    recovery_alpha_slow: 0.001
     resample_interval: 1
     robot_model_type: nav2_amcl::DifferentialMotionModel
     save_pose_rate: 0.5
-    sigma_hit: 0.2
+    # 🔴 측정모델을 방 크기에 맞게 조임 [2026-08-08].
+    #    종전 sigma_hit 0.2 는 지도 해상도(0.05)의 4배이고 방(3.15x3.40m)의 6% 였다.
+    #    거기에 z_rand 0.5 가 나쁜 pose 에도 높은 바닥 점수를 줘서, 우도장이 평평해져
+    #    **옳은 pose 와 틀린 pose 를 구분하지 못했다**.
+    #    실측: 전역 정합에서 옳은 pose 100% vs AMCL 이 믿던 pose 33% 로 명확히 갈렸는데
+    #          입자 가중치는 그 차이를 반영하지 못했다.
+    #    z 계열 합은 1.0 이어야 한다: 0.80 + 0.05 + 0.05 + 0.10 = 1.00
+    sigma_hit: 0.08
+    z_hit: 0.80
+    z_rand: 0.10
+    # 2.0 -> 1.0. 이 방의 라이다 최대 실측거리가 2.7m 라 2.0 은 과하다.
+    laser_likelihood_max_dist: 1.0
     tf_broadcast: true
     transform_tolerance: 1.0
     update_min_a: 0.10
     update_min_d: 0.10
-    z_hit: 0.5
     z_max: 0.05
-    z_rand: 0.5
     z_short: 0.05
     scan_topic: /scan_filtered
 
@@ -93,12 +114,28 @@ controller_server:
       required_movement_angle: 0.10
       # Translation or a meaningful ~5.7 degree turn resets this window.
       # If neither happens, fail promptly instead of waiting motionless.
-      movement_time_allowance: 3.0
+      # [2026-08-09] 3.0 -> 10.0. status 6(ABORTED) 13건의 근본 원인이었다.
+      #
+      # abort 10건 전부에서 /cmd_vel_nav 가 11~18Hz 로 **살아 있었다** — 제어기가
+      # 죽은 게 아니라 progress_checker 가 포기한 것이다. abort 직전 3초의 실제
+      # 변위(/odom 실측)는 0.2/0.2/0.6/1.5/1.6/1.9/2.0/3.1 cm 로 10건 중 8건이
+      # required_movement_radius(0.05)에 미달했다.
+      #
+      # 왜 못 갔나 — 오늘 켠 예측 층(directional_approach)이 제대로 일해서다.
+      # raw->autonomy 8,123건 비교: 감속 29구간, **배율 중앙값 0.208**.
+      # 1/5 로 줄이면 3초에 5cm 를 못 간다. 게다가 RPP 의 rotate_to_heading 은
+      # v=0 이라 병진이 아예 없는데 progress_checker 는 **병진만** 센다.
+      # 즉 "안전하게 천천히" 와 "끼여서 못 감" 을 구분하지 못했다.
+      #
+      # ⚠️ 대가: 진짜 끼였을 때 Nav2 가 포기하는 데 10초가 걸린다. 그러나 그건
+      #    escape_recovery 가 3초 유지로 훨씬 먼저 잡는다 — 역할이 겹치므로
+      #    Nav2 쪽을 느슨하게 두는 것이 맞다.
+      movement_time_allowance: 10.0
     general_goal_checker:
       stateful: true
       plugin: nav2_controller::SimpleGoalChecker
-      xy_goal_tolerance: 0.05
-      yaw_goal_tolerance: 0.052
+      xy_goal_tolerance: 0.10
+      yaw_goal_tolerance: 6.28
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
       desired_linear_vel: 0.10
@@ -113,7 +150,17 @@ controller_server:
       min_approach_linear_velocity: 0.07
       approach_velocity_scaling_dist: 0.40
       use_collision_detection: true
-      max_allowed_time_to_collision_up_to_carrot: 1.0
+      # 1.0 -> 0.5 (2026-08-07): 0.10 m/s 로봇에 1초 전방 예측(=10cm)은
+      # robot_radius(0.22)와 겹쳐 상시 collision-ahead 오탐을 만들 소지가 있었다.
+      # collision-ahead 162회/2분49초 재현 이후 첫 실험값.
+      # [2026-08-09] 0.5 -> 1.5. Humble RPP 소스(isCollisionImminent) 확인 결과
+      # 제자리 회전 시 스텝은  2*sin((res/2)/r_max)/|w| = 2*sin(0.025/0.328)/0.42
+      # = 0.363초 다. 루프 조건이 i*step < 이 값이라 0.5 면 **스텝이 한 번**만
+      # 돌아 예지력이 8.7°(코가 4cm 움직이는 만큼)에 그쳤다. 실측 감지 지연
+      # 0.3초와 거의 같아 사실상 못 피한다. 1.5 면 4스텝 ≈ 35° 를 내다본다.
+      # ⚠️ 부작용: 좁은 곳에서 "못 간다" 거부가 늘어 재계획이 잦아질 수 있다.
+      #    주행이 자주 끊기면 1.0 으로 낮출 것.
+      max_allowed_time_to_collision_up_to_carrot: 1.5
       use_regulated_linear_velocity_scaling: true
       use_cost_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 0.50
@@ -142,7 +189,21 @@ local_costmap:
       width: 4
       height: 4
       resolution: 0.05
-      robot_radius: 0.30
+      # 실측 섀시 0.30 x 0.25 -> 외접 0.195. 0.20 은 모든 자세에서
+      # 로봇을 덮는 가장 작은 원이며 0.40 m 통로를 열어준다.
+      # 🔴 collision_monitor.yaml 의 immediate_stop 반경을 이 값보다
+      #    크게 두면, Nav2 가 계획한 통로에서 정지 폴리곤이 로봇을
+      #    멈춰 세워 이 값을 낮춘 의미가 사라진다.
+      # [실측 2026-08-07 · S15P11E101-848] robot_radius 원 가정을 폐기했다.
+      # 라이다 벽밀착 실측(base_link 기준): 앞 +264.1 / 뒤 -149.5 / 좌 +176.7 / 우 -181.1 mm
+      # 외접 320.2mm · 내접 149.5mm — 비율 2.14배라 원으로는 표현이 불가능하다.
+      # 종전 0.22 원은 앞을 44mm 과소평가(코가 무방비)하고 뒤를 70mm 과대평가했다.
+      # 뒤쪽 과대평가가 2026-08-07 20:30 '뒷벽 22.8cm 앞에서 출발 불가'의 직접 원인이다.
+      # 아래 값 = 실측 + 5mm (각 면 1회 측정이라 그만큼 여유. 반복 측정 후 재확정할 것)
+      # 주의: SmacPlanner2D 는 다각형이 아니라 내접원(0.155)으로 계획한다. 앞쪽 돌출은
+      #       RPP(use_collision_detection)와 collision_monitor 가 실제 다각형으로 잡는다.
+      # 정본: docs/차체_footprint_실측_2026-08-07.md
+      footprint: "[[0.270, -0.186], [0.270, 0.182], [-0.155, 0.182], [-0.155, -0.186]]"
       plugins: [obstacle_layer, denoise_layer, inflation_layer]
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
@@ -166,7 +227,36 @@ local_costmap:
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 3.0
-        inflation_radius: 0.40
+        # 0.40 은 robot_radius(0.22)의 1.8배라, 좁은 통로에서 planner 가 낸
+        # 경로가 반드시 팽창 영역을 지나고 RPP 가 그걸 충돌로 판정했다
+        # (2026-08-06: collision ahead 178회, 목표당 53초 낭비 후 실패).
+        # 안전은 inflation 이 아니라 robot_radius(치명 경계)와 collision
+        # monitor 의 0.22 m 정지 폴리곤이 담당한다.
+        # [2026-08-09] 0.35 -> 0.55 (Nav2 기본값 복귀). local·global 동일.
+        #
+        # 통로 폭 0.9 m 기준으로 무엇이 달라지나:
+        #   0.35 : 벽에서 0.35 넘게 떨어진 칸은 전부 비용 0 -> **평평한 지대**.
+        #          플래너는 그 안에서 최단거리만 보고 골라 벽에 붙는다.
+        #   0.55 : 어느 칸도 양쪽 벽에서 0.55 이상 떨어질 수 없다(최대 0.45).
+        #          모든 칸에 비용이 생기고 **정중앙이 최소** -> 그릇 모양 기울기.
+        #          플래너가 통로 중앙으로 밀린다.
+        #
+        # 실측 근거(20:16): 로봇이 좌벽에 붙어 우측 여유 0.22 m 만 남았고
+        # (최근접 0.221 @ -80.5°), 제자리 회전 불가(0.221 < 0.320)로 목표마다
+        # rotate_to_heading 에 들어가 전부 죽었다.
+        #
+        # 🔴 새로 막히는 칸은 생기지 않는다 — 팽창은 내접반경(0.155) 안쪽에만
+        #    lethal 을 찍고 그 바깥은 비용일 뿐이다. 경로가 조금 길어질 뿐.
+        # [2026-08-09 되돌림] 0.55 -> 0.35. 실측이 반박했다.
+        # 0.55 로 돌린 20:43 주행에서 로봇이 한 번도 못 움직이고 30초 만에
+        # 종료했다(블랙리스트 17 / 도달 0 / 'no reachable goal for 30s').
+        # 통로 폭 약 0.98 m 인데 양쪽 0.55 를 부풀리면 1.10 m 가 필요해
+        # **자유 통로가 0 이 된다**. 0.35 면 0.28 m 가 남고, 지금까지
+        # 그 틈으로 다녔다. 게다가 abort 19건 전부 최근접 0.233~0.314 m 로
+        # 0.35 에서도 이미 인플레이션 한복판이었고 접촉은 0건이었다 —
+        # 반경을 키울 안전상 근거가 없었다.
+        # 대안이 필요하면 cost_scaling_factor(3.0)를 올리는 쪽을 볼 것.
+        inflation_radius: 0.35
       always_send_full_costmap: true
 
 global_costmap:
@@ -179,8 +269,38 @@ global_costmap:
       robot_base_frame: base_link
       resolution: 0.05
       track_unknown_space: true
-      robot_radius: 0.30
-      plugins: [static_layer, obstacle_layer, denoise_layer, inflation_layer]
+      # trail_layer 가 0~99 의 중간 비용을 싣기 때문에 필요하다. 아래 두 개는
+      # 레이어별이 아니라 costmap 노드 레벨 파라미터라 static_layer 에도 걸리는데,
+      # /map 은 {0, 100} 만 내보내므로 진짜 맵 해석은 그대로다(실측 확인).
+      trinary_costmap: false
+      use_maximum: true
+      # 실측 섀시 0.30 x 0.25 -> 외접 0.195. 0.20 은 모든 자세에서
+      # 로봇을 덮는 가장 작은 원이며 0.40 m 통로를 열어준다.
+      # 🔴 collision_monitor.yaml 의 immediate_stop 반경을 이 값보다
+      #    크게 두면, Nav2 가 계획한 통로에서 정지 폴리곤이 로봇을
+      #    멈춰 세워 이 값을 낮춘 의미가 사라진다.
+      # [실측 2026-08-07 · S15P11E101-848] robot_radius 원 가정을 폐기했다.
+      # 라이다 벽밀착 실측(base_link 기준): 앞 +264.1 / 뒤 -149.5 / 좌 +176.7 / 우 -181.1 mm
+      # 외접 320.2mm · 내접 149.5mm — 비율 2.14배라 원으로는 표현이 불가능하다.
+      # 종전 0.22 원은 앞을 44mm 과소평가(코가 무방비)하고 뒤를 70mm 과대평가했다.
+      # 뒤쪽 과대평가가 2026-08-07 20:30 '뒷벽 22.8cm 앞에서 출발 불가'의 직접 원인이다.
+      # 아래 값 = 실측 + 5mm (각 면 1회 측정이라 그만큼 여유. 반복 측정 후 재확정할 것)
+      # 주의: SmacPlanner2D 는 다각형이 아니라 내접원(0.155)으로 계획한다. 앞쪽 돌출은
+      #       RPP(use_collision_detection)와 collision_monitor 가 실제 다각형으로 잡는다.
+      # 정본: docs/차체_footprint_실측_2026-08-07.md
+      footprint: "[[0.270, -0.186], [0.270, 0.182], [-0.155, 0.182], [-0.155, -0.186]]"
+      plugins: [static_layer, obstacle_layer, denoise_layer, inflation_layer, trail_layer]
+      # 이미 지나온 칸에 통과 가능한 수준의 비용을 얹어, SmacPlanner2D 가
+      # 다음 목표와 복귀 경로를 다른 길로 잡게 한다. inflation 뒤에 두어
+      # updateWithMax 로 덮이지 않게 한다. 치명값이 아니라서 그 길밖에
+      # 없으면 그대로 지나간다. local_costmap 에는 절대 넣지 않는다 —
+      # 거기 넣으면 RPP 가 제 자취 위에서 속도를 깎는다.
+      trail_layer:
+        plugin: nav2_costmap_2d::StaticLayer
+        map_topic: /trail_grid
+        map_subscribe_transient_local: true
+        subscribe_to_updates: false
+        enabled: true
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
         map_subscribe_transient_local: true
@@ -206,7 +326,22 @@ global_costmap:
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 3.0
-        inflation_radius: 0.40
+        # 0.40 은 robot_radius(0.22)의 1.8배라, 좁은 통로에서 planner 가 낸
+        # 경로가 반드시 팽창 영역을 지나고 RPP 가 그걸 충돌로 판정했다
+        # (2026-08-06: collision ahead 178회, 목표당 53초 낭비 후 실패).
+        # 안전은 inflation 이 아니라 robot_radius(치명 경계)와 collision
+        # monitor 의 0.22 m 정지 폴리곤이 담당한다.
+        # [2026-08-09] 0.35 -> 0.55 — 위 costmap 과 같은 근거.
+        # [2026-08-09 되돌림] 0.55 -> 0.35. 실측이 반박했다.
+        # 0.55 로 돌린 20:43 주행에서 로봇이 한 번도 못 움직이고 30초 만에
+        # 종료했다(블랙리스트 17 / 도달 0 / 'no reachable goal for 30s').
+        # 통로 폭 약 0.98 m 인데 양쪽 0.55 를 부풀리면 1.10 m 가 필요해
+        # **자유 통로가 0 이 된다**. 0.35 면 0.28 m 가 남고, 지금까지
+        # 그 틈으로 다녔다. 게다가 abort 19건 전부 최근접 0.233~0.314 m 로
+        # 0.35 에서도 이미 인플레이션 한복판이었고 접촉은 0건이었다 —
+        # 반경을 키울 안전상 근거가 없었다.
+        # 대안이 필요하면 cost_scaling_factor(3.0)를 올리는 쪽을 볼 것.
+        inflation_radius: 0.35
       always_send_full_costmap: true
 
 planner_server:
@@ -226,10 +361,31 @@ planner_server:
       downsampling_factor: 1
       # Frontier goals are deliberately placed in reachable known-free space.
       # Do not let the global plan cut across the unseen wedge to reach them.
+      #
+      # 🔴 이 값은 2026-08-06 까지 true 였다 — 위 주석과 정반대다. 그래서
+      #    모든 경로가 로봇이 한 번도 본 적 없는 셀을 관통할 수 있었고,
+      #    그 미지 구간이 벽 옆 틈이면 도착했을 때 벽이 footprint 안에
+      #    들어와 있었다: 'Starting point in lethal space!' 그리고 방향
+      #    무관 정지 폴리곤 때문에 후진조차 못 하는 교착에 빠졌다.
+      #    탐색은 알려진 영역을 넓혀 나가는 것이지 미지를 가로지르는 것이
+      #    아니다. false 로 두면 'no valid path found' 가 늘지만 그건
+      #    정직한 실패다.
       allow_unknown: false
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 5.0
+      # [2026-08-09] 2.0 -> 4.0. 코너를 안쪽으로 붙어 돌다 튀어나온 박스에
+      # 물리는 일이 반복됐다(사진 확인). 그때 실측 여유는 후방 1.17 / 전방 0.81 /
+      # 좌 0.52 인데 **우 0.27** — 넓은 쪽을 두고 좁은 쪽으로 붙었다.
+      # 이 값은 SmacPlanner2D 가 '장애물에 가까운 칸' 을 얼마나 피할지를 정한다.
+      # 올리면 조금 돌아가더라도 넓은 쪽으로 경로를 낸다.
+      # ⚠️ 좁은 통로에서는 경로가 길어지거나 드물게 못 찾을 수 있다.
+      #    주행이 자주 끊기면 3.0 으로 낮출 것.
+      # [2026-08-09] 4.0 -> 2.0 (Nav2 기본값 복귀).
+      # 오늘 코너 회피용으로 2.0 -> 4.0 으로 올렸는데, 그 목적을 위의
+      # inflation_radius 0.55 가 더 올바른 방식으로 달성한다(팽창 기울기 자체를
+      # 만든다). 둘을 겹치면 비용 가중이 과해져 우회가 길어지거나 좁은 곳에서
+      # 경로를 못 찾을 수 있다. 한 번에 한 가지만 바꾼다.
       cost_travel_multiplier: 2.0
       use_final_approach_orientation: false
       smoother:
@@ -284,7 +440,19 @@ waypoint_follower:
     wait_at_waypoint:
       plugin: nav2_waypoint_follower::WaitAtWaypoint
       enabled: true
-      waypoint_pause_duration: 0
+      # Milliseconds. 0 disables the plugin entirely -- WaitAtWaypoint logs
+      # 'pause duration is set to zero' and skips it.
+      #
+      # 🔴 [2026-08-10] 이 주석은 원래 "Nav2 가 웨이포인트 자세에 먼저 도달하므로
+      #    (yaw_goal_tolerance 0.175 rad 포함) 로봇은 이 대기가 시작될 때 이미
+      #    벽을 바라보고 있다" 고 적혀 있었다. 그 전제는 더 이상 참이 아니다.
+      #    yaw_goal_tolerance 가 6.28(=2pi) 이라 목표 방향은 사실상 무시되고,
+      #    로봇은 어느 방향을 보고 있든 도착으로 판정된다. 도달률을 우선한
+      #    의도적 선택이다 [사용자 결정 2026-08-10].
+      #    ⚠️ 따라서 이 대기 시간 동안 카메라가 감시 대상을 향한다는 보장이 없다.
+      #       순찰 지점에서 특정 방향을 봐야 한다면 yaw_goal_tolerance 를 먼저
+      #       되돌려야 한다 — 이 값을 늘리는 것으로는 해결되지 않는다.
+      waypoint_pause_duration: 1000
 
 velocity_smoother:
   ros__parameters:

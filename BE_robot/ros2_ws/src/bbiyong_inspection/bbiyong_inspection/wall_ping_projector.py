@@ -17,7 +17,7 @@ from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from .geometry import GridMap, normalize2, quaternion_rotate
-from .protocol import decode_object, encode_object, finite_number
+from .protocol import decode_object, encode_object, finite_number, integer
 
 
 def yaw_from_quaternion(quaternion):
@@ -25,6 +25,17 @@ def yaw_from_quaternion(quaternion):
         2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y),
         1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z),
     )
+
+
+def manual_candidate_identity(map_id, payload):
+    """Keep legacy manual points while allowing an operator-selected tag binding."""
+    request_id = str(payload.get("requestId", uuid.uuid4().hex))[:128]
+    raw_tag_id = payload.get("tagId")
+    if raw_tag_id is None:
+        return f"manual-{request_id}", "MANUAL", {}
+
+    tag_id = integer(raw_tag_id, "tagId", minimum=0)
+    return f"tag-{map_id}-{tag_id}", "APRILTAG", {"tagId": tag_id}
 
 
 class WallPingProjector(Node):
@@ -247,13 +258,14 @@ class WallPingProjector(Node):
             transform = self._lookup(self.base_frame, {})
             base = transform.transform.translation
             direction = normalize2(target["x"] - base.x, target["y"] - base.y)
-            request_id = str(payload.get("requestId", uuid.uuid4().hex))[:128]
+            candidate_id, source, extra = manual_candidate_identity(self.map_id, payload)
             self._candidate(
-                f"manual-{request_id}",
-                "MANUAL",
+                candidate_id,
+                source,
                 target,
                 direction,
                 1.0,
+                **extra,
             )
         except (ValueError, TransformException) as exc:
             self.get_logger().warning(f"could not project manual target: {exc}")

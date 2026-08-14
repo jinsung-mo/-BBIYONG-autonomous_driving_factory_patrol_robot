@@ -1,10 +1,11 @@
 <!-- Commit to a valid path instead of replacing it at 1 Hz.
-     A path/controller failure returns to the outer recovery node, which clears
-     stale costmaps and computes a new path. A genuinely new NavigateToPose
-     goal can still preempt this tree through GoalUpdated. -->
+     A path/controller failure returns to the outer recovery node, which first
+     backs out in short collision-checked steps and replans after each step.
+     If backing out does not restore a valid motion, the differential base can
+     spin in place before the existing clear/wait recoveries are attempted. -->
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <RecoveryNode number_of_retries="2" name="NavigateRecovery">
+    <RecoveryNode number_of_retries="4" name="NavigateRecovery">
       <SequenceStar name="NavigateCommittedPath">
         <RecoveryNode number_of_retries="1" name="ComputePathToPose">
           <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
@@ -20,6 +21,17 @@
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
         <RoundRobin name="RecoveryActions">
+          <!-- Replan after each 5 cm step. BackUp performs its own collision
+               check and aborts rather than reversing into an obstacle. -->
+          <BackUp name="BackOutStep1" backup_dist="0.05"
+            backup_speed="0.05" time_allowance="5.0"/>
+          <BackUp name="BackOutStep2" backup_dist="0.05"
+            backup_speed="0.05" time_allowance="5.0"/>
+          <!-- Backing out is refused outright when an obstacle sits behind the
+               base, so rotating in place is the escalation this tree was
+               documented to have. behavior_server already loads the plugin
+               (max_rotational_vel 0.50), it was simply never called. -->
+          <Spin name="SpinInPlace" spin_dist="1.57" time_allowance="10.0"/>
           <Sequence name="ClearingActions">
             <ClearEntireCostmap name="ClearLocalCostmap-Subtree"
               service_name="local_costmap/clear_entirely_local_costmap"/>

@@ -16,7 +16,7 @@ from nav2_msgs.action import NavigateToPose
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from bbiyong_base.qos import CONTROL_STATE_QOS
 from std_msgs.msg import Bool, String
 
 from .protocol import decode_object, encode_object, validate_point
@@ -89,11 +89,7 @@ class InspectionPatrol(Node):
         self.cancel_target_state = "PAUSED"
         self.consecutive_failures = 0
 
-        latched = QoSProfile(
-            depth=1,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            reliability=ReliabilityPolicy.RELIABLE,
-        )
+        latched = CONTROL_STATE_QOS
         self.state_publisher = self.create_publisher(
             String, str(self.get_parameter("state_topic").value), latched
         )

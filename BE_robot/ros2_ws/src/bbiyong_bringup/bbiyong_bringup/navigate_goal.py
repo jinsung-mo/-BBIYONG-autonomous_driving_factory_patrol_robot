@@ -15,7 +15,7 @@ from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from bbiyong_base.qos import CONTROL_STATE_QOS
 from std_msgs.msg import Bool, String
 
 from .patrol_route_model import validate_goal, yaw_quaternion
@@ -58,11 +58,7 @@ class NavigateGoal(Node):
         if self.cancel_timeout <= 0.0:
             raise ValueError("cancel_timeout_sec must be positive")
 
-        qos = QoSProfile(
-            depth=1,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            reliability=ReliabilityPolicy.RELIABLE,
-        )
+        qos = CONTROL_STATE_QOS
         self.state_publisher = self.create_publisher(
             String, "/bbiyong/navigation_goal/state", qos
         )

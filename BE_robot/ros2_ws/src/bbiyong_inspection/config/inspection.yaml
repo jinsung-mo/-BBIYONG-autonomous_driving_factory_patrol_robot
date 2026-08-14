@@ -24,7 +24,7 @@ bbiyong_wall_ping_projector:
     map_id: active-map
     max_ray_range_m: 8.0
     occupied_threshold: 65
-    stand_off_m: 0.8
+    stand_off_m: 0.6
     robot_clearance_m: 0.32
     lateral_search_m: 0.8
     manual_snap_radius_m: 0.30

@@ -46,9 +46,14 @@ def validate_route(waypoints):
             "seq": sequence,
             "x": _finite(raw.get("x"), f"waypoints[{index}].x"),
             "y": _finite(raw.get("y"), f"waypoints[{index}].y"),
-            "yaw": _finite(
-                0.0 if raw.get("yaw") is None else raw.get("yaw"),
-                f"waypoints[{index}].yaw",
+            # None means "unspecified", and patrol_route resolves it against the
+            # live map so the point is inspected facing the nearest wall.
+            # Coercing to 0.0 here would silently aim every point at map +X and
+            # be indistinguishable from an operator asking for that heading.
+            "yaw": (
+                None
+                if raw.get("yaw") is None
+                else _finite(raw.get("yaw"), f"waypoints[{index}].yaw")
             ),
             "name": str(raw.get("name") or "")[:120],
         })

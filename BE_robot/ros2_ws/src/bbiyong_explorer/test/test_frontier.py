@@ -8,6 +8,7 @@ from bbiyong_explorer.frontier import (
     frontier_heading,
     loop_is_closed,
     perimeter_heading,
+    project_wall_standoff_cluster,
     reachable_free_cells,
     select_frontier,
     select_perimeter_frontier,
@@ -91,6 +92,25 @@ class FrontierTests(unittest.TestCase):
         )
         frontier_cells = {cell for cluster in clusters for cell in cluster.cells}
         self.assertNotIn((2, 1), frontier_cells)
+
+    def test_frontier_clearance_is_circular_not_square(self):
+        rows = [[-1] * 15] + [[0] * 15 for _ in range(9)]
+        # From frontier cell (2, 1), this obstacle is six cells away in both
+        # axes: 0.30 m per axis but 0.42 m Euclidean distance. A square test
+        # incorrectly rejects it for a 0.28 m circular robot clearance.
+        rows[7][8] = 100
+        grid = make_grid(rows, resolution=0.05)
+
+        clusters = detect_frontier_clusters(
+            grid,
+            (2, 5),
+            min_cluster_size=1,
+            min_obstacle_clearance_m=0.28,
+            require_known_goal_clearance=False,
+        )
+
+        frontier_cells = {cell for cluster in clusters for cell in cluster.cells}
+        self.assertIn((2, 1), frontier_cells)
 
     def test_goal_stands_back_in_known_free_space_and_faces_unknown(self):
         grid = make_grid(
@@ -374,6 +394,65 @@ class FrontierTests(unittest.TestCase):
         self.assertEqual(
             select_perimeter_frontier(**common, require_exterior=False), interior
         )
+
+    def test_boundary_acquisition_can_prefer_farthest_visible_wall(self):
+        grid = make_grid([[0] * 20 for _ in range(5)])
+        near_wall = FrontierCluster(
+            tuple((x, 2) for x in range(2, 8)),
+            (4, 2),
+            is_exterior=True,
+            wall_distance_m=0.4,
+            wall_length_m=3.0,
+            wall_point=(4.5, 3.0),
+        )
+        far_wall = FrontierCluster(
+            tuple((x, 2) for x in range(11, 17)),
+            (13, 2),
+            is_exterior=True,
+            wall_distance_m=0.4,
+            wall_length_m=3.0,
+            wall_point=(13.5, 3.0),
+        )
+
+        selected = select_perimeter_frontier(
+            grid,
+            [near_wall, far_wall],
+            robot_position=(0.5, 2.5),
+            robot_heading=0.0,
+            wall_side="left",
+            target_wall_distance_m=0.4,
+            wall_distance_tolerance_m=0.05,
+            minimum_structural_wall_length_m=1.0,
+            perimeter_heading_weight=2.5,
+            prefer_farthest_wall=True,
+        )
+
+        self.assertEqual(selected, far_wall)
+
+    def test_projects_goal_to_requested_wall_standoff(self):
+        rows = [[0] * 14 for _ in range(5)]
+        for y in range(5):
+            rows[y][10] = 100
+        grid = make_grid(rows, resolution=0.1)
+        wall = FrontierCluster(
+            ((8, 2),),
+            (8, 2),
+            wall_point=grid.cell_to_world((10, 2)),
+            wall_length_m=0.4,
+        )
+
+        projected = project_wall_standoff_cluster(
+            grid,
+            wall,
+            robot_position=grid.cell_to_world((1, 2)),
+            target_wall_distance_m=0.4,
+            wall_distance_tolerance_m=0.05,
+            min_obstacle_clearance_m=0.28,
+        )
+
+        self.assertIsNotNone(projected)
+        self.assertEqual(projected.goal_cell, (6, 2))
+        self.assertAlmostEqual(projected.wall_distance_m, 0.4)
 
     def test_loop_closure_requires_distance_position_and_heading(self):
         common = dict(

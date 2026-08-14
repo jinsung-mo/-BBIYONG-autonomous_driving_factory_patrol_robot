@@ -96,8 +96,12 @@ def test_navigation_commits_path_and_wires_safety_chain() -> None:
     launch = (LAUNCH / "navigation_core.launch.py").read_text(encoding="utf-8")
     assert "SequenceStar" in tree
     assert "RateController" not in tree
-    assert 'number_of_retries="2"' in tree
-    assert "<BackUp" not in tree
+    assert 'number_of_retries="4"' in tree
+    assert tree.count("<BackUp") == 2
+    assert 'backup_dist="0.05"' in tree
+    assert 'backup_speed="0.05"' in tree
+    assert "<Spin" in tree
+    assert 'spin_dist="1.57"' in tree
     assert '<Wait wait_duration="0.2"/>' in tree
     assert '"cmd_vel_smoothed", "/cmd_vel/autonomy_unfloored"' in launch
     assert '"input_topic": "/cmd_vel/autonomy_slowed"' in launch

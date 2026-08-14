@@ -25,6 +25,7 @@ setup(
             "ackermann_adapter = bbiyong_base.ackermann_adapter_node:main",
             "differential_adapter = bbiyong_base.differential_adapter_node:main",
             "velocity_floor = bbiyong_base.velocity_floor_node:main",
+            "escape_recovery = bbiyong_base.escape_recovery:main",
         ]
     },
 )

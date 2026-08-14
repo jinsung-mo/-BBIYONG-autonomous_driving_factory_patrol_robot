@@ -30,6 +30,7 @@ setup(
             "wall_ping_projector = bbiyong_inspection.wall_ping_projector:main",
             "inspection_point_manager = bbiyong_inspection.inspection_point_manager:main",
             "inspection_patrol = bbiyong_inspection.inspection_patrol:main",
+            "fire_inspection = bbiyong_inspection.fire_inspection:main",
         ]
     },
 )

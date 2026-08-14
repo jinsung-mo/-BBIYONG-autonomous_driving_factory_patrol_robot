@@ -30,7 +30,7 @@ class ManualDriveBridge(Node):
         self.declare_parameter("max_linear_speed", 1.0)
         self.declare_parameter("max_angular_speed", 0.6)
         self.declare_parameter("linear_acceleration", 0.5)
-        self.declare_parameter("obstacle_stop_distance", 0.35)
+        self.declare_parameter("obstacle_stop_distance", 0.25)
         self.declare_parameter("obstacle_cone_half_angle_deg", 40.0)
 
         self.command_file = Path(

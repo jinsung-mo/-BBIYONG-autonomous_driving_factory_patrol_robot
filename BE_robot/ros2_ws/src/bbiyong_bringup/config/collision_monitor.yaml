@@ -1,44 +1,130 @@
 collision_monitor:
   ros__parameters:
     use_sim_time: false
-    enabled: true
+    # (제거) 최상단 enabled 는 Humble 의 collision_monitor 가 선언하지 않는 파라미터라
+    #        무시된다. 하위 immediate_stop.enabled 등은 정상 동작한다.
     base_frame_id: base_link
     odom_frame_id: odom
     cmd_vel_in_topic: /cmd_vel/autonomy_raw
     cmd_vel_out_topic: /cmd_vel/autonomy
-    state_topic: /collision_monitor_state
-    transform_tolerance: 0.2
-    source_timeout: 0.5
-    base_shift_correction: true
+    # 🔴 (무효) state_topic 은 Humble(nav2_collision_monitor 1.1.20)이 선언하지 않는다.
+    #    Iron(1.2+) 부터 추가된 기능이라 여기서는 조용히 무시된다 —
+    #    `ros2 param get /collision_monitor state_topic` 이 "Parameter not set" 을 낸다.
+    #    그래서 escape_recovery 는 감시기 입력/출력 비교로 대체 감지한다
+    #    (escape_recovery.py 의 monitor_in_topic/monitor_out_topic).
+    #    Nav2 를 올리면 아래 줄을 되살릴 것.
+    # state_topic: /collision_monitor_state
+    # 0.2 -> 0.5 [2026-08-07]. laser_frame->base_link 조회가 부하 중
+    # 'Lookup would require extrapolation' 으로 연속 실패했다.
+    transform_tolerance: 0.5
+    # 0.5 -> 1.5 [2026-08-07]. 스캔 데이터 자체는 신선하다 — 실측 지연 중앙값 95ms,
+    # 최대 172ms. 0.5s 임계에 걸린 것은 **감시기가 CPU 를 못 받아 늦게 처리**한 탓이고
+    # (로그: timestamps differ on 0.53s), 그것을 센서 두절로 보고 안전측 정지를 걸었다.
+    # 근본 해결은 DDS/컴포지션 부하 감소다. 이 값은 그때까지의 완화다.
+    source_timeout: 1.5
+    # [2026-08-08] true -> false. rosbag 분석 근거:
+    #   순찰 3종 31분에서 긴 정지 23건 중 21건(91%)이 **폴리곤 안 점 0개**였고,
+    #   전부 getTransform 실패와 시각이 1:1로 겹쳤다.
+    #   실패하는 조회는 laser_frame->**odom**->base_link 이고, 이 odom 경유는
+    #   base_shift_correction: true 때문에만 존재한다. 끄면 정적 TF 만 쓰므로
+    #   낡을 수 없다. (/odom 은 10분당 15~16회, 총 20초 정체한다 — 별건 이슈)
+    #   대가: 스캔~처리 사이 미보정 이동 약 23mm (v_p99 0.106m/s x 0.085s + 회전 13.4mm).
+    #   이미 감수 중인 정면 맹점 35mm 보다 작다.
+    base_shift_correction: false
     stop_pub_timeout: 1.0
 
     polygons: [immediate_stop, directional_approach]
     immediate_stop:
-      type: circle
-      radius: 0.20
+      # 🔴 원(circle)은 로봇의 최대 치수를 모든 방향에 요구한다. 섀시가
+      #    0.30 x 0.25 라 반경 0.22 원은 정면 여유 7.0cm 를 주는 대신
+      #    측면에 9.5cm 를 요구했다. 그런데 탐사 전략은 벽을 따라 도는,
+      #    즉 장애물 옆을 스쳐 지나가는 주행이다.
+      #    실측(2026-08-07 15:1x, 정지 상태): 최근접 0.227m @ -76도 —
+      #    거의 정확히 옆이고 진행 방향은 뚫려 있었다. 같은 구간에서
+      #    정지 20회 / 해제 19회, 여유 7mm 로 떨고 있었다. 정지가
+      #    stop_pub_timeout 을 넘기면 감시기가 발행을 멈추고(설계상),
+      #    cmd_mux 가 autonomy_timeout 으로 0 을 내보내 로봇이 얼어붙는다.
+      #    섀시 모양 사각형으로 바꾼다. 정면 여유는 그대로 두고 측면만 푼다.
+      type: polygon
+      # [x1,y1, x2,y2, ...] 앞왼 → 앞오른 → 뒤오른 → 뒤왼
+      #   x ±0.24 : 정면/후면 — 몸통 0.15 + 9.0cm  (원 0.22 보다 2cm 넓다)
+      #   y ±0.18 : 측면      — 몸통 0.125 + 5.5cm (원은 9.5cm 를 요구했다)
+      # 2026-08-07 각 방향 2cm 확대. 측면을 키워도 실측 정지 사례는 통과한다:
+      #   0.227m @ -76도 → |y| 0.220 > 0.18 통과 / 0.198m @ +94도 → 0.198 > 0.18 통과
+      # [실측 2026-08-07 · S15P11E101-848] footprint 와 동일한 다각형으로 맞췄다.
+      #    nav2_diff.yaml 이 명시한 부등호(정지폴리곤 <= planner 경계)가 깨져 있었다:
+      #    종전 모서리 300mm > robot_radius 220mm -> planner 가 계획한 자리를 감시기가
+      #    거부해 교착. 같은 다각형을 쓰면 그 모순이 원천적으로 사라진다.
+      # 🔴 앞 0.270 -> 0.170 [2026-08-07 22:1x]. footprint 를 그대로 쓴 것이 오류였다.
+      #    네 면 실측(앞264/뒤150/좌177/우181)을 **직사각형으로 가정**했는데, 앞 264mm 는
+      #    배선·카메라라는 **좁은 코**다. 전폭이 264까지 나와 있지 않다. 직사각형 폴리곤이
+      #    앞-좌/앞-우 모서리를 로봇 몸이라 주장해, 실제로 아무것도 안 닿는 구역에서
+      #    정지가 걸렸다 — 실측: 폴리곤 안 점 38~40개가 전부 x=+0.203 y=+0.155(방위 +37°).
+      #    게다가 라이다는 코를 보지 못한다(정면 개방 시 2.116m 판독) — 관측 불가 구역을
+      #    정지영역으로 두면 안전은 안 늘고 오정지만 는다.
+      #    planner footprint 는 0.270 을 유지한다(경로 계획은 코를 계속 고려).
+      #    이로써 nav2_diff.yaml:202-204 의 '정지 <= planner 경계' 규칙도 회복된다.
+      #    ⚠️ 코의 실제 폭은 미측정 — 재면 육각형으로 정밀화 가능
+      #       (docs/차체_footprint_실측_2026-08-07.md §7).
+      points: [0.170, 0.182, 0.170, -0.186, -0.155, -0.186, -0.155, 0.182]
       action_type: stop
-      # A non-self point inside the compact emergency zone always stops the
-      # robot, regardless of commanded direction.
-      max_points: 0
+      # 0 -> 3 [2026-08-07 · S15P11E101-848]. 0 은 점 1개로 전면 정지라
+      #    Humble 상류 기본값(polygon.cpp = 3)보다 4배 민감하다. Nav2 공식 튜토리얼도
+      #    정지 3 / approach 5 를 쓴다. 실측: 점 1개가 2mm 안쪽에 들어와 22초 동결
+      #    (총 주행 229초의 9.6%), 그 자리는 planner 가 통과 가능으로 계획한 곳이었다.
+      #    근거: docs/성공사례_비교_자율주행_2026-08-07.md
+      max_points: 3
       visualize: true
       polygon_pub_topic: /collision_monitor/immediate_stop
       enabled: true
     directional_approach:
-      type: circle
-      radius: 0.30
+      # [2026-08-08 22:1x] 원(0.30) -> 실측 footprint 폴리곤 · false -> true
+      #
+      # 껐던 이유(02:3x): "반경 0.30 원이 실제 최근접 0.258m 보다 커서 상시 겹침
+      #   -> 충돌시각 0 -> 영구 정지". 진단은 맞았지만 처방이 과했다.
+      #   문제는 예측이 아니라 **원**이다 — 원은 모든 방향에 0.30 을 요구해
+      #   옆이 0.25 만 돼도 상시 발동한다. 폴리곤은 **명령된 v·w 방향으로만
+      #   스윕**하므로 옆 스침은 안 막고 가는 쪽만 본다.
+      #
+      # 되살리는 이유 — rosbag 실측(21:08 주행)에서 접촉 2건:
+      #   1) 229.6~235.5s (5.9초) 앞-좌 모서리 (+0.208, +0.141), 최심 7.2cm
+      #   2) 246.9~249.8s (2.9초) 뒤-좌 모서리 (-0.128, +0.152), 최심 4.0cm
+      #
+      # 🔴 [2026-08-09 정정] 이 자리에 "명령 v=0.000 w=+0.420 = 완전 제자리 회전"
+      #    이라고 적혀 있었으나 **틀렸다.** 그 값은 /cmd_vel_nav(Nav2 의 희망)였고
+      #    실행된 명령(/cmd_vel/autonomy)은 w=0 이었다 — 안전 계층이 이미 자르고
+      #    있었다. 다음 사람이 이 숫자로 판단하지 않도록 측정값으로 바꾼다.
+      #
+      # 2026-08-09 재분석에서 밝혀진 진짜 원인:
+      #   접촉 순간 최근접 장애물 반경 0.22~0.31 m < 외접반경 0.328 m.
+      #   **돌 수 없는 자리에서 제자리 회전을 하고 있었다.**
+      #   ±34° 에 몰린 것은 footprint 앞 모서리 방위(atan2(0.182,0.270)=34°)다.
+      #   AMCL 은 정상이었다(스캔-지도 정합 중앙값 3.2cm, 기준선 3.1cm).
+      #   대책은 escape_recovery.py 의 '회전 여유 게이트'.
+      #
+      # immediate_stop 의 구조적 한계:
+      #   앞변 0.170 vs 실제 코 0.264  -> 무방비 띠 94mm
+      #   최대반경 0.252 < 코 스윕반경 0.264
+      #   => 제자리 회전을 하면 코는 항상 폴리곤 밖을 쓸고 지나간다.
+      #   w=0.420 에서 코 접선속도 0.111 m/s -> 94mm 통과에 0.85초.
+      #
+      # 좌표는 실측 footprint 그대로 — 코(0.264)까지 덮는다.
+      # 🔴 immediate_stop 은 건드리지 않았다. 앞변을 0.264 로 늘리면 코 자체의
+      #    자기반사(/scan 차체 박스는 x<=0.175 까지만 지운다)가 상시 정지를 만든다.
+      #    코 폭 실측(Jira -865) 전에는 위험하다.
+      type: polygon
+      points: [0.264, 0.177, 0.264, -0.181, -0.150, -0.181, -0.150, 0.177]
       action_type: approach
-      # Humble's approach model projects the circular footprint along the
-      # current linear/angular command. A nearby point outside the commanded
-      # sweep no longer blocks motion, while forward, reverse, and in-place
-      # rotation collisions remain protected.
-      # Project only half a second ahead. The independent 0.30 m immediate
-      # stop remains active for the physical footprint.
-      time_before_collision: 0.5
+      # 0.10 m/s 에서 1.2초 = 12cm 전방부터 완만히 줄인다.
+      time_before_collision: 1.2
       simulation_time_step: 0.05
-      max_points: 0
+      # 🔴 0 이면 점이 없어도 '>= max_points_' 가 성립해 영구 정지가 된다.
+      #    Nav2 공식 튜토리얼 값: stop 3 / approach 5.
+      max_points: 5
       visualize: true
       polygon_pub_topic: /collision_monitor/directional_approach
-      enabled: false
+      # ⚠️ 되돌리려면 이 줄만 false 로. /cmd_vel/autonomy 가 1분 이상 0Hz 면 즉시.
+      enabled: true
     observation_sources: [scan]
     scan:
       type: scan

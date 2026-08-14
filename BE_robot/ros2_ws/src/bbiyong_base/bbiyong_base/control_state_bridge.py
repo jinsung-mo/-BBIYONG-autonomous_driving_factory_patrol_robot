@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish fail-safe mux state from the dashboard's atomic control file."""
+"""Publish fail-safe mux state from one persistent authority."""
 
 from __future__ import annotations
 
@@ -10,8 +10,9 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from bbiyong_base.qos import CONTROL_STATE_QOS
 from std_msgs.msg import Bool, String
+from std_srvs.srv import SetBool, Trigger
 
 
 class ControlStateBridge(Node):
@@ -28,17 +29,18 @@ class ControlStateBridge(Node):
         if rate <= 0.0:
             raise ValueError("publish_rate_hz must be positive")
 
-        qos = QoSProfile(
-            depth=1,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            reliability=ReliabilityPolicy.RELIABLE,
-        )
         self.mode_publisher = self.create_publisher(
-            String, "/bbiyong/control_mode", qos
+            String, "/bbiyong/control_mode", CONTROL_STATE_QOS
         )
-        self.estop_publisher = self.create_publisher(Bool, "/bbiyong/estop", qos)
+        self.estop_publisher = self.create_publisher(Bool, "/bbiyong/estop", CONTROL_STATE_QOS)
         self.create_subscription(
             Bool, "/bbiyong/estop_request", self._on_estop_request, 10
+        )
+        self.create_service(
+            SetBool, "/bbiyong/set_autonomy", self._on_set_autonomy
+        )
+        self.create_service(
+            Trigger, "/bbiyong/set_manual", self._on_set_manual
         )
         self.mode = "disabled"
         self.estop = True
@@ -62,19 +64,65 @@ class ControlStateBridge(Node):
         temporary.write_text(json.dumps(payload), encoding="utf-8")
         os.replace(temporary, self.control_file)
 
-    def _on_estop_request(self, message: Bool) -> None:
-        if not bool(message.data):
-            return
+    def _publish_state(self) -> None:
+        self.mode_publisher.publish(String(data=self.mode))
+        self.estop_publisher.publish(Bool(data=self.estop))
+
+    def _transition(self, mode: str, estop: bool, reason: str) -> tuple[bool, str]:
+        """Atomically persist and publish one authoritative control transition."""
+        previous = (self.sequence, self.mode, self.estop)
         self.sequence = max(0, self.sequence + 1)
-        self.mode = "disabled"
-        self.estop = True
+        self.mode = mode
+        self.estop = estop
         try:
             self._write_state()
         except OSError as exc:
+            if not estop:
+                # Never release motion unless the latched state was persisted.
+                self.sequence, self.mode, self.estop = previous
+                self.mode = "disabled"
+                self.estop = True
+                self._publish_state()
+                message = f"arm refused; failed to persist control state: {exc}"
+                self.get_logger().error(message)
+                return False, message
             self.get_logger().error(f"failed to persist emergency stop: {exc}")
-        self.mode_publisher.publish(String(data=self.mode))
-        self.estop_publisher.publish(Bool(data=True))
-        self.get_logger().warning("emergency stop request latched")
+
+        self._publish_state()
+        message = f"control state: mode={self.mode} estop={self.estop} ({reason})"
+        self.get_logger().info(message)
+        return True, message
+
+    def _on_set_autonomy(self, request, response):
+        if bool(request.data):
+            success, message = self._transition(
+                "autonomy", False, "confirmed autonomy request"
+            )
+        else:
+            success, message = self._transition(
+                "disabled", True, "confirmed stop request"
+            )
+        response.success = success
+        response.message = message
+        return response
+
+    def _on_set_manual(self, request, response):
+        del request
+        success, message = self._transition(
+            "manual", False, "confirmed manual request"
+        )
+        response.success = success
+        response.message = message
+        return response
+
+    def _on_estop_request(self, message: Bool) -> None:
+        if not bool(message.data):
+            return
+        success, _ = self._transition(
+            "disabled", True, "emergency stop request"
+        )
+        if success:
+            self.get_logger().warning("emergency stop request latched")
 
     def _read(self):
         try:
@@ -109,12 +157,12 @@ class ControlStateBridge(Node):
                     self.get_logger().info(
                         f"control state: mode={self.mode} estop={self.estop}"
                     )
-        self.mode_publisher.publish(String(data=self.mode))
-        self.estop_publisher.publish(Bool(data=self.estop))
+        self._publish_state()
 
     def stop(self) -> None:
-        self.mode_publisher.publish(String(data="disabled"))
-        self.estop_publisher.publish(Bool(data=True))
+        self.mode = "disabled"
+        self.estop = True
+        self._publish_state()
 
 
 def main(args=None) -> None:

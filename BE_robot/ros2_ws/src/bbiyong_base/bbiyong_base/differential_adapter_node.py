@@ -1,6 +1,7 @@
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
+from bbiyong_base.qos import CONTROL_STATE_QOS
 from std_msgs.msg import Bool, Float64
 
 from .kinematics import VehicleLimits, twist_to_differential
@@ -40,10 +41,14 @@ class DifferentialAdapter(Node):
         self.watchdog = CommandWatchdog(timeout)
         self.estop = True
         self.last_twist = Twist()
+        # (S15P11E101-801) 발행자(control_state_bridge.py)는 TRANSIENT_LOCAL 로 마지막
+        # 상태를 래치해 보낸다 — 순정수(10)면 기본 QoS인 VOLATILE 이 되어 래치된 값을
+        # 못 받고 재시작 시 몇 초~몇십 초간 estop=True 에 갇힌다(exploration_node.py
+        # 에서 실기 확인된 것과 같은 버그).
         self.left_pub = self.create_publisher(Float64, "/bbiyong/actuator/wheel_left", 10)
         self.right_pub = self.create_publisher(Float64, "/bbiyong/actuator/wheel_right", 10)
         self.create_subscription(Twist, "/cmd_vel", self._twist_callback, 10)
-        self.create_subscription(Bool, "/bbiyong/estop", self._estop_callback, 10)
+        self.create_subscription(Bool, "/bbiyong/estop", self._estop_callback, CONTROL_STATE_QOS)
         self.create_timer(0.05, self._tick)
         if not self.hardware_enabled:
             self.get_logger().warn("hardware_enabled=false: actuator outputs are forced to zero")
