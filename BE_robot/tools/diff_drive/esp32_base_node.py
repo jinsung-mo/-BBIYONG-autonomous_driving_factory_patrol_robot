@@ -5,7 +5,12 @@
 실험 스크립트와 동시에 띄우면 포트 충돌이 난다 (하나만 실행할 것).
 
     ros2 run 대신 직접:
-        python3 esp32_base_node.py --ros-args -p track_width_m:=0.2124
+        python3 esp32_base_node.py --ros-args -p duty_max:=30.0
+
+    🔑 파라미터 정본은 **이 파일의 declare_parameter 선언값**이다.
+       base_up.sh · stack_up.sh 는 duty_max 하나만 오버라이드하므로
+       track_width_m · laser_* 는 선언값이 곧 런타임 값이다.
+       (구 예시 `-p track_width_m:=0.2124` 는 선언값 0.2130 과 어긋나 제거했다 — 2026-07-31)
 
 구조
     /cmd_vel (Twist) ─→ 차동 기구학 ─→ `v <L> <R>` ─→ ESP32(속도 PID)
@@ -17,6 +22,8 @@
    따라서 여기서는 **양쪽 다 + = 전진**이며 right_wheel_direction 같은
    반전 파라미터를 두지 않는다. 두면 이중 반전이 된다.
 """
+import base64
+import binascii
 import hashlib
 import json
 import math
@@ -24,6 +31,7 @@ import os
 import re
 import shutil
 import socket
+import struct
 import sys
 import threading
 import time
@@ -58,26 +66,49 @@ from esp32_timing import McuTimeSynchronizer, parse_encoder_telemetry
 #    {"pct": 30, "ts": 1785306373.2}
 #    server.py 는 표준 라이브러리만 쓰므로 ROS 를 모른다. 그래서 파일이
 #    유일한 접점이고, 시리얼 유일 소유자인 이 노드가 펌웨어로 옮겨 준다.
+#    🔴 2026-07-31 복구: 이 파일에 있던 이 기능(power_tick)이 다른 수정본
+#    배포 과정에서 통째로 빠졌던 것을 07-29 백업(esp32_base_node.py.20260729_163014)
+#    에서 되살렸다. 당시 있던 power_ack_tick(회신 확인)은 그 백업에도 없어서
+#    복구하지 못했다 — 대신 2026-07-31에 새로 짰다(아래 POWER_ACK_FILE).
 POWER_FILE = os.environ.get("ORINCAR_POWER_FILE", "/tmp/orincar_power.json")
-
-# 🆕 되읽기(ack) 파일 — **반대 방향**이다. POWER_FILE 이 "명령"이라면 이쪽은
-#    "기기가 실제로 그렇게 됐다"는 회신이다.
-#    {"pct": 20, "ts": 1785310028.3}
-#
-# 🔴 왜 필요한가 — 지금까지 출력 제한은 **단방향**이었다:
-#      브라우저 → server.py(메모리 권위) → POWER_FILE → 이 노드 → 펌웨어 kx
-#    server.py 가 화면에 돌려주던 power_pct 는 **자기가 기억하는 명령값**이지
-#    펌웨어에 물어본 결과가 아니다. 그래서 이 노드가 죽어 있으면
-#    파일은 갱신되는데 펌웨어는 못 받고, **대시보드는 새 값을 표시한 채
-#    로봇은 옛 duty_max 로 달린다.** 실제로 그 상태를 재현할 수 있다.
-#    → 펌웨어 `k?` 회신을 파싱해 이 파일로 되돌려, 화면이 "명령"과 "실제"를
-#      나란히 보게 한다. 둘이 다르면 그게 곧 경보다.
+# 🆕 되읽기 — esp32_base_node 가 펌웨어 `k?` 회신에서 뽑아 떨구는 **실제** duty_max.
+#    CTL["power_pct"](server.py)는 이 프로세스가 기억하는 **명령값**이지 펌웨어에
+#    물어본 결과가 아니다. esp32_base_node 가 죽어 있으면 POWER_FILE 은 갱신되는데
+#    펌웨어는 못 받는다 — 그런데 화면은 새 값을 그대로 표시해버린다. 그 한 방향
+#    신뢰를 끊으려고 반대 방향 파일을 하나 더 쓴다. server.py 의 POWER_ACK_FRESH_S(15s)
+#    와 대칭 — 여기서는 5초마다 질의한다(3회 연속 실패해야 화면이 stale 로 본다).
 POWER_ACK_FILE = os.environ.get("ORINCAR_POWER_ACK_FILE",
                                 "/tmp/orincar_power_ack.json")
+SERVO_FILE = "/tmp/orincar_servo.json"
+# 🆕 서보 상태 되읽기 — 방향이 SERVO_FILE 과 **반대**다.
+#    SERVO_FILE  = 대시보드 → 이 노드 (명령: "몇 도로 가라")
+#    SERVO_STATE_FILE = 이 노드 → 대시보드 (상태: "마지막으로 실제 시리얼에 내보낸 각도")
+#    🔴 SG90 류 RC 서보는 위치 피드백 배선이 없다 — 축이 진짜 그 각도에 있는지는
+#    알 방법이 없다. 여기 담기는 값은 "펌웨어에 전송 성공한 마지막 명령각"(servo_angle_sent)
+#    이지 실측 위치가 아니다. server.py·프런트는 이 사실을 라벨에 그대로 밝힌다.
+#    POWER_ACK_FILE 과 같은 관례(원자적 쓰기, ts 로 신선도 판정).
+SERVO_STATE_FILE = os.environ.get("ORINCAR_SERVO_STATE_FILE",
+                                  "/tmp/orincar_servo_state.json")
+# 🆕 DHT11(온습도) + INA226(배터리전압) — speed_pid.ino 가 1Hz 로 내는
+#    `E,<millis>,<dht_ok>,<tempC>,<humidity%>,<ina_ok>,<batt_V>` 줄을
+#    이 노드가 파싱해 떨군다. server.py 는 ROS 를 모르므로 POWER_FILE·
+#    SERVO_FILE 과 같은 관례로 파일이 유일한 접점이다.
+ENV_FILE = os.environ.get("ORINCAR_ENV_FILE", "/tmp/orincar_env.json")
 
-# `# kp=25.00 ki=60.00 ... duty_max=30.0 v_alpha=0.30 deadman=1000ms` 에서
-# duty_max 만 뽑는다. 다른 키가 늘거나 순서가 바뀌어도 깨지지 않게 키로 앵커한다.
-DUTY_MAX_RE = re.compile(r"duty_max=([0-9]+(?:\.[0-9]+)?)")
+# 🆕 배터리 % — "대충" 선형 매핑이다. 근거는 이미 확정된 두 값뿐이다:
+#    만충 25.2V(6S 공칭 21.6V, CLAUDE.md 배터리 스펙) ·
+#    19.0V(CLAUDE.md "19V 미만 30초 지속 → 복귀충전" 운영 트리거).
+#    리튬 방전곡선은 비선형이라 이 값은 정밀 SoC 가 아니라 대략적 지표일 뿐이다.
+#    실측 방전곡선이 생기기 전까지는 이 이상 정밀하게 만들지 않는다(지어내지 않는다).
+BATT_EMPTY_V = 19.0
+BATT_FULL_V = 25.2
+
+
+def battery_percent(volts):
+    if volts is None:
+        return None
+    pct = (volts - BATT_EMPTY_V) / (BATT_FULL_V - BATT_EMPTY_V) * 100.0
+    return round(max(0.0, min(100.0, pct)), 1)
 
 
 def yaw_to_quat(yaw):
@@ -142,16 +173,21 @@ class Esp32Base(Node):
         self.declare_parameter("odom_frame", "odom")
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("laser_frame", "laser_frame")
-        # [실측 2026-07-26] 제자리 회전 중 벽거리 사인파 적합. 2회 평균.
         # [수정 2026-07-31] 7월 29일 차체 수평 복원(재조립)으로 인한 라이다 수평 투영 거리 축소 반영 (0.0597 -> 0.0550)
         self.declare_parameter("laser_x", 0.0550)
         self.declare_parameter("laser_y", -0.0051)
-        # The LiDAR is mounted facing backward. Preserve the measured +4.31 deg
-        # mounting correction, then add 180 deg:
-        #   normalize(+0.0752 + pi) = -3.06639 rad (-175.69 deg)
-        # This is a physical base_link -> laser_frame rotation. Do not express
-        # it by changing the driver's inverted/reversion scan-order settings.
-        # Re-run laser_yaw_calib.py if the mount is moved again.
+        # 🔄 2026-07-31 실차 확인 — -3.06639 rad 로 갱신.
+        #    팀 be_robot/dev(커밋 880adbc, 2026-07-29)와 일치, Orin 실기
+        #    (`~/calib/esp32_base_node.py`)도 이미 이 값이었다 — 개인 저장소만
+        #    아래 07-26 구값에 뒤처져 있었다. 2026-07-29 재조립 때 라이다가
+        #    재설치되며 방향이 바뀐 것으로 보이나, 정확히 언제·어떻게 재설치됐는지는
+        #    [확인 필요] — 지어내지 않는다.
+        #    확인: ssh orin "grep laser_yaw ~/calib/esp32_base_node.py"
+        #
+        #    (이력, 무효화됨) 🔒 +4.31° = +0.0752 rad — 2026-07-26 laser_yaw_calib.py
+        #    3회 평균(전진 +4.52/+4.69, 후진 +3.71, 산포 ±0.5°). 평면 2개 + 직진
+        #    이동벡터 방식. 전진·후진이 일치해 당시엔 짝짓기 계통오차가 아니라
+        #    실제 마운트 오차로 판단했으나, 이후 라이다 재장착으로 무효가 됐다.
         self.declare_parameter("laser_yaw", -3.06639)
 
         # ── 🆕 펌웨어 게인 (`k` 명령으로 기동 시 전송) ──────────────
@@ -215,6 +251,11 @@ class Esp32Base(Node):
         self.scan_tf_available = 0
         self.last_scan_tf_age_ms = None
         self.last_diag_values = None
+        # Chunked thermal frames are assembled only in serial_loop(), so no
+        # additional lock or reader thread can contend with odometry parsing.
+        self.ir_chunk_key = None
+        self.ir_chunk_total = 0
+        self.ir_chunks = {}
         # 주행로그 상태 — serial_loop 스레드 전용. 락을 걸지 않는다
         self.trace_root = str(g("trace_dir"))
         self.trace_fp = None
@@ -223,17 +264,6 @@ class Esp32Base(Node):
         self.trace_pending = 0
         self.fw_banner = None
         self.fw_tunables = None
-        # 🆕 출력 제한 — 마지막으로 **펌웨어에 실제로 보낸** 값.
-        #    None = 아직 한 번도 안 보냄 → 첫 관측값은 무조건 보낸다
-        #    (기동 순서가 어떻든 화면과 펌웨어를 한 번은 맞춘다).
-        self.power_pct_sent = None
-        self.power_warned = False      # 경고는 한 번만. 1Hz 로그 폭주 방지
-        # 🆕 되읽기 — 펌웨어가 `k?` 로 회신한 **실제** duty_max.
-        #    serial_loop(리더 스레드)이 쓰고 아무도 안 읽지만, 같은 객체를
-        #    두 스레드가 만지므로 다른 카운터들과 동일하게 self.lock 아래 둔다.
-        self.power_pct_ack = None
-        self.power_ack_query_warned = False   # 조회 전송 실패 경고 1회만
-        self.power_ack_write_warned = False   # ack 파일 쓰기 실패 경고 1회만
 
         # ── 시리얼 ──────────────────────────────────────────────────
         self.ser = serial.Serial(g("port"), int(g("baud")), timeout=0.2)
@@ -280,6 +310,22 @@ class Esp32Base(Node):
         # 🔑 fw_tunables 가 확보된 뒤에 열어야 meta 에 **실제 적용값**이 들어간다
         self._open_trace()
 
+        # 🆕 출력 제한 — 마지막으로 **펌웨어에 실제로 보낸** 값.
+        #    None = 아직 한 번도 안 보냄 → 첫 관측값은 무조건 보낸다
+        #    (기동 순서가 어떻든 화면과 펌웨어를 한 번은 맞춘다).
+        self.power_pct_sent = None
+        self.power_warned = False      # 경고는 한 번만. 1Hz 로그 폭주 방지
+        # 🆕 되읽기(ack) 상태 — 질의는 이 스레드(타이머)에서, 응답 파싱은
+        #    serial_loop(리더 스레드)에서 한다. 시리얼 read는 리더 스레드
+        #    하나로만 해야 경합이 없다 — 여기서 직접 readline 하지 않는다.
+        self.power_pct_ack = None
+        self.power_ack_query_warned = False   # 조회 전송 실패 경고 1회만
+        self.power_ack_write_warned = False   # ack 파일 쓰기 실패 경고 1회만
+
+        self.servo_angle_sent = None
+        self.servo_warned = False
+        self.servo_state_write_warned = False   # 상태파일 쓰기 실패 경고 1회만
+
         self.reader = threading.Thread(target=self.serial_loop, daemon=True)
         self.reader.start()
         # Command/watchdog output stays periodic. Odometry is emitted only when
@@ -289,16 +335,10 @@ class Esp32Base(Node):
         # 🆕 출력 제한 감시 1Hz. 슬라이더는 사람 손이라 1Hz 면 충분하고,
         #    더 빠르게 돌면 stat() 만 늘고 얻는 게 없다.
         self.create_timer(1.0, self.power_tick)
-        # 🆕 되읽기 조회 5초 주기.
-        #    🔑 `create_timer` 를 쓰는 이유는 command_tick·power_tick 과
-        #       **같은 executor 스레드**에서 돌리기 위해서다. rclpy.spin() 은
-        #       SingleThreadedExecutor 라 타이머끼리는 절대 겹치지 않는다 —
-        #       별도 스레드로 만들면 command_tick 의 `v ...` write 와 뒤섞여
-        #       한 줄이 쪼개질 수 있고, 그러면 펌웨어 파서가 명령을 잃는다.
-        #    🔑 5초인 이유: 회신 1줄(≈90B)이 T줄 사이에 끼는 비용 대 신선도의
-        #       절충. 대시보드 신선도 판정 창(15초)의 1/3 이라 정상 상태에서
-        #       한 번 놓쳐도 여전히 "신선"으로 남는다.
+        # 🆕 출력 제한 회신 질의 5Hz가 아니라 0.2Hz(5초) — server.py의
+        #    POWER_ACK_FRESH_S=15s와 맞춘 생산 주기(3회 연속 실패해야 stale).
         self.create_timer(5.0, self.power_ack_tick)
+        self.create_timer(0.2, self.servo_tick)
 
     # ══════════════════════════════════════════════════════════════
     # 게인 전송 (설계문서 §2)
@@ -308,6 +348,195 @@ class Esp32Base(Node):
         ("kp", "p"), ("ki", "i"), ("ff_slope", "f"), ("ff_dead", "z"),
         ("i_limit", "l"), ("duty_max", "x"), ("v_alpha", "a"),
     )
+
+    # ── 🆕 출력 제한 감시 (대시보드 슬라이더 → 펌웨어 duty_max) ──────
+    def power_tick(self):
+        """POWER_FILE 을 1Hz 로 읽어 **바뀐 값만** 펌웨어에 밀어 넣는다.
+
+        🔴 어떤 예외도 밖으로 내보내지 않는다. 이 노드는 오도메트리를 담당한다 —
+           /tmp 파일 하나 못 읽었다고 주행이 멈추면 안 된다. `_trace_write` 와
+           같은 방침이다(실패는 삼키고 기능만 조용히 쉰다).
+        🔑 파일이 없거나 깨졌으면 **아무것도 하지 않는다.** 기동 시 ROS 파라미터
+           duty_max 로 이미 보낸 값이 그대로 유효하다 — 0 으로 떨어뜨리지 않는다.
+        🔑 매 틱 보내지 않는다. 같은 값을 1Hz 로 계속 쏘면 시리얼 대역을 먹고
+           펌웨어가 매번 printTunables() 로 8줄을 되뱉어 T줄 사이에 끼어든다.
+        """
+        try:
+            with open(POWER_FILE) as f:
+                pct = int(round(float(json.load(f)["pct"])))
+        except Exception:                       # noqa: BLE001 — 없음/깨짐/권한 전부
+            return                              # 조용히 넘어간다. 다음 틱에 또 본다
+        pct = max(0, min(100, pct))             # 서버가 이미 잘랐지만 여기서도 자른다
+        if pct == self.power_pct_sent:
+            return
+
+        # 🔴 펌웨어 명령은 `x 30` 이 아니라 **`kx30.000000`** 이다.
+        #    speed_pid.ino:190-201 의 최상위 switch 에 'x' 케이스가 없다 — 'k' 아래
+        #    서브키다. 공백을 넣으면 서브키가 ' ' 가 되어 무시되고,
+        #    지수표기는 parseFloat 이 못 읽는다. TUNABLE_KEYS 의 매핑을 그대로 쓴다.
+        key = dict(self.TUNABLE_KEYS)["duty_max"]
+        try:
+            self.ser.write(f"k{key}{float(pct):.6f}\n".encode())   # 단일 write
+        except Exception as e:                  # noqa: BLE001
+            if not self.power_warned:
+                self.get_logger().warn(f"출력 제한 전송 실패: {e}")
+                self.power_warned = True
+            return
+        prev = self.power_pct_sent
+        self.power_pct_sent = pct
+        self.power_warned = False
+        self.get_logger().info(
+            f"출력 제한 {'—' if prev is None else prev}% → {pct}% "
+            f"(k{key}{float(pct):.1f} 전송)")
+
+    def power_ack_tick(self):
+        """5초마다 펌웨어에 `k?`를 물어 실제 duty_max 를 회신받는다.
+
+        🔴 응답은 여기서 안 읽는다 — 시리얼 read 는 리더 스레드(`serial_loop`)
+           하나로만 해야 경합이 없다(동시에 두 스레드가 readline 하면 어느 쪽이
+           줄을 가져갈지 보장이 없다). 여기서는 질의만 던지고, 실제 파싱과
+           ACK 파일 쓰기는 `serial_loop` 가 "# kp=..." 회신 줄을 받았을 때
+           `_handle_tunables_echo` 에서 처리한다. `power_tick` 이 보내는
+           `kx<pct>` 명령도 펌웨어가 항상 `printTunables()` 로 같은 형식의
+           줄을 되뱉으므로(speed_pid.ino 의 'k' 케이스 마지막), 값이 바뀔
+           때마다 이 5초를 기다리지 않고도 더 빨리 ACK 가 갱신된다.
+        """
+        try:
+            self.ser.write(b"k?\n")
+            self.ser.flush()
+        except Exception as e:                  # noqa: BLE001
+            if not self.power_ack_query_warned:
+                self.get_logger().warn(f"출력 제한 회신 질의 실패: {e}")
+                self.power_ack_query_warned = True
+            return
+        self.power_ack_query_warned = False
+
+    def servo_tick(self):
+        # 🔴 종전에는 int() 라 1도 단위였다. 펌웨어 `c` 파서를 0.1도까지 받도록 고쳐도
+        #    여기(와 server.py `_servo`)가 먼저 자르면 아무 효과가 없다 — 낮은 쪽이 이긴다.
+        #    IPM 거리추정에서 카메라 pitch 0.66° 오차는 1 m 에서 7.9% 다
+        #    (docs/단안깊이_조사_2026-08-02.md §3-2 · 링크 레버비 0.66 은 노즈설계 §5).
+        #    0.1도로 양자화해 두면 float 동등비교가 안전하고 전송 문자열도 결정적이다.
+        #
+        # 🆕 이 함수 끝에서 매 틱(5Hz) SERVO_STATE_FILE 을 갱신한다 — agy 검토 결과
+        #    "1Hz 하트비트만으로는 확정 지연이 최대 1초"라는 지적을 받아, 새 명령을
+        #    보낸 바로 그 틱에서 즉시 반영하도록 했다(이미 5Hz 로 돌던 타이머라
+        #    타이머를 새로 만들 필요가 없었다). 명령이 없어도 매 틱 ts 를 갱신해
+        #    "노드가 살아 있다"는 신선도(하트비트)를 유지한다 — _write_power_ack 와
+        #    같은 방침이다.
+        try:
+            with open(SERVO_FILE) as f:
+                angle = float(json.load(f).get("angle", 90))
+            angle = round(max(0.0, min(180.0, angle)), 1)
+        except Exception:
+            angle = None      # 명령 파일 없음/깨짐 — 새 명령이 없다는 뜻, 정지 아님
+
+        if angle is not None and angle != self.servo_angle_sent:
+            try:
+                self.ser.write(f"c {angle:.1f}\n".encode())
+                self.ser.flush()
+                self.servo_angle_sent = angle
+                self.servo_warned = False
+            except Exception as e:
+                if not self.servo_warned:
+                    self.get_logger().warn(f"서보명령 전송 실패: {e}")
+                    self.servo_warned = True
+
+        self._write_servo_state()
+
+    def _write_servo_state(self):
+        """SERVO_STATE_FILE 에 servo_angle_sent 를 원자적으로 떨군다.
+
+        POWER_ACK_FILE(`_write_power_ack`)과 같은 관례 — 값이 안 바뀌어도 매번
+        쓴다. ts 를 계속 갱신해야 대시보드가 "노드가 살아서 최근에 확인해줬다"는
+        신선도를 판정할 수 있다. servo_angle_sent 가 아직 None(기동 후 명령을
+        한 번도 못 받음)이어도 그대로 쓴다 — "모른다"를 굳이 숨기지 않는다.
+        """
+        tmp = SERVO_STATE_FILE + ".tmp"
+        try:
+            with open(tmp, "w") as f:
+                json.dump({"angle_sent": self.servo_angle_sent, "ts": time.time()}, f)
+            os.replace(tmp, SERVO_STATE_FILE)
+        except OSError as e:
+            if not self.servo_state_write_warned:
+                self.get_logger().warn(
+                    f"서보 상태 파일 쓰기 실패 {SERVO_STATE_FILE}: {e}")
+                self.servo_state_write_warned = True
+            return
+        self.servo_state_write_warned = False
+
+    def _handle_tunables_echo(self, line):
+        """`# kp=... duty_max=<pct> ...` 회신 줄에서 duty_max 를 뽑아 ACK 파일에 쓴다.
+
+        🔑 매번(값이 안 바뀌어도) 쓴다 — ts 를 계속 갱신해야 "노드가 살아서
+           확인해줬다"는 신선도(POWER_ACK_FRESH_S)가 유지된다. 값 중복을
+           걸러내면(power_tick 처럼) 안 바뀐 채 오래 유지될 때 화면이
+           틀리게 stale 로 떨어진다 — 그건 이 기능의 존재 이유와 반대다.
+        """
+        m = re.search(r"duty_max=([\d.]+)", line)
+        if not m:
+            return
+        pct = int(round(float(m.group(1))))
+        self.power_pct_ack = pct
+        self._write_power_ack(pct)
+
+    def _write_power_ack(self, pct):
+        """server.py 의 `_write_power_file` 과 대칭 — 원자적으로 쓴다.
+
+        읽는 쪽(`_read_power_ack`)은 옛 값 아니면 새 값만 본다.
+        """
+        tmp = POWER_ACK_FILE + ".tmp"
+        try:
+            with open(tmp, "w") as f:
+                json.dump({"pct": int(pct), "ts": time.time()}, f)
+            os.replace(tmp, POWER_ACK_FILE)
+        except OSError as e:
+            if not self.power_ack_write_warned:
+                self.get_logger().warn(
+                    f"출력 제한 ack 파일 쓰기 실패 {POWER_ACK_FILE}: {e}")
+                self.power_ack_write_warned = True
+            return
+        self.power_ack_write_warned = False
+
+    def _handle_env_telemetry(self, raw):
+        """`E,<millis>,<dht_ok>,<tempC>,<humidity%>,<ina_ok>,<batt_V>` → 상태 파일.
+
+        speed_pid.ino 가 T,/IR, 과는 별도로 1Hz 로 내는 줄이다(주석 참고:
+        firmware/speed_pid/speed_pid.ino 의 "환경/배터리 센서" 절). 여기서는
+        문자열 split + float 변환뿐이라 오도메트리 실시간성에 영향이 없다.
+        🔴 어떤 예외도 밖으로 내보내지 않는다 — 센서 한 줄 파싱 실패로 리더
+           스레드가 죽으면 안 된다(다른 _write_* 헬퍼들과 같은 방침).
+        """
+        try:
+            parts = raw.split(",")
+            if len(parts) != 7:
+                return
+            _, _millis, dht_ok, temp_c, humidity, ina_ok, batt_v = parts
+            dht_ok = bool(int(dht_ok))
+            ina_ok = bool(int(ina_ok))
+            # 펌웨어는 실패 시 이전 값을 래치해서 보내지만(NaN 방지), 여기서는
+            # *_ok 가 false 면 신뢰할 수 없는 값으로 보고 None 처리한다 — 화면이
+            # "한 번도 못 읽었는데 0.0 이 찍혀 있다"를 참으로 만들지 않기 위해서다.
+            volts = float(batt_v) if ina_ok else None
+            payload = {
+                "ts": time.time(),
+                "battery": {
+                    "connected": ina_ok,
+                    "volts": volts,
+                    "percent": battery_percent(volts),
+                },
+                "env": {
+                    "connected": dht_ok,
+                    "temp_c": float(temp_c) if dht_ok else None,
+                    "humidity_pct": float(humidity) if dht_ok else None,
+                },
+            }
+            tmp = ENV_FILE + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(payload, f)
+            os.replace(tmp, ENV_FILE)
+        except Exception as e:                   # noqa: BLE001
+            self.get_logger().error(f"E, 파싱/기록 실패: {e}")
 
     def _read_lines(self, budget_s):
         """budget_s 동안 도착한 줄을 모은다. 예외를 밖으로 내보내지 않는다."""
@@ -567,17 +796,17 @@ class Esp32Base(Node):
         v = max(-self.max_lin, min(self.max_lin, msg.linear.x))
         w = max(-self.max_ang, min(self.max_ang, msg.angular.z))
         half = 0.5 * self.track * w
-
+        
         req_l = v - half
         req_r = v + half
-
+        
         # Saturation Scaling: preserve turning radius if physical limit is exceeded
         max_req = max(abs(req_l), abs(req_r))
         if max_req > self.max_lin:
             scale = self.max_lin / max_req
             req_l *= scale
             req_r *= scale
-
+            
         with self.lock:
             self.tgt_l, self.tgt_r = req_l, req_r
             self.last_cmd_t = time.time()
@@ -595,17 +824,76 @@ class Esp32Base(Node):
             arrival_ns = self.get_clock().now().nanoseconds
             if self.trace_fp is not None and raw:
                 self._trace_write(arrival_ns, raw)
+            if raw.startswith("# kp="):
+                self._handle_tunables_echo(raw)
+                continue
+            if raw.startswith("L tgt"):
+                self.get_logger().info("펌웨어가 사람용 로그를 보내고 있습니다. 기계용(CSV)으로 전환(t 명령)합니다.")
+                self.ser.write(b"t\n")
+                self.ser.flush()
+                continue
+            if raw.startswith("IRC,"):
+                try:
+                    parts = raw.split(",", 5)
+                    if len(parts) != 6:
+                        raise ValueError("expected six IRC fields")
+                    stamp_ms = int(parts[1])
+                    frame_seq = int(parts[2])
+                    chunk_index = int(parts[3])
+                    chunk_total = int(parts[4])
+                    body = parts[5].strip()
+                    if not 1 <= chunk_total <= 64:
+                        raise ValueError("invalid IRC chunk count")
+                    if not 0 <= chunk_index < chunk_total:
+                        raise ValueError("invalid IRC chunk index")
+                    if len(body) > 128:
+                        raise ValueError("oversized IRC payload")
+
+                    key = (stamp_ms, frame_seq)
+                    if key != self.ir_chunk_key:
+                        self.ir_chunk_key = key
+                        self.ir_chunk_total = chunk_total
+                        self.ir_chunks = {}
+                    elif chunk_total != self.ir_chunk_total:
+                        raise ValueError("IRC chunk count changed within frame")
+                    self.ir_chunks[chunk_index] = body
+
+                    if len(self.ir_chunks) == self.ir_chunk_total:
+                        encoded = "".join(
+                            self.ir_chunks[index]
+                            for index in range(self.ir_chunk_total)
+                        )
+                        pixels = _decode_ir(encoded)
+                        if pixels is not None:
+                            with open("/tmp/ir.json", "w") as f:
+                                json.dump({"width": 32, "height": 24,
+                                           "pixels": pixels}, f)
+                        self.ir_chunk_key = None
+                        self.ir_chunk_total = 0
+                        self.ir_chunks = {}
+                except Exception as exc:
+                    self.get_logger().error(f"IRC parse error: {exc}")
+                    self.ir_chunk_key = None
+                    self.ir_chunk_total = 0
+                    self.ir_chunks = {}
+                continue
+            if raw.startswith("IR,"):
+                try:
+                    parts = raw.split(",")
+                    if len(parts) >= 3:
+                        body = parts[2].strip()
+                        pixels = _decode_ir(body)
+                        if pixels is not None:
+                            with open("/tmp/ir.json", "w") as f:
+                                json.dump({"width": 32, "height": 24,
+                                           "pixels": pixels}, f)
+                except Exception as exc:
+                    self.get_logger().error(f"IR parse error: {exc}")
+                continue
+            if raw.startswith("E,"):
+                self._handle_env_telemetry(raw)
+                continue
             if not raw.startswith("T,"):
-                # 🆕 되읽기 — `k?` 회신은 T줄이 아니라 '#' 줄로 온다.
-                #    🔑 **여기서 처리하는 이유**: serial_loop 이 이미 포트의
-                #       모든 줄을 읽고 있다. 별도 읽기 경로를 만들면 두 스레드가
-                #       같은 포트에서 readline() 을 다투게 되고, 회신을 가져가는
-                #       쪽이 매번 달라져 T줄(오도메트리)까지 잃는다.
-                #    🔑 _trace_write 를 **지나온 뒤**에 본다 — tee 는 '#' 줄을
-                #       거르지 않는 것이 설계 의도(이벤트·게인·배너)라
-                #       그 동작을 조금도 바꾸지 않는다.
-                if raw.startswith("#") and "duty_max=" in raw:
-                    self._absorb_duty_max(raw)
                 continue
             try:
                 sample = parse_encoder_telemetry(raw)
@@ -687,115 +975,6 @@ class Esp32Base(Node):
             self.ser.write(f"v {left:.4f} {right:.4f}\n".encode())
         except Exception as e:
             self.get_logger().error(f"시리얼 송신 실패: {e}")
-
-    # ── 🆕 출력 제한 감시 (대시보드 슬라이더 → 펌웨어 duty_max) ──────
-    def power_tick(self):
-        """POWER_FILE 을 1Hz 로 읽어 **바뀐 값만** 펌웨어에 밀어 넣는다.
-
-        🔴 어떤 예외도 밖으로 내보내지 않는다. 이 노드는 오도메트리를 담당한다 —
-           /tmp 파일 하나 못 읽었다고 주행이 멈추면 안 된다. `_trace_write` 와
-           같은 방침이다(실패는 삼키고 기능만 조용히 쉰다).
-        🔑 파일이 없거나 깨졌으면 **아무것도 하지 않는다.** 기동 시 ROS 파라미터
-           duty_max 로 이미 보낸 값이 그대로 유효하다 — 0 으로 떨어뜨리지 않는다.
-        🔑 매 틱 보내지 않는다. 같은 값을 1Hz 로 계속 쏘면 시리얼 대역을 먹고
-           펌웨어가 매번 printTunables() 로 8줄을 되뱉어 T줄 사이에 끼어든다.
-        """
-        try:
-            with open(POWER_FILE) as f:
-                pct = int(round(float(json.load(f)["pct"])))
-        except Exception:                       # noqa: BLE001 — 없음/깨짐/권한 전부
-            return                              # 조용히 넘어간다. 다음 틱에 또 본다
-        pct = max(0, min(100, pct))             # 서버가 이미 잘랐지만 여기서도 자른다
-        if pct == self.power_pct_sent:
-            return
-
-        # 🔴 펌웨어 명령은 `x 30` 이 아니라 **`kx30.000000`** 이다.
-        #    speed_pid.ino:167 의 최상위 switch 에 'x' 케이스가 없다 — 'k' 아래
-        #    서브키다(191-201행). 공백을 넣으면 서브키가 ' ' 가 되어 무시되고,
-        #    지수표기는 parseFloat 이 못 읽는다. TUNABLE_KEYS 의 매핑을 그대로 쓴다.
-        key = dict(self.TUNABLE_KEYS)["duty_max"]
-        try:
-            self.ser.write(f"k{key}{float(pct):.6f}\n".encode())   # 단일 write
-        except Exception as e:                  # noqa: BLE001
-            if not self.power_warned:
-                self.get_logger().warn(f"출력 제한 전송 실패: {e}")
-                self.power_warned = True
-            return
-        prev = self.power_pct_sent
-        self.power_pct_sent = pct
-        self.power_warned = False
-        self.get_logger().info(
-            f"출력 제한 {'—' if prev is None else prev}% → {pct}% "
-            f"(k{key}{float(pct):.1f} 전송)")
-
-    # ── 🆕 되읽기 (펌웨어 duty_max → 대시보드) ──────────────────────
-    def power_ack_tick(self):
-        """5초마다 펌웨어에 게인 조회를 보낸다. 회신은 serial_loop 이 받는다.
-
-        🔴 명령 문자열은 추측하지 않고 `_send_tunables` 가 쓰는 것을 그대로
-           재사용한다 — `k?` 다. `k ?` 는 **동작하지 않는다**: speed_pid.ino:186
-           이 'k' 다음 한 글자를 서브키로 읽어서 공백이면 그냥 무시한다.
-        🔴 어떤 예외도 밖으로 내보내지 않는다. 이 노드는 오도메트리를 담당한다 —
-           조회 한 번 실패했다고 주행이 멈추면 안 된다.
-        🔑 경고는 **한 번만** 찍는다. 포트가 끊기면 5초마다 영원히 같은 줄이
-           쌓여 /tmp/base.log 를 채우고 진짜 오류를 덮는다 (power_warned 와 동일 패턴).
-        """
-        try:
-            self.ser.write(b"k?\n")            # 🔴 공백 없음. `k ?` 아님
-            self.ser.flush()
-        except Exception as e:                 # noqa: BLE001
-            if not self.power_ack_query_warned:
-                self.get_logger().warn(
-                    f"출력 제한 조회(k?) 전송 실패: {e} — 되읽기만 쉰다")
-                self.power_ack_query_warned = True
-            return
-        self.power_ack_query_warned = False
-
-    def _absorb_duty_max(self, raw):
-        """`# ... duty_max=25.0 ...` 한 줄에서 실제 적용값을 회수한다.
-
-        🔴 serial_loop(리더 스레드) 안에서 불린다. 예외를 밖으로 내보내면
-           리더 스레드가 죽고 **오도메트리가 통째로 멈춘다.** 전부 삼킨다.
-        🔑 값이 바뀔 때만이 아니라 **회신을 받을 때마다** 파일을 다시 쓴다.
-           대시보드는 `ts` 로 신선도를 판단하기 때문이다 — 값이 그대로라고
-           안 쓰면 ts 가 늙어서 "노드가 죽었다"와 구분이 안 된다.
-        """
-        try:
-            m = DUTY_MAX_RE.search(raw)
-            if not m:
-                return
-            pct = int(round(float(m.group(1))))
-        except Exception:                      # noqa: BLE001
-            return
-        with self.lock:                        # 다른 카운터들과 같은 락
-            prev = self.power_pct_ack
-            self.power_pct_ack = pct
-        # 🔑 파일 I/O 는 락 **밖**에서 한다. 락 안에서 write+fsync 를 하면
-        #    50Hz 로 도는 오도메트리 적분이 디스크를 기다리게 된다.
-        self._write_power_ack(pct)
-        if prev is not None and prev != pct:
-            # 값이 실제로 바뀐 순간만 로그. 5초마다 같은 줄을 찍지 않는다.
-            self.get_logger().info(f"출력 제한 기기 확인 {prev}% → {pct}%")
-
-    def _write_power_ack(self, pct):
-        """ack 파일을 **원자적으로** 떨군다 (.tmp → os.replace).
-
-        server.py 가 언제 읽을지 모르므로 반쯤 쓰인 JSON 이 보이는 창을
-        아예 만들지 않는다. os.replace 는 같은 파일시스템에서 원자적이라
-        읽는 쪽은 옛 값 아니면 새 값만 본다 (server.py 의 _write_power_file 과 대칭).
-        """
-        tmp = POWER_ACK_FILE + ".tmp"
-        try:
-            with open(tmp, "w") as f:
-                json.dump({"pct": int(pct), "ts": time.time()}, f)
-            os.replace(tmp, POWER_ACK_FILE)
-        except Exception as e:                 # noqa: BLE001
-            if not self.power_ack_write_warned:
-                self.get_logger().warn(
-                    f"출력 제한 ack 파일 쓰기 실패 {POWER_ACK_FILE}: {e}")
-                self.power_ack_write_warned = True
-            return
-        self.power_ack_write_warned = False
 
     def publish_odom(self, stamp_ns, x, y, th, v, w):
         stamp = Time(nanoseconds=stamp_ns).to_msg()
@@ -944,6 +1123,41 @@ class Esp32Base(Node):
         except Exception:
             pass
         self._close_trace("shutdown")
+
+
+def _decode_ir(body):
+    """열화상 한 줄을 픽셀 배열(°C×10)로. 못 알아보면 None.
+
+    두 형식을 모두 받는다.
+      · **base64** (2,048글자) — 지금 형식. int16 big-endian ×768.
+        🔑 부호가 있다. 영하 온도가 제대로 음수로 나온다
+      · **hex** (3,072글자) — 옛 형식. 🔴 uint16 로 읽혀서 영하가
+        6553.5°C 로 뒤집힌다. 그 버그까지 재현하지 않고 여기서 부호를
+        복원한다 — 옛 펌웨어가 물려 있어도 화면이 거짓말하지 않게
+
+    🔴 왜 둘 다 받나: 펌웨어 플래시는 물리 작업이라 Orin 과 동시에 바꿀 수
+       없다. 한쪽만 바뀐 구간에서 열화상이 죽으면 안 된다.
+       펌웨어가 전부 base64 로 넘어간 뒤 hex 가지는 지워도 된다.
+    """
+    def _signed(v):
+        return v - 65536 if v >= 32768 else v
+
+    if len(body) == 3072:                     # 옛 hex
+        try:
+            return [_signed(int(body[i:i + 4], 16)) for i in range(0, 3072, 4)]
+        except ValueError:
+            return None
+
+    if len(body) == 2048:                     # base64
+        try:
+            data = base64.b64decode(body, validate=True)
+        except (binascii.Error, ValueError):
+            return None
+        if len(data) != 1536:
+            return None
+        return list(struct.unpack(">768h", data))
+
+    return None
 
 
 def main():
