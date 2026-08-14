@@ -36,12 +36,33 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     private static final String BEARER_PREFIX = "Bearer ";
 
+    /** 제어 거부 사유를 요청자 본인에게만 배달하는 개인 목적지(화이트리스트 예외). */
+    private static final String USER_CONTROL_QUEUE = "/user/queue/control";
+
     private final JwtTokenProvider jwtTokenProvider;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-        if (accessor == null || !StompCommand.CONNECT.equals(accessor.getCommand())) {
+        if (accessor == null) {
+            return message;
+        }
+        // SUBSCRIBE 목적지 화이트리스트: 브로드캐스트는 /topic/** 만 사용한다.
+        // /queue, /user 등 미사용 목적지 구독을 차단해 브로커 오남용을 막는다. (S15P11E101-729)
+        // 예외: /user/queue/control — 제어 거부 사유를 요청자 본인에게만 돌려주는 개인 목적지.
+        // 브로커가 세션별로 목적지를 치환하므로 남의 통지를 받을 수 없다. (S15P11E101-779)
+        if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+            String destination = accessor.getDestination();
+            if (USER_CONTROL_QUEUE.equals(destination)) {
+                return message;
+            }
+            if (destination == null || !destination.startsWith("/topic/")) {
+                log.debug("STOMP SUBSCRIBE 거부: 허용되지 않은 목적지 {}", destination);
+                throw new MessagingException("허용되지 않은 구독 목적지입니다: " + destination);
+            }
+            return message;
+        }
+        if (!StompCommand.CONNECT.equals(accessor.getCommand())) {
             return message;
         }
 

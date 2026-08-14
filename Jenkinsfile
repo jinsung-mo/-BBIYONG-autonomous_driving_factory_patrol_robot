@@ -80,8 +80,9 @@ pipeline {
             steps {
                 dir('BE_system') {
                     sh '''
-                        docker compose --project-name bbiyong-system-test -f compose.test.yaml up -d --wait
-                        TEST_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3307/bbiyong_test \\
+                        export TEST_DB_PORT=3307
+                        docker compose --project-name bbiyong-system-deploy-test -f compose.test.yaml up -d --wait
+                        TEST_DATASOURCE_URL=jdbc:mysql://127.0.0.1:${TEST_DB_PORT}/bbiyong_test \\
                         TEST_DATASOURCE_USERNAME=test \\
                         TEST_DATASOURCE_PASSWORD=test \\
                         sh ./gradlew test --no-daemon
@@ -91,7 +92,7 @@ pipeline {
             post {
                 always {
                     dir('BE_system') {
-                        sh 'docker compose --project-name bbiyong-system-test -f compose.test.yaml down -v --remove-orphans || true'
+                        sh 'TEST_DB_PORT=3307 docker compose --project-name bbiyong-system-deploy-test -f compose.test.yaml down -v --remove-orphans || true'
                     }
                 }
             }
@@ -100,7 +101,23 @@ pipeline {
         stage('Deploy') {
             steps {
                 dir('BE_system') {
-                    sh 'docker compose up -d --build'
+                    withCredentials([
+                        string(
+                            credentialsId: 'bbiyong-jwt-secret',
+                            variable: 'BBIYONG_JWT_SECRET'
+                        ),
+                        string(
+                            credentialsId: 'bbiyong-robot-upload-token',
+                            variable: 'BBIYONG_ROBOT_UPLOAD_TOKEN'
+                        ),
+                        usernamePassword(
+                            credentialsId: 'bbiyong-gmail-smtp',
+                            usernameVariable: 'BBIYONG_MAIL_USERNAME',
+                            passwordVariable: 'BBIYONG_MAIL_PASSWORD'
+                        )
+                    ]) {
+                        sh 'docker compose up -d --build'
+                    }
                 }
             }
         }
@@ -109,7 +126,7 @@ pipeline {
             steps {
                 sh '''
                     for i in $(seq 1 30); do
-                        if curl -fsS http://127.0.0.1:8081/actuator/health; then
+                        if curl -fsS http://127.0.0.1:8081/actuator/health/deployment; then
                             exit 0
                         fi
                         sleep 2
@@ -128,7 +145,7 @@ pipeline {
             }
         }
         failure {
-            sh 'docker compose -f BE_system/compose.yaml logs --tail=100 || true'
+            sh 'docker logs --tail=100 bbiyong-server || true'
             script {
                 sendMattermostNotification(false)
             }

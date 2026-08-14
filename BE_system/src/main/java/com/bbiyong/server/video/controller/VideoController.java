@@ -79,7 +79,13 @@ public class VideoController {
         MediaType mediaType = MediaType.parseMediaType(stored.contentType());
         long length = contentLength(resource);
 
-        List<HttpRange> ranges = headers.getRange();
+        // malformed Range(예: "bytes=abc")는 파싱 예외가 500 으로 새지 않도록 400 으로 변환한다. (S15P11E101-715)
+        List<HttpRange> ranges;
+        try {
+            ranges = headers.getRange();
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 Range 헤더입니다.");
+        }
         if (ranges.isEmpty()) {
             // Range 미지정: 전체 파일을 단일 region 으로 200 응답.
             ResourceRegion full = new ResourceRegion(resource, 0, length);
@@ -92,6 +98,12 @@ public class VideoController {
         HttpRange range = ranges.get(0);
         long start = range.getRangeStart(length);
         long end = range.getRangeEnd(length);
+        // 파일 범위를 벗어난 요청(start >= length 등)은 RFC 9110 대로 416 + 전체 길이를 알려준다.
+        if (start >= length || start < 0 || end < start) {
+            return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    .header(HttpHeaders.CONTENT_RANGE, "bytes */" + length)
+                    .build();
+        }
         long chunk = Math.min(MAX_CHUNK_BYTES, end - start + 1);
         ResourceRegion region = new ResourceRegion(resource, start, chunk);
         return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)

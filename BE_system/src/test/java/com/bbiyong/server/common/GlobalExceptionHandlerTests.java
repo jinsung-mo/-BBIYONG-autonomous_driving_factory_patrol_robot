@@ -29,10 +29,10 @@ class GlobalExceptionHandlerTests {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.error").value("Bad Request"))
-                .andExpect(jsonPath("$.path").value("/api/auth/signup"))
+                .andExpect(jsonPath("$.title").value("Validation Failed"))
+                .andExpect(jsonPath("$.instance").value("/api/auth/signup"))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())
-                .andExpect(jsonPath("$.message").isNotEmpty());
+                .andExpect(jsonPath("$.detail").isNotEmpty());
     }
 
     @Test
@@ -44,8 +44,8 @@ class GlobalExceptionHandlerTests {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401))
-                .andExpect(jsonPath("$.error").value("Unauthorized"))
-                .andExpect(jsonPath("$.path").value("/api/auth/login"))
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                .andExpect(jsonPath("$.instance").value("/api/auth/login"))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
@@ -55,8 +55,8 @@ class GlobalExceptionHandlerTests {
         mockMvc.perform(get("/api/auth/login"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.status").value(405))
-                .andExpect(jsonPath("$.error").value("Method Not Allowed"))
-                .andExpect(jsonPath("$.path").value("/api/auth/login"));
+                .andExpect(jsonPath("$.title").value("Method Not Allowed"))
+                .andExpect(jsonPath("$.instance").value("/api/auth/login"));
     }
 
     @Test
@@ -66,6 +66,6 @@ class GlobalExceptionHandlerTests {
                         .content("not-json"))
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.status").value(415))
-                .andExpect(jsonPath("$.error").value("Unsupported Media Type"));
+                .andExpect(jsonPath("$.title").value("Unsupported Media Type"));
     }
 }

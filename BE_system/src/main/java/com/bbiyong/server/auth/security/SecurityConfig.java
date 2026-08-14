@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -31,6 +32,7 @@ import java.util.List;
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity // @PreAuthorize (관리자 전용 API 인가) 활성화
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -58,6 +60,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         // 헬스/모니터링
                         .requestMatchers("/actuator/**").permitAll()
+                        // Swagger UI 및 OpenAPI 문서 (개발/테스트 용도)
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         // 실시간 소켓 핸드셰이크 (로봇 WSS · 관제 STOMP/SockJS)
                         .requestMatchers("/ws/robot/**", "/ws-관제/**", "/ws/control/**").permitAll()
                         // 그 외 REST 는 인증 필요

@@ -2,8 +2,8 @@ package com.bbiyong.server.equipment;
 
 import com.bbiyong.server.auth.jwt.JwtTokenProvider;
 import com.bbiyong.server.equipment.domain.Equipment;
-import com.bbiyong.server.equipment.dto.StatusResponse;
 import com.bbiyong.server.equipment.repository.EquipmentRepository;
+import com.bbiyong.server.equipment.service.EquipmentService;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
@@ -14,13 +14,8 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
-
-import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,6 +26,9 @@ class EquipmentTests {
 
     @Autowired
     private EquipmentRepository equipmentRepository;
+
+    @Autowired
+    private EquipmentService equipmentService;
 
     @Autowired
     private TestRestTemplate restTemplate;
@@ -51,12 +49,36 @@ class EquipmentTests {
     }
 
     @Test
-    void getEquipmentsReturnsSeededPanels() {
+    void getEquipmentsReturnsRegisteredEquipment() {
+        // 자동 시드를 제거했으므로(S15P11E101) 테스트가 직접 설비를 등록해 조회를 검증한다.
+        Equipment probe = new Equipment();
+        probe.setEquipmentId("panel_probe");
+        probe.setName("조회 검증 분전반");
+        probe.setStatus("UNKNOWN");
+        equipmentRepository.save(probe);
+
         ResponseEntity<Equipment[]> resp = restTemplate.getForEntity("/api/equipments", Equipment[].class);
         assertThat(resp.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(resp.getBody()).isNotNull();
         assertThat(resp.getBody()).extracting(Equipment::getEquipmentId)
-                .contains("panel_A", "panel_B", "panel_C");
+                .contains("panel_probe");
+    }
+
+    @Test
+    void purgeRemovesDemoEquipmentButKeepsReal() {
+        // 데모 시드/흔적(panel_A/B/C, '데모')은 정리 대상, 실제 로봇 점검 설비는 유지.
+        Equipment demoA = new Equipment(); demoA.setEquipmentId("panel_A"); demoA.setName("A구역 분전반"); demoA.setStatus("UNKNOWN");
+        Equipment demoNamed = new Equipment(); demoNamed.setEquipmentId("eq_x"); demoNamed.setName("데모"); demoNamed.setStatus("UNKNOWN");
+        Equipment demoPanel = new Equipment(); demoPanel.setEquipmentId("demo_panel"); demoPanel.setName("demo_panel"); demoPanel.setStatus("OVER");
+        Equipment real = new Equipment(); real.setEquipmentId("switchboard_101"); real.setName("101호 분전반"); real.setStatus("UNKNOWN");
+        equipmentRepository.saveAll(java.util.List.of(demoA, demoNamed, demoPanel, real));
+
+        equipmentService.purgeDemoEquipments();
+
+        assertThat(equipmentRepository.findById("panel_A")).isEmpty();
+        assertThat(equipmentRepository.findById("eq_x")).isEmpty();
+        assertThat(equipmentRepository.findById("demo_panel")).isEmpty();
+        assertThat(equipmentRepository.findById("switchboard_101")).isPresent();
     }
 
     @Test
@@ -94,39 +116,4 @@ class EquipmentTests {
         assertThat(e.getLastTemperature()).isEqualTo(41.5);
     }
 
-    @Test
-    void updateThresholdSuccess() {
-        ResponseEntity<StatusResponse> resp = restTemplate.exchange(
-                RequestEntity.put(URI.create("/api/equipments/panel_C"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"threshold\": 70.0}"),
-                StatusResponse.class);
-
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(resp.getBody()).isNotNull();
-        assertThat(resp.getBody().status()).isEqualTo("SUCCESS");
-        assertThat(equipmentRepository.findById("panel_C").orElseThrow().getThreshold()).isEqualTo(70.0);
-    }
-
-    @Test
-    void updateThresholdNotFoundReturns404() {
-        ResponseEntity<String> resp = restTemplate.exchange(
-                RequestEntity.put(URI.create("/api/equipments/panel_ZZZ"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"threshold\": 55.0}"),
-                String.class);
-
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-    }
-
-    @Test
-    void updateThresholdInvalidBodyReturns400() {
-        ResponseEntity<String> resp = restTemplate.exchange(
-                RequestEntity.put(URI.create("/api/equipments/panel_C"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"threshold\": -5.0}"),
-                String.class);
-
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    }
 }

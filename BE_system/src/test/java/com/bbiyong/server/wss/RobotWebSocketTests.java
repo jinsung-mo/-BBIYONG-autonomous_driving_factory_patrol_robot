@@ -33,6 +33,13 @@ public class RobotWebSocketTests {
     @Autowired
     private ObjectMapper objectMapper;
 
+    /** 핸드셰이크 토큰 필수화(S15P11E101-715)에 맞춰 테스트 토큰(X-Robot-Token)을 싣는다. */
+    private static org.springframework.web.socket.WebSocketHttpHeaders robotAuthHeaders() {
+        var headers = new org.springframework.web.socket.WebSocketHttpHeaders();
+        headers.add("X-Robot-Token", "test-robot-secret");
+        return headers;
+    }
+
     @Test
     @DisplayName("WSS - 로봇 텔레메트리 전송 시 세션 등록 및 메모리 캐시 갱신 검증")
     void testRobotWebSocketTelemetry() throws Exception {
@@ -46,7 +53,7 @@ public class RobotWebSocketTests {
             protected void handleTextMessage(WebSocketSession session, TextMessage message) {
                 receivedMessages.add(message.getPayload());
             }
-        }, wsUrl).get(5, TimeUnit.SECONDS);
+        }, robotAuthHeaders(), java.net.URI.create(wsUrl)).get(5, TimeUnit.SECONDS);
 
         assertThat(session.isOpen()).isTrue();
 
@@ -93,7 +100,7 @@ public class RobotWebSocketTests {
         StandardWebSocketClient client = new StandardWebSocketClient();
 
         WebSocketSession session = client.execute(new TextWebSocketHandler() {
-        }, wsUrl).get(5, TimeUnit.SECONDS);
+        }, robotAuthHeaders(), java.net.URI.create(wsUrl)).get(5, TimeUnit.SECONDS);
 
         assertThat(session.isOpen()).isTrue();
 

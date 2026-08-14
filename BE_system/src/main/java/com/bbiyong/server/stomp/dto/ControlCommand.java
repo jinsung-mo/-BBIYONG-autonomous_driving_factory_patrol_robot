@@ -15,7 +15,7 @@ public class ControlCommand {
     @JsonProperty("robot_id")
     private String robotId;
 
-    private String command; // DRIVE | SET_MODE | ESTOP | NAVIGATE | SAVE_MAP | START_MAPPING | STOP_MAPPING | CAMERA_TILT
+    private String command; // DRIVE | SET_MODE | NAVIGATE | SAVE_MAP | START_MAPPING | STOP_MAPPING | CAMERA_TILT
 
     // DRIVE
     private Double linear;
@@ -23,9 +23,6 @@ public class ControlCommand {
 
     // SET_MODE
     private String mode; // autonomy | manual | disabled
-
-    // ESTOP (fail-safe: 활성화만 허용)
-    private Boolean active;
 
     // NAVIGATE
     private Double x;

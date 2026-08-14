@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -137,6 +138,25 @@ class EventControllerTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"DONE\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deleteRemovesEvent() throws Exception {
+        Long id = eventLogRepository.findAll().get(0).getEventId();
+
+        mockMvc.perform(delete("/api/events/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, bearer()))
+                .andExpect(status().isNoContent());
+
+        assertThat(eventLogRepository.findById(id)).isEmpty();
+        assertThat(eventLogRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void deleteMissingEventReturns404() throws Exception {
+        mockMvc.perform(delete("/api/events/{id}", 999999L)
+                        .header(HttpHeaders.AUTHORIZATION, bearer()))
+                .andExpect(status().isNotFound());
     }
 
     @Test

@@ -2,7 +2,6 @@ package com.bbiyong.server.equipment.service;
 
 import com.bbiyong.server.equipment.domain.Equipment;
 import com.bbiyong.server.equipment.repository.EquipmentRepository;
-import com.bbiyong.server.wss.RobotWebSocketSessionManager;
 import com.bbiyong.server.wss.dto.RobotPacket;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
@@ -15,23 +14,17 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
 public class EquipmentService {
 
-    private static final String DEFAULT_ROBOT_ID = "orinka_01";
-
     private final EquipmentRepository equipmentRepository;
-    private final RobotWebSocketSessionManager sessionManager;
 
-    public EquipmentService(EquipmentRepository equipmentRepository,
-                            RobotWebSocketSessionManager sessionManager) {
+    public EquipmentService(EquipmentRepository equipmentRepository) {
         this.equipmentRepository = equipmentRepository;
-        this.sessionManager = sessionManager;
     }
 
     @Transactional(readOnly = true)
@@ -40,54 +33,100 @@ public class EquipmentService {
     }
 
     /**
-     * 설비 임계 온도를 수정한다. 존재하지 않는 설비면 404.
+     * 분전반 과열 임계온도 설정 (S15P11E101-836).
      *
-     * <p>DB(표시·조회용 사본)를 갱신한 뒤, 실제 과열 판정 기준을 바꾸도록 로봇으로
-     * SET_THRESHOLD 명령을 중계한다. 로봇 미연결 시에도 DB 수정은 성공 처리하고
-     * 경고만 남긴다(로봇 재연결·재시딩 시 반영은 상세설계).
+     * 서버가 임계온도를 소유하고, 저장 즉시 최근 온도로 과열 여부를 다시 판정한다.
+     * 로봇 프로토콜에 SET_THRESHOLD 가 없어 로봇으로 하달하지 않는다 — 이 값은 서버 판정용이다.
      */
     @Transactional
-    public void updateThreshold(String equipmentId, double threshold) {
-        Equipment e = equipmentRepository.findById(equipmentId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "설비를 찾을 수 없습니다: " + equipmentId));
+    public void updateThreshold(String id, double threshold) {
+        Equipment e = equipmentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "설비를 찾을 수 없습니다."));
         e.setThreshold(threshold);
+        e.setStatus(evaluateStatus(e.getLastTemperature(), threshold, e.getStatus()));
         equipmentRepository.save(e);
-        log.info("Equipment [{}] threshold updated: {}", equipmentId, threshold);
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("command", "SET_THRESHOLD");
-        payload.put("equipmentId", equipmentId);
-        payload.put("threshold", threshold);
-        boolean delivered = sessionManager.sendCommand(DEFAULT_ROBOT_ID, payload);
-        if (!delivered) {
-            log.warn("SET_THRESHOLD not delivered (robot [{}] offline): equipment={}, threshold={}",
-                    DEFAULT_ROBOT_ID, equipmentId, threshold);
-        }
+        log.info("Equipment [{}] threshold set to {} -> status={}", id, threshold, e.getStatus());
     }
 
-    /** 애플리케이션 기동 시 감시 대상 분전반 초기 시드 (비어있을 때만). */
-    @EventListener(ApplicationReadyEvent.class)
+    /**
+     * AprilTag 점검 지점 승인(CONFIRM) 시 감시 대상 설비로 등록/갱신한다 (S15P11E101).
+     *
+     * <p>승인한 점검 지점이 그대로 '분전반 임계온도' 목록에 나타나 임계온도를 설정할 수 있게 한다.
+     * upsert: 이미 있으면 이름/좌표만 갱신하고 임계온도·상태는 보존한다(관리자가 정한 값을 지우지 않는다).
+     * 좌표(x,y)는 confirm 명령에 없을 수 있어 null 이면 건드리지 않는다(있으면 지도 표시에 쓴다).
+     */
     @Transactional
-    public void seedDefaults() {
-        if (equipmentRepository.count() > 0) {
+    public void registerInspectionEquipment(String equipmentId, String name, Double x, Double y) {
+        if (equipmentId == null || equipmentId.isBlank()) {
             return;
         }
-        save("panel_A", "A구역 분전반", 8.5, 3.1, 55.0);
-        save("panel_B", "B구역 분전반", 12.8, 14.2, 55.0);
-        save("panel_C", "C구역 분전반", 3.2, 9.7, 55.0);
-        log.info("Seeded default equipments: panel_A/B/C");
+        Equipment e = equipmentRepository.findById(equipmentId).orElseGet(() -> {
+            Equipment created = new Equipment();
+            created.setEquipmentId(equipmentId);
+            created.setStatus("UNKNOWN");
+            return created;
+        });
+        if (name != null && !name.isBlank()) {
+            e.setName(name.trim());
+        } else if (e.getName() == null) {
+            e.setName(equipmentId);
+        }
+        if (x != null) {
+            e.setX(x);
+        }
+        if (y != null) {
+            e.setY(y);
+        }
+        equipmentRepository.save(e);
+        log.info("Equipment [{}] registered from inspection point (name={})", equipmentId, e.getName());
     }
 
-    private void save(String id, String name, double x, double y, double threshold) {
-        Equipment e = new Equipment();
-        e.setEquipmentId(id);
-        e.setName(name);
-        e.setX(x);
-        e.setY(y);
-        e.setThreshold(threshold);
-        e.setStatus("UNKNOWN");
-        equipmentRepository.save(e);
+    /**
+     * 서버 과열 판정 (S15P11E101-836). 최근온도와 임계온도가 모두 있으면 초과 여부로 OVER/NORMAL 을
+     * 매기고, 둘 중 하나라도 없으면 판정할 수 없어 fallback(기존 상태 또는 로봇 판정)을 그대로 둔다.
+     */
+    private String evaluateStatus(Double temperature, Double threshold, String fallback) {
+        if (temperature == null || threshold == null) {
+            return fallback != null ? fallback : "UNKNOWN";
+        }
+        return temperature > threshold ? "OVER" : "NORMAL";
+    }
+
+    /**
+     * 데모 설비 정리 (S15P11E101). 예전 기동 시드(panel_A/B/C)와 옛 데모 흔적('데모')이
+     * 설정탭 분전반 임계온도 목록에 더미로 남아 있었다. 실제 설비는 로봇 점검(applyInspection)
+     * 으로만 등록되어야 하므로, 자동 시드를 제거하고 기동 시 남은 데모 행을 지운다.
+     *
+     * <p>id 가 panel_A/B/C 이거나, id·이름에 '데모'가 들어간 설비를 삭제한다(멱등).
+     * 배포 DB가 모두 정리된 뒤에는 이 정리 로직을 제거해도 된다.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void purgeDemoEquipments() {
+        List<Equipment> demo = equipmentRepository.findAll().stream()
+                .filter(EquipmentService::isDemo)
+                .toList();
+        if (demo.isEmpty()) {
+            return;
+        }
+        equipmentRepository.deleteAll(demo);
+        log.info("Purged {} demo equipment(s): {}", demo.size(),
+                demo.stream().map(Equipment::getEquipmentId).toList());
+    }
+
+    private static final Set<String> DEMO_IDS = Set.of("panel_A", "panel_B", "panel_C");
+
+    /**
+     * 데모/더미 설비 판정. 자동 시드(panel_A/B/C)와 옛 이벤트 시뮬레이션이 남긴
+     * 잔재('데모' 한글 · 'demo_panel' 등 영문 demo)를 모두 잡는다.
+     * 실 로봇 설비 id/name 에는 'demo'·'데모'가 들어가지 않으므로 오삭제 위험은 없다.
+     */
+    private static boolean isDemo(Equipment e) {
+        String id = (e.getEquipmentId() == null ? "" : e.getEquipmentId()).toLowerCase();
+        String name = (e.getName() == null ? "" : e.getName()).toLowerCase();
+        return DEMO_IDS.contains(e.getEquipmentId())
+                || id.contains("demo") || name.contains("demo")
+                || id.contains("데모") || name.contains("데모");
     }
 
     @EventListener
@@ -116,10 +155,13 @@ public class EquipmentService {
             return created;
         });
         e.setLastTemperature(packet.getTemperature());
-        if (packet.getThreshold() != null) {
+        // 임계온도는 서버가 소유한다(S15P11E101-836) — 관리자가 정한 값을 로봇 보고로 덮지 않는다.
+        // 서버에 값이 아직 없을 때만 로봇이 보낸 값으로 초기 시드한다.
+        if (e.getThreshold() == null && packet.getThreshold() != null) {
             e.setThreshold(packet.getThreshold());
         }
-        e.setStatus(over ? "OVER" : "NORMAL");
+        // 서버 저장 임계온도로 과열을 판정한다. 기준/온도가 없으면 로봇 판정(over)을 따른다.
+        e.setStatus(evaluateStatus(packet.getTemperature(), e.getThreshold(), over ? "OVER" : "NORMAL"));
         e.setLastInspectedAt(Instant.now());
         equipmentRepository.save(e);
         log.info("Equipment [{}] inspection applied: temp={}, status={}", equipmentId, packet.getTemperature(), e.getStatus());

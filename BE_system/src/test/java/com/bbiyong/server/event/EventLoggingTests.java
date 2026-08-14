@@ -12,6 +12,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.annotation.DirtiesContext;
 
 import java.util.List;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,6 +37,8 @@ public class EventLoggingTests {
         firePacket.setType("EVENT_FIRE");
         firePacket.setConfidence(0.95);
         firePacket.setTemperature(65.0);
+        firePacket.setMessageId("fire-message-001");
+        firePacket.setTimestamp(1785806400L);
         
         RobotPacket.Location fireLoc = new RobotPacket.Location();
         fireLoc.setX(10.0);
@@ -50,6 +53,7 @@ public class EventLoggingTests {
         overheatPacket.setRobotId("orinka_01");
         overheatPacket.setType("EVENT_OVERHEAT");
         overheatPacket.setTemperature(85.5);
+        overheatPacket.setTimestamp(1785806401L);
         overheatPacket.setEquipmentId("panel_01");
         overheatPacket.setThreshold(55.0);
 
@@ -61,8 +65,8 @@ public class EventLoggingTests {
 
         eventPublisher.publishEvent(new RobotOverheatEvent(this, overheatPacket));
 
-        // 3. Assert: Verify database contents
-        List<EventLog> logs = eventLogRepository.findAll();
+        // 3. Assert: 경보 영속화는 @Async(alertTaskExecutor) 로 처리되므로 완료를 폴링 대기한다. (S15P11E101-715)
+        List<EventLog> logs = awaitLogs(2);
         assertThat(logs).hasSize(2);
 
         // Verify Fire Log details
@@ -72,15 +76,17 @@ public class EventLoggingTests {
                 .orElse(null);
         assertThat(fireLog).isNotNull();
         assertThat(fireLog.getRobotId()).isEqualTo("orinka_01");
+        assertThat(fireLog.getMessageId()).isEqualTo("fire-message-001");
         assertThat(fireLog.getConfidence()).isEqualTo(0.95);
         assertThat(fireLog.getTemperature()).isEqualTo(65.0);
         assertThat(fireLog.getStatus()).isEqualTo("UNRESOLVED");
+        // 경보 위치 = 이벤트 시점 로봇 보고 위치 (S15P11E101-715)
         assertThat(fireLog.getX()).isEqualTo(10.0);
         assertThat(fireLog.getY()).isEqualTo(20.0);
-        assertThat(fireLog.getTimestamp()).isNotNull();
+        assertThat(fireLog.getTimestamp()).isEqualTo(Instant.ofEpochSecond(1785806400L));
         // 강화 필드: 화재는 CRITICAL, 메시지 보존, 설비 정보 없음
         assertThat(fireLog.getLevel()).isEqualTo("CRITICAL");
-        assertThat(fireLog.getMessage()).contains("orinka_01");
+        assertThat(fireLog.getMessage()).isEqualTo("화재 발생");
         assertThat(fireLog.getEquipmentId()).isNull();
 
         // Verify Overheat Log details
@@ -93,13 +99,50 @@ public class EventLoggingTests {
         assertThat(overheatLog.getConfidence()).isNull();
         assertThat(overheatLog.getTemperature()).isEqualTo(85.5);
         assertThat(overheatLog.getStatus()).isEqualTo("UNRESOLVED");
+        // 경보 위치 = 이벤트 시점 로봇 보고 위치 (S15P11E101-715)
         assertThat(overheatLog.getX()).isEqualTo(30.0);
         assertThat(overheatLog.getY()).isEqualTo(40.0);
-        assertThat(overheatLog.getTimestamp()).isNotNull();
+        assertThat(overheatLog.getTimestamp()).isEqualTo(Instant.ofEpochSecond(1785806401L));
         // 강화 필드: 과열은 WARNING, 어느 설비인지·임계치·메시지 보존
         assertThat(overheatLog.getLevel()).isEqualTo("WARNING");
         assertThat(overheatLog.getEquipmentId()).isEqualTo("panel_01");
         assertThat(overheatLog.getThreshold()).isEqualTo(55.0);
-        assertThat(overheatLog.getMessage()).contains("panel_01");
+        assertThat(overheatLog.getMessage()).isEqualTo("과열 발생");
+    }
+
+    @Test
+    public void sameMessageIdIsPersistedOnlyOnce() {
+        eventLogRepository.deleteAll();
+
+        RobotPacket packet = new RobotPacket();
+        packet.setRobotId("orinka_01");
+        packet.setType("EVENT_FIRE");
+        packet.setMessageId("fire-retry-001");
+        packet.setConfidence(0.80);
+        packet.setTemperature(70.0);
+        packet.setTimestamp(1785806500L);
+
+        eventPublisher.publishEvent(new RobotFireEvent(this, packet));
+        eventPublisher.publishEvent(new RobotFireEvent(this, packet));
+
+        List<EventLog> logs = awaitLogs(1);
+        assertThat(logs).hasSize(1);
+        assertThat(logs.get(0).getMessageId()).isEqualTo("fire-retry-001");
+    }
+
+    /** 비동기 경보 영속화가 기대 건수에 도달할 때까지 폴링(최대 5초). */
+    private List<EventLog> awaitLogs(int expectedCount) {
+        long deadline = System.currentTimeMillis() + 5_000;
+        List<EventLog> logs = eventLogRepository.findAll();
+        while (logs.size() < expectedCount && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            logs = eventLogRepository.findAll();
+        }
+        return logs;
     }
 }

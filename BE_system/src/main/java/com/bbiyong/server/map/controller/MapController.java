@@ -1,8 +1,12 @@
 package com.bbiyong.server.map.controller;
 
+import com.bbiyong.server.map.dto.MapGridResponse;
 import com.bbiyong.server.map.dto.MapResponses;
 import com.bbiyong.server.map.dto.MapUploadRequest;
+import com.bbiyong.server.map.dto.MappingStatusResponse;
+import com.bbiyong.server.map.service.MapGridService;
 import com.bbiyong.server.map.service.MapService;
+import com.bbiyong.server.map.service.MappingStatusService;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -16,10 +20,28 @@ import java.util.List;
 @RequestMapping("/api/maps")
 public class MapController {
 
-    private final MapService mapService;
+    private static final String DEFAULT_ROBOT_ID = "orinka_01";
 
-    public MapController(MapService mapService) {
+    private final MapService mapService;
+    private final MapGridService mapGridService;
+    private final MappingStatusService mappingStatusService;
+
+    public MapController(MapService mapService, MapGridService mapGridService,
+                         MappingStatusService mappingStatusService) {
         this.mapService = mapService;
+        this.mapGridService = mapGridService;
+        this.mappingStatusService = mappingStatusService;
+    }
+
+    /**
+     * 온디맨드 매핑 진행 상태 조회. 새로고침·중간접속 클라이언트가 "지도" 탭 상태(매핑중 vs 도면)를
+     * 복원하는 데 사용한다. 실시간 전환은 STOMP {@code /topic/mapping} 의 {@code MAPPING_STATUS} 구독. (S15P11E101-737 후속)
+     */
+    @GetMapping("/status")
+    public ResponseEntity<MappingStatusResponse> mappingStatus(
+            @RequestParam(required = false) String robotId) {
+        String id = (robotId != null && !robotId.isBlank()) ? robotId : DEFAULT_ROBOT_ID;
+        return ResponseEntity.ok(mappingStatusService.snapshot(id));
     }
 
     /** SLAM 맵 이미지 업로드(로봇/게이트웨이가 SAVE_MAP 산출물 등록). */
@@ -53,6 +75,23 @@ public class MapController {
     @GetMapping("/active")
     public ResponseEntity<MapResponses.Detail> active() {
         return ResponseEntity.ok(mapService.getActive());
+    }
+
+    /** 활성 맵의 3D 압출용 벽 격자. ('/{id}/grid' 보다 먼저 선언해 리터럴 경로 우선 매칭.) (S15P11E101-728) */
+    @GetMapping("/active/grid")
+    public ResponseEntity<MapGridResponse> activeGrid(
+            @RequestParam(required = false) Integer maxCells,
+            @RequestParam(required = false) Integer threshold) {
+        return ResponseEntity.ok(mapGridService.getActiveGrid(maxCells, threshold));
+    }
+
+    /** 지정 맵의 3D 압출용 벽 격자(다운샘플 이진 격자 + 좌표 메타). (S15P11E101-728) */
+    @GetMapping("/{id}/grid")
+    public ResponseEntity<MapGridResponse> grid(
+            @PathVariable String id,
+            @RequestParam(required = false) Integer maxCells,
+            @RequestParam(required = false) Integer threshold) {
+        return ResponseEntity.ok(mapGridService.getGrid(id, maxCells, threshold));
     }
 
     /** 저장된 맵을 활성 맵으로 지정(온디맨드 매핑 완료 후 '이 맵 사용'). */

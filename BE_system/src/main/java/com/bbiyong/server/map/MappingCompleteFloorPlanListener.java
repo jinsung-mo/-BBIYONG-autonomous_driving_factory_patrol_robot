@@ -38,6 +38,9 @@ public class MappingCompleteFloorPlanListener {
         String robotId = event.getRobotId();
         Optional<MapResponses.Detail> plan = floorPlanService.generateFloorPlan(robotId);
         if (plan.isEmpty()) {
+            // 폴백: 도면 생성 실패(원본 없음/디코드 실패) 시 어떤 맵도 활성화되지 않으면
+            // 매핑 완주에도 관제 활성맵이 갱신되지 않는다. 방금 업로드된 RAW 를 활성화한다. (S15P11E101-480)
+            floorPlanService.activateLatestRawFallback(robotId);
             return;
         }
         try {

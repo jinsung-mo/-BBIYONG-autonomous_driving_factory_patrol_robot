@@ -9,7 +9,7 @@ import java.time.Instant;
  * 로봇이 확정한 화재(FIRE)/과열(OVERHEAT) 이벤트를 통일된 형태로 브로드캐스트한다.
  */
 public record AlertMessage(
-        String type,          // FIRE | OVERHEAT
+        String type,          // FIRE | OVERHEAT | CAUTION
         String level,         // CRITICAL | WARNING
         String source,        // ROBOT
         String robotId,
@@ -21,25 +21,64 @@ public record AlertMessage(
         Double x,
         Double y,
         String message,
-        String timestamp
+        String timestamp,
+        String messageId,    // 로봇 재전송 멱등 키. 기존 패킷은 null
+        Long eventId       // DB 저장 후 부여. 실시간 행의 상세 조회 대상
 ) {
     public static AlertMessage fromFire(RobotPacket p) {
-        Double x = null, y = null;
-        if (p.getLocation() != null) { x = p.getLocation().getX(); y = p.getLocation().getY(); }
         return new AlertMessage(
-                "FIRE", "CRITICAL", "ROBOT", p.getRobotId(),
-                p.getConfidence(), p.getTemperature(), null, null, null, x, y,
-                "순찰 로봇(" + p.getRobotId() + ")이 근접 교차검증으로 화재를 확정했습니다.",
-                Instant.now().toString());
+                "FIRE", "CRITICAL", sourceOf(p), p.getRobotId(),
+                p.getConfidence(), p.getTemperature(), null, null, null, locationX(p), locationY(p),
+                prefix(p) + "화재 발생",
+                timestampOf(p).toString(),
+                p.getMessageId(), null);
     }
 
     public static AlertMessage fromOverheat(RobotPacket p) {
-        Double x = null, y = null;
-        if (p.getLocation() != null) { x = p.getLocation().getX(); y = p.getLocation().getY(); }
         return new AlertMessage(
-                "OVERHEAT", "WARNING", "ROBOT", p.getRobotId(),
-                null, p.getTemperature(), p.getEquipmentId(), p.getThreshold(), p.getThermalImage(), x, y,
-                "설비(" + p.getEquipmentId() + ") 과열이 감지되었습니다.",
-                Instant.now().toString());
+                "OVERHEAT", "WARNING", sourceOf(p), p.getRobotId(),
+                null, p.getTemperature(), p.getEquipmentId(), p.getThreshold(), p.getThermalImage(),
+                locationX(p), locationY(p),
+                prefix(p) + "과열 발생",
+                timestampOf(p).toString(),
+                p.getMessageId(), null);
+    }
+
+    public static AlertMessage fromCaution(RobotPacket p) {
+        return new AlertMessage(
+                "CAUTION", "WARNING", sourceOf(p), p.getRobotId(),
+                p.getConfidence(), p.getTemperature(), null, p.getThreshold(), null,
+                locationX(p), locationY(p),
+                prefix(p) + "화재 후보 감지 - 추가 확인 필요",
+                timestampOf(p).toString(), p.getMessageId(), null);
+    }
+
+    /** 경보 위치 = 이벤트 발생 시점의 로봇 보고 위치. 없으면 null로 보존한다. */
+    private static Double locationX(RobotPacket p) {
+        return (p.getLocation() != null) ? p.getLocation().getX() : null;
+    }
+
+    private static Double locationY(RobotPacket p) {
+        return (p.getLocation() != null) ? p.getLocation().getY() : null;
+    }
+
+    /** 이력이 저장된 뒤에만 웹 경보에 DB 식별자를 붙인다. */
+    public AlertMessage withEventId(Long savedEventId) {
+        return new AlertMessage(
+                type, level, source, robotId,
+                confidence, temperature, equipmentId, threshold, thermalImage, x, y,
+                message, timestamp, messageId, savedEventId);
+    }
+
+    private static String sourceOf(RobotPacket p) {
+        return "SIMULATION".equalsIgnoreCase(p.getSource()) ? "SIMULATION" : "ROBOT";
+    }
+
+    private static String prefix(RobotPacket p) {
+        return "SIMULATION".equalsIgnoreCase(p.getSource()) ? "[테스트] " : "";
+    }
+
+    private static Instant timestampOf(RobotPacket p) {
+        return p.getTimestamp() == null ? Instant.now() : Instant.ofEpochSecond(p.getTimestamp());
     }
 }

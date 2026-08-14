@@ -1,12 +1,18 @@
 package com.bbiyong.server.wss;
 
 import com.bbiyong.server.wss.dto.RobotPacket;
+import com.bbiyong.server.wss.dto.H264BinaryFrame;
+import com.bbiyong.server.wss.event.RobotBinaryVideoEvent;
+import com.bbiyong.server.wss.event.RobotConnectedEvent;
+import com.bbiyong.server.wss.event.RobotCautionEvent;
 import com.bbiyong.server.wss.event.RobotDisconnectedEvent;
 import com.bbiyong.server.wss.event.RobotFireEvent;
 import com.bbiyong.server.wss.event.RobotInspectionEvent;
+import com.bbiyong.server.wss.event.RobotInspectionPointEvent;
 import com.bbiyong.server.wss.event.RobotMappingCompleteEvent;
 import com.bbiyong.server.wss.event.RobotNavEvent;
 import com.bbiyong.server.wss.event.RobotOverheatEvent;
+import com.bbiyong.server.wss.event.RobotSystemLogEvent;
 import com.bbiyong.server.wss.event.RobotTelemetryEvent;
 import com.bbiyong.server.wss.event.RobotVideoEvent;
 import tools.jackson.databind.ObjectMapper;
@@ -14,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -54,7 +61,26 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
 
             String robotId = packet.getRobotId();
             if (robotId != null && !robotId.trim().isEmpty()) {
-                sessionManager.register(robotId, session);
+                // 세션-로봇 소유권 검사: 한 세션은 최초 등록한 robot_id 에 고정된다.
+                // 같은 세션이 다른 robot_id 를 실어 보내면 타 로봇 사칭·세션 탈취이므로
+                // 패킷을 폐기한다(바이너리 경로의 검사와 동일 정책). (S15P11E101-715)
+                String boundRobotId = sessionManager.getRobotIdBySessionId(session.getId());
+                if (boundRobotId != null && !boundRobotId.equals(robotId.trim())) {
+                    log.warn("Dropping WSS packet with robot mismatch: session=[{}] bound=[{}], packet=[{}]",
+                            session.getId(), boundRobotId, robotId);
+                    return;
+                }
+                // 새 등록(연결·재연결)일 때만 ONLINE 이벤트 발행 — 관제 시스템 탭 연결 로그용. (S15P11E101-683)
+                if (sessionManager.register(robotId, session)) {
+                    eventPublisher.publishEvent(new RobotConnectedEvent(this, robotId));
+                }
+            }
+
+            // AprilTag 점검 지점 메시지는 type 대신 kind(inspection_*)를 쓴다. 서버는 해석하지 않고
+            // 수신 원문을 /topic/inspection 으로 그대로 relay 한다(nav·mapping 과 동일 raw 중계). (S15P11E101-778)
+            if (packet.getKind() != null && packet.getKind().startsWith("inspection")) {
+                eventPublisher.publishEvent(new RobotInspectionPointEvent(this, robotId, payload));
+                return;
             }
 
             if (packet.getType() == null) {
@@ -84,6 +110,19 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
                             robotId, packet.getEquipmentId(), packet.getTemperature(), packet.getThreshold());
                     eventPublisher.publishEvent(new RobotOverheatEvent(this, packet));
                     break;
+                case "EVENT_CAUTION":
+                    log.info("Caution event received via WSS from [{}]: confidence={}, temp={}",
+                            robotId, packet.getConfidence(), packet.getTemperature());
+                    eventPublisher.publishEvent(new RobotCautionEvent(this, packet));
+                    break;
+                case "EVENT_SYSTEM":
+                    // 조용한 시스템 로그. 화재/과열과 달리 /topic/alerts 로 방송하지 않고
+                    // 알림도 보내지 않는다 — 이벤트 목록에만 level=INFO 로 남는다.
+                    // (사용자 지침 2026-08-10: "소리나 알림이 갈 필요는 없다. 정말 로그만")
+                    log.info("System log received via WSS from [{}]: code={}, message={}",
+                            robotId, packet.getCode(), packet.getMessage());
+                    eventPublisher.publishEvent(new RobotSystemLogEvent(this, packet));
+                    break;
                 case "INSPECTION":
                     // 분전반 정상 점검 리포트 (경보 아님) - 설비 최근점검 상태 갱신용
                     eventPublisher.publishEvent(new RobotInspectionEvent(this, packet));
@@ -112,6 +151,30 @@ public class RobotWebSocketHandler extends TextWebSocketHandler {
             }
         } catch (Exception e) {
             log.error("Failed to parse WSS JSON packet: {}, error: {}", payload, e.getMessage());
+        }
+    }
+
+    @Override
+    protected void handleBinaryMessage(WebSocketSession session, BinaryMessage message) {
+        try {
+            String registeredRobotId = sessionManager.getRobotIdBySessionId(session.getId());
+            if (registeredRobotId == null) {
+                log.warn("Dropping binary video from unregistered WSS session [{}]", session.getId());
+                return;
+            }
+
+            byte[] payload = new byte[message.getPayloadLength()];
+            message.getPayload().get(payload);
+            H264BinaryFrame frame = H264BinaryFrame.parse(payload);
+            if (!registeredRobotId.equals(frame.robotId())) {
+                log.warn("Dropping binary video with robot mismatch: session=[{}], packet=[{}]",
+                        registeredRobotId, frame.robotId());
+                return;
+            }
+            eventPublisher.publishEvent(new RobotBinaryVideoEvent(this, registeredRobotId, payload));
+        } catch (IllegalArgumentException e) {
+            log.warn("Dropping malformed H.264 binary packet from session [{}]: {}",
+                    session.getId(), e.getMessage());
         }
     }
 
