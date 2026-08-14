@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
@@ -9,19 +8,22 @@
     /* 번들러(Vite/esbuild) 기준 모듈 해석 */
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "isolatedModules": true,
     "moduleDetection": "force",
-    "noEmit": true,
     "jsx": "react-jsx",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
-    /* 1단계: 실용적(느슨한) 타입 — 이후 strict 로 단계적 강화 */
-    "strict": false,
-    "noImplicitAny": false,
+    /* 산출물을 내지 않는다 — 빌드는 Vite 가 하고 tsc 는 검사만 한다 */
+    "noEmit": true,
+    /* 이 코드베이스는 로컬 import 에 확장자를 명시하는 규칙을 쓴다.
+       .ts/.tsx 를 그대로 적으려면 이 옵션이 필요하다(noEmit 전제). */
+    "allowImportingTsExtensions": true,
+
+    /* 4단계 완료 — strict 전 항목을 켠다(S15P11E101-576). 개별 예외 없음. */
+    "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src"]
 }

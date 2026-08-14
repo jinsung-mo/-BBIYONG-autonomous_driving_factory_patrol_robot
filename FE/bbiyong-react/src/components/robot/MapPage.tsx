@@ -1,0 +1,66 @@
+import { useEffect } from 'react'
+import { useSim } from '../../SimContext.ts'
+import { useSettings } from '../../settings/SettingsContext.tsx'
+import { useLive } from '../../live/LiveContext.tsx'
+import { useAuth } from '../../auth/AuthContext.tsx'
+import { capOf, isDown, CAP_KEYS } from '../../live/capabilities.ts'
+import StatusPanel from './StatusPanel.tsx'
+import EventLog from './EventLog.tsx'
+import MapPanel from './MapPanel.tsx'
+import MappingTab from './MappingTab.tsx'
+
+// 지도 화면.
+//
+// 좌측에는 '지금 로봇이 어떤 상태인가' 와 '무슨 일이 있었나' — 지도를 보면서 곁눈으로
+// 확인할 것들만 남긴다. 조작(수동 주행·모드 전환)은 카메라 화면에 있다.
+//
+// '매핑' 탭(S15P11E101 콘솔 정리): 운영 탭에 있던 2D 맵 모델링 + 순찰 경로를 이리로 옮겼다.
+// 맵을 그리는 관리자 작업이라 관리자에게만 보인다.
+//
+// 🔴 '지도/매핑' 세그먼트와 제목·KPI 는 이 화면이 아니라 고정된 공유 머리에 있다(App.tsx).
+// 탭을 옮길 때 머리까지 같이 밀려 올라가지 않게 하려면 머리가 트랙 밖에 있어야 한다.
+// 그래서 어느 쪽을 볼지(`tab`)는 여기서 들지 못하고 위에서 받는다.
+export type MapTab = 'map' | 'mapping'
+
+export default function MapPage({ tab }: { tab: MapTab }) {
+  const { actions } = useSim()
+  const { settings } = useSettings()
+  const { telemetry, enabled } = useLive()
+  const { isAdmin } = useAuth()
+
+  // 열화상 경고·임계 기준을 설정 값으로 맞춘다(S15P11E101-475 설정 탭)
+  useEffect(() => {
+    actions.setTempThresholds(settings.tempWarn, settings.tempCritical)
+  }, [actions, settings.tempWarn, settings.tempCritical])
+
+  const mapDown = enabled && isDown(capOf(telemetry, CAP_KEYS.map))
+
+  return (
+    <section id="pgMap" className="page on sim-skin nav-page v3-theme">
+      {/* 지도 화면은 계속 마운트해 둔다(hidden) — 탭을 옮겼다고 캔버스와 STOMP 구독을 버리면
+          돌아올 때마다 지도가 처음부터 다시 붙는다. */}
+      {/* 🔴 이 wrapper 에 클래스를 준다(S15P11E101-814 후속). 예전에는 클래스 없는
+          평범한 div 였는데, `.nav-page` 가 세로 flex 라 이 div 가 flex 항목이 되고
+          그 안의 `.nav-stage{flex:1 1 0}` 은 **블록 부모 안이라 무시**됐다. 그래서
+          씬 높이가 남는 높이가 아니라 **콘텐츠 높이**로 정해졌다.
+          이벤트 로그가 좌측 열 높이를 벌어 주던 동안에는 티가 안 났는데, 그걸 떼자
+          상태 카드 하나 높이로 주저앉았다(배포본에서 확인). 높이 사슬을 잇는다. */}
+      <div className="map-view" hidden={isAdmin && tab === 'mapping'}>
+        <div className="nav-stage">
+          {/* 좌측 아래에 이벤트 로그를 둔다(S15P11E101-911, 사용자 요청 2026-08-10) —
+              카메라 화면에 있던 것을 이리로 옮겼다. 지도를 보면서 곁눈으로 '무슨 일이
+              있었나' 를 함께 확인한다. 상세·필터·영상은 전용 이벤트 탭에 따로 있다. */}
+          <aside className="nav-side" aria-label="로봇 상태 및 이벤트 로그">
+            <StatusPanel />
+            <EventLog />
+          </aside>
+          <div className={`nav-canvas${mapDown ? ' down' : ''}`}>
+            <MapPanel />
+          </div>
+        </div>
+      </div>
+
+      {isAdmin && tab === 'mapping' && <MappingTab />}
+    </section>
+  )
+}

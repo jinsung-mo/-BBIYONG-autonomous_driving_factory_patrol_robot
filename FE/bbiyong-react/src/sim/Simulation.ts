@@ -2,11 +2,18 @@
 // 컨트롤러로 이식. Canvas 실시간 렌더링(rAF)과 상태 머신을 담당하고,
 // UI에 필요한 값은 subscribe(snapshot) 로 React에 밀어준다.
 
-import { MAP, RS, CSn, astar, loop, PANELS, FIREC, speed } from './mapData'
-import type { Bot, BotMode, Cell, Detection, LogEntry, LogKind, Ptz, SegMode, Snapshot, Switches, Tab } from '../types'
+import { MAP, RS, CSn, astar, loop, PANELS, FIREC, speed } from './mapData.ts'
+
+// 열화상 센서가 물리적으로 90도 돌아 붙어 있다(S15P11E101-759). 서버는 프레임을
+// 무변환 중계하므로 되돌리는 자리는 FE 렌더뿐이다 — 지도 180도 회전(-746)과 같은 기조다.
+// 센서를 바로 달면 0 으로 바꾸면 된다. 여기 한 곳만 고치면 카메라 화면과 관제 화면이
+// 함께 따라온다(예전에는 카메라 화면 CSS 에만 걸려 있어 두 화면이 서로 달랐다).
+const THERMAL_ROT_DEG = 90
 
 // 캔버스를 부모 크기에 맞추고 2D 컨텍스트를 반환
-function fit(cv: HTMLCanvasElement) {
+function fit(cv: any) {
+  // 화면에서 떨어져 나간 캔버스는 그리지 않는다(부모가 없으면 크기를 잴 수 없다)
+  if (!cv.parentElement) return null
   const r = cv.parentElement.getBoundingClientRect()
   if (cv.width !== Math.round(r.width) || cv.height !== Math.round(r.height)) {
     cv.width = Math.round(r.width)
@@ -18,36 +25,47 @@ function fit(cv: HTMLCanvasElement) {
 const nowStr = () => new Date().toTimeString().slice(0, 8)
 
 export default class Simulation {
-  // 필드는 생성자에서 모두 할당된다 — declare 로 타입만 부여(런타임 코드 미생성, 원본 JS와 동일).
-  declare t: number
-  declare fireOn: boolean
-  declare heatOn: boolean
-  declare soundOn: boolean
-  declare currentTab: Tab
-  declare ptz: Ptz
-  declare conf: number[]
-  declare det: Detection
-  declare bot: Bot
-  declare seg: SegMode
-  declare modeText: string
-  declare modeClass: string
-  declare spd: string
-  declare rcamHud: string
-  declare batt: number
-  declare bt: number
-  declare envT: string
-  declare envH: string
-  declare switches: Switches
-  declare heatT: number
-  declare thermalMax: string
-  declare thermalColor: string
-  declare logs: LogEntry[]
-  declare logId: number
-  declare canvases: Record<string, HTMLCanvasElement>
-  declare listeners: Set<(snap: Snapshot) => void>
-  declare _raf: number | null
-  declare _emitTimer: ReturnType<typeof setInterval> | null
-  declare _started: boolean
+  // 필드 선언 — 값은 전부 constructor 에서 넣는다. JS 에서는 선언 없이 this.x 로 만들 수
+  // 있었지만 TS 는 클래스에 선언된 것만 인정한다(S15P11E101 3단계).
+  // 캔버스 렌더러라 형태가 제각각이고 이 파일 밖으로 나가지 않으므로 any 를 허용한다 —
+  // 화면으로 나가는 값은 subscribe(snapshot) 한 곳뿐이고 그쪽은 호출부가 타입을 좁힌다.
+  t: number
+  fireOn: boolean
+  heatOn: boolean
+  soundOn: boolean
+  ptz: { x: number, y: number, z: number }
+  conf: number[]
+  det: any
+  bot: any
+  seg: string
+  estop: boolean
+  /** 표시용 문자열 — '0.6 m/s' */
+  spd: string
+  manualSpeed: number
+  batt: number
+  bt: number
+  /** 표시용 문자열 — '24.6°C' */
+  envT: string
+  /** 표시용 문자열 — '41%' */
+  envH: string
+  heatT: number
+  tempWarn: number
+  tempCritical: number
+  /** 표시용 문자열 — 'MAX 38.4°C' */
+  thermalMax: string
+  thermalColor: string
+  modeText: string
+  modeClass: string
+  rcamHud: string
+  logs: any[]
+  logId: number
+  canvases: Record<string, HTMLCanvasElement | null>
+  listeners: Set<(snap: any) => void>
+  externalPose: any
+  externalFrames: any
+  _raf: number | null
+  _emitTimer: any
+  _started: boolean
 
   constructor() {
     // ---- 공통 상태 ----
@@ -55,9 +73,10 @@ export default class Simulation {
     this.fireOn = false
     this.heatOn = false
     this.soundOn = true
-    this.currentTab = 'robot' // 'cctv' | 'robot' — 순찰 로봇 관제가 첫 페이지
 
     // ---- CCTV / PTZ ----
+    // CCTV 관제 화면은 제거됐지만(S15P11E101-431) 렌더러(drawFactoryCam/drawConf/drawBig)는
+    // 되살릴 여지를 남겨 보존한다. 현재 tick()에서 호출되지 않는다.
     this.ptz = { x: 0, y: 0, z: 1 }
     this.conf = new Array(48).fill(0)
     this.det = { flameState: '미발생', flamePct: '0%', smokeState: '미발생', smokePct: '0%' }
@@ -65,18 +84,25 @@ export default class Simulation {
     // ---- 로봇 ----
     this.bot = { pos: { c: 0, r: 0 }, seg: 0, prog: 0, mode: 'patrol', route: [], rs: 0, rp: 0, hd: 0 }
     this.seg = 'patrol' // 순찰 모드 세그먼트 표시용
+    // E-STOP 체결 여부. 실서버는 텔레메트리 estop 필드가 정답이지만 시뮬에는 없어
+    // 여기서 직접 들고 있는다. 체결 시 문자열은 가이드에 명시가 없어 ENGAGED 로 두었다
+    // (가이드 §3.1 예시에는 "RELEASED" 만 나온다) — 실서버 값 확인되면 맞출 것.
+    this.estop = false
     this.modeText = '순찰 중'
     this.modeClass = ''
     this.spd = '0.6 m/s'
+    this.manualSpeed = 0.5 // 수동 주행 속도 — 조작 패널의 속도 단계와 연동된다
     this.rcamHud = 'MODE PATROL · MAP OK'
     this.batt = 87
     this.bt = 0
     this.envT = '24.6°C'
     this.envH = '41%'
-    this.switches = { power: true, light: false, ultra: true, siren: false }
 
     // ---- 열화상 ----
     this.heatT = 38.4
+    // 열화상 경고·임계 기준 — 설정 탭에서 바꾼다(S15P11E101-475)
+    this.tempWarn = 52
+    this.tempCritical = 60
     this.thermalMax = 'MAX 38.4°C'
     this.thermalColor = '#b9ffe0'
 
@@ -88,6 +114,12 @@ export default class Simulation {
     this.canvases = {}
     this.listeners = new Set()
 
+    // ---- 실서버(live) 외부 입력 ----
+    // 값이 있으면 시뮬 상태머신 대신 실제 로봇의 위치/영상을 그린다.
+    // null이면 기존 시뮬레이션 동작 그대로 (mock 모드).
+    this.externalPose = null              // { c, r, hd }
+    this.externalFrames = { FRONT: null, THERMAL: null } // { img, maxTemp }
+
     this._raf = null
     this._emitTimer = null
     this._started = false
@@ -97,9 +129,9 @@ export default class Simulation {
   }
 
   // ---------- 라이프사이클 ----------
-  registerCanvas(name: string, el: HTMLCanvasElement) { this.canvases[name] = el }
+  registerCanvas(name: any, el: any) { this.canvases[name] = el }
 
-  subscribe(fn: (snap: Snapshot) => void) {
+  subscribe(fn: any) {
     this.listeners.add(fn)
     fn(this.snapshot())
     return () => this.listeners.delete(fn)
@@ -121,7 +153,7 @@ export default class Simulation {
   }
 
   // ---------- 스냅샷 / 방출 ----------
-  snapshot(): Snapshot {
+  snapshot() {
     return {
       fireOn: this.fireOn,
       heatOn: this.heatOn,
@@ -129,6 +161,7 @@ export default class Simulation {
       ptz: { ...this.ptz },
       det: { ...this.det },
       seg: this.seg,
+      estop: this.estop ? 'ENGAGED' : 'RELEASED',
       modeText: this.modeText,
       modeClass: this.modeClass,
       spd: this.spd,
@@ -136,7 +169,6 @@ export default class Simulation {
       batt: this.batt,
       envT: this.envT,
       envH: this.envH,
-      switches: { ...this.switches },
       thermalMax: this.thermalMax,
       thermalColor: this.thermalColor,
       logs: this.logs,
@@ -148,29 +180,28 @@ export default class Simulation {
     this.listeners.forEach((fn) => fn(snap))
   }
 
-  pushLog(kind: LogKind, msg: string) {
+  pushLog(kind: any, msg: any) {
     this.logs = [{ id: ++this.logId, kind, time: nowStr(), msg }, ...this.logs].slice(0, 100)
     this.emit()
   }
 
-  setTab(tab: Tab) { this.currentTab = tab }
-
   // 결정적 유사난수 (텍스처·노이즈용, Math.random 미사용)
-  _hash(a: number, b: number) { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+  _hash(a: any, b: any) { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
 
   // ---------- 공장 CCTV 카메라 (관제 전체 뷰 · 3/4 부감) ----------
   // 참고: BBIYONG_simulation_v3 의 camL(높이 34·반경 50·피치 ~34° 부감 회전)을
   // 3D 투영으로 재현 — 공장 전체를 비스듬히 내려다보며 압출 박스(분전반·로봇·설비)와
   // 원거리 벽·순찰 경로·화재를 깊이 정렬로 그린다. PTZ(off)로 회전/틸트/줌.
-  drawFactoryCam(cv: HTMLCanvasElement, off: Ptz) {
-    const g = fit(cv), Wc = cv.width, Hc = cv.height, t = this.t
+  drawFactoryCam(cv: any, off: any) {
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height, t = this.t
     const zoom = off ? Math.min(2.4, Math.max(1, off.z)) : 1
     const yaw = 0.66 + (off ? off.x * 0.05 : 0) + Math.sin(t * 0.0004) * 0.05 // 코너각 + 팬 + 완만한 회전
     const pitch = Math.max(0.42, Math.min(0.95, 0.62 - (off ? off.y * 0.02 : 0)))
     const CAMD = 13
     const cyA = Math.cos(yaw), syA = Math.sin(yaw), cpA = Math.cos(pitch), spA = Math.sin(pitch)
     const cxw = (CSn - 1) / 2, czw = (RS - 1) / 2
-    const raw = (c, wy, r) => {
+    const raw = (c: any, wy: any, r: any) => {
       const x = c - cxw, z = r - czw
       const rx = x * cyA - z * syA, rz = x * syA + z * cyA
       // 카메라 하향 피치: 먼 쪽(rz 큼)이 화면 위로, 박스는 위로 압출 (부호 정정)
@@ -185,11 +216,11 @@ export default class Simulation {
     }
     const scale = Math.min(Wc * 0.92 / (maxX - minX), Hc * 0.92 / (maxY - minY)) * zoom
     const cxn = (minX + maxX) / 2, cyn = (minY + maxY) / 2, ox = Wc / 2, oy = Hc / 2
-    const P = (c, wy, r) => { const q = raw(c, wy, r); return { x: ox + (q.X - cxn) * scale, y: oy - (q.Y - cyn) * scale, s: scale / q.zc, zc: q.zc } }
-    const lerp2 = (a, b, f) => ({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f })
+    const P = (c: any, wy: any, r: any) => { const q = raw(c, wy, r); return { x: ox + (q.X - cxn) * scale, y: oy - (q.Y - cyn) * scale, s: scale / q.zc, zc: q.zc } }
+    const lerp2 = (a: any, b: any, f: any) => ({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f })
 
     // 압출 박스(측면 근접순 → 윗면)
-    const box = (c, r, hw, hd, H, side, top) => {
+    const box = (c: any, r: any, hw: any, hd: any, H: any, side: any, top: any) => {
       const base = [[c - hw, r - hd], [c + hw, r - hd], [c + hw, r + hd], [c - hw, r + hd]]
       const bp = base.map(([x, z]) => P(x, 0, z)), tp = base.map(([x, z]) => P(x, H, z))
       const faces = []
@@ -200,7 +231,7 @@ export default class Simulation {
       g.fillStyle = top; g.beginPath(); tp.forEach((p, k) => k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); g.fill(); g.stroke()
       return { bp, tp, front: faces[faces.length - 1].q, cen: P(c, H, r) }
     }
-    const shadow = (c, r, rw) => { const p = P(c, 0, r); g.fillStyle = 'rgba(0,0,0,.30)'; g.beginPath(); g.ellipse(p.x, p.y, rw * p.s, rw * p.s * 0.5, 0, 0, 7); g.fill() }
+    const shadow = (c: any, r: any, rw: any) => { const p = P(c, 0, r); g.fillStyle = 'rgba(0,0,0,.30)'; g.beginPath(); g.ellipse(p.x, p.y, rw * p.s, rw * p.s * 0.5, 0, 0, 7); g.fill() }
 
     // 배경
     const sky = g.createLinearGradient(0, 0, 0, Hc)
@@ -229,11 +260,11 @@ export default class Simulation {
     g.fillStyle = cone; g.beginPath(); g.moveTo(chead.x, chead.y); g.lineTo(cbL.x, cbL.y); g.lineTo(cbR.x, cbR.y); g.closePath(); g.fill()
 
     // 원거리 벽 2개 (근접 벽은 생략해 내부 시야 확보)
-    const walls: Array<{ c: number; r: number; hw: number; hd: number; zc?: number }> = [
+    const walls = [
       { c: cxw, r: -0.6, hw: CSn / 2 + 0.1, hd: 0.12 }, { c: cxw, r: RS - 0.4, hw: CSn / 2 + 0.1, hd: 0.12 },
       { c: -0.6, r: czw, hw: 0.12, hd: RS / 2 + 0.1 }, { c: CSn - 0.4, r: czw, hw: 0.12, hd: RS / 2 + 0.1 },
-    ]
-    walls.forEach((w) => { w.zc = raw(w.c, 0, w.r).zc }); walls.sort((a, b) => b.zc - a.zc)
+    ].map((w) => ({ ...w, zc: raw(w.c, 0, w.r).zc }))   // zc(깊이)는 정렬용
+    walls.sort((a, b) => b.zc - a.zc)
     for (let i = 0; i < 2; i++) { const w = walls[i]; box(w.c, w.r, w.hw, w.hd, 1.7, '#333b46', '#464f5c') }
 
     // 순찰 경로(파랑 점선) + 긴급 경로(초록)
@@ -242,7 +273,7 @@ export default class Simulation {
     const q0 = P(loop[0].c, 0.04, loop[0].r); g.lineTo(q0.x, q0.y); g.stroke(); g.setLineDash([])
     if ((this.bot.mode === 'dispatch' || this.bot.mode === 'goto') && this.bot.route.length > 1) {
       g.strokeStyle = '#22b98a'; g.lineWidth = 2.4; g.beginPath()
-      this.bot.route.forEach((p, i) => { const q = P(p.c, 0.05, p.r); i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y) }); g.stroke()
+      this.bot.route.forEach((p: any, i: any) => { const q = P(p.c, 0.05, p.r); i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y) }); g.stroke()
     }
 
     // 분전반: 벽면 부착 지오메트리 (내측 면 인덱스 face·안쪽 방향 inC/inR)
@@ -254,7 +285,21 @@ export default class Simulation {
     })
 
     // 내부 오브젝트 depth-sort (먼 것 → 가까운 것)
-    const items = []
+    //
+    // kind 마다 필요한 필드가 다른 이질 배열이다. 그냥 두면 처음 push 한 모양으로만
+    // 추론돼 geo 접근이 막힌다 — 이 함수 안에서만 쓰는 형태라 여기 typedef 로 둔다.
+    /** 벽면 부착 분전반 지오메트리 */
+    type PanelGeo = {
+      pn: any, c: number, r: number, hw: number, hd: number,
+      face: number[], inC: number, inR: number,
+    }
+    /** kind 마다 필요한 필드가 다른 이질 배열이다 */
+    type DrawItem =
+      | { zc: number, kind: 'obs', c: number, r: number }
+      | { zc: number, kind: 'panel', geo: PanelGeo }
+      | { zc: number, kind: 'robot' }
+      | { zc: number, kind: 'fire' }
+    const items: DrawItem[] = []
     for (let r = 0; r < RS; r++) for (let c = 0; c < CSn; c++) if (MAP[r][c] === 1) items.push({ zc: raw(c, 0, r).zc, kind: 'obs', c, r })
     panelGeos.forEach((geo) => items.push({ zc: raw(geo.c, 0, geo.r).zc, kind: 'panel', geo }))
     items.push({ zc: raw(this.bot.pos.c, 0, this.bot.pos.r).zc, kind: 'robot' })
@@ -293,8 +338,8 @@ export default class Simulation {
         // 진행 방향(hd)으로 회전 — 전방(f) / 측방(s) 로컬축을 그리드로 변환
         const bc = this.bot.pos.c, br = this.bot.pos.r, hd = this.bot.hd
         const ch = Math.cos(hd), sh = Math.sin(hd)
-        const pt = (f, s) => ({ c: bc + f * ch - s * sh, r: br + f * sh + s * ch })
-        const rbox = (f0, f1, s0, s1, y0, H, side, top) => {
+        const pt = (f: any, s: any) => ({ c: bc + f * ch - s * sh, r: br + f * sh + s * ch })
+        const rbox = (f0: any, f1: any, s0: any, s1: any, y0: any, H: any, side: any, top: any) => {
           const base = [pt(f1, s0), pt(f1, s1), pt(f0, s1), pt(f0, s0)]
           const bp = base.map((p) => P(p.c, y0, p.r)), tp = base.map((p) => P(p.c, y0 + H, p.r))
           const faces = []
@@ -365,7 +410,8 @@ export default class Simulation {
   // ---------- 신뢰도 차트 ----------
   drawConf() {
     const cv = this.canvases.conf; if (!cv) return
-    const g = fit(cv), Wc = cv.width, Hc = cv.height
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height
     g.clearRect(0, 0, Wc, Hc)
     const L = 34, B = 18, T = 8
     g.strokeStyle = '#e7ebf1'; g.lineWidth = 1; g.fillStyle = '#98a2b0'; g.font = '10px Consolas,monospace'
@@ -394,13 +440,71 @@ export default class Simulation {
   // ---------- 확대 화면 ----------
   drawBig() {
     const cv = this.canvases.bigcam; if (!cv) return
-    const g = fit(cv)
+    const g = fit(cv); if (!g) return
     const src = this.canvases.cam3
     if (src && src.width > 0) g.drawImage(src, 0, 0, cv.width, cv.height)
   }
 
+  // ---------- 실서버 외부 입력 ----------
+  // live 모드에서 텔레메트리 위치를 격자 좌표로 변환해 넣는다. null이면 시뮬 상태머신으로 복귀.
+  setExternalPose(pose: any) {
+    this.externalPose = pose
+    if (!pose) this.botResume()
+  }
+
+  // live 모드 카메라 프레임. img 는 **디코딩이 끝난 그릴 수 있는 것**이면 된다 —
+  // drawImage 에 그대로 넘기고 .width/.height 만 읽으므로 다음 셋 다 들어온다:
+  //   ImageBitmap        mjpeg 경로 (LiveSimBridge 의 createImageBitmap)
+  //   HTMLCanvasElement  h264 경로 (H264VideoDecoder 가 캔버스를 준다)
+  //   HTMLImageElement   createImageBitmap 이 없는 브라우저의 폴백
+  setExternalFrame(channel: any, img: any, maxTemp: any) {
+    if (channel !== 'FRONT' && channel !== 'THERMAL') return
+    this.externalFrames[channel] = img ? { img, maxTemp } : null
+  }
+
+  clearExternalFrames() { this.externalFrames = { FRONT: null, THERMAL: null } }
+
+  // 캔버스를 꽉 채우되 종횡비를 유지해 그린다 (letterbox).
+  //
+  // rotDeg: 센서가 물리적으로 돌아 붙어 있을 때 되돌리는 각도(S15P11E101-759).
+  // 🔴 이 회전은 **프레임에만** 건다. 예전에는 캔버스 요소 전체에 CSS transform 으로
+  // 걸었는데, 이 캔버스에는 센서 프레임 말고 우리가 직접 그린 라벨('THERMAL · …',
+  // 좌상단 10,18)도 들어 있어서 그 글자까지 같이 돌았다. 게다가 프레임이 아예 없는
+  // 시뮬 화면(이 로봇은 열화상을 생산하지 않는다)까지 통째로 돌아갔다.
+  // 돌려야 하는 것은 센서가 준 픽셀이지 캔버스가 아니다.
+  // cover=true 면 검은 여백(letterbox) 없이 패널을 꽉 채운다(S15P11E101-892) —
+  // 종횡비는 유지하되 남는 변을 잘라 낸다. 캔버스가 스스로 경계 밖을 잘라 주므로
+  // 별도 클립이 필요 없다. 기본은 종전대로 letterbox(contain)다.
+  _drawFrame(g: any, img: any, Wc: any, Hc: any, rotDeg = 0, cover = false) {
+    g.fillStyle = '#000'; g.fillRect(0, 0, Wc, Hc)
+    const pick = cover ? Math.max : Math.min
+    if (!rotDeg) {
+      const s = pick(Wc / img.width, Hc / img.height)
+      const w = img.width * s, h = img.height * s
+      g.drawImage(img, (Wc - w) / 2, (Hc - h) / 2, w, h)
+      return
+    }
+    // 직각으로 돌리면 프레임이 놓이는 상자의 가로·세로가 뒤바뀐다. 바꾸지 않으면 긴 변이 잘린다.
+    const quarterTurn = Math.abs(rotDeg % 180) === 90
+    const boxW = quarterTurn ? Hc : Wc
+    const boxH = quarterTurn ? Wc : Hc
+    const s = pick(boxW / img.width, boxH / img.height)
+    const w = img.width * s, h = img.height * s
+    g.save()
+    g.translate(Wc / 2, Hc / 2)
+    g.rotate(rotDeg * Math.PI / 180)
+    g.drawImage(img, -w / 2, -h / 2, w, h)
+    g.restore()
+  }
+
   // ---------- 로봇 상태 머신 ----------
   botStep() {
+    // 실서버 위치가 들어오면 시뮬 주행을 멈추고 그 값을 따른다.
+    if (this.externalPose) {
+      this.bot.pos = { c: this.externalPose.c, r: this.externalPose.r }
+      if (typeof this.externalPose.hd === 'number') this.bot.hd = this.externalPose.hd
+      return
+    }
     const bot = this.bot
     if (bot.mode === 'patrol') {
       const a = loop[bot.seg], b = loop[(bot.seg + 1) % loop.length]
@@ -418,7 +522,7 @@ export default class Simulation {
     }
   }
 
-  botGoto(cell: Cell, mode: BotMode) {
+  botGoto(cell: any, mode: any) {
     const bot = this.bot
     const cur = { c: Math.round(bot.pos.c), r: Math.round(bot.pos.r) }
     bot.route = astar(cur, cell)
@@ -427,6 +531,8 @@ export default class Simulation {
   }
 
   botResume() {
+    // 순찰 복귀·순찰 모드가 모두 이 경로를 지난다 — 로봇이 다시 달리므로 E-STOP 도 함께 풀린다
+    this.estop = false
     const bot = this.bot
     let bi = 0, bd = 1e9
     loop.forEach((p, i) => {
@@ -437,10 +543,11 @@ export default class Simulation {
     this.setMode('순찰 중', '')
   }
 
-  setMode(txt: string, cls: string) {
+  setMode(txt: any, cls: any) {
     this.modeText = txt; this.modeClass = cls
     const m = this.bot.mode
-    this.spd = (m === 'patrol' ? '0.6' : (m === 'manual' ? '0.0' : '1.2')) + ' m/s'
+    // 수동 주행만 2자리 — 0.25 를 0.3 으로 반올림하면 실제 발행값과 어긋나 보인다
+    this.spd = (m === 'patrol' ? '0.6' : (m === 'manual' ? this.manualSpeed.toFixed(2) : '1.2')) + ' m/s'
     this.rcamHud = 'MODE ' + (m === 'patrol' ? 'PATROL' : m === 'dispatch' ? 'EMERGENCY' : m === 'goto' ? 'GOTO' : 'MANUAL') + ' · MAP OK'
     this.emit()
   }
@@ -448,31 +555,38 @@ export default class Simulation {
   // ---------- 로봇 지도 (SLAM 스타일) ----------
   drawMap() {
     const cv = this.canvases.map2d; if (!cv) return
-    const g = fit(cv), Wc = cv.width, Hc = cv.height
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height
     const t = this.t
-    g.fillStyle = '#0a0c10'; g.fillRect(0, 0, Wc, Hc)
+    // 지도 색은 밝은 화면 전제다. 밝은 화면에 검은 지도를 두면 그 판만 구멍처럼 남는다.
+    // 다크 팔레트 분기는 다크 모드와 함께 걷어냈다(S15P11E101-805) — 여긴 CSS 가 아니라 JS 라
+    // CSS 만 고치면 시뮬 지도만 검게 남는다.
+    // 상태색(로봇 초록·화재 빨강·분전반 호박)은 원래 두 테마 공통이라 손대지 않는다.
+    const P = { bg: '#ffffff', wall: '#96a3a8', wallEdge: 'rgba(110,125,132,.75)',
+                frame: '#c3cacb', route: 'rgba(47,111,208,.7)', label: 'rgba(45,55,64,.85)' }
+    g.fillStyle = P.bg; g.fillRect(0, 0, Wc, Hc)
     const m = 14, cw = (Wc - m * 2) / CSn, ch = (Hc - m * 2) / RS
-    const X = (c) => m + c * cw + cw / 2, Y = (r) => m + r * ch + ch / 2
+    const X = (c: any) => m + c * cw + cw / 2, Y = (r: any) => m + r * ch + ch / 2
     // SLAM 점묘 장애물
-    g.fillStyle = '#59637a'
+    g.fillStyle = P.wall
     for (let r = 0; r < RS; r++) for (let c = 0; c < CSn; c++) if (MAP[r][c] === 1) {
       for (let i = 0; i < 14; i++) {
         const rx = X(c) - cw / 2 + ((i * 37 + r * 13 + c * 7) % 100) / 100 * cw
         const ry = Y(r) - ch / 2 + ((i * 61 + c * 11) % 100) / 100 * ch
         g.fillRect(rx, ry, 1.6, 1.6)
       }
-      g.strokeStyle = 'rgba(89,99,122,.35)'; g.strokeRect(X(c) - cw / 2 + 2, Y(r) - ch / 2 + 2, cw - 4, ch - 4)
+      g.strokeStyle = P.wallEdge; g.strokeRect(X(c) - cw / 2 + 2, Y(r) - ch / 2 + 2, cw - 4, ch - 4)
     }
     // 외곽
-    g.strokeStyle = '#3a4356'; g.lineWidth = 1.5; g.strokeRect(m - 4, m - 4, Wc - m * 2 + 8, Hc - m * 2 + 8)
+    g.strokeStyle = P.frame; g.lineWidth = 1.5; g.strokeRect(m - 4, m - 4, Wc - m * 2 + 8, Hc - m * 2 + 8)
     // 순찰 경로
-    g.strokeStyle = 'rgba(63,143,224,.8)'; g.setLineDash([5, 4]); g.lineWidth = 1.4; g.beginPath()
+    g.strokeStyle = P.route; g.setLineDash([5, 4]); g.lineWidth = 1.4; g.beginPath()
     loop.forEach((p, i) => { i ? g.lineTo(X(p.c), Y(p.r)) : g.moveTo(X(p.c), Y(p.r)) })
     g.closePath(); g.stroke(); g.setLineDash([])
     // 긴급 경로
     if ((this.bot.mode === 'dispatch' || this.bot.mode === 'goto') && this.bot.route.length > 1) {
       g.strokeStyle = '#22b98a'; g.lineWidth = 2; g.beginPath()
-      this.bot.route.forEach((p, i) => { i ? g.lineTo(X(p.c), Y(p.r)) : g.moveTo(X(p.c), Y(p.r)) })
+      this.bot.route.forEach((p: any, i: any) => { i ? g.lineTo(X(p.c), Y(p.r)) : g.moveTo(X(p.c), Y(p.r)) })
       g.stroke()
     }
     // 분전반
@@ -499,9 +613,19 @@ export default class Simulation {
   // ---------- 로봇 전면 카메라 (현실적 산업용 카메라 피드) ----------
   drawRcam() {
     const cv = this.canvases.rcam; if (!cv) return
-    const g = fit(cv), Wc = cv.width, Hc = cv.height, t = this.t
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height, t = this.t
+
+    // live: 로봇이 보내온 실제 전면 카메라 프레임 (YOLO 오버레이는 로봇 쪽에서 이미 합성됨)
+    const front = this.externalFrames.FRONT
+    if (front) {
+      this._drawFrame(g, front.img, Wc, Hc, 0, true)   // cover — 검은 여백 없이 꽉 채운다(S15P11E101-892)
+      g.fillStyle = 'rgba(180,230,255,.75)'; g.font = '10px Consolas,monospace'
+      g.fillText('FRONT · LIVE', 10, Hc - 12)
+      return
+    }
     const vx = Wc / 2, vy = Hc * 0.47, ex = Wc * 0.13 // 소실점 · 통로 폭
-    const edgeX = (spread) => ex + (Wc / 2 - ex) * spread // 깊이별 통로 반폭
+    const edgeX = (spread: any) => ex + (Wc / 2 - ex) * spread // 깊이별 통로 반폭
 
     // 배경(대기 원근)
     const sky = g.createLinearGradient(0, 0, 0, Hc)
@@ -626,14 +750,28 @@ export default class Simulation {
   // 그 위에 FLIR 측정 오버레이(스팟·박스·min/max·팔레트)를 얹는다.
   drawThermal() {
     const cv = this.canvases.tcam; if (!cv) return
-    const g = fit(cv), Wc = cv.width, Hc = cv.height, t = this.t
+    const g = fit(cv); if (!g) return
+    const Wc = cv.width, Hc = cv.height, t = this.t
     const bx = this.bot.pos.c, br = this.bot.pos.r
     const vx = Wc / 2, vy = Hc * 0.47
+
+    // live: 로봇 열화상 프레임. HUD 최고온도는 프레임에 실려온 maxTemp를 그대로 쓴다.
+    const thermal = this.externalFrames.THERMAL
+    if (thermal) {
+      this._drawFrame(g, thermal.img, Wc, Hc, THERMAL_ROT_DEG, true)   // cover — 검은 여백 없이 꽉 채운다(S15P11E101-892)
+      if (typeof thermal.maxTemp === 'number') {
+        this.thermalMax = 'MAX ' + thermal.maxTemp.toFixed(1) + '°C' + (thermal.maxTemp > this.tempCritical ? ' ⚠ 임계 초과' : '')
+        this.thermalColor = thermal.maxTemp > this.tempCritical ? '#ff8d85' : (thermal.maxTemp > this.tempWarn ? '#ffd9a8' : '#b9ffe0')
+      }
+      g.fillStyle = 'rgba(255,220,180,.9)'; g.font = '11px Consolas,monospace'
+      g.fillText('THERMAL · LIVE', 10, 18)
+      return
+    }
 
     // 아이언바우 팔레트
     const stops = [[6, 10, 52], [24, 36, 150], [128, 28, 150], [214, 48, 58], [248, 142, 22], [255, 236, 120], [255, 255, 255]]
     const pos = [0, 0.2, 0.4, 0.6, 0.8, 0.92, 1]
-    const heat = (v) => {
+    const heat = (v: any) => {
       v = v < 0 ? 0 : v > 1 ? 1 : v
       let i = 0; while (i < pos.length - 1 && v > pos[i + 1]) i++
       const k = (v - pos[i]) / ((pos[i + 1] - pos[i]) || 1), a = stops[i], b = stops[i + 1]
@@ -641,9 +779,9 @@ export default class Simulation {
     }
 
     // 겨냥 분전반 + 표면온도 easing
-    let near
-    if (this.heatOn) near = PANELS.find((p) => p.n === 'B')
-    else { near = PANELS[0]; let nd = 1e9; for (const p of PANELS) { const d = Math.hypot(p.c - bx, p.r - br); if (d < nd) { nd = d; near = p } } }
+    let near = PANELS[0]
+    if (this.heatOn) near = PANELS.find((p) => p.n === 'B') || near
+    else { let nd = 1e9; for (const p of PANELS) { const d = Math.hypot(p.c - bx, p.r - br); if (d < nd) { nd = d; near = p } } }
     const dist = Math.hypot(near.c - bx, near.r - br)
     const prox = Math.max(0, 1 - dist / 6)
     const panelBase = near.n === 'A' ? 39 : near.n === 'B' ? 43 : 41
@@ -714,14 +852,14 @@ export default class Simulation {
     g.textAlign = 'left'
 
     // HUD 라벨 갱신 + 코너 라벨
-    this.thermalMax = 'MAX ' + this.heatT.toFixed(1) + '°C' + (this.heatT > 60 ? ' ⚠ 임계 초과' : '')
-    this.thermalColor = this.heatT > 60 ? '#ff8d85' : (this.heatT > 52 ? '#ffd9a8' : '#b9ffe0')
+    this.thermalMax = 'MAX ' + this.heatT.toFixed(1) + '°C' + (this.heatT > this.tempCritical ? ' ⚠ 임계 초과' : '')
+    this.thermalColor = this.heatT > this.tempCritical ? '#ff8d85' : (this.heatT > this.tempWarn ? '#ffd9a8' : '#b9ffe0')
     g.fillStyle = 'rgba(255,220,180,.9)'; g.font = '11px Consolas,monospace'
     g.fillText('THERMAL · FLIR · 640×480 · ε0.95', 10, 18)
   }
 
   // ---------- 이벤트 데모 ----------
-  setFire(on: boolean) {
+  setFire(on: any) {
     this.fireOn = on
     this.det.flameState = on ? '발생' : '미발생'
     this.det.flamePct = on ? '62.5%' : '0%'
@@ -739,7 +877,7 @@ export default class Simulation {
     this.emit()
   }
 
-  setHeat(on: boolean) {
+  setHeat(on: any) {
     this.heatOn = on
     if (on) this.pushLog('heat', '분전반 B 표면온도 임계 초과 (71.3°C > 60°C) — 과열 자동 경보')
     else this.pushLog('ok', '분전반 B 온도 정상 복귀 — 경보 해제')
@@ -751,7 +889,7 @@ export default class Simulation {
   toggleSound() { this.soundOn = !this.soundOn; this.emit() }
 
   // ---------- CCTV 조작 ----------
-  ptzMove(dir: string) {
+  ptzMove(dir: any) {
     if (dir === 'u') this.ptz.y -= 1
     if (dir === 'd') this.ptz.y += 1
     if (dir === 'l') this.ptz.x -= 1
@@ -763,41 +901,53 @@ export default class Simulation {
     this.emit()
   }
 
-  ptzZoom(delta: number) {
+  ptzZoom(delta: any) {
     this.ptz.z = Math.min(2.4, Math.max(1, this.ptz.z + 0.2 * delta))
     this.emit()
   }
 
   // ---------- 로봇 조작 ----------
-  segSet(man: boolean) {
+  segSet(man: any) {
     this.seg = man ? 'manual' : 'patrol'
     if (man) { this.bot.mode = 'manual'; this.setMode('수동 조작', 'man') }
     else this.botResume()
   }
 
   // dir: 'w'|'a'|'s'|'d'  (전진/좌/후진/우) — 원본 data-m 매핑과 동일
-  dpadMove(dir: string) {
-    if (this.bot.mode !== 'manual') this.segSet(true)
-    const map = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] }
+  //
+  // 주행 입력은 모드를 바꾸지 않는다(S15P11E101-513). 예전에는 여기서 segSet(true) 를 불러
+  // 순찰 중 WASD 한 번에 수동으로 넘어갔다 — 조작자가 화면을 잠깐 건드린 것만으로 순찰이
+  // 멈추는 셈이라 위험하다. 모드 전환은 스페이스바(또는 모드 버튼)의 몫이다.
+  dpadMove(dir: any) {
+    if (this.bot.mode !== 'manual') return
+    const map: Record<string, number[]> = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] }
     const [dc, dr] = map[dir] || [0, 0]
     const nc = Math.round(this.bot.pos.c) + dc, nr = Math.round(this.bot.pos.r) + dr
     if (nc >= 0 && nr >= 0 && nc < CSn && nr < RS && MAP[nr][nc] === 0) this.bot.pos = { c: nc, r: nr }
   }
 
-  dpStop() { this.segSet(true) }
-  emergencyStop() { this.bot.mode = 'manual'; this.setMode('긴급 정지', 'emg'); this.pushLog('heat', '수동 긴급 정지 (E-STOP)') }
+  // 주행 입력을 뗐다는 신호일 뿐이다. mock 은 한 번에 한 칸씩 움직여 멈출 것이 없고,
+  // 여기서 모드를 건드리면 키를 떼는 순간 수동으로 고정된다(S15P11E101-513).
+  dpStop() {}
+  // 수동 주행 속도 변경 — 현재 표시 중인 속도를 곧바로 갱신한다
+  setTempThresholds(warn: any, critical: any) {
+    this.tempWarn = warn
+    this.tempCritical = critical
+  }
+
+  setManualSpeed(v: any) {
+    this.manualSpeed = v
+    this.setMode(this.modeText, this.modeClass)
+  }
+
+  emergencyStop() { this.estop = true; this.bot.mode = 'manual'; this.setMode('긴급 정지', 'emg'); this.pushLog('heat', '수동 긴급 정지 (E-STOP)') }
   reset() { this.segSet(true); this.pushLog('ok', '제어 리셋') }
   returnPatrol() { this.botResume(); this.pushLog('ok', '순찰 복귀 명령') }
 
-  goto(value: string, label?: string) {
+  goto(value: any, label: any) {
     const [c, r] = value.split(',').map(Number)
     this.botGoto({ c, r }, 'goto'); this.setMode('지점 이동', 'man')
     this.pushLog('ok', '지점 이동: ' + label)
-  }
-
-  toggleSwitch(name: string) {
-    this.switches[name] = !this.switches[name]
-    this.emit()
   }
 
   // ---------- 메인 루프 ----------
@@ -811,12 +961,7 @@ export default class Simulation {
       this.bt++
       if (this.bt % 20 === 0 && this.batt > 20) { this.batt-- }
     }
-    if (this.currentTab === 'cctv') {
-      if (this.canvases.cam3) this.drawFactoryCam(this.canvases.cam3, this.ptz)
-      this.drawConf()
-    } else {
-      this.drawRcam(); this.drawThermal(); this.drawMap()
-    }
+    this.drawRcam(); this.drawThermal(); this.drawMap()
     this._raf = requestAnimationFrame(this.tick)
   }
 }
