@@ -1,0 +1,216 @@
+/* BBIYONG 디자인 시스템 v3 — 토큰 정본
+ *
+ * 출처: 디자인 핸드오프 패키지 design_handoff_bbiyong/tokens.css 를 그대로 가져온다.
+ * 값을 손으로 베껴 적지 않는다 — 핸드오프가 갱신되면 이 파일을 통째로 교체한다.
+ *
+ * 네임스페이스가 `--bb-` 인 이유: 기존 `--ink/--sub/--line/--dk-*`(app.css, 라이트/다크
+ * 토글용)와 `--c-*`(navexa.css)와 한 글자도 겹치지 않게 하려는 것이다. 겹치지 않으므로
+ * 이 파일을 추가해도 기존 화면은 한 픽셀도 바뀌지 않고, 화면을 하나씩 v3 로 옮겨 갈 수 있다.
+ *
+ * 지금 app.css 의 `.v3-theme` 블록은 아래 값들을 hex 로 직접 박아 두었다(S15P11E101-751).
+ * 그쪽은 이 파일의 변수 참조로 바꾸는 후속 작업 대상이다 — 이번 변경에서는 건드리지 않는다.
+ */
+
+:root {
+  /* ── Color: neutral ─────────────────────────── */
+  --bb-ink:            #232733;
+  --bb-ink-2:          #3C4252;
+  --bb-body:           #5A6072;
+  --bb-muted:          #7C8296;
+  --bb-muted-2:        #8B90A3;
+  --bb-faint:          #A2A7B6;
+  --bb-faint-2:        #B6BAC7;
+  --bb-line:           #EEEFF4;
+  --bb-line-strong:    #D6D9E3;
+  --bb-surface:        #F4F5F8;
+  --bb-canvas:         #E4E3ED;
+  --bb-frame-bg:       #F6F5FA;
+  --bb-scene-dark:     #0D1017;
+
+  /* ── Color: brand & status ──────────────────── */
+  --bb-primary:        #4C5695;
+  --bb-primary-hover:  #3F4880;
+  --bb-primary-tonal:  #E4E5F5;
+  --bb-primary-on-tonal:#3F4880;
+
+  /* 랜딩(웰컴) 전용 강조 파랑 — 확정 시안 수정한환영페이지.png(S15P11E101-877)의
+     헤드라인·CTA 색. 제품 프라이머리(#4C5695)와 성격이 달라(마케팅 히어로 톤)
+     별도 토큰으로 둔다 — 관제 화면 안에서는 쓰지 않는다. */
+  --bb-hero-accent:       #0056FB;
+  --bb-hero-accent-hover: #0047D6;
+
+  --bb-danger:         #C07A72;
+  --bb-danger-text:    #B4655C;
+  --bb-danger-tint:    #F0D6D2;
+
+  --bb-warn:           #C9A26A;
+  --bb-warn-text:      #96762F;
+  --bb-warn-tint:      #F5E7D0;
+
+  --bb-ok:             #6FA487;
+  --bb-ok-text:        #3E7C57;
+  --bb-ok-tint:        #DCEBE2;
+
+  --bb-neutral-dot:    #D5D8E1;
+
+  /* ── Gradients ──────────────────────────────── */
+  --bb-grad-frame:   radial-gradient(120% 90% at 18% 0%, #FCFCFD 0%, #F5F6F8 55%, #EEEFF3 100%);
+  --bb-grad-dense:   radial-gradient(120% 80% at 15% 0%, #FBFBFD 0%, #F3F4F8 60%, #EBECF2 100%);
+  --bb-grad-panel:   linear-gradient(150deg, #FFFFFF 0%, #FAFAFD 42%, #EEF0F7 100%);
+  --bb-grad-subsurface: linear-gradient(150deg, #FDFDFE 0%, #F1F2F9 100%);
+
+  /* ── Type ───────────────────────────────────── */
+  --bb-font:      'Gothic A1', system-ui, 'Malgun Gothic', sans-serif;
+  --bb-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --bb-fs-display: 34px;   /* 화면 타이틀, 700, -1.1px */
+  --bb-fs-kpi:     30px;   /* mono 600, -1px */
+  --bb-fs-kpi-sm:  26px;
+  --bb-fs-title:   15px;   /* 패널 제목, 700 */
+  --bb-fs-card:    13.5px; /* 카드 제목, 700 */
+  --bb-fs-body:    12.5px;
+  --bb-fs-label:   11.5px;
+  --bb-fs-caption: 10.5px;
+
+  /* ── Radius ─────────────────────────────────── */
+  --bb-r-input:  8px;
+  --bb-r-tile:   10px;
+  --bb-r-ctrl:   12px;
+  --bb-r-card:   16px;
+  --bb-r-scene:  18px;
+  --bb-r-panel:  22px;
+  --bb-r-frame:  20px;
+  --bb-r-pill:   999px;
+
+  /* ── Shadow ─────────────────────────────────── */
+  --bb-sh-1:  0 1px 3px rgba(35,39,51,.08);
+  --bb-sh-2:  0 6px 18px rgba(35,39,51,.06);
+  --bb-sh-3:  0 10px 26px rgba(35,39,51,.06);
+  --bb-sh-4:  0 18px 44px rgba(35,39,51,.10);
+  --bb-sh-5:  5px 9px 28px rgba(35,39,51,.13);
+  --bb-sh-up: 0 -8px 44px rgba(35,39,51,.08);
+
+  /* ── Spacing (4px base) ─────────────────────── */
+  --bb-sp-1: 6px;  --bb-sp-2: 8px;  --bb-sp-3: 10px; --bb-sp-4: 12px;
+  --bb-sp-5: 14px; --bb-sp-6: 18px; --bb-sp-7: 22px; --bb-sp-8: 26px;
+  --bb-sp-9: 34px;
+
+  --bb-dur: .12s;
+  --bb-ease: ease;
+}
+
+/* ── Glass: 밝은 씬 위에서만 사용. 어두운 영상 위엔 불투명 흰색. ──
+   🔴 전제: **유리 뒤에 흐려질 것이 있어야 한다.**
+   `backdrop-filter: blur()` 는 뒤를 흐리는 필터일 뿐이다. 뒤가 균일한 흰색이면
+   흐려도 흰색이라 유리를 켜든 끄든 픽셀이 거의 같다. 레퍼런스에서 유리가 유리로
+   보이는 건 블러 때문이 아니라 **뒤에 흐려질 만한 대비(3D 씬)가 있기 때문**이다.
+   이 클래스를 쓰려면 뒤에 경로·마커·격자 같은 내용을 먼저 깔아라.
+
+   [보완 2026-08-07] 핸드오프 원본에는 테두리도 엣지 하이라이트도 없었다.
+   그 상태로는 흰 배경 위에서 계층이 그림자와 radius 로만 읽혀 사실상 사라진다
+   (로그인 화면에서 실제로 확인됨). 레퍼런스 이미지의 유리 패널에는 좌상단에
+   밝은 모서리 선이 뚜렷한데, 그게 토큰으로 옮겨지지 않았다. 셋을 더한다:
+     ① 옅은 틴트  — 순백이 아니라 아래로 갈수록 surface 쪽으로 내려가는 그라디언트.
+                    안쪽 카드(순백)와 명도차를 만들어 준다
+     ② 테두리    — 배경과 무관하게 경계가 생긴다. `.bb-panel` 이 이미 쓰는 문법이다
+     ③ 상단 inset — 위에서 빛이 드는 씬의 조명 방향과 일치시킨다 */
+.bb-glass {
+  background: linear-gradient(150deg, rgba(255,255,255,.72) 0%, rgba(244,245,248,.60) 100%);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,.72);
+  box-shadow: 0 18px 46px rgba(35,39,51,.07),
+              inset 0 1px 0 rgba(255,255,255,.92);
+  border-radius: var(--bb-r-card);
+}
+
+.bb-card {                      /* 씬 위 불투명 카드 (영상 위 필수) */
+  background: #fff;
+  border-radius: var(--bb-r-card);
+  box-shadow: var(--bb-sh-4);
+}
+
+.bb-panel {                     /* 조밀 화면 패널 */
+  background: var(--bb-grad-panel);
+  border: 1px solid rgba(255,255,255,.8);
+  border-radius: var(--bb-r-card);
+  box-shadow: 2px 6px 22px rgba(35,39,51,.07);
+}
+
+.bb-subsurface {
+  background: var(--bb-grad-subsurface);
+  border: 1px solid rgba(255,255,255,.9);
+  border-radius: var(--bb-r-ctrl);
+}
+
+/* ── 계층: 유리 안에 들어앉는 카드 ─────────────────────────────
+   레퍼런스의 좌측 패널이 이 문법이다 — 반투명 유리 컨테이너 안에
+   더 불투명한 카드가 항목으로 들어앉고, 그 안에 더 옅은 표가 온다.
+   유리와 카드를 **형제로** 놓으면 이 위계가 생기지 않는다.
+   [사용자 지적 2026-08-07]
+
+   세 가지가 동시에 성립해야 층이 읽힌다. 하나만 어겨도 계층이 뒤집힌다.
+   ① 안쪽은 불투명 — 반투명 위에 반투명을 겹치면 뒤가 두 번 비쳐 글자가 흔들린다
+   ② 안쪽 그림자가 더 약하다 — 유리는 sh 46px 이고 안쪽은 sh-2(18px).
+      안쪽이 더 세면 카드가 유리 위로 떠올라 "패널 안의 항목"이 아니게 된다
+   ③ 안쪽 radius 가 더 작다 — 같으면 두 모서리가 겹쳐 한 덩어리로 보인다 */
+.bb-glass > .bb-card {
+  background: #fff;                       /* ① 유리 위에서는 반드시 불투명 */
+  box-shadow: var(--bb-sh-2);             /* ② 바깥(46px)보다 약하게 */
+  border-radius: var(--bb-r-card);        /* ③ 바깥 r-panel(22)보다 작게 */
+}
+/* 3단째. 카드 안에서는 그림자를 빼고 면의 밝기 차이로만 구분한다 —
+   그림자를 세 번 겹치면 화면이 지저분해진다. */
+.bb-glass > .bb-card > .bb-subsurface,
+.bb-card > .bb-subsurface {
+  box-shadow: none;
+  border-radius: var(--bb-r-tile);        /* r-card(16)보다 작게 */
+}
+
+/* 🔴 유리 위에 유리를 겹치지 마라. 규칙 ①의 반대 사례를 명시해 둔다 —
+   .bb-glass 안에 또 .bb-glass 를 넣으면 backdrop-filter 가 중첩되어
+   블러가 두 번 걸리고, 뒤 배경이 두 번 비쳐 대비가 예측 불가능해진다. */
+.bb-glass .bb-glass { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ── Scene grid ─────────────────────────────── */
+.bb-scene-grid {
+  background-image:
+    linear-gradient(90deg, rgba(120,128,150,.05) 1px, transparent 1px),
+    linear-gradient(0deg,  rgba(120,128,150,.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* ── Buttons ────────────────────────────────── */
+.bb-btn { font-family: var(--bb-font); font-weight: 600; font-size: 13px;
+          border-radius: 20px; cursor: pointer; border: 0;
+          transition: background var(--bb-dur) var(--bb-ease); }
+.bb-btn--filled   { padding:10px 20px; background: var(--bb-primary); color:#fff; }
+.bb-btn--filled:hover   { background: var(--bb-primary-hover); }
+.bb-btn--tonal    { padding:10px 20px; background: var(--bb-primary-tonal); color: var(--bb-primary-on-tonal); }
+.bb-btn--tonal:hover    { background:#D9DAF0; }
+.bb-btn--outlined { padding:9px 19px; background: transparent; color: var(--bb-danger-text);
+                    border:1px solid #C4C6D4; }
+.bb-btn--outlined:hover { background:#FBF6F5; border-color: var(--bb-danger-text); }
+.bb-btn--text     { padding:10px 18px; background: transparent; color: var(--bb-body); }
+.bb-btn--text:hover     { background: var(--bb-surface); color: var(--bb-ink); }
+
+.bb-iconbtn { width:36px; height:36px; border-radius:50%; background:#fff; border:0;
+              display:flex; align-items:center; justify-content:center;
+              color: var(--bb-muted); font-size:13px; box-shadow: var(--bb-sh-1);
+              cursor:pointer; flex:none; }
+.bb-iconbtn--square { border-radius: var(--bb-r-ctrl); }
+
+/* ── Numerals ───────────────────────────────── */
+.bb-kpi  { font-family: var(--bb-font-mono); font-weight:600; letter-spacing:-1px;
+           font-size: var(--bb-fs-kpi); color: var(--bb-ink); }
+.bb-unit { font-family: var(--bb-font); font-weight:500; font-size:14px; color: var(--bb-faint); }
+
+/* ── Progress (2px + triangle marker) ───────── */
+.bb-progress { height:2px; background: var(--bb-line); position:relative; }
+.bb-progress__fill { height:100%; background: var(--bb-ok); }
+.bb-progress__marker { position:absolute; top:2px; width:0; height:0;
+  border-left:4px solid transparent; border-right:4px solid transparent;
+  border-top:6px solid currentColor; }
+
+@keyframes bb-fade { 0%,100%{opacity:1} 50%{opacity:.4} }
+.bb-live { animation: bb-fade 1.4s ease-in-out infinite; }
