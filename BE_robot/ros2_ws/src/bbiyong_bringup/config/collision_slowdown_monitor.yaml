@@ -1,0 +1,36 @@
+collision_slowdown_monitor:
+  ros__parameters:
+    use_sim_time: false
+    enabled: true
+    base_frame_id: base_link
+    odom_frame_id: odom
+    cmd_vel_in_topic: /cmd_vel/autonomy_unfloored
+    cmd_vel_out_topic: /cmd_vel/autonomy_slowed
+    state_topic: /collision_slowdown_monitor_state
+    transform_tolerance: 0.2
+    source_timeout: 0.5
+    base_shift_correction: true
+    stop_pub_timeout: 1.0
+
+    polygons: [slowdown_zone]
+    slowdown_zone:
+      type: polygon
+      # Slow only for a confirmed cluster in the forward approach region.
+      # Side/rear clearance remains guarded by the independent stop monitor.
+      # Keep the warning band compact so nearby but navigable structure does
+      # not hold the base below its effective movement speed.
+      points: [0.50, 0.20, 0.50, -0.20, 0.30, -0.20, 0.30, 0.20]
+      action_type: slowdown
+      # Humble triggers when the number of points is greater than max_points.
+      max_points: 8
+      # 0.42 rad/s floor * 0.85 = 0.357 rad/s.
+      slowdown_ratio: 0.85
+      visualize: true
+      polygon_pub_topic: /collision_monitor/slowdown_zone
+      enabled: false
+
+    observation_sources: [scan]
+    scan:
+      type: scan
+      topic: /scan_safety_confirmed
+      enabled: true

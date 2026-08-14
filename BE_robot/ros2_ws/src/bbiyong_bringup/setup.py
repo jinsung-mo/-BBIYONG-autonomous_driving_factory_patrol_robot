@@ -27,6 +27,13 @@ setup(
             "generate_nav2_config = bbiyong_bringup.generate_nav2_config:main",
             "save_map = bbiyong_bringup.save_map:main",
             "exploration_map_saver = bbiyong_bringup.exploration_map_saver:main",
+            "patrol_route = bbiyong_bringup.patrol_route:main",
+            "navigate_goal = bbiyong_bringup.navigate_goal:main",
+            "scouting_guard = bbiyong_bringup.scouting_guard:main",
+            "trail_layer = bbiyong_bringup.trail_layer:main",
+            "commission_check = bbiyong_bringup.commission_check:main",
+            "collect_evidence = bbiyong_bringup.commissioning_artifacts:main",
+            "release_manager = bbiyong_bringup.release_manager:main",
         ]
     },
 )

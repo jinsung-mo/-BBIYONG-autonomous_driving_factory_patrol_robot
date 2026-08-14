@@ -2,28 +2,156 @@ frontier_explorer:
   ros__parameters:
     map_topic: /map
     navigate_to_pose_action: /navigate_to_pose
-    compute_path_to_pose_action: /compute_path_to_pose
-    planner_id: GridBased
     global_frame: map
     robot_frame: base_link
-    planning_period_sec: 1.0
-    plan_timeout_sec: 8.0
-    goal_timeout_sec: 90.0
-    goal_response_timeout_sec: 5.0
+    # Analysis runs only while no Nav2 goal is active. A shorter idle period
+    # reduces the pause between completed goals without replacing live paths.
+    planning_period_sec: 0.2
+    goal_timeout_sec: 60.0
+    goal_timeout_base_sec: 30.0
+    goal_timeout_per_meter_sec: 20.0
+    max_goal_timeout_sec: 90.0
+    # 🔴 [2026-08-10] 1.0 -> 4.0. CPU 부하(load ~30, 6코어)로 Nav2 액션
+    # 서버 ack 가 1.0초를 살짝 넘겨(실측 1.15초) 매번 goal_response_timeout 으로
+    # 블랙리스트됐다. 후보 clearance 는 0.43~0.45m 로 min_obstacle_clearance_m
+    # 0.40 을 이미 통과한 정상 목표였다 — 못 가는 게 아니라 기다려주지 않은 것.
+    # 안전거리는 그대로 두고 인내 시간만 늘린다.
+    goal_response_timeout_sec: 4.0
     cancel_grace_sec: 3.0
-    server_wait_timeout_sec: 2.0
-    startup_grace_sec: 15.0
-    completion_stable_sec: 15.0
+    server_wait_timeout_sec: 0.5
+    # START_MAPPING wipes SLAM first, so the first map is one scan old.  In a
+    # small enclosed space that scan clears >100 cells with no unknown
+    # adjacency yet, which looks exactly like a finished exploration.  These
+    # two guards are what separate 'nothing left to explore' from 'the map has
+    # not warmed up'; at 1.0/3.0 a run could complete 4 s after starting
+    # without moving (observed 2026-08-06 15:17).
+    startup_grace_sec: 5.0
+    completion_stable_sec: 12.0
     minimum_known_free_cells: 100
     free_threshold: 20
     min_cluster_size: 5
     occupied_threshold: 65
-    # nav2_diff.yaml uses robot_radius=0.30 m.  Keep the complete goal
-    # footprint in known free space, with a little localization margin.
-    min_obstacle_clearance_m: 0.35
-    goal_standoff_m: 0.45
-    min_frontier_distance: 0.5
+    # Preserve the thin free-space rays in the SLAM map. Clearance queries use
+    # summed-area tables, so full 5 cm analysis remains fast.
+    analysis_resolution_m: 0.05
+    # Sits 2 cm above Nav2's 0.22 m circular footprint: the 0.195 m
+    # circumscribed radius of the measured 0.30 x 0.25 m chassis plus ~2.5 cm
+    # of padding, added after the base clipped obstacles at the bare radius.
+    # gates frontier DETECTION, not just goal choice (frontier.py has_clearance),
+    # so raising it silently removes frontiers: at 0.30 only 6 of 111 candidate
+    # cells survived and exploration reported 'no frontiers' without moving.
+    # The goal stays on the last known free frontier cell; Nav2's 0.10 m goal
+    # tolerance stops the base before its center reaches the unknown boundary,
+    # while LiDAR collision monitors retain the immediate hard-stop zone.
+    min_goal_progress_m: 0.15
+    stalled_goal_limit: 3
+    min_obstacle_clearance_m: 0.40  # [2026-08-08] 0.24→0.40: 외접반경 0.328 + 위치오차 0.072. 이보다 좁으면 제자리 회전이 불가능하다
+    goal_standoff_m: 0.00
+    # Exploration may approach along a thin LiDAR-cleared ray before the full
+    # footprint is represented as known. Nav2 still plans only through known
+    # center cells; Collision Monitor enforces physical LaserScan clearance.
+    require_known_goal_clearance: false
+    # Prefer a frontier whose approach is open over one surrounded by sparse
+    # returns. Clearance is capped at this radius before scoring.
+    openness_radius_m: 1.0
+    # Sweep frontier boundaries connected to the outside of the map before
+    # revisiting enclosed unknown holes in the middle.
+    prefer_exterior_frontiers: true
+    # Nav2's XY goal tolerance is 0.10 m. Allow short 0.25 m advances that
+    # thicken an initially sparse LiDAR starburst into continuous free space.
+    min_frontier_distance: 0.25
     information_gain_weight: 2.0
     distance_weight: 1.0
-    blacklist_radius: 0.6
-    blacklist_ttl_sec: 120.0
+    open_space_weight: 2.0
+    # Prefer continuing through open space in roughly the current direction.
+    # One score point per radian makes a 180-degree reversal expensive without
+    # overriding the exterior-frontier first pass.
+    heading_change_weight: 1.0
+    blacklist_radius: 0.3
+    # [2026-08-09] 3.0 -> 90.0. 실패한 목표가 3초 뒤 되돌아와 무한 왕복이 났다.
+    # 20:11 매핑 실측: (0.54,3.91) <-> (1.54,4.46) 사이를 5분간 왕복하며
+    # 도달 1 · status6 18.
+    # 🔴 [정정] 처음엔 'PoseProgressChecker 가 병진만 세서' 라고 적었으나 **틀렸다**.
+    #    required_movement_angle: 0.10(5.73°)이 설정돼 있어 회전도 센다.
+    #    실제 사슬은 RPP 충돌예측 -> failure_tolerance 0.3s 초과 -> follow_path
+    #    abort -> BT 복구(backup/spin/wait) 소진 -> status 6 다.
+    #    실측: 'detected collision ahead' 1826회 vs 'Failed to make progress' 1회.
+    # TTL 을 올리는 근거는 따로 있다 — 동일 좌표 재선택까지 **중앙값 12.4초**라
+    # 3초 TTL 은 그 사이 이미 만료돼 블랙리스트가 없는 것과 같았다.
+    # 표준 구현 explore_lite 는 progress_timeout 30s + **영구** 블랙리스트를 쓴다.
+    # ⚠️ 후보가 적은 좁은 환경에서는 블랙리스트가 쌓여 조기 종료될 수 있다 —
+    #    부분 지도로 끝나는 편이 끼여서 멈추는 것보다 낫다.
+    # [2026-08-10] 90.0 -> 20.0. 위의 ⚠️ 경고가 실제로 터졌다.
+    #
+    # 03:24 매핑 실측(/tmp/exploration.log.keep-0332):
+    #   "All 4 frontiers are temporarily excluded; 7 blacklisted, next retry in 36.8s"
+    #   이 줄이 7.2s 까지 카운트다운하다가 no_progress_timeout(30s)에 먼저 죽었다.
+    #   -> 재시도까지 7.2초 남기고 탐사 종료. 지도는 3.5 x 3.0 m 에서 멈췄다.
+    #
+    # 🔴 불변식: no_progress_timeout_sec(30.0, exploration_node.py:110)
+    #            > blacklist_ttl_sec  이어야 한다.
+    #    아니면 프론티어가 전부 블랙리스트에 들어간 순간 회복이 구조적으로 불가능하다.
+    #
+    # 20.0 을 고른 근거는 위 주석의 실측이다 — 동일 좌표 재선택까지 중앙값 12.4초.
+    #   12.4(재선택 간격) < 20.0 < 30.0(타임아웃)
+    # 그보다 짧으면 블랙리스트가 무의미하고(3.0 이 그랬다), 길면 타임아웃에 걸린다.
+    # 원래값 3.0 대비 6.7배라 2026-08-09 의 무한 왕복 방지 효과는 유지된다.
+    #
+    # 대가: 같은 실패 지점을 20초마다 재시도한다. 진짜 못 가는 곳이면 시간을 쓴다 —
+    #       다만 아무것도 못 하고 조기 종료하는 것보다는 낫다.
+    blacklist_ttl_sec: 20.0
+    # Visit obstacle boundaries repeatedly before the final frontier cleanup,
+    # then return to the map-frame pose where exploration started.
+    # [2026-08-09] all_obstacles_then_return -> frontier_only (C안)
+    #
+    # 왜: 18:07 매핑에서 로봇이 0.0 cm 움직이고 24초 만에 끝났다. 무장은 정상
+    # (mode=autonomy 22초)이었는데 목표가 한 번도 Nav2 에 가지 않았다
+    # (/navigate_to_pose/_action/status 변화 0건, /cmd_vel_nav 0건 — rosbag 실측).
+    #
+    # 벽추종 모드는 목표에 두 조건을 동시에 요구한다:
+    #   min_obstacle_clearance_m 0.40      모든 장애물에서 0.40 m 이상
+    #   target_wall_distance_m   0.50±0.12 좌측 벽에서 0.38~0.62 m
+    # => 통로 폭이 최소 0.78 m 여야 후보가 생긴다. 실측 로봇 위치는
+    #    좌 0.444 / 우 0.394 m 로 가장 가까운 벽이 기준에 6 mm 모자랐다.
+    #
+    # exploration_node.py:168-175 — 이 값이 perimeter_then_cleanup /
+    # all_obstacles_then_return 둘 중 하나가 **아니면** 곧바로 cleanup 단계로 간다.
+    # cleanup 은 select_frontier 를 쓰고 open_space_weight 2.0 으로 넓은 곳을
+    # 선호하며, 벽 거리 밴드 조건이 없다.
+    #
+    # ⚠️ 되돌리기: all_obstacles_then_return 으로 되돌리면 벽 한 바퀴 도는
+    #    순찰 성격이 돌아온다. 넓은 시연장에서는 그쪽이 나을 수 있다.
+    # 🔴 min_obstacle_clearance_m 0.40 은 일부러 그대로 뒀다 — 회전 가능성의
+    #    근거이고, 같이 낮추면 실패했을 때 원인을 못 가른다.
+    exploration_mode: frontier_only
+    wall_side: left
+    target_wall_distance_m: 0.50  # [2026-08-08] 0.35→0.50: 벽 추종 목표. 0.35 는 tolerance 를 빼면 0.15 가 되어 회전 불가
+    # 벽에서 0.15~0.55 m 를 허용한다(0.35 +- 0.20). 종전 +-0.05 는 10 cm
+    # 창이라, 넓은 공간에서는 어떤 frontier 도 그 안에 들어오지 않아 앞이
+    # 뻥 뚫려 있어도 목표를 못 냈다 (2026-08-06 실측: frontier 4개가
+    # 1.2~2.4 m 에 있는데 75초간 정지).
+    wall_distance_tolerance_m: 0.12  # [2026-08-08] 0.20→0.12: 0.50±0.12 = 0.38~0.62. 전 구간이 외접반경 0.328 위
+    wall_search_radius_m: 1.20
+    # occupied 연결 덩어리의 bbox 대각선 길이. 의자 다리·스캔 스펙클을
+    # perimeter 모드가 벽으로 오인하지 않게 하는 필터다.
+    #
+    # 0.25 는 넓은 공간에서 '아직 조금만 스캔된 진짜 벽'까지 걸러내 자기강화
+    # 교착을 만든다 — 벽이 짧아 목표를 못 냄 → 로봇이 안 움직임 → 벽이 계속
+    # 짧음 (2026-08-06 20:50 실측: 다른 필터를 다 통과한 클러스터 2개가
+    # 길이 0.16 m / 0.05 m 로 탈락, 36초간 정지).
+    # 0.10(=2셀)이면 실제 벽 조각은 통과하고 1셀 스펙클은 여전히 배제된다.
+    minimum_structural_wall_length_m: 0.10
+    wall_persistence_updates: 2
+    perimeter_heading_weight: 2.50
+    wall_lost_updates: 3
+    max_acquire_frontier_goals: 3
+    # A return near the initial pose only completes the perimeter pass after
+    # meaningful travel and with a compatible heading.
+    minimum_loop_travel_m: 3.00
+    loop_position_tolerance_m: 0.50
+    loop_heading_tolerance_rad: 0.52
+    # Do not reacquire a boundary that was already followed around a closed loop.
+    completed_wall_exclusion_radius_m: 0.60
+    completed_wall_sample_spacing_m: 0.20
+    return_to_start_tolerance_m: 0.20      # Nav2 xy_goal_tolerance(0.10) 보다 느슨해야 한다 [2026-08-08]
+    return_to_start_heading_tolerance_rad: 0.30   # Nav2 yaw_goal_tolerance(0.175) 보다 느슨해야 한다 [2026-08-08]

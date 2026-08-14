@@ -10,7 +10,7 @@
 |---|---|---|
 | `tools/diff_drive/esp32_base_node.py` | `~/calib/` | `/cmd_vel` → ESP32, `/odom` + TF. **시리얼 포트 단독 소유자** |
 | `tools/diff_drive/patrol.py` | `~/calib/` | 라이다 + 카메라 융합 순찰 |
-| `tools/diff_drive/teleop_node.py` | `~/calib/` | 수동 조종 브리지 (명령 파일 경유, 안전 4중) |
+| `tools/diff_drive/teleop_node.py` | 배포 금지 | 퇴역 안내 전용; 영속 `bbiyong_manual_drive_bridge` 사용 |
 | `tools/diff_drive/explore.py` | `~/calib/` | 프런티어 탐사 |
 | `tools/diff_drive/roam.py` · `roam_ros.py` | `~/calib/` | 라이다 단독 주행기 (patrol 이전 세대) |
 | `tools/diff_drive/bench.py` | `~/calib/` | 실험 하네스 (step/sweep/tune/trace) |
