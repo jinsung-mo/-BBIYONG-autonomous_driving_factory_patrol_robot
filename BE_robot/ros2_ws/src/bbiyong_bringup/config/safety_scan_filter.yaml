@@ -1,0 +1,90 @@
+# Mapping keeps /scan_filtered unchanged. Collision safety uses a separate
+# chain: the hard-stop sees body-filtered points, while slowdown additionally
+# requires a spatially consistent cluster.
+safety_body_filter:
+  ros__parameters:
+    filter1:
+      name: robot_body
+      type: laser_filters/LaserScanBoxFilter
+      params:
+      # [2026-08-08] 🔴 이 박스는 **정지 폴리곤(=실측 차체)보다 커야 한다.**
+      #   폴리곤: x -0.155~0.170, y -0.186~0.182  (collision_monitor.yaml)
+      # 이전 값(y ±0.141)은 폴리곤보다 4cm 좁아서, 그 띠에 보이는 차체 일부를
+      # 장애물로 판정했다. rosbag 실측: 7,336 스캔 **전부**가 정지 조건을 만족했고
+      # (침입 점이 x -0.11~-0.05, y +0.17~+0.18 에 고정), collision_monitor 가
+      # 명령 9,229개 중 108개만 통과시켜 로봇이 10분 내내 멈춰 있었다.
+      # 지우는 영역은 로봇 자신의 footprint 안쪽이므로 안전을 낮추지 않는다 —
+      # 거기에 실제 장애물이 있다면 이미 충돌한 상태다. 보호는 폴리곤 경계가 한다.
+        box_frame: base_link
+        # Strictly inside the hard-stop polygon, and it must STAY inside it.
+        # These half-extents were sized for a 0.30-0.35 m stop radius; once the
+        # immediate_stop polygon came down to 0.22 m the box reached past it
+        # (max_x 0.24 > 0.22), so an obstacle closer than 0.24 m in front was
+        # deleted as 'own body' before the monitor could see it. The robot then
+        # drove into walls it had stopped rendering (2026-08-06, front/side).
+        #
+        # Chassis 0.30 x 0.25 m -> half-extents 0.15 x 0.125. This box still
+        # covers the body with ~4 cm margin and leaves a visible band from
+        # 0.19 m out to the 0.22 m stop line.
+        # 🔴 immediate_stop 반경(collision_monitor.yaml)을 바꾸면 여기도 같이
+        #    줄여야 한다. 두 값이 어긋나면 조용히 사각이 생긴다.
+        # 🔴 사각형 박스 / 원형 정지구역이라 축이 아니라 '모서리'가 기준이다.
+        #    이전 값(0.19 / 0.16)은 정면·정측면만 맞췄고 모서리가
+        #    hypot(0.19,0.16)=0.248 m, 후방은 hypot(0.20,0.16)=0.256 m 로
+        #    0.22 m 정지원을 벗어났다. 그 대각선 구역에서는 정지원 안의 장애물이
+        #    통째로 '내 몸'으로 삭제돼 immediate_stop 이 걸리지 않았다
+        #    — 가끔 대각선으로 살짝 부딪히던 원인.
+        #
+        #    실측 섀시 0.30 x 0.25 m → |x|>=0.15, |y|>=0.125 를 덮어야 하고,
+        #    모서리 hypot 은 0.22 미만이어야 한다.
+        #      0.168 / 0.141 → hypot 0.219 m  (여유 1 mm)
+        #      몸통 여유      x 1.8 cm, y 1.6 cm
+        # -0.168 -> -0.145 [실측 2026-08-07 · S15P11E101-848]
+        #    실제 차체 뒤쪽은 149.5mm 다. 종전 168mm 박스는 차체보다 18.5mm 커서
+        #    뒤쪽 149.5~168mm 껍질의 진짜 장애물이 '내 몸'으로 삭제되고 있었다.
+        #    2026-08-06 '벽에 박음' 사고와 같은 계열인데, 그때는 정지원 기준으로만
+        #    고쳐서 차체 기준으로는 여전히 컸다.
+        #    주의: max_x 는 손대지 않았다 — 라이다 평면 높이의 차체 단면이 미측정이다.
+        min_x: -0.165
+        max_x: 0.180
+        min_y: -0.145
+        max_y: 0.145
+        min_z: -0.20
+        max_z: 0.20
+        invert: false
+
+    filter2:
+      name: left_wheel
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        # [2026-08-08] 왼쪽 구동 바퀴만 도려낸다.
+        # 근거: rosbag 7,336 스캔에서 폴리곤 침입 점이 x -0.11~-0.05, y +0.17~+0.18 에
+        #       상시(90%+) 고정돼 있었다. 로봇이 움직여도 base_link 좌표가 안 변한다
+        #       = 차체 고정물. 사진으로도 그 자리가 왼쪽 뒷바퀴임을 확인했다.
+        # 🔴 우측은 침입이 0건이었다 — 라이다에 안 보인다. 대칭 박스를 넣지 않는다.
+        #    안 보이는 것을 지우면 실제 장애물만 놓치게 된다.
+        # 🔴 전 구간을 넓히면 안 된다: 폴리곤 좌우 경계가 ±0.182 이므로,
+        #    필터를 그보다 넓히면 측면 보호가 통째로 사라진다(v1 의 실수).
+        box_frame: base_link
+        # [2026-08-08] 실측 재확인: 침입 점이 x -0.150 까지 있었다.
+        # 폴리곤 후면(-0.155)을 덮도록 -0.165 까지 넓힌다.
+        min_x: -0.165
+        # [2026-08-08] -0.030 -> 0.000. 자기반사 점이 x -0.017~-0.030 에서 깜빡이며
+        # 통로 반폭(0.184) 경계를 넘나들어, 후진 여유 계산이 0.00 <-> 2.23 로 뒤집혔다.
+        # 탈출이 그 순간 후진을 골랐다 — 실제로는 뒤가 막혀 있었다.
+        max_x: 0.000
+        min_y: 0.140
+        max_y: 0.200
+        min_z: -0.20
+        max_z: 0.20
+        invert: false
+safety_speckle_filter:
+  ros__parameters:
+    filter1:
+      name: consistent_cluster
+      type: laser_filters/LaserScanSpeckleFilter
+      params:
+        filter_type: 1
+        max_range: 1.0
+        max_range_difference: 0.10
+        filter_window: 3

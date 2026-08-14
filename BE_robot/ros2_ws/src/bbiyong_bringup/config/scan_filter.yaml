@@ -1,0 +1,24 @@
+# Preserve the driver output as /scan_raw and publish this chain as /scan_filtered.
+# Thresholds and masks must be changed only from repeatable stationary/rotation bags.
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: physical_range
+      type: laser_filters/LaserScanRangeFilter
+      params:
+        use_message_range_limits: false
+        lower_threshold: 0.15
+        upper_threshold: 8.0
+        lower_replacement_value: .nan
+        upper_replacement_value: .inf
+
+    # The 2026-07-27 stationary profile found only 21% valid returns and
+    # 367 mm variation in this sensor-fixed sector. Its angles remain unchanged
+    # when the complete LiDAR is mounted backward; the TF rotates the scan into
+    # base_link. In-place filtering preserves LaserScan indexing and timing.
+    filter2:
+      name: unstable_sensor_sector
+      type: laser_filters/LaserScanAngularBoundsFilterInPlace
+      params:
+        lower_angle: -1.832596  # -105 degrees
+        upper_angle: -1.570796  #  -90 degrees
