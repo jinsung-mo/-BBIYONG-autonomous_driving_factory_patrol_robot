@@ -21,19 +21,62 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-restclient'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.hibernate.orm:hibernate-community-dialects'
+	runtimeOnly 'com.mysql:mysql-connector-j'
 	runtimeOnly 'org.xerial:sqlite-jdbc:3.53.1.0'
+
+	// 인증/인가(MVP): Spring Security 필터 체인 + BCrypt 해시 + JWT 발급/검증
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+	// 이메일 인증코드 발송(SMTP) — 회원가입 이메일 인증 · 비밀번호 재설정 코드 발송에 사용.
+	// 자격증명(BBIYONG_MAIL_USERNAME/PASSWORD) 미주입 시 개발모드로 동작(코드를 로그에 출력).
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+	// API 문서 자동화 (SpringDoc OpenAPI 3.0)
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+
+	// 구조화된 로깅 (Logback JSON Encoder)
+	implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+	// OpenCV(bytedeco) — 2D 도면 정제(S15P11E101-518). 네이티브는 배포(linux)·개발(windows)
+	// 플랫폼만 번들해 용량 최소화. (opencv-platform 전체 대신 classifier 지정)
+	implementation 'org.bytedeco:opencv:4.9.0-1.5.10'
+	implementation 'org.bytedeco:javacpp:1.5.10'
+	implementation 'org.bytedeco:openblas:0.3.26-1.5.10'
+	runtimeOnly 'org.bytedeco:opencv:4.9.0-1.5.10:linux-x86_64'
+	runtimeOnly 'org.bytedeco:opencv:4.9.0-1.5.10:windows-x86_64'
+	runtimeOnly 'org.bytedeco:javacpp:1.5.10:linux-x86_64'
+	runtimeOnly 'org.bytedeco:javacpp:1.5.10:windows-x86_64'
+	runtimeOnly 'org.bytedeco:openblas:0.3.26-1.5.10:linux-x86_64'
+	runtimeOnly 'org.bytedeco:openblas:0.3.26-1.5.10:windows-x86_64'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+
+	// Jenkins CI 환경 변수를 테스트 프로세스로 전달
+	if (System.getenv('TEST_DATASOURCE_URL')) {
+		environment 'TEST_DATASOURCE_URL', System.getenv('TEST_DATASOURCE_URL')
+	}
+	if (System.getenv('TEST_DATASOURCE_USERNAME')) {
+		environment 'TEST_DATASOURCE_USERNAME', System.getenv('TEST_DATASOURCE_USERNAME')
+	}
+	if (System.getenv('TEST_DATASOURCE_PASSWORD')) {
+		environment 'TEST_DATASOURCE_PASSWORD', System.getenv('TEST_DATASOURCE_PASSWORD')
+	}
 }

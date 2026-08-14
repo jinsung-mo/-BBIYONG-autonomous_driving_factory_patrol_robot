@@ -1,0 +1,14 @@
+{
+  "definition": "Pretrained weights loaded into the initialized two-class smoke/fire model, evaluated on test before the first optimizer step",
+  "fitness": 9e-05,
+  "metrics": {
+    "metrics/mAP50(B)": 0.00026,
+    "metrics/mAP50-95(B)": 9e-05,
+    "metrics/precision(B)": 0.00253,
+    "metrics/recall(B)": 0.00864,
+    "test/box_loss": 1.8515,
+    "test/cls_loss": 148.03651,
+    "test/dfl_loss": 0.02314
+  },
+  "split": "test"
+}

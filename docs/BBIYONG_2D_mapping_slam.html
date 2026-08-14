@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>삐용 순찰 로봇 — 2D 맵핑 시뮬레이션 (SLAM 탐사)</title>
+<style>
+  :root{
+    --bg:#0a0c10; --ink:#e7ecf3; --sub:#8a94a6; --line:#222a36;
+    --green:#3ddc97; --cyan:#4fd0ff; --amber:#e0a93b; --slate:#59637a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI",Roboto,"Malgun Gothic",sans-serif;overflow:hidden;}
+  canvas{display:block;position:fixed;inset:0;}
+  .mono{font-family:Consolas,"Courier New",monospace;}
+  .overlay{position:fixed;z-index:5;}
+
+  #top{top:14px;left:16px;display:flex;align-items:center;gap:12px;}
+  #top .brand{font-weight:800;font-size:16px;letter-spacing:.2px;}
+  #top .brand small{font-weight:400;color:var(--sub);font-size:11px;margin-left:6px;}
+  #mode{font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;
+    background:rgba(79,208,255,.14);color:var(--cyan);border:1px solid rgba(79,208,255,.4);}
+  #mode.done{background:rgba(61,220,151,.14);color:var(--green);border-color:rgba(61,220,151,.4);}
+
+  #hud{top:14px;right:16px;text-align:right;min-width:200px;}
+  #hud .row{display:flex;justify-content:space-between;gap:18px;font-size:12px;padding:2px 0;}
+  #hud .row span{color:var(--sub);}
+  #hud .row b{color:var(--ink);}
+  #bar{margin-top:8px;height:7px;border-radius:6px;background:#1a2028;overflow:hidden;border:1px solid var(--line);}
+  #bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2f9e77,#3ddc97);transition:width .2s;}
+
+  #legend{bottom:16px;left:16px;display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--sub);}
+  #legend .k{display:flex;align-items:center;gap:7px;}
+  #legend .sw{width:12px;height:12px;border-radius:3px;display:inline-block;}
+  #legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+
+  #ctrl{bottom:16px;right:16px;display:flex;align-items:center;gap:12px;
+    background:rgba(16,20,26,.85);border:1px solid var(--line);border-radius:12px;padding:9px 12px;}
+  #ctrl button{background:#1c2530;color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;}
+  #ctrl button:hover{border-color:var(--green);color:var(--green);}
+  #ctrl label{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:7px;}
+  #ctrl input[type=range]{width:110px;accent-color:var(--green);}
+
+  #toast{top:50%;left:50%;transform:translate(-50%,-50%);z-index:8;
+    background:rgba(61,220,151,.12);border:1px solid rgba(61,220,151,.5);color:var(--green);
+    font-weight:800;font-size:18px;padding:16px 26px;border-radius:14px;
+    opacity:0;transition:opacity .4s;pointer-events:none;text-align:center;}
+  #toast small{display:block;color:var(--sub);font-weight:500;font-size:12px;margin-top:6px;}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="top" class="overlay">
+  <div class="brand">삐용 순찰 로봇<small>· 2D 맵핑 시뮬레이션 (SLAM 자율 탐사)</small></div>
+  <div id="mode">탐사 중</div>
+</div>
+
+<div id="hud" class="overlay">
+  <div class="row"><span>탐사 진행률</span><b class="mono" id="pct">0%</b></div>
+  <div class="row"><span>이동가능 셀</span><b class="mono" id="cFree">0 / 0</b></div>
+  <div class="row"><span>장애물 셀</span><b class="mono" id="cWall">0</b></div>
+  <div class="row"><span>이동 거리</span><b class="mono" id="dist">0.0 m</b></div>
+  <div id="bar"><i id="barI"></i></div>
+</div>
+
+<div id="legend" class="overlay">
+  <div class="k"><span class="sw" style="background:#0f131a;border:1px solid #222a36;"></span>미탐사 영역 (Unknown)</div>
+  <div class="k"><span class="sw" style="background:#22303e;"></span>이동가능 (Free)</div>
+  <div class="k"><span class="sw" style="background:#141a22;box-shadow:inset 0 0 0 1px #59637a;"></span>장애물 (Occupied · 포인트클라우드)</div>
+  <div class="k"><span class="dot" style="background:#3ddc97;"></span>순찰 로봇 · LiDAR 센서</div>
+  <div class="k"><span class="sw" style="background:#4fd0ff;"></span>프런티어 (탐사 경계)</div>
+  <div class="k"><span class="sw" style="background:#e0a93b;"></span>분전반 (발견 시 표시)</div>
+</div>
+
+<div id="ctrl" class="overlay">
+  <button id="restart">↻ 다시 탐사</button>
+  <label>속도 <input id="speed" type="range" min="0.2" max="3" step="0.1" value="0.5" /></label>
+</div>
+
+<div id="toast" class="overlay"></div>
+
+<script>
+(function(){
+  "use strict";
+  // ---------- 공장 점유격자 (Ground Truth) — 로봇은 처음엔 모른다 ----------
+  const MAP = [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,1,0,1,1,1,0,1,1,0,0],
+    [0,1,0,0,0,0,1,0,0,1,0,0],
+    [0,0,0,1,1,0,0,0,0,0,0,0],
+    [0,1,0,1,0,0,1,1,0,1,1,0],
+    [0,1,0,0,0,1,1,0,0,0,1,0],
+    [0,0,0,1,0,0,0,0,1,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ];
+  const RS = MAP.length, CSn = MAP[0].length;
+  const PANELS = [{c:4,r:0,n:'A'},{c:11,r:4,n:'B'},{c:7,r:7,n:'C'}];
+  const DIRS4 = [[1,0],[-1,0],[0,1],[0,-1]];
+  const CELL_M = 0.6;   // 셀당 실제 거리(표시용)
+  const SENSE_R = 1.5;  // LiDAR 감지 반경(셀) — 짧게 두어 지나간 경로 주변만 한 칸씩 밝혀진다
+
+  // ---------- 상태 ----------
+  let known, revealAt, robot, path, seg, prog, frame;
+  let mappingDone, senseHits, traj, distCells;
+  let patrolCells, patrolSeg, patrolProg, doneFrame;
+  let speedMult = 0.5;
+
+  const cv = document.getElementById('cv'), g = cv.getContext('2d');
+  let W, H, DPR, cell, ox, oy;
+
+  const $ = id => document.getElementById(id);
+
+  // ---------- 레이아웃 ----------
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    layout();
+  }
+  function layout(){
+    const m = Math.min(W, H) * 0.09;
+    cell = Math.min((W - 2*m)/CSn, (H - 2*m)/RS);
+    ox = (W - cell*CSn)/2;
+    oy = (H - cell*RS)/2 + 8;
+  }
+  const px = c => ox + (c + 0.5) * cell;
+  const py = r => oy + (r + 0.5) * cell;
+
+  // ---------- A* (완성된 지도 위 순찰 경로용) ----------
+  function astar(s, gl){
+    const key=(c,r)=>r*CSn+c;
+    const open=[{c:s.c,r:s.r,g:0,f:0,p:null}], gsc={}; gsc[key(s.c,s.r)]=0;
+    const H2=(c,r)=>Math.abs(c-gl.c)+Math.abs(r-gl.r);
+    while(open.length){
+      open.sort((a,b)=>a.f-b.f); const cur=open.shift();
+      if(cur.c===gl.c&&cur.r===gl.r){ const o=[]; let n=cur; while(n){o.unshift({c:n.c,r:n.r});n=n.p;} return o; }
+      for(const[dc,dr]of DIRS4){ const nc=cur.c+dc,nr=cur.r+dr;
+        if(nc<0||nr<0||nc>=CSn||nr>=RS||MAP[nr][nc]===1) continue;
+        const ng=cur.g+1,k=key(nc,nr);
+        if(gsc[k]===undefined||ng<gsc[k]){ gsc[k]=ng; open.push({c:nc,r:nr,g:ng,f:ng+H2(nc,nr),p:cur}); }
+      }
+    }
+    return [];
+  }
+  function chainPath(wps){
+    const out=[{c:wps[0].c,r:wps[0].r}];
+    for(let i=1;i<wps.length;i++){ const p=astar(out[out.length-1],wps[i]); for(let j=1;j<p.length;j++) out.push(p[j]); }
+    return out;
+  }
+
+  // ---------- 초기화 ----------
+  function reset(){
+    known   = Array.from({length:RS},()=>new Array(CSn).fill(-1)); // -1 미탐사, 0 free, 1 wall
+    revealAt= Array.from({length:RS},()=>new Array(CSn).fill(-1));
+    robot = {c:0, r:0, hd:0};
+    path=null; seg=0; prog=0; frame=0;
+    mappingDone=false; senseHits=[]; traj=[]; distCells=0; doneFrame=0;
+    patrolCells=null; patrolSeg=0; patrolProg=0;
+    $('mode').textContent='탐사 중'; $('mode').classList.remove('done');
+    $('toast').style.opacity=0;
+    sense();
+  }
+
+  // ---------- LiDAR 센싱: 로봇 주변을 광선으로 훑어 미지의 셀을 밝혀낸다 ----------
+  function reveal(r,c,val){
+    if(r<0||c<0||r>=RS||c>=CSn) return;
+    if(known[r][c]===-1){ known[r][c]=val; revealAt[r][c]=frame; }
+    else if(val===1){ known[r][c]=1; }
+  }
+  function sense(){
+    const R=SENSE_R, steps=16, rays=180;
+    senseHits=[];
+    reveal(Math.round(robot.r), Math.round(robot.c), 0);
+    for(let k=0;k<rays;k++){
+      const ang=k/rays*Math.PI*2, dx=Math.cos(ang), dy=Math.sin(ang);
+      let end=null;
+      for(let s=1;s<=steps;s++){
+        const d=R*s/steps, cc=robot.c+dx*d, rr=robot.r+dy*d;
+        const ci=Math.round(cc), ri=Math.round(rr);
+        if(ci<0||ri<0||ci>=CSn||ri>=RS){ end={c:cc,r:rr,wall:true}; break; }
+        if(MAP[ri][ci]===1){ reveal(ri,ci,1); end={c:ci,r:ri,wall:true}; break; }
+        reveal(ri,ci,0);
+        if(s===steps) end={c:cc,r:rr,wall:false};
+      }
+      if(end && k%3===0) senseHits.push(end);
+    }
+  }
+
+  // ---------- 프런티어 탐사: 밝혀진 자유공간의 경계로 이동해 미지 영역을 넓힌다 ----------
+  function frontiers(){
+    const fs=[];
+    for(let r=0;r<RS;r++)for(let c=0;c<CSn;c++){
+      if(known[r][c]!==0) continue;
+      for(const[dc,dr]of DIRS4){ const nc=c+dc,nr=r+dr;
+        if(nc<0||nr<0||nc>=CSn||nr>=RS) continue;
+        if(known[nr][nc]===-1){ fs.push({c,r}); break; }
+      }
+    }
+    return fs;
+  }
+  // 로봇 → 가장 가까운 프런티어까지 known-free 위 BFS 경로
+  function planToNearestFrontier(){
+    const fs=frontiers();
+    if(fs.length===0) return null;
+    const fset=new Set(fs.map(f=>f.r*CSn+f.c));
+    const start={c:Math.round(robot.c), r:Math.round(robot.r)};
+    const sk=start.r*CSn+start.c;
+    const q=[start], prev={}, seen=new Set([sk]);
+    while(q.length){
+      const cur=q.shift(), ck=cur.r*CSn+cur.c;
+      if(fset.has(ck) && ck!==sk){
+        const p=[]; let n=cur; while(n){ p.unshift(n); n=prev[n.r*CSn+n.c]; } return p;
+      }
+      for(const[dc,dr]of DIRS4){ const nc=cur.c+dc,nr=cur.r+dr;
+        if(nc<0||nr<0||nc>=CSn||nr>=RS) continue;
+        if(known[nr][nc]!==0) continue;
+        const k=nr*CSn+nc; if(seen.has(k)) continue;
+        seen.add(k); prev[k]=cur; q.push({c:nc,r:nr});
+      }
+    }
+    return null; // 도달 가능한 프런티어 없음 → 탐사 완료
+  }
+
+  // ---------- 탐사 완료 후 순찰 경로 ----------
+  function buildPatrol(){
+    const perim=[{c:0,r:0},{c:CSn-1,r:0},{c:CSn-1,r:RS-1},{c:0,r:RS-1},{c:0,r:0}];
+    const sweep=[];
+    for(let r=0;r<RS;r++){
+      if(r%2===0){ for(let c=0;c<CSn;c++) if(MAP[r][c]===0) sweep.push({c,r}); }
+      else { for(let c=CSn-1;c>=0;c--) if(MAP[r][c]===0) sweep.push({c,r}); }
+    }
+    patrolCells=chainPath([...perim, ...sweep, {c:0,r:0}]); patrolCells.pop();
+    patrolSeg=0; patrolProg=0;
+  }
+
+  // ---------- 스텝 ----------
+  function moveAlong(a,b,spd){
+    if(b.c!==a.c||b.r!==a.r) robot.hd=Math.atan2(b.r-a.r, b.c-a.c);
+    prog+=spd; const p=Math.min(1,prog);
+    const nc=a.c+(b.c-a.c)*p, nr=a.r+(b.r-a.r)*p;
+    distCells += Math.hypot(nc-robot.c, nr-robot.r);
+    robot.c=nc; robot.r=nr;
+    traj.push({c:robot.c,r:robot.r}); if(traj.length>1600) traj.shift();
+    return p>=1;
+  }
+  function step(){
+    frame++;
+    if(mappingDone){ patrolStep(); return; }
+    if(!path || seg>=path.length-1){
+      path=planToNearestFrontier(); seg=0; prog=0;
+      if(!path){ mappingDone=true; doneFrame=frame; buildPatrol(); onComplete(); return; }
+    }
+    const done=moveAlong(path[seg], path[seg+1]||path[seg], 0.04*speedMult);
+    sense();
+    if(done){ prog=0; seg++; }
+  }
+  function patrolStep(){
+    if(!patrolCells) return;
+    const n=patrolCells.length, a=patrolCells[patrolSeg], b=patrolCells[(patrolSeg+1)%n];
+    if(b.c!==a.c||b.r!==a.r) robot.hd=Math.atan2(b.r-a.r, b.c-a.c);
+    patrolProg+=0.03*speedMult; const p=Math.min(1,patrolProg);
+    const nc=a.c+(b.c-a.c)*p, nr=a.r+(b.r-a.r)*p;
+    distCells += Math.hypot(nc-robot.c, nr-robot.r);
+    robot.c=nc; robot.r=nr;
+    traj.push({c:robot.c,r:robot.r}); if(traj.length>1600) traj.shift();
+    if(p>=1){ patrolProg=0; patrolSeg=(patrolSeg+1)%n; }
+  }
+  function onComplete(){
+    $('mode').textContent='맵핑 완료 · 순찰 전환';
+    $('mode').classList.add('done');
+    const st=stats();
+    const t=$('toast');
+    t.innerHTML='✔ 2D 지도 맵핑 완료<small>이동가능 '+st.tf+'셀 · 장애물 '+st.kw+'셀 · 이제 완성된 지도로 자율 순찰</small>';
+    t.style.opacity=1;
+    setTimeout(()=>{ t.style.opacity=0; }, 4200);
+    // 통합 컨트롤러(부모 프레임)에 맵핑 완료 신호 — 단독 실행 시엔 무시됨
+    try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'bbiyong-mapping-done',stats:st},'*'); }catch(e){}
+  }
+
+  // ---------- 통계 ----------
+  function stats(){
+    let kf=0,kw=0,tf=0;
+    for(let r=0;r<RS;r++)for(let c=0;c<CSn;c++){
+      if(MAP[r][c]===0) tf++;
+      if(known[r][c]===0) kf++;
+      if(known[r][c]===1) kw++;
+    }
+    return {kf,kw,tf,pct: tf?Math.round(kf/tf*100):0};
+  }
+
+  // ---------- 렌더링 ----------
+  function circle(x,y,r){ g.beginPath(); g.arc(x,y,r,0,7); g.fill(); }
+
+  function drawCell(r,c){
+    const x=ox+c*cell, y=oy+r*cell, k=known[r][c];
+    if(k===-1){
+      g.fillStyle='#0f131a'; g.fillRect(x,y,cell,cell);
+      g.fillStyle='rgba(255,255,255,.020)';
+      for(let i=0;i<3;i++){ const rx=x+((i*53+r*17+c*29)%100)/100*cell, ry=y+((i*71+c*23)%100)/100*cell; g.fillRect(rx,ry,1,1); }
+      return;
+    }
+    const a=Math.min(1,(frame-revealAt[r][c])/16); // 밝혀지는 페이드인
+    if(k===0){
+      g.fillStyle='rgba(34,48,62,'+(0.35+0.65*a)+')'; g.fillRect(x,y,cell,cell);
+    }else{
+      g.fillStyle='rgba(20,26,34,'+(0.45+0.55*a)+')'; g.fillRect(x,y,cell,cell);
+      g.fillStyle='rgba(89,99,122,'+(0.75*a)+')'; // SLAM 포인트클라우드
+      for(let i=0;i<13;i++){ const rx=x+((i*37+r*13+c*7)%100)/100*cell, ry=y+((i*61+c*11)%100)/100*cell; g.fillRect(rx,ry,1.6,1.6); }
+      g.strokeStyle='rgba(89,99,122,'+(0.35*a)+')'; g.lineWidth=1; g.strokeRect(x+2,y+2,cell-4,cell-4);
+    }
+  }
+
+  function drawTraj(){
+    if(traj.length<2) return;
+    g.strokeStyle='rgba(61,220,151,.22)'; g.lineWidth=1.5; g.setLineDash([4,4]);
+    g.beginPath(); traj.forEach((p,i)=>{ const x=px(p.c),y=py(p.r); i?g.lineTo(x,y):g.moveTo(x,y); }); g.stroke();
+    g.setLineDash([]);
+  }
+
+  function drawSensor(){
+    const x=px(robot.c), y=py(robot.r), R=SENSE_R*cell;
+    const grad=g.createRadialGradient(x,y,2,x,y,R);
+    grad.addColorStop(0,'rgba(61,220,151,.10)'); grad.addColorStop(1,'rgba(61,220,151,0)');
+    g.fillStyle=grad; circle(x,y,R);
+    g.strokeStyle='rgba(61,220,151,.16)'; g.lineWidth=1;
+    senseHits.forEach(h=>{ g.beginPath(); g.moveTo(x,y); g.lineTo(px(h.c),py(h.r)); g.stroke(); });
+    g.fillStyle='rgba(130,235,185,.7)';
+    senseHits.forEach(h=>{ if(h.wall) g.fillRect(px(h.c)-1.3,py(h.r)-1.3,2.6,2.6); });
+  }
+
+  function drawRobot(){
+    const x=px(robot.c), y=py(robot.r);
+    g.fillStyle='rgba(61,220,151,.16)'; circle(x,y,cell*0.5);
+    g.fillStyle='#3ddc97'; circle(x,y,cell*0.22);
+    g.strokeStyle='#eafff5'; g.lineWidth=2;
+    g.beginPath(); g.moveTo(x,y); g.lineTo(x+Math.cos(robot.hd)*cell*0.42, y+Math.sin(robot.hd)*cell*0.42); g.stroke();
+  }
+
+  function draw(){
+    g.clearRect(0,0,W,H);
+    g.fillStyle='#0a0c10'; g.fillRect(0,0,W,H);
+
+    for(let r=0;r<RS;r++)for(let c=0;c<CSn;c++) drawCell(r,c);
+
+    // 격자
+    g.strokeStyle='rgba(90,102,122,.12)'; g.lineWidth=1;
+    for(let c=0;c<=CSn;c++){ g.beginPath(); g.moveTo(ox+c*cell,oy); g.lineTo(ox+c*cell,oy+RS*cell); g.stroke(); }
+    for(let r=0;r<=RS;r++){ g.beginPath(); g.moveTo(ox,oy+r*cell); g.lineTo(ox+CSn*cell,oy+r*cell); g.stroke(); }
+    g.strokeStyle='#2a3342'; g.lineWidth=2; g.strokeRect(ox,oy,CSn*cell,RS*cell);
+
+    // 프런티어(탐사 중에만)
+    if(!mappingDone){
+      const s=cell*0.18;
+      g.fillStyle='rgba(79,208,255,.55)';
+      frontiers().forEach(f=>{ g.fillRect(px(f.c)-s/2, py(f.r)-s/2, s, s); });
+    }
+
+    drawTraj();
+
+    // 분전반 (발견된 셀만)
+    PANELS.forEach(p=>{
+      if(known[p.r][p.c]===-1) return;
+      const x=px(p.c), y=py(p.r), s=cell*0.30;
+      g.fillStyle='#e0a93b'; g.fillRect(x-s/2, y-s/2, s, s);
+      g.fillStyle='#1a1206'; g.font='bold '+Math.round(cell*0.24)+'px Consolas,monospace';
+      g.textAlign='center'; g.textBaseline='middle'; g.fillText(p.n, x, y+0.5);
+      g.textAlign='left'; g.textBaseline='alphabetic';
+    });
+
+    if(!mappingDone) drawSensor();
+    drawRobot();
+  }
+
+  // ---------- HUD ----------
+  function updateHUD(){
+    const st=stats();
+    $('pct').textContent=st.pct+'%';
+    $('cFree').textContent=st.kf+' / '+st.tf;
+    $('cWall').textContent=st.kw;
+    $('dist').textContent=(distCells*CELL_M).toFixed(1)+' m';
+    $('barI').style.width=st.pct+'%';
+  }
+
+  // ---------- 루프 ----------
+  function loop(){ step(); draw(); updateHUD(); requestAnimationFrame(loop); }
+
+  // ---------- 이벤트 ----------
+  window.addEventListener('resize', resize);
+  $('restart').addEventListener('click', reset);
+  $('speed').addEventListener('input', e=>{ speedMult=parseFloat(e.target.value); });
+
+  resize(); reset(); loop();
+})();
+</script>
+</body>
+</html>
