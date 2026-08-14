@@ -4,12 +4,12 @@
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-jira"
+        "@aashari/mcp-server-atlassian-jira"
       ],
       "env": {
-        "JIRA_API_TOKEN": "YOUR_JIRA_API_TOKEN",
-        "JIRA_EMAIL": "YOUR_JIRA_EMAIL",
-        "JIRA_URL": "YOUR_JIRA_URL"
+        "ATLASSIAN_SITE_NAME": "YOUR_SITE_NAME",
+        "ATLASSIAN_USER_EMAIL": "YOUR_JIRA_EMAIL",
+        "ATLASSIAN_API_TOKEN": "YOUR_JIRA_API_TOKEN"
       }
     }
   }

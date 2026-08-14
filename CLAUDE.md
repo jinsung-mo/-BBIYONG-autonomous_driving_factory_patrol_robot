@@ -7,23 +7,59 @@ This is the E101 BBIYONG (삐용) repository, containing FE, BE system, BE robot
 When performing work in this repository, you MUST follow these specific conventions.
 
 ### 1. Jira Automation Conventions (Epic ➔ Story ➔ Task)
-* **Structure**: Epic ➔ Story ➔ Task. **Do NOT use Jira Sub-tasks.**
+* **Structure**: `Epic ➔ Story ➔ Task` 3-tier hierarchy. **Do NOT use Jira Sub-tasks.**
+  * **Epic**: Top-level domain epic (already created, no new Epics will be added)
+  * **Story**: Feature-level story as a child of Epic
+  * **Task**: Individual developer task (1-2 days) linked to Story via "Relates to" relationship
+* **Parenting rule**:
+  - Story's `parent` = Epic
+  - Task is linked to Story via **"Relates to"** issue link (NOT parent-child)
+* **Mandatory Story grouping**: Every Task must be associated with a Story via "Relates to" link. If no matching Story exists, create the Story first (as child of Epic), then create the Task and link it to the Story.
 * **Title Format**: `[Type][Module] Summary` (e.g. `[Feat][BE] 회원가입 API 구현`, `[Fix][FE] 버튼 클릭 이벤트 미동작 수정`, `[Docs][BE] 관제 서버 API 명세서 작성`).
 * **Story**: High-level domain features (e.g. `회원 관리`, `로봇 제어`).
 * **Task**: Individual developer tasks of 1-2 days (e.g. `로그인 API 구현`).
 * **Due Date**: Automatically set to the upcoming Friday.
-* **Assignee**: Automatically search for user's `accountId` using their configuration email, and assign all created issues to them.
-* **Format**: All issue descriptions must strictly follow this template (emoticons removed). Use asterisks (*) for checkbox lists to prevent rendering bugs:
+* **Format**: All issue descriptions must strictly follow this template (emoticons removed):
   ```markdown
-  ### 개요 (Context)
-  - 
-  ### 작업 상세 내용 (To-Do)
-  - 
-  ### 완료 기준 (Definition of Done)
-  - 
+  1. **개요 (Context)**
+     - ...
+  2. **작업 상세 내용 (To-Do)**
+     - ...
+  3. **완료 기준 (Definition of Done)**
+     - ...
   ```
-  (Note: When programmatically using Jira REST API v2, convert '### ' headers to 'h3. ' and '- ' to '* ' to avoid rendering bugs where '#' is parsed as numbered list items 1. a. i.)
 * **Configuration**: Read `.ai_jira_config.json` or `.gemini_jira_config.json` in the root folder for URL, email, api token, and project key.
+
+### 1-1. Ticket-First Workflow (No Ticket, No Work)
+
+**⚠️ CRITICAL RULE**: Before writing ANY code or starting ANY work, you MUST create Jira tickets first.
+
+**Workflow:**
+1. **User requests a feature/task** → Analyze requirements
+2. **Check if matching Story exists**:
+   - If NO matching Story exists → **Create Story first** (parent = Epic)
+   - If Story exists → Proceed to step 3
+3. **Create Task** (linked to Story via "Relates to")
+4. **Report Jira ticket key to user** (e.g., "Created S15P11E101-XXX")
+5. **Create Git branch** `[prefix]/[JiraTicketId]-[task-name]`
+6. **Start coding**
+
+**Example:**
+```
+User: "로봇 제어 WebSocket 기능 구현해줘"
+
+AI checks: Is there a "로봇 제어" Story?
+- NO → Create Story first:
+  - Story: "[Feat][BE] 로봇 제어" (parent = Epic)
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to Story)
+- YES → Create Task only:
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to existing Story)
+
+Report: "Created S15P11E101-123 (Story) and S15P11E101-124 (Task)"
+Branch: feat/S15P11E101-124-websocket-handler
+```
+
+**Never start coding without a Jira ticket ID!**
 
 ### 2. Git & Branching Conventions
 * **Development Target Branches**: `fe/main`, `be_system/main`, `be_robot/main`, `ai/main`
@@ -31,10 +67,30 @@ When performing work in this repository, you MUST follow these specific conventi
 * **Branch Names**: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-144-login`)
 * **Commit Messages**: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-144] feat: [BE] 회원가입 API 구현`)
 * **MR flow**: Always target the part main branch (e.g. `be_system/main`) rather than release `main`.
-* **MR Auto-Fill**: Extract the Jira Issue Key (e.g. `S15P11E101-144`) from the active branch name, format it as a link `[S15P11E101-144](https://ssafy.atlassian.net/browse/S15P11E101-144)`, and write it under `### 관련 Jira 티켓` when assisting the user with GitLab MR creation.
+* **Branch Cleanup Rule**: After MR is merged, always delete the feature branch locally (`git branch -D [branch-name]`) and remotely (GitLab UI or `git push origin --delete [branch-name]`).
+* **Mandatory MR Description Output**: Whenever pushing code or guiding MR creation, the AI agent MUST automatically generate and output a fully populated MR description markdown block in the following format:
+
+```markdown
+## 관련 Jira 티켓
+[S15P11E101-XXX](https://ssafy.atlassian.net/browse/S15P11E101-XXX)
+
+## 개요 (Context)
+- ...
+
+## 작업 상세 내용 (To-Do)
+- [ ] ...
+- [ ] ...
+
+## 완료 기준 (Definition of Done)
+- [ ] ...
+- [ ] ...
+
+## Reviewer Notes
+- ...
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
 
 For more details on team automation, refer to [AI.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/AI.md).
-
-### 3. Ticket-First Workflow Automation (No Ticket, No Work)
-* Before writing any code, modifying files, or creating branches for a task, you MUST automatically create the Jira ticket via API first.
-* Report the ticket key to the user, then checkout the branch `[prefix]/[JiraTicketId]-[task-name]`, and finally perform the coding/writing. Do not code without a ticket key.
