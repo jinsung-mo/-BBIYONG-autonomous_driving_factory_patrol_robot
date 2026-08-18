@@ -17,7 +17,9 @@ def load_gitlab_token():
     # .ai_jira_config.json에서 GitLab 토큰을 찾거나, 별도 파일에서 로드
     # 여기서는 사용자가 환경변수 또는 별도로 제공해야 함
     try:
-        with open('../.gitlab_token', 'r') as f:
+        import os
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(repo_root, '.gitlab_token'), 'r') as f:
             return f.read().strip()
     except:
         print("⚠️  GitLab Personal Access Token이 필요합니다.")

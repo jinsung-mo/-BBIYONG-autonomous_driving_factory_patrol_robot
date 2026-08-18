@@ -10,7 +10,9 @@ from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 
 def load_jira_config():
-    config_paths = ['../.ai_jira_config.json', '../.gemini_jira_config.json']
+    import os
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    config_paths = [os.path.join(repo_root, n) for n in ('.ai_jira_config.json', '.gemini_jira_config.json')]
     for path in config_paths:
         try:
             with open(path, 'r') as f:
