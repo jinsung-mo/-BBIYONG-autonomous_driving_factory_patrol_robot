@@ -210,14 +210,14 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 <a id="team"></a>
 ## 팀원
 
-최종 발표 자료에 기재된 담당 역할입니다.
+팀원별 담당 역할입니다.
 
 | 이름 | 담당 |
 | --- | --- |
 | 모진성 | 팀장 · Backend |
 | 장효준 | Hardware · AI |
 | 고지혁 | Hardware · AI |
-| 박재현 | Backend · AI |
+| 박재현 | CI/CD · Infra |
 | 이승현 | Frontend · VP |
 | 이예승 | Frontend · IP |
 
