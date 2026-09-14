@@ -41,7 +41,7 @@ def sendMattermostNotification(boolean success, String jiraStatus = '') {
         script: 'git log -1 --pretty=%s 2>/dev/null || true',
         returnStdout: true
     ).trim() ?: '커밋 메시지 정보 없음'
-    def statusText = success ? '[CD] FE 배포 성공' : '[CD] FE 배포 실패'
+    def statusText = success ? '[CD] 배포 성공' : '[CD] 배포 실패'
     def iconEmoji = success ? ':jenkins1:' : ':angry_jenkins:'
     def text = "## ${iconEmoji} ${statusText}\n" +
         "**대상 브랜치:** `${branch}`\n" +
@@ -82,6 +82,23 @@ pipeline {
                     sh 'npm ci'
                     sh 'npm run build'
                 }
+                dir('BE_system') {
+                    sh '''
+                        export TEST_DB_PORT=3307
+                        docker compose --project-name bbiyong-system-deploy-test -f compose.test.yaml up -d --wait
+                        TEST_DATASOURCE_URL=jdbc:mysql://127.0.0.1:${TEST_DB_PORT}/bbiyong_test \\
+                        TEST_DATASOURCE_USERNAME=test \\
+                        TEST_DATASOURCE_PASSWORD=test \\
+                        sh ./gradlew test --no-daemon
+                    '''
+                }
+            }
+            post {
+                always {
+                    dir('BE_system') {
+                        sh 'TEST_DB_PORT=3307 docker compose --project-name bbiyong-system-deploy-test -f compose.test.yaml down -v --remove-orphans || true'
+                    }
+                }
             }
         }
 
@@ -115,6 +132,25 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh 'docker compose -f FE/bbiyong-react/compose.yaml up -d --build'
+                dir('BE_system') {
+                    withCredentials([
+                        string(
+                            credentialsId: 'bbiyong-jwt-secret',
+                            variable: 'BBIYONG_JWT_SECRET'
+                        ),
+                        string(
+                            credentialsId: 'bbiyong-robot-upload-token',
+                            variable: 'BBIYONG_ROBOT_UPLOAD_TOKEN'
+                        ),
+                        usernamePassword(
+                            credentialsId: 'bbiyong-gmail-smtp',
+                            usernameVariable: 'BBIYONG_MAIL_USERNAME',
+                            passwordVariable: 'BBIYONG_MAIL_PASSWORD'
+                        )
+                    ]) {
+                        sh 'docker compose up -d --build'
+                    }
+                }
             }
         }
 
@@ -123,6 +159,15 @@ pipeline {
                 sh '''
                     for i in $(seq 1 30); do
                         if curl -fsS http://127.0.0.1:8082/; then
+                            exit 0
+                        fi
+                        sleep 2
+                    done
+                    exit 1
+                '''
+                sh '''
+                    for i in $(seq 1 30); do
+                        if curl -fsS http://127.0.0.1:8081/actuator/health/deployment; then
                             exit 0
                         fi
                         sleep 2
@@ -142,9 +187,11 @@ pipeline {
         }
         failure {
             sh 'docker compose -f FE/bbiyong-react/compose.yaml logs --tail=100 || true'
+            sh 'docker logs --tail=100 bbiyong-server || true'
             script {
                 sendMattermostNotification(false)
             }
         }
     }
 }
+

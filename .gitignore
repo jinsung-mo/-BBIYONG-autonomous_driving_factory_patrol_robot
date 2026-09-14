@@ -10,3 +10,12 @@ sync_to_notion.py
 # === 디버그/일회성 산출물 ===
 inspect_*.py
 hierarchy_output.txt
+mr_description.md
+
+# === IDE 설정 ===
+.idea/
+*.iml
+
+# === 런타임 로컬 저장소(파일 스토리지 산출물) ===
+BE_system/map-store/
+BE_system/video-store/
