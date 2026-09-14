@@ -1,6 +1,6 @@
 {
   "presentation": "15기 공통PJT_부울경_E101_삐용.pptx",
-  "method": "Original embedded media copied without modification",
+  "method": "Original embedded images copied; selected animations and video resized and encoded for README. Transformations recorded per asset.",
   "assets": [
     {
       "file": "robot-concept.png",
@@ -71,8 +71,142 @@
       "slides": [
         58
       ],
-      "bytes": 16569855,
-      "sha256": "bf6f7ad8399d4aaa31d3ea0608aba50f37c0dcc2e6d325e033789c91b556d80d"
+      "bytes": 2710309,
+      "sha256": "06d0a24bb2bfc8d41e07cc18730a0d141f3e65d6f5500adb50ac5b848143e421",
+      "transform": {
+        "width": 720,
+        "fps": 8,
+        "palette_colors": 96,
+        "speed": 1
+      }
+    },
+    {
+      "file": "patrol-console.png",
+      "source": "ppt/media/image12.png",
+      "bytes": 759957,
+      "sha256": "334fe722fd40f5469c62bfbd1af1814af3b31281d60a0a5552286a1ffa3abcfe",
+      "slides": [
+        23
+      ]
+    },
+    {
+      "file": "patrol-route-plan.png",
+      "source": "ppt/media/image13.png",
+      "bytes": 39499,
+      "sha256": "f7f84efd4d453656e1b9fd769bdb03bb6a430836d1d46047fd028647f318c0c1",
+      "slides": [
+        23
+      ]
+    },
+    {
+      "file": "patrol-route-map.png",
+      "source": "ppt/media/image15.png",
+      "bytes": 141138,
+      "sha256": "b6d1f96a94849c3288a6593434bedb77bd0a5619d0c3223a152833382d6b41a0",
+      "slides": [
+        23
+      ]
+    },
+    {
+      "file": "event-log-overview.png",
+      "source": "ppt/media/image22.png",
+      "bytes": 917853,
+      "sha256": "b555110c3af78bccd6bda8c6681ef134d05845f1865847008e035b32286903d0",
+      "slides": [
+        29,
+        30
+      ]
+    },
+    {
+      "file": "mapping-progress.gif",
+      "source": "ppt/media/image9.gif",
+      "bytes": 3915296,
+      "sha256": "d47a230c60c3d5efe773b199b4b17152582419d1e73205d746718812a81fc031",
+      "slides": [
+        20
+      ],
+      "transform": {
+        "width": 640,
+        "fps": 8,
+        "palette_colors": 64,
+        "speed": 1
+      }
+    },
+    {
+      "file": "priority-patrol.gif",
+      "source": "ppt/media/image17.gif",
+      "bytes": 2440531,
+      "sha256": "7cf8b8b5e1a3faae7697986069d8373296ddde1f341fd9f4be5a2bcc3bcd840f",
+      "slides": [
+        25
+      ],
+      "transform": {
+        "fps": 10,
+        "width": 540,
+        "speed": 1,
+        "palette_colors": 128
+      }
+    },
+    {
+      "file": "fire-alert-console.gif",
+      "source": "ppt/media/image20.gif",
+      "bytes": 5793871,
+      "sha256": "b0426d0c2adc9775da193292cc1df41a2ffe03ec409f47569ee2f9c8845c5710",
+      "slides": [
+        28
+      ],
+      "transform": {
+        "width": 800,
+        "fps": 8,
+        "palette_colors": 64,
+        "speed": 1
+      }
+    },
+    {
+      "file": "navigation-recovery.gif",
+      "source": "ppt/media/image41.gif",
+      "bytes": 1341118,
+      "sha256": "ddb3aad6f3a7baddf5bbfa71fa414ba3dd73e5a02d48e4a07ce35baa87106650",
+      "slides": [
+        47
+      ],
+      "transform": {
+        "fps": 10,
+        "width": 720,
+        "speed": 1,
+        "palette_colors": 128
+      }
+    },
+    {
+      "file": "autonomous-driving.mp4",
+      "source": "시연영상_202608013_1700.mov",
+      "bytes": 518491,
+      "sha256": "132881156fc0b533d0dd28f567ea0376214b3c14ed8aa36b1f2e4d34bdf77a18",
+      "transform": {
+        "start_seconds": 60,
+        "duration_seconds": 20,
+        "speed": 1,
+        "width": 960,
+        "fps": 24,
+        "audio": false,
+        "codec": "H.264",
+        "crf": 26
+      }
+    },
+    {
+      "file": "autonomous-driving.gif",
+      "source": "시연영상_202608013_1700.mov",
+      "bytes": 4511077,
+      "sha256": "5ab61b9fcb5aed93125582e03d7341bdc1f67d3c48818ab631de05f015d7b695",
+      "transform": {
+        "start_seconds": 60,
+        "duration_seconds": 20,
+        "speed": 1,
+        "width": 640,
+        "fps": 8,
+        "palette_colors": 128,
+        "derived_from": "autonomous-driving.mp4"
+      }
     }
   ]
 }

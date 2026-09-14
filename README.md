@@ -42,7 +42,15 @@
 <a id="demo"></a>
 ## 화면과 시연
 
-아래 자료는 팀 최종 발표 PPT에 포함된 관제 화면과 시연 GIF입니다. 화면에 표시된 지도와 이벤트 값은 발표 당시의 데모 데이터입니다.
+실제 로봇 촬영 영상과 팀 최종 발표 PPT의 기능별 관제 화면을 모았습니다. 관제 화면의 지도와 이벤트 값은 발표 당시의 데모 데이터입니다.
+
+### 실제 로봇 자율주행 · 20초
+
+박스 장애물을 배치한 실내 테스트 공간에서 실제 삐용 로봇이 이동하는 장면입니다. 원본 시연 영상의 **01:00~01:20** 구간을 발췌했으며, 재생 속도는 원본과 같습니다.
+
+[![실내 장애물 사이를 주행하는 실제 삐용 로봇](docs/assets/readme/autonomous-driving.gif)](docs/assets/readme/autonomous-driving.mp4)
+
+[20초 주행 영상 보기 · MP4, 약 0.5 MB](docs/assets/readme/autonomous-driving.mp4)
 
 ### 1. 지도 생성과 관제
 
@@ -52,6 +60,15 @@
 | :---: | :---: |
 | ![지도 관리 관제 화면](docs/assets/readme/mapping-console.png) | ![생성된 지도의 3D 관제 화면](docs/assets/readme/map-3d.png) |
 
+<details>
+<summary><strong>지도 생성 과정 보기</strong></summary>
+
+탐색 중 수집한 지도에서 벽과 이동 가능한 공간이 드러나는 과정입니다.
+
+<img src="docs/assets/readme/mapping-progress.gif" alt="로봇 탐색에 따라 2D 지도가 생성되는 과정" width="720" />
+
+</details>
+
 ### 2. 미탐색 공간 탐색
 
 Frontier 기반으로 알려진 공간과 미탐색 공간의 경계에서 다음 목표를 선택합니다. 지도 위의 로봇 이동과 탐색 영역 변화를 확인할 수 있습니다.
@@ -60,7 +77,28 @@ Frontier 기반으로 알려진 공간과 미탐색 공간의 경계에서 다�
   <img src="docs/assets/readme/frontier-exploration.gif" alt="지도 위에서 미탐색 영역을 탐색하는 로봇의 이동 시연" width="640" />
 </p>
 
-### 3. AI 화재 인식
+### 3. 순찰 설정과 우선 구역 반복 순찰
+
+관제 화면에서 순찰 공간과 지점을 확인합니다. 발표 자료에서는 설정한 우선 구역을 차례로 방문하는 순찰 경로와 반복 주행을 보여줍니다.
+
+![순찰 지점 목록과 3D 지도가 표시된 관제 화면](docs/assets/readme/patrol-console.png)
+
+<details>
+<summary><strong>순찰 경로와 반복 순찰 시연 보기</strong></summary>
+
+| 순찰 경로 구성 | 지도 위 경로 확인 |
+| :---: | :---: |
+| ![순찰 지점을 연결한 경로 구성](docs/assets/readme/patrol-route-plan.png) | ![실제 지도 위 순찰 경로](docs/assets/readme/patrol-route-map.png) |
+
+<img src="docs/assets/readme/priority-patrol.gif" alt="설정한 우선 구역을 순서대로 방문하는 반복 순찰 시연" width="540" />
+
+</details>
+
+### 4. AI 화재 인식과 관제 경보
+
+화재 이벤트가 발생하면 관제 화면에 경보를 표시합니다. 아래 화면은 발표 PPT의 화재 경보 시연입니다.
+
+![3D 지도와 함께 화재 경보가 표시되는 관제 화면](docs/assets/readme/fire-alert-console.gif)
 
 YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 사용한 영상 기반 탐지 예시입니다.
 
@@ -69,7 +107,7 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 </p>
 
 <details>
-<summary><strong>RGB·열화상 확인 시연 펼치기</strong> · 원본 GIF 약 16.6 MB</summary>
+<summary><strong>RGB·열화상 확인 시연 펼치기</strong> · GIF 약 2.7 MB</summary>
 
 불꽃을 보여주는 RGB 화면과 열화상 화면을 함께 확인하는 실험 장면입니다.
 
@@ -77,13 +115,23 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 
 </details>
 
-### 4. 이벤트 이력과 상세 확인
+### 5. 이벤트 이력과 상세 확인
 
-발생한 이벤트를 목록에서 조회하고, 상세 화면에서 관련 기록과 영상을 확인합니다.
+발생한 이벤트를 목록에서 조회하고, 상세 화면에서 관련 기록과 영상을 확인합니다. 발표 자료의 이벤트 목록 개요와 후속 목록 상태를 함께 담았습니다.
+
+![이벤트 이력 전체 목록을 보여주는 관제 화면](docs/assets/readme/event-log-overview.png)
 
 | 이벤트 목록 | 이벤트 상세 |
 | :---: | :---: |
 | ![화재와 시스템 이벤트 목록](docs/assets/readme/event-log.png) | ![이벤트 상세 정보와 영상 화면](docs/assets/readme/event-detail.png) |
+
+### 6. 주행 복구 동작
+
+발표 자료에서 설명한 막힌 경로의 복구 동작입니다. 로봇이 회전·후진한 뒤 탐색을 재개하는 모습을 3D 지도에서 보여줍니다.
+
+<p align="center">
+  <img src="docs/assets/readme/navigation-recovery.gif" alt="3D 지도에서 로봇의 경로 복구 동작을 보여주는 발표 시연" width="720" />
+</p>
 
 <a id="architecture"></a>
 ## 시스템 아키텍처
