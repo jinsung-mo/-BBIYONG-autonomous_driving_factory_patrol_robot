@@ -16,6 +16,11 @@
 ![ROS 2](https://img.shields.io/badge/ROS_2-Humble-22314E?logo=ros&logoColor=white)
 ![YOLO](https://img.shields.io/badge/AI-YOLO11n-7356BF)
 ![Jetson](https://img.shields.io/badge/NVIDIA-Jetson_Orin_Nano-76B900?logo=nvidia&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![Jenkins](https://img.shields.io/badge/Jenkins-D24939?logo=jenkins&logoColor=white)
+![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white)
 
 **SSAFY 15기 공통 프로젝트 · 부울경 E101 · PRODUCE E101**
 
@@ -155,16 +160,49 @@ flowchart LR
 
 ### 기술 스택
 
-| 영역 | 기술 | 역할 |
+저장소의 의존성·실행 코드·배포 설정을 기준으로 정리했습니다. 버전은 저장소에 명시된 값이며, CUDA·TensorRT는 기록된 Jetson 벤치마크 환경 기준입니다.
+
+| 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
-| Frontend | React 18, TypeScript, Vite, Three.js | 관제 UI, 지도 시각화, 로봇 제어 |
-| 실시간 통신·영상 | STOMP/WebSocket, WebRTC/WHEP, HLS | 상태 구독, 제어 명령, 영상 재생 |
-| Backend | Java 17, Spring Boot, Spring Security, JPA, JWT | 인증, 로봇 연결, 지도·이벤트 관리 |
-| 데이터 | MySQL, SQLite | 운영·로컬 환경의 데이터 저장 |
-| Robot | ROS 2 Humble, SLAM Toolbox, Nav2, AMCL | 지도 작성, 위치 추정, 경로 주행 |
-| Hardware | Jetson Orin Nano, ESP32, YDLIDAR, MDD10A | 온디바이스 연산, 거리 측정, 모터 제어 |
-| AI | Python, PyTorch, YOLO11n, ONNX, TensorRT | 불꽃·연기 탐지와 추론 최적화 |
-| 배포 | Docker, Nginx, Jenkins | 서비스 배포와 파트별 CI/CD |
+| 웹 UI | **React 18 · TypeScript 5 · HTML · CSS** | 관제 화면, 상태 표시, 사용자 입력 처리 |
+| 웹 빌드 | **Vite 5 · Node.js · npm** | 개발 서버, 의존성 관리, 정적 리소스 빌드 |
+| 지도 시각화 | **Three.js · Canvas** | 3D 지도와 로봇 위치·이동 경로 표현 |
+| 관제 API | **Java 17 · Spring Boot 4.1 · Spring MVC** | 로봇·지도·이벤트·사용자 관리 REST API |
+| 인증·인가 | **Spring Security · JWT (JJWT) · BCrypt** | 토큰 인증, 권한 검사, 비밀번호 해시 |
+| 데이터 접근 | **Spring Data JPA · Hibernate · HikariCP · JDBC** | 엔티티 영속화, DB 연결과 커넥션 풀 관리 |
+| 운영 DB | **MySQL 8.0 · MySQL Connector/J** | Docker Compose 배포 환경의 관계형 데이터 저장 |
+| 로컬 DB | **SQLite · SQLite JDBC** | 별도 DB 서버 없이 로컬 실행·테스트 |
+| 파일 저장 | **로컬 파일시스템 · Docker Bind Mount** | 지도·이벤트 영상 파일 보관과 컨테이너 재생성 시 데이터 유지 |
+| 실시간 통신 | **WebSocket/WSS · STOMP · @stomp/stompjs** | 로봇 상태·경보 구독과 제어 명령 전달 |
+| 영상 전달·재생 | **MediaMTX · WebRTC/WHEP · HLS · hls.js** | 실시간 카메라 영상 전달과 브라우저 재생 |
+| 영상 처리 | **GStreamer · H.264/x264 · FFmpeg** | 로봇 영상 인코딩, HLS 처리, 이벤트 클립 생성 |
+| 서버 이미지 처리 | **OpenCV · JavaCPP · OpenBLAS** | 지도 이미지 정제와 네이티브 영상 처리 연동 |
+| 알림 | **Spring Mail · SMTP · Mattermost Webhook** | 이메일 인증과 이벤트 알림 |
+| API 문서·운영 진단 | **SpringDoc OpenAPI · Swagger UI · Actuator · Logback** | API 문서화, 상태 확인, JSON 로그 출력 |
+| AI 학습 | **Python · PyTorch · Ultralytics · YOLO11n** | 불꽃·연기 탐지 모델 학습과 평가 |
+| AI 추론 배포 | **ONNX · TensorRT 10.3 · CUDA 12.6 · JetPack** | Jetson GPU 추론과 FP16 최적화 |
+| 로봇 미들웨어 | **ROS 2 Humble · rclpy · TF2** | 노드 간 통신, 좌표 변환, 센서·제어 연결 |
+| 지도·위치 추정 | **SLAM Toolbox · AMCL · RF2O** | 지도 작성, 저장 지도 기반 위치 추정, LiDAR 오도메트리 구성 |
+| 경로 계획·순찰 | **Nav2 · Frontier Exploration · AprilTag · OpenCV · NumPy** | 이동 목표 실행, 미탐색 영역 선택, 점검 지점 인식·계산 |
+| 로봇 연산·센서 | **Jetson Orin Nano · YDLIDAR X4 Pro · RGB 카메라 · MLX90640** | 온디바이스 연산, 거리·영상·열화상 수집 |
+| 구동·펌웨어 | **ESP32 · MDD10A · 엔코더 · PID · PWM · USB Serial** | 차동구동 모터 속도 제어와 피드백 |
+| 클라우드 | **AWS EC2** | 관제 백엔드와 영상 중계 서버 운영 |
+| 컨테이너·웹 서버 | **Docker · Docker Compose · Nginx** | 서비스 패키징, DB·앱 실행, 정적 웹 배포 |
+| CI/CD·빌드 | **Jenkins · Gradle Wrapper · Git** | 파트별 빌드·검증·배포와 버전 관리 |
+| 테스트·검증 | **JUnit Platform · Spring Boot Test · Mockito · Python unittest · pytest · TypeScript tsc** | 서버·로봇·AI 테스트와 웹 타입 검사 |
+| 협업·산출물 관리 | **GitHub · GitLab · Git LFS · Jira** | 코드 리뷰, 대용량 파일 관리, 작업 추적 |
+
+DB의 사용자·이벤트 등 구조화된 데이터와 지도·영상 파일의 저장 경로를 분리합니다. 운영용 Compose는 **MySQL 8.0**, 기본 로컬 설정은 **SQLite**를 사용하며, 파일은 호스트 디렉터리를 마운트해 보존합니다.
+
+<details>
+<summary><strong>기술 스택 확인 근거</strong></summary>
+
+- [웹 의존성](FE/bbiyong-react/package.json) · [웹 통신·영상 설정](FE/bbiyong-react/src/live/config.ts)
+- [서버 의존성](BE_system/build.gradle) · [운영 DB·파일 저장 설정](BE_system/compose.yaml) · [로컬 DB 기본 설정](BE_system/src/main/resources/application.properties)
+- [AI 의존성](AI/requirements.txt) · [Jetson 추론 환경](AI/deployment/fire_smoke/README.md)
+- [ROS 2 패키지 구성](BE_robot/ros2_ws/src/bbiyong_bringup/package.xml) · [로봇 영상 파이프라인](BE_robot/orin_dashboard/README.md) · [하드웨어 구성](BE_robot/README.md)
+
+</details>
 
 <a id="engineering"></a>
 ## 기술적 성과와 구현 포인트
