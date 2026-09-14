@@ -1,5 +1,4 @@
-// main(통합 배포) 대상 MR 전용 검증 파이프라인.
-// 파트별 브랜치 대상 MR은 Jenkinsfile.ci.fe / Jenkinsfile.ci.be_system 를 사용한다.
+// BE_system 파트 MR 검증(CI) 파이프라인. Jenkins Job(be_system/main 대상 MR) Script Path 를 이 파일로 지정한다.
 def checkoutMergeRequestSource() {
     def sourceBranch = env.gitlabSourceBranch?.trim()
 
@@ -24,7 +23,7 @@ def sendMattermostNotification(boolean success) {
         script: 'git log -1 --pretty=%s 2>/dev/null || true',
         returnStdout: true
     ).trim() ?: '커밋 메시지 정보 없음'
-    def statusText = success ? '[CI] MR 검증 성공' : '[CI] MR 검증 실패'
+    def statusText = success ? '[CI] System MR 검증 성공' : '[CI] System MR 검증 실패'
     def iconEmoji = success ? ':jenkins1:' : ':angry_jenkins:'
     def text = "## ${iconEmoji} ${statusText}\n" +
         "**MR source 브랜치:** `${branch}`\n" +
@@ -63,19 +62,6 @@ pipeline {
             steps {
                 script {
                     checkoutMergeRequestSource()
-                }
-            }
-        }
-
-        stage('Build') {
-            steps {
-                dir('FE/bbiyong-react') {
-                    sh 'npm ci'
-                    // 서버·로봇 연동 계약 타입 검사 (S15P11E101-569).
-                    // 빌드(esbuild)는 타입을 보지 않으므로 별도 단계가 필요하다 —
-                    // 이 단계가 없으면 타입은 곧 낡아 무의미해진다.
-                    sh 'npm run typecheck'
-                    sh 'npm run build'
                 }
             }
         }

@@ -1,0 +1,23 @@
+// BE_robot 파트 배포(CD) 파이프라인. Jenkins Job(be_robot/main) Script Path 를 이 파일로 지정한다.
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
+    stages {
+        stage('Validate robot workspace') {
+            steps {
+                dir('BE_robot') {
+                    sh '''
+                        test -d .
+                        echo 'Robot runtime build and test commands will be added with the implementation.'
+                        find . -maxdepth 2 -type f -print
+                    '''
+                }
+            }
+        }
+    }
+}
