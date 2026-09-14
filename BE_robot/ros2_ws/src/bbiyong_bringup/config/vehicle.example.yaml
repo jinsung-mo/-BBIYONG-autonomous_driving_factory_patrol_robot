@@ -1,0 +1,46 @@
+# Copy this file to vehicle.yaml. The copied file is gitignored.
+# Never set configured/hardware_enabled true until these values are measured.
+vehicle:
+  configured: false
+  hardware_enabled: false
+  # ackermann | differential. The current chassis is differential
+  # (two driven wheels + caster, no steering servo).
+  drive_type: differential
+  # The generated rectangular footprint assumes base_link is at the chassis center.
+  base_link_reference: geometric_center
+  wheelbase_m: null
+  width_m: null
+  length_m: null
+  footprint_padding_m: 0.03
+  max_steering_angle_deg: null
+  min_turning_radius_m: null
+  max_linear_speed_mps: 0.10
+  max_angular_speed_rps: 0.30
+  max_angular_accel_rps2: 0.50
+  throttle_direction: 1
+  steering_direction: 1
+  # Differential drive only. Distance between the two driven wheel contact
+  # patches, measured on the built chassis. Leave null until it is measured:
+  # the adapter keeps both wheel outputs at zero while it is null.
+  track_width_m: null
+  # Flip to -1 if a motor is wired with reversed polarity.
+  left_wheel_direction: 1
+  right_wheel_direction: 1
+  cmd_timeout_sec: 0.35
+
+lidar:
+  frame_id: laser_frame
+  range_max_m: 10.0
+  # Measure from base_link. Mapping dry-run may temporarily use zero values.
+  x_m: null
+  y_m: null
+  z_m: null
+  roll_rad: null
+  pitch_rad: null
+  yaw_rad: null
+
+wheel_odometry:
+  configured: false
+  wheel_radius_m: null
+  encoder_cpr: null
+  publish_tf: true

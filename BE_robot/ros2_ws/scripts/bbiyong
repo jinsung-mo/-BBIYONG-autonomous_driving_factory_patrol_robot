@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+# Safe operator entrypoint. Launch commands use exec so Ctrl+C reaches ROS directly.
+set -euo pipefail
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SOURCE_WORKSPACE="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+if [[ -n "${BBIYONG_WS:-}" ]]; then
+  WORKSPACE_DIR="$BBIYONG_WS"
+elif [[ -f "$HOME/bbiyong_ros2_ws/install/setup.bash" ]]; then
+  WORKSPACE_DIR="$HOME/bbiyong_ros2_ws"
+else
+  WORKSPACE_DIR="$SOURCE_WORKSPACE"
+fi
+YDLIDAR_WORKSPACE="${YDLIDAR_WS:-$HOME/ydlidar_ros2_ws}"
+RF2O_WORKSPACE="${RF2O_WS:-$HOME/rf2o_ws}"
+
+die() { echo "bbiyong: $*" >&2; exit 2; }
+require_file() { [[ -f "$1" ]] || die "file not found: $1"; }
+require_topic() {
+  ros2 topic list 2>/dev/null | grep -Fxq "$1" ||
+    die "required topic is unavailable: $1"
+}
+require_action() {
+  ros2 action list 2>/dev/null | grep -Fxq "$1" ||
+    die "required action is unavailable: $1 (start 'bbiyong mapping-runtime' first)"
+}
+require_node() {
+  ros2 node list 2>/dev/null | grep -Fxq "$1" ||
+    die "required node is unavailable: $1 (start 'bbiyong mapping-runtime' first)"
+}
+node_exists() { ros2 node list 2>/dev/null | grep -Fxq "$1"; }
+require_lifecycle_active() {
+  ros2 lifecycle get "$1" 2>/dev/null | grep -Fq 'active [3]' ||
+    die "lifecycle node is not active: $1"
+}
+map_publisher_count() {
+  ros2 topic info /map 2>/dev/null | awk '/Publisher count:/ {print $3}'
+}
+refuse_legacy_cmd_vel_publishers() {
+  if pgrep -f '[e]xplore.py' >/dev/null; then
+    die "legacy explore.py is running; stop it before starting Nav2 exploration"
+  fi
+  if pgrep -f '[t]eleop_node.py' >/dev/null; then
+    die "legacy teleop_node.py bypasses the safety mux; run ~/calib/teleop_down.sh first"
+  fi
+}
+source_workspace() {
+  require_file /opt/ros/humble/setup.bash
+  require_file "$YDLIDAR_WORKSPACE/install/setup.bash"
+  require_file "$RF2O_WORKSPACE/install/setup.bash"
+  require_file "$WORKSPACE_DIR/install/setup.bash"
+  # ROS setup scripts reference optional variables that are unset under nounset.
+  # Keep errexit enabled so a missing or failing workspace still stops the operator command.
+  set +u
+  # shellcheck disable=SC1091
+  source /opt/ros/humble/setup.bash
+  # shellcheck disable=SC1090
+  source "$YDLIDAR_WORKSPACE/install/setup.bash"
+  # shellcheck disable=SC1090
+  source "$RF2O_WORKSPACE/install/setup.bash"
+  # shellcheck disable=SC1090
+  source "$WORKSPACE_DIR/install/setup.bash"
+  set -u
+}
+usage() {
+  cat <<'EOF'
+Usage:
+  bbiyong mapping
+  bbiyong mapping-runtime [nav2.yaml]
+  bbiyong scouting-runtime <map.yaml> [nav2.yaml]
+  bbiyong save-map <output-prefix>
+  bbiyong localize <map.yaml>
+  bbiyong navigate <map.yaml> <vehicle.yaml> <nav2.yaml>
+  bbiyong control <vehicle.yaml>
+  bbiyong explore <map-output-prefix> [nav2.yaml]
+  bbiyong patrol <route.json>
+  bbiyong navigate-goal <x> <y> [yaw]
+  bbiyong commission-check <mapping|scouting> [--json]
+  bbiyong collect-evidence <stage> <output-dir> [--mode mapping|scouting] [--release-manifest file] [--log file]
+  bbiyong release <stage|verify|activate|rollback> ...
+  bbiyong arm-autonomy
+  bbiyong stop
+  bbiyong status
+
+Start "bbiyong mapping-runtime" once after ~/calib/stack_up.sh. Repeated
+"bbiyong explore" commands then launch only the frontier mission and map saver.
+The runtime starts DISARMED. Run "bbiyong arm-autonomy" only after starting an
+exploration mission. Run "bbiyong stop" for an immediate software e-stop.
+EOF
+}
+
+[[ $# -ge 1 ]] || { usage; exit 2; }
+command="$1"
+shift
+source_workspace
+
+case "$command" in
+  mapping)
+    [[ $# -eq 0 ]] || die "mapping takes no arguments"
+    exec ros2 launch bbiyong_bringup mapping.launch.py odom_source:=rf2o allow_unmeasured_lidar:=true
+    ;;
+  mapping-runtime)
+    [[ $# -le 1 ]] || die "mapping-runtime takes an optional nav2.yaml"
+    refuse_legacy_cmd_vel_publishers
+    require_topic /map
+    require_topic /odom
+    require_topic /scan_filtered
+    if [[ $# -eq 1 ]]; then
+      require_file "$1"
+      exec ros2 launch bbiyong_bringup navigation_runtime.launch.py nav2_params:="$1"
+    fi
+    exec ros2 launch bbiyong_bringup navigation_runtime.launch.py
+    ;;
+  scouting-runtime)
+    [[ $# -ge 1 && $# -le 2 ]] ||
+      die "scouting-runtime requires map.yaml and optionally nav2.yaml"
+    refuse_legacy_cmd_vel_publishers
+    require_file "$1"
+    map_yaml="$(readlink -f "$1")"
+    node_exists /slam_toolbox &&
+      die "slam_toolbox is active; its session owner must stop it before scouting"
+    publishers="$(map_publisher_count || true)"
+    [[ -z "$publishers" || "$publishers" == "0" ]] ||
+      die "a /map publisher already exists; stop the current map-provider session"
+    start_runtime=true
+    if node_exists /bbiyong_cmd_mux; then
+      start_runtime=false
+      require_action /navigate_to_pose
+      require_action /follow_waypoints
+      require_lifecycle_active /controller_server
+      require_lifecycle_active /planner_server
+      require_lifecycle_active /bt_navigator
+      require_lifecycle_active /waypoint_follower
+      require_lifecycle_active /collision_monitor
+    elif node_exists /controller_server; then
+      die "partial Nav2 runtime detected; stop it before starting scouting"
+    fi
+    nav2_params="${2:-}"
+    if [[ -n "$nav2_params" ]]; then
+      require_file "$nav2_params"
+      exec ros2 launch bbiyong_bringup scouting_runtime.launch.py \
+        map:="$map_yaml" nav2_params:="$nav2_params" \
+        start_navigation_runtime:="$start_runtime"
+    fi
+    exec ros2 launch bbiyong_bringup scouting_runtime.launch.py \
+      map:="$map_yaml" start_navigation_runtime:="$start_runtime"
+    ;;
+  save-map)
+    [[ $# -eq 1 ]] || die "save-map requires an output prefix"
+    mkdir -p "$(dirname "$1")"
+    exec ros2 run bbiyong_bringup save_map "$1"
+    ;;
+  localize)
+    [[ $# -eq 1 ]] || die "localize requires map.yaml"
+    require_file "$1"
+    exec ros2 launch bbiyong_bringup localization.launch.py map:="$1" odom_source:=rf2o allow_unmeasured_lidar:=true
+    ;;
+  navigate)
+    [[ $# -eq 3 ]] || die "navigate requires map.yaml vehicle.yaml nav2.yaml"
+    require_file "$1"; require_file "$2"; require_file "$3"
+    exec ros2 launch bbiyong_bringup navigation.launch.py map:="$1" vehicle_config:="$2" nav2_params:="$3" odom_source:=wheel
+    ;;
+  control)
+    [[ $# -eq 1 ]] || die "control requires vehicle.yaml"
+    require_file "$1"
+    exec ros2 launch bbiyong_bringup control.launch.py vehicle_config:="$1"
+    ;;
+  explore)
+    [[ $# -ge 1 && $# -le 2 ]] ||
+      die "explore requires map-output-prefix and accepts one deprecated nav2.yaml argument"
+    refuse_legacy_cmd_vel_publishers
+    require_topic /map
+    require_topic /odom
+    require_topic /scan_filtered
+    require_action /navigate_to_pose
+    require_action /follow_waypoints
+    require_node /bbiyong_cmd_mux
+    require_node /bbiyong_control_state_bridge
+    require_node /bbiyong_manual_drive_bridge
+    require_lifecycle_active /controller_server
+    require_lifecycle_active /planner_server
+    require_lifecycle_active /bt_navigator
+    map_output="$1"
+    mkdir -p "$(dirname "$map_output")"
+    if [[ $# -eq 2 ]]; then
+      require_file "$2"
+      echo "bbiyong: nav2.yaml is owned by mapping-runtime and ignored by the mission" >&2
+    fi
+    exec ros2 launch bbiyong_bringup exploration.launch.py map_output:="$map_output"
+    ;;
+  patrol)
+    [[ $# -eq 1 ]] || die "patrol requires a route JSON file"
+    refuse_legacy_cmd_vel_publishers
+    require_file "$1"
+    require_action /follow_waypoints
+    require_node /bbiyong_cmd_mux
+    require_node /bbiyong_control_state_bridge
+    require_node /bbiyong_scouting_guard
+    require_topic /bbiyong/scouting/ready
+    require_lifecycle_active /waypoint_follower
+    exec ros2 run bbiyong_bringup patrol_route --ros-args -p route_file:="$1"
+    ;;
+  navigate-goal)
+    [[ $# -ge 2 && $# -le 3 ]] || die "navigate-goal requires x y and optional yaw"
+    refuse_legacy_cmd_vel_publishers
+    require_action /navigate_to_pose
+    require_node /bbiyong_cmd_mux
+    require_node /bbiyong_control_state_bridge
+    require_node /bbiyong_scouting_guard
+    require_lifecycle_active /bt_navigator
+    exec ros2 run bbiyong_bringup navigate_goal --ros-args \
+      -p x:="$1" -p y:="$2" -p yaw:="${3:-0.0}"
+    ;;
+  commission-check)
+    [[ $# -ge 1 ]] || die "commission-check requires mapping or scouting"
+    exec ros2 run bbiyong_bringup commission_check "$@"
+    ;;
+  collect-evidence)
+    [[ $# -ge 2 ]] || die "collect-evidence requires stage and output directory"
+    exec ros2 run bbiyong_bringup collect_evidence "$@"
+    ;;
+  release)
+    [[ $# -ge 1 ]] || die "release requires stage, verify, activate, or rollback"
+    exec ros2 run bbiyong_bringup release_manager "$@"
+    ;;
+  arm-autonomy)
+    [[ $# -eq 0 ]] || die "arm-autonomy takes no arguments"
+    refuse_legacy_cmd_vel_publishers
+    require_topic /scan_filtered
+    require_action /navigate_to_pose
+    require_node /bbiyong_cmd_mux
+    require_node /bbiyong_control_state_bridge
+    require_lifecycle_active /controller_server
+    require_lifecycle_active /bt_navigator
+    echo "Arming Nav2 (run this only after 'Managed nodes are active')..."
+    timeout 25 ros2 run bbiyong_base control_command arm ||
+      die "arm failed; keep the explore terminal running and confirm both nodes started"
+    echo "Nav2 autonomy armed. Keep a second terminal ready with: bbiyong stop"
+    ;;
+  stop)
+    [[ $# -eq 0 ]] || die "stop takes no arguments"
+    timeout 8 ros2 run bbiyong_base control_command stop || true
+    ;;
+  status)
+    [[ $# -eq 0 ]] || die "status takes no arguments"
+    ros2 node list
+    ros2 topic list | grep -E '^/(scan|odom|map|cmd_vel|bbiyong)' || true
+    echo
+    echo "/cmd_vel publishers (exactly one bbiyong_cmd_mux publisher is expected):"
+    ros2 topic info /cmd_vel --verbose || true
+    ;;
+  *) usage; exit 2 ;;
+esac

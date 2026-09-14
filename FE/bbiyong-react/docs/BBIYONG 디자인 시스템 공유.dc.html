@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box;margin:0;}
+body{background:#EEEEF3;font-family:'Gothic A1',system-ui,'Malgun Gothic',sans-serif;-webkit-font-smoothing:antialiased;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+.card{background:#fff;border-radius:16px;box-shadow:3px 5px 16px rgba(35,39,51,.08);}
+</style>
+</helmet>
+
+<div style="max-width:1100px;width:100%;margin:0 auto;padding:56px 40px 96px;color:#232733;background:linear-gradient(158deg,#E9E8F1 0%,#F2F2F7 38%,#F9F9FB 72%,#FFFFFF 100%);">
+
+  <header style="padding-bottom:24px;border-bottom:1px solid #E3E5EE;">
+    <div class="mono" style="font-size:11px;letter-spacing:1.6px;color:#7C8296;">TEAM REVIEW · 2026.08.05</div>
+    <h1 style="margin-top:14px;font-size:38px;font-weight:800;letter-spacing:-1.4px;">삐용<span style="color:#B4655C;">.</span> 디자인 방향 선택</h1>
+    <p style="margin-top:12px;max-width:760px;font-size:13.5px;line-height:1.9;color:#5A6072;">현재 배포 버전을 기준으로 색·타이포·간격 규칙은 확정했고, <b style="color:#232733;">화면을 구성하는 방식(레이아웃 문법)만 두 방향으로 갈려 있습니다.</b> 팀원 각자 A/B 중 하나를 골라 아래 댓글/투표란에 의견을 남겨주세요 — 다수안으로 전체 화면을 통일합니다.</p>
+  </header>
+
+  <div style="display:flex;align-items:center;gap:14px;margin-top:40px;margin-bottom:16px;">
+    <span class="mono" style="font-size:11px;color:#A8ADBC;">공통</span>
+    <h2 style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#7C8296;font-weight:700;">두 방향 모두 지키는 것</h2>
+    <span style="flex:1;height:1px;background:#E3E5EE;"></span>
+  </div>
+  <div class="card" style="padding:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+    <div><div style="display:flex;gap:6px;">
+      <span style="width:22px;height:22px;border-radius:6px;background:#C07A72;"></span><span style="width:22px;height:22px;border-radius:6px;background:#C9A26A;"></span><span style="width:22px;height:22px;border-radius:6px;background:#74A98D;"></span><span style="width:22px;height:22px;border-radius:6px;background:#6E79B4;"></span>
+    </div><div style="margin-top:8px;font-size:12px;color:#5A6072;">저채도 4색 · 면은 흰색 고정</div></div>
+    <div><b class="mono" style="font-size:22px;">71.3<span style="font-size:12px;color:#7C8296;">°C</span></b><div style="margin-top:6px;font-size:12px;color:#5A6072;">숫자는 mono + 자리 고정</div></div>
+    <div><div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;"><i style="width:6px;height:6px;border-radius:50%;background:#C07A72;"></i>화재 발생</div><div style="margin-top:8px;font-size:12px;color:#5A6072;">상태는 점 + 글자, 배경 칠 없음</div></div>
+    <div><button style="padding:9px 18px;border-radius:20px;border:0;background:#4C5695;color:#fff;font-weight:600;font-size:12.5px;font-family:inherit;">순찰 시작</button><div style="margin-top:8px;font-size:12px;color:#5A6072;">버튼은 Material 3, 채운 건 하나만</div></div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:14px;margin-top:40px;margin-bottom:16px;">
+    <span class="mono" style="font-size:11px;color:#A8ADBC;">선택</span>
+    <h2 style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#7C8296;font-weight:700;">A vs B — 레이아웃 문법</h2>
+    <span style="flex:1;height:1px;background:#E3E5EE;"></span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+    <div class="card" style="overflow:hidden;">
+      <div style="padding:18px 20px 0;display:flex;align-items:center;gap:10px;">
+        <span class="mono" style="font-size:11px;font-weight:700;color:#fff;background:#4C5695;padding:3px 10px;border-radius:6px;">A</span>
+        <b style="font-size:16px;">패널 그리드</b>
+      </div>
+      <div style="padding:6px 20px 0;font-size:12px;color:#7C8296;line-height:1.7;">지금 배포 버전과 가장 가까운 구조. 좌측 고정폭 패널(상태·조작) + 우측 지도/영상. 모든 정보가 테두리 있는 카드 안에.</div>
+      <div style="margin:16px 20px 0;border-radius:12px;overflow:hidden;background:#0A0C10;height:260px;position:relative;">
+        <div style="position:absolute;left:10px;top:10px;right:10px;height:34px;background:#12151B;border-radius:8px;display:flex;align-items:center;padding:0 10px;gap:6px;">
+          <span style="width:16px;height:16px;border-radius:4px;background:#3A4256;"></span>
+          <span style="width:40px;height:8px;border-radius:4px;background:#2A3040;"></span>
+        </div>
+        <div style="position:absolute;left:10px;top:52px;bottom:10px;width:76px;background:#12151B;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;">
+          <span style="height:8px;border-radius:3px;background:#2A3040;"></span>
+          <span style="height:24px;border-radius:5px;background:#1A1E26;"></span>
+          <span style="height:5px;border-radius:3px;background:#2A3040;width:70%;"></span>
+          <span style="height:5px;border-radius:3px;background:#2A3040;width:50%;"></span>
+        </div>
+        <div style="position:absolute;left:94px;right:10px;top:52px;bottom:10px;background:#171B22;border-radius:8px;"></div>
+      </div>
+      <div style="padding:16px 20px 20px;font-size:11.5px;line-height:1.75;color:#5A6072;">
+        <div><b style="color:#4F7D68;">+</b> 정보 위치가 예측 가능, 개발 리소스 재사용 쉬움</div>
+        <div><b style="color:#B4655C;">–</b> 지도·3D가 좁아지고, 화면이 다소 딱딱함</div>
+      </div>
+    </div>
+
+    <div class="card" style="overflow:hidden;">
+      <div style="padding:18px 20px 0;display:flex;align-items:center;gap:10px;">
+        <span class="mono" style="font-size:11px;font-weight:700;color:#fff;background:#4C5695;padding:3px 10px;border-radius:6px;">B</span>
+        <b style="font-size:16px;">플로팅 씬</b>
+      </div>
+      <div style="padding:6px 20px 0;font-size:12px;color:#7C8296;line-height:1.7;">지도/영상이 화면 전체를 채우고, 카드는 그 위에 필요한 자리에 떠 있음. KPI는 테두리 없이 크게.</div>
+      <div style="margin:16px 20px 0;border-radius:12px;overflow:hidden;background:#0A0C10;height:260px;position:relative;">
+        <div style="position:absolute;inset:0;"></div>
+        <div style="position:absolute;left:14px;top:14px;width:120px;background:#fff;border-radius:10px;padding:8px;box-shadow:2px 3px 10px rgba(0,0,0,.3);">
+          <span style="display:block;height:6px;border-radius:3px;background:#DADCE6;width:60%;"></span>
+          <span style="display:block;height:5px;border-radius:3px;background:#E7E8EF;width:80%;margin-top:6px;"></span>
+        </div>
+        <div style="position:absolute;right:14px;top:14px;width:96px;background:#fff;border-radius:10px;padding:8px;box-shadow:2px 3px 10px rgba(0,0,0,.3);">
+          <span style="display:block;height:6px;border-radius:3px;background:#DADCE6;width:70%;"></span>
+        </div>
+        <div style="position:absolute;left:100px;bottom:-10px;width:100px;background:#fff;border-radius:10px 10px 0 0;padding:8px 8px 16px;box-shadow:0 -4px 12px rgba(0,0,0,.25);">
+          <span style="display:block;height:6px;border-radius:3px;background:#DADCE6;width:50%;"></span>
+        </div>
+      </div>
+      <div style="padding:16px 20px 20px;font-size:11.5px;line-height:1.75;color:#5A6072;">
+        <div><b style="color:#4F7D68;">+</b> 지도·3D가 주인공, 최신 관제 대시보드 톤</div>
+        <div><b style="color:#B4655C;">–</b> 카드 겹침 관리 필요, 구현 난이도 A보다 높음</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:14px;margin-top:40px;margin-bottom:16px;">
+    <span class="mono" style="font-size:11px;color:#A8ADBC;">참고</span>
+    <h2 style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#7C8296;font-weight:700;">전체 화면 예시</h2>
+    <span style="flex:1;height:1px;background:#E3E5EE;"></span>
+  </div>
+  <div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;color:#5A6072;">
+    <div>A안 전체 화면(지도·카메라·운영·설정·로그) — <b style="color:#232733;">BBIYONG 관제 화면.dc.html</b></div>
+    <div>B안 전체 화면(동일 5개) — <b style="color:#232733;">BBIYONG 관제 화면 v3.dc.html</b></div>
+    <div>토큰·컴포넌트 상세 — <b style="color:#232733;">BBIYONG 디자인 시스템.dc.html</b>(A) · <b style="color:#232733;">BBIYONG 디자인 시스템 v3.dc.html</b>(B)</div>
+  </div>
+
+  <div class="card" style="margin-top:24px;padding:22px;text-align:center;">
+    <b style="font-size:15px;">투표 / 의견</b>
+    <p style="margin-top:8px;font-size:12.5px;color:#7C8296;">파일에 직접 댓글로 A 또는 B, 그리고 이유를 남겨주세요. 이번 주 안으로 하나로 확정합니다.</p>
+    <div style="display:flex;justify-content:center;gap:10px;margin-top:14px;">
+      <span style="padding:9px 22px;border-radius:20px;background:#E4E5F5;color:#3F4880;font-weight:700;font-size:13px;">A · 패널 그리드</span>
+      <span style="padding:9px 22px;border-radius:20px;background:#E4E5F5;color:#3F4880;font-weight:700;font-size:13px;">B · 플로팅 씬</span>
+    </div>
+  </div>
+
+  <footer style="margin-top:40px;padding-top:18px;border-top:1px solid #E3E5EE;font-size:10.5px;letter-spacing:1px;color:#A8ADBC;" class="mono">
+    BBIYONG · TEAM E101 · SSAFY 부울경 1반
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:900}}"></script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+# slam_toolbox (async, 매핑) — OrinCar 실측 기반 설정
+#
+# 근거가 있는 값만 기본에서 바꿨다. 나머지는 slam_toolbox 기본값을 따른다.
+slam_toolbox:
+  ros__parameters:
+    # ── 프레임 ────────────────────────────────────────────────
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_link
+    scan_topic: /scan_filtered
+    mode: mapping
+
+    # ── 노드 생성 조건 ────────────────────────────────────────
+    # 🔴 기본 minimum_travel_heading 은 0.5 rad(28.6°)인데,
+    #    스캔매처 coarse_search_angle_offset 이 0.349 rad(20°)다.
+    #    즉 기본값대로면 **노드가 생길 때쯤엔 이미 매치 창을 벗어나** 있다.
+    #    (rf2o 드리프트 때 slam_toolbox가 보정하지 못한 구조적 원인)
+    #    0.3 rad(17.2°)로 낮춰 매치 창 안에서 노드가 생기게 한다.
+    minimum_travel_heading: 0.3
+    minimum_travel_distance: 0.15      # 실내·좁은 공간이라 촘촘히
+
+    # ── 라이다 ────────────────────────────────────────────────
+    # X4 Pro [실측 §H] 0.12~10m, 11.58Hz. 원거리는 입사각이 얕아 신뢰도가
+    # 떨어지므로 8m로 자른다(사양 10m를 다 쓰지 않는다).
+    min_laser_range: 0.15
+    max_laser_range: 8.0
+    resolution: 0.05
+    map_update_interval: 2.0
+    transform_publish_period: 0.02
+    transform_timeout: 0.2
+    tf_buffer_duration: 10.0
+
+    # ── 스캔 정합 ─────────────────────────────────────────────
+    use_scan_matching: true
+    use_scan_barycenter: true
+    minimum_time_interval: 0.2
+    scan_buffer_size: 20
+    scan_buffer_maximum_scan_distance: 10.0
+
+    # 폐루프 — 실내 소규모라 기본보다 조금 좁혀 오검출을 줄인다
+    do_loop_closing: true
+    loop_search_maximum_distance: 3.0
+    loop_match_minimum_chain_size: 8
+    loop_match_maximum_variance_coarse: 3.0
+    loop_match_minimum_response_coarse: 0.35
+    loop_match_minimum_response_fine: 0.45
+
+    correlation_search_space_dimension: 0.5
+    correlation_search_space_resolution: 0.01
+    correlation_search_space_smear_deviation: 0.1
+
+    # 휠 오도메트리 품질 [실측 2026-07-26]: 병진 0.5% · 회전 0.2%.
+    # 꽤 좋으므로 스캔매처가 오도메트리를 과도하게 뒤집지 않도록
+    # 벌점(penalty)을 기본보다 살짝 높인다.
+    distance_variance_penalty: 0.5
+    angle_variance_penalty: 1.0
+    fine_search_angle_offset: 0.00349
+    coarse_search_angle_offset: 0.349
+    coarse_angle_resolution: 0.0349
+    minimum_angle_penalty: 0.9
+    minimum_distance_penalty: 0.5
+    use_response_expansion: true

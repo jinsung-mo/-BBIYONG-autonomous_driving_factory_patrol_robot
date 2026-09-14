@@ -1,0 +1,94 @@
+def checkoutMergeRequestSource() {
+    def sourceBranch = env.gitlabSourceBranch?.trim()
+
+    if (!sourceBranch) {
+        error('GitLab MR source branch 정보를 찾지 못했습니다.')
+    }
+
+    checkout([
+        $class: 'GitSCM',
+        branches: [[name: "*/${sourceBranch}"]],
+        userRemoteConfigs: [[
+            url: 'https://lab.ssafy.com/s15-webmobile3-sub1/S15P11E101.git',
+            credentialsId: 'gitlab-bbiyong-read'
+        ]],
+        extensions: [[$class: 'CleanBeforeCheckout']]
+    ])
+}
+
+def sendMattermostNotification(boolean success) {
+    def branch = env.gitlabSourceBranch ?: '브랜치 정보 없음'
+    def commitMessage = sh(
+        script: 'git log -1 --pretty=%s 2>/dev/null || true',
+        returnStdout: true
+    ).trim() ?: '커밋 메시지 정보 없음'
+    def statusText = success ? '[CI] FE MR 검증 성공' : '[CI] FE MR 검증 실패'
+    def iconEmoji = success ? ':jenkins1:' : ':angry_jenkins:'
+    def text = "## ${iconEmoji} ${statusText}\n" +
+        "**MR source 브랜치:** `${branch}`\n" +
+        "**최신 커밋:** ${commitMessage}"
+
+    writeFile(
+        file: 'mattermost-payload.json',
+        text: groovy.json.JsonOutput.toJson([
+            text      : text,
+            username  : 'Jenkins',
+            icon_emoji: iconEmoji
+        ])
+    )
+
+    withCredentials([string(credentialsId: 'mattermost-webhook', variable: 'MM_WEBHOOK')]) {
+        sh '''
+            curl --silent --show-error --fail --request POST \
+              --header 'Content-Type: application/json' \
+              --data-binary @mattermost-payload.json \
+              "$MM_WEBHOOK" || true
+        '''
+    }
+}
+
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+        skipDefaultCheckout(true)
+    }
+
+    stages {
+        stage('Checkout MR Source') {
+            steps {
+                script {
+                    checkoutMergeRequestSource()
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir('FE/bbiyong-react') {
+                    sh 'npm ci'
+                    // 서버·로봇 연동 계약 타입 검사 (S15P11E101-569).
+                    // 빌드(esbuild)는 타입을 보지 않으므로 별도 단계가 필요하다 —
+                    // 이 단계가 없으면 타입은 곧 낡아 무의미해진다.
+                    sh 'npm run typecheck'
+                    sh 'npm run build'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                sendMattermostNotification(true)
+            }
+        }
+        failure {
+            script {
+                sendMattermostNotification(false)
+            }
+        }
+    }
+}

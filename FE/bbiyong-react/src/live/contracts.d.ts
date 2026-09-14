@@ -1,0 +1,1235 @@
+/// <reference types="vite/client" />
+// ^ import.meta.env 타입. Vite 가 제공하며 런타임 산출물과는 무관하다.
+
+// 서버·로봇과 주고받는 계약 (S15P11E101-569).
+//
+// BE record / 로봇 payload 를 그대로 옮겨 적은 것이다. 여기 적힌 이름과 선택 여부(?)가
+// 실제 코드와 어긋나면 그게 곧 결함이다 — 지금까지 겪은 사고가 전부 이 지점이었다.
+//
+// 근거:
+//   BE_system  .../stomp/dto/ControlCommand.java · event/dto/AlertMessage.java
+//              event/domain/EventLog.java · event/dto/EventPageResponse.java
+//              map/dto/MapResponses.java · map/domain/MapArtifact.java
+//              waypoint/dto/WaypointRequest.java · WaypointResponses.java
+//              equipment/domain/Equipment.java · settings/dto/DriveSpeed*.java
+//              robot/dto/RobotResponse.java · auth/dto/LoginResponse.java
+//   BE_robot   orin_dashboard/cloud_bridge.py (build_telemetry · build_map · build_nav_live)
+//   문서       docs/fe_backend_integration_guide.md · docs/backend_api_specification.md
+//
+// 이 파일은 .d.ts 라 런타임 산출물에 아무 영향이 없다.
+
+// ---------------------------------------------------------------- 열거
+
+/** 로봇 서브시스템 생존 상태. 브리지가 /tmp 파일 mtime 으로 판정해 보고한다. */
+export type CapabilityState = 'online' | 'stale' | 'offline'
+
+/** 화면에서만 쓰는 값 — capabilities 자체가 없을 때(=보고하지 않는 로봇). */
+export type CapabilityUnknown = 'unknown'
+
+/**
+ * 서버 RobotPacket.status 가 기대하는 값.
+ * 다만 cloud_bridge.infer_status() 는 AUTO_PATROL / MANUAL_CONTROL / (없음) 만 낸다 —
+ * APPROACH·VERIFY·MAPPING 은 서버가 정의만 해 둔 상태다.
+ */
+export type RobotStatus =
+  | 'AUTO_PATROL' | 'APPROACH' | 'VERIFY' | 'MANUAL_CONTROL' | 'MAPPING'
+  /** RobotService 가 무수신 임계를 넘겼을 때 REST 응답에 채우는 값 */
+  | 'OFFLINE'
+
+export type EstopState = 'RELEASED' | 'ENGAGED'
+
+/**
+ * 이벤트 종류.
+ *
+ * SYSTEM 은 로봇 연결/해제 로그가 쓴다.
+ *
+ * PLANNER_* 는 **조용한 시스템 로그**다(2026-08-10). 경로 계산 서버(Nav2 planner)가
+ * 죽었을 때 남는다. 🔴 화재·과열과 등급이 다르다 — 서버가 /topic/alerts 로 방송하지
+ * 않으므로 토스트도 경보음도 뜨지 않고, 이벤트 목록에만 나타난다.
+ * PLANNER_DOWN 행에서만 '복구' 버튼이 뜬다(EventDetailModal).
+ *
+ * 서버의 EventLog.type 은 enum 이 아니라 자유 문자열이므로 여기 없는 값이 올 수 있다 —
+ * 목록·상세 모두 모르는 type 을 그대로 흘려보낸다(mappers.eventToLog 의 kind 폴백).
+ */
+export type EventType =
+  | 'FIRE' | 'OVERHEAT' | 'SYSTEM'
+  | 'PLANNER_DOWN'
+  | 'PLANNER_RECOVER_STARTED' | 'PLANNER_RECOVER_OK'
+  | 'PLANNER_RECOVER_FAILED' | 'PLANNER_RECOVER_BUSY'
+
+/** INFO 는 조용한 로그(연결/해제·PLANNER_*)의 등급이다. 경보 통계·알림에 세지 않는다. */
+export type EventLevel = 'CRITICAL' | 'WARNING' | 'INFO'
+
+export type EventStatus = 'UNRESOLVED' | 'RESOLVED'
+
+export type EquipmentStatus = 'NORMAL' | 'OVER' | 'UNKNOWN'
+
+/** 맵 산출물 종류. null 이면 RAW 취급(MapArtifact 주석). */
+export type MapKind = 'RAW' | 'FLOORPLAN'
+
+/** SET_MODE 로 보낼 수 있는 값. 가이드 §5 — 이 셋뿐이다. */
+export type DriveMode = 'autonomy' | 'manual' | 'disabled'
+
+export type Role = 'ROLE_ADMIN' | 'ROLE_VIEWER'
+
+// ---------------------------------------------------------------- STOMP 수신
+
+/** 미터·map 프레임. 로봇이 TF 를 못 잡으면 통째로 생략된다. */
+export interface RobotLocation {
+  x?: number
+  y?: number
+  yaw?: number
+  /**
+   * 이 좌표가 어느 프레임의 값인가(S15P11E101-773).
+   * 'map' 이라야 도면 위에 그릴 수 있다. 로봇이 로컬라이즈되지 않으면 odom 폴백이
+   * 오는데, 그것을 map 으로 오인해 그리면 도면 위 엉뚱한 곳에 자신 있게 찍힌다.
+   * 필드가 없는 구버전 텔레메트리는 기존대로 map 으로 본다(하위호환).
+   */
+  frame?: string
+}
+
+export type Capabilities = Partial<Record<
+  'camera' | 'thermal' | 'lidar_map' | 'nav' | 'drive' | 'fire',
+  CapabilityState
+>>
+
+/**
+ * 순찰 시작 가능 여부를 로봇이 판단해 하나로 알려준다(S15P11E101-869).
+ * FE 는 상태를 조합하지 않는다 — canStartPatrol 로 버튼을 켜고 끄고, hint 를 그대로 보여준다.
+ * blockedBy 는 표에 없는 새 값이 와도 깨지면 안 된다 — hint 폴백, hint 도 없으면 일반 문구.
+ */
+// 🔴 ROUTE_SESSION_MISMATCH / NAV_FAILED 는 로봇이 실제로 보내는데 이 표에 없었다
+// (navigation_orchestrator.readiness). 특히 ROUTE_SESSION_MISMATCH 는 '순찰 시작'을 눌러야
+// 풀리는 사유라서, 그걸로 버튼을 잠그면 교착이다 — RoutePanel 의 SELF_CLEARING_BLOCKS 참고
+// (S15P11E101-893).
+// 🔴 [2026-08-12] NO_ROUTE 도 같은 성질이다. 로봇에 경로가 없을 때 오는데, 핀 추가는 서버 DB
+// 에만 쓰이므로 화면에 지점이 있어도 이 사유가 유지된다 — /start 가 SET_PATROL_ROUTE 를 먼저
+// 보내 스스로 풀리므로 SELF_CLEARING_BLOCKS 에 함께 들어 있다.
+export type BlockedByReason =
+  | 'MAP_SAVING' | 'MAPPING_ACTIVE' | 'NO_MAP' | 'LOCALIZATION_NOT_READY'
+  | 'NAV_NOT_READY' | 'NO_ROUTE' | 'ESTOP'
+  | 'ROUTE_SESSION_MISMATCH' | 'NAV_FAILED'
+
+export interface Readiness {
+  canStartPatrol: boolean
+  canStartMapping?: boolean
+  /** 표에 없는 값이 올 수 있다 — 문자열로 넓게 받는다 */
+  blockedBy: BlockedByReason | string | null
+  /** 로봇이 준 문장을 그대로 쓴다 — FE 가 표를 보고 다시 만들지 않는다 */
+  hint?: string
+  retryAfterSec?: number
+}
+
+/**
+ * Orin `tegrastats` 한 줄에서 뽑은 부하·전력 서브셋(S15P11E101-814).
+ * 🔴 아직 로봇/서버가 이 필드를 보내지 않는다 — 계약만 먼저 정의해 둔다. FE 는 값이
+ * 없으면 반드시 '—' 로 표시하고 그래프를 그리지 않는다(값이 없다고 0 으로 채우지 않는다).
+ * 기대 필드명은 아래와 같다. 로봇 담당자가 이 이름에 맞춰 전송하면 자동으로 그려진다.
+ *   - cpuCores  : 코어별 사용률(%). 예 `[44,77,42,44,47,44]` — 개수는 로봇 코어 수를 따른다.
+ *   - gpuPercent: GR3D_FREQ(%), 단일 값.
+ *   - vddInMw   : VDD_IN(mW) — 모듈 전체 입력. VDD_CPU_GPU_CV·VDD_SOC 는 "부분의 합"이
+ *                 아니라서(docs/design/mockups/orin-load-v6.html 참고) 이번 화면 범위 밖이다.
+ */
+export interface OrinPowerTelemetry {
+  cpuCores?: number[]
+  gpuPercent?: number
+  vddInMw?: number
+}
+
+/**
+ * /topic/robots — 서버가 로봇 패킷을 그대로 직렬화해 중계한다.
+ *
+ * 브리지는 값이 없으면 null 로 채우지 않고 **필드를 생략**한다. 그래서 거의 모두 선택이다 —
+ * '보고하지 않음' 과 '0' 은 다른 뜻이고, 화면도 그렇게 구분해야 한다.
+ */
+export interface RobotTelemetry {
+  source?: 'robot'
+  type?: 'TELEMETRY'
+  robotId?: string
+  /** 로봇 원문은 snake_case 로 보낸다. 서버 직렬화에 따라 둘 다 올 수 있어 함께 둔다. */
+  robot_id?: string
+  location?: RobotLocation
+  battery?: number
+  speed?: number
+  status?: RobotStatus
+  estop?: EstopState
+  commLatencyMs?: number
+  inferenceFps?: number
+  capabilities?: Capabilities
+  timestamp?: number | string
+  /** 카메라 상하 각도(도). 로봇 계약 미확정 — S15P11E101-521 */
+  cameraTilt?: number
+  camera_tilt?: number
+  tilt?: number
+  /** 순찰 시작 가능 여부(S15P11E101-869). 아직 안 보낼 수 있다 — 없으면 기존 동작 그대로다. */
+  readiness?: Readiness
+  /** Orin CPU/GPU/전력(S15P11E101-814). 아직 안 보낼 수 있다 — 없으면 '—'. */
+  orinPower?: OrinPowerTelemetry
+  /**
+   * 충전 중인가(S15P11E101-884). 로봇에 충전 감지 센서가 없어 배터리 %의 **추세**로
+   * 추정한 값이다(cloud_bridge.BatteryChargeEstimator). 판단할 표본이 모이기 전(≈4분)에는
+   * 로봇이 필드를 생략하고, 서버 DTO(RobotPacket)를 거치며 null 로 내려온다 —
+   * 그때는 '충전 중'도 '방전 중'도 아닌 '—' 다.
+   * 🔴 false 와 null 은 다른 뜻이다. `!charging` 으로 뭉뚱그리지 말 것.
+   */
+  charging?: boolean | null
+  /**
+   * 완충까지 남은 시간(분). 상승률에서 낸 추정치라 상승률을 못 구하면 로봇이 생략한다
+   * (충전 중이 아니면 항상 없다). 없으면 '—' — 0 이나 임의 값으로 채우지 않는다.
+   */
+  minutesToFull?: number | null
+}
+
+/**
+ * 화재·연기 검출 하나. 로봇 YOLO(yolo11n/s firesmoke) 출력이다.
+ *
+ * 🔴 `box` 는 **`DetectionsMessage.src_w x src_h` 기준 픽셀 절대좌표** `[x1,y1,x2,y2]` 다.
+ *    정규화(0~1)도 아니고 영상 해상도 기준도 아니다 — 로봇 추론은 640x360 인데 영상은
+ *    1280x720 이라 **고정 상수로 나누면 정확히 2배 어긋난다**(실측 확인).
+ *    반드시 `box[0] / src_w * 표시폭` 으로 환산한다.
+ */
+export interface Detection {
+  /** 0=smoke, 1=fire (로봇 엔진 클래스 고정값) */
+  cls?: number
+  name?: string
+  /** 0~1 */
+  conf?: number
+  box?: number[]
+}
+
+/**
+ * 검출 박스 묶음. `/topic/video/{robotId}` 에 `type:'DETECTIONS'` 로 온다.
+ *
+ * 왜 영상과 별도인가: 전면 영상이 HLS(H.264 세그먼트)로 옮겨가면서 **프레임에 메타데이터를
+ * 실을 수 없게 됐다.** 종전에는 로봇이 박스를 JPEG 픽셀에 직접 그려 보냈다.
+ *
+ * 🔴 `dets` 가 빈 배열로도 온다 — 그래야 "이제 안 보인다"를 알고 박스를 지운다.
+ * 🔴 `captureTs` 로 **영상 시각에 맞춰 늦춰서** 그려야 한다. 이 메시지는 WS 로 즉시 오는데
+ *    영상은 HLS 라 약 6초 늦다(config.HLS_LAG_FALLBACK_S).
+ */
+export interface DetectionsMessage {
+  type?: 'DETECTIONS'
+  robot_id?: string
+  /** 촬영 시각(epoch 초). 영상 타임라인 정합의 기준. */
+  captureTs?: number
+  /** 박스 좌표의 기준 해상도 */
+  src_w?: number
+  src_h?: number
+  dets?: Detection[]
+  seq?: number
+}
+
+/** /topic/alerts — 로봇이 확정한 화재·과열. AlertMessage record 그대로. */
+export interface AlertMessage {
+  /** 저장 완료된 이벤트 이력 식별자. 있으면 즉시 상세·영상을 조회할 수 있다. */
+  eventId?: number
+  /** 로봇 재전송 멱등 키. 화면 식별자는 저장된 eventId를 계속 사용한다. */
+  messageId?: string
+  type: 'FIRE' | 'OVERHEAT'
+  level?: EventLevel
+  source?: string
+  robotId?: string
+  /** FIRE 전용 */
+  confidence?: number
+  temperature?: number
+  /** OVERHEAT 전용 */
+  equipmentId?: string
+  threshold?: number
+  /** OVERHEAT 전용 열화상 base64 — 중계만 하고 저장하지 않는다 */
+  thermalImage?: string
+  x?: number
+  y?: number
+  message?: string
+  timestamp?: string
+  /** 실시간 수신분에 FE 가 붙이는 로컬 식별자. 서버 필드가 아니다. */
+  _id?: number
+}
+
+/** FE가 로봇 연결 상태 변경을 이벤트 로그에 표시하기 위해 만드는 화면 전용 알림. */
+export interface SystemAlertMessage {
+  _id: number
+  type: 'SYSTEM'
+  level: EventLevel
+  robotId: string
+  timestamp: string | number
+  message: string
+}
+
+/** 서버 위험 경보와 FE 화면 전용 시스템 알림의 표시 모델. */
+export type LiveAlertMessage = AlertMessage | SystemAlertMessage
+
+/**
+ * /topic/nav/{robotId} — 점유격자 스냅샷.
+ * cells 는 flat RLE([값, 개수, ...]) 이고 서버는 해석하지 않고 그대로 중계한다.
+ */
+export interface MapSnapshot {
+  type: 'MAP'
+  robot_id?: string
+  sequence: number
+  w: number
+  h: number
+  /** m/셀 */
+  res: number
+  /** 맵 원점(미터, ROS map 규약) */
+  ox: number
+  oy: number
+  encoding?: string
+  cells: number[]
+  /**
+   * 순찰 지점을 찍어도 되는 칸(S15P11E101-869). 지도와 같은 flat RLE 형식이고,
+   * 셀 순서도 cells 와 같은 그리드(w×h)를 가리킨다. 1=가능·0=불가.
+   * 아직 안 보낼 수 있다 — 없으면 오버레이를 그리지 않는다(기존 동작 유지).
+   *
+   * 🔴 이름은 snake_case `patrol_mask`, 런 배열도 `cells` 다. MAP 패킷은 서버가
+   * DTO 로 재직렬화하지 않고 로봇 원문을 그대로 중계하므로(RobotEventListener
+   * .handleNavEvent) camelCase 로 바뀌지 않는다 — 같은 패킷의 robot_id·cells 와 같은
+   * 규칙이다. geometry 는 격자 자기검증용 사본이다(어긋나면 마스크를 버린다).
+   */
+  patrol_mask?: {
+    schema?: number
+    encoding?: string
+    cells: number[]
+    geometry?: { w: number, h: number, res: number, ox: number, oy: number }
+    revision?: number
+    stamp?: number
+    clearance_m?: number
+  }
+}
+
+/** nav_bridge 포맷. ranges[i] === 0 은 무효 측정이다. */
+export interface LidarScan {
+  angle_min: number
+  angle_inc: number
+  ranges: number[]
+}
+
+export interface NavPose {
+  frame?: string
+  x: number
+  y: number
+  yaw: number
+}
+
+/** /topic/nav/{robotId} — 실시간 자세·스캔(3Hz). */
+export interface NavLive {
+  type: 'NAV_LIVE'
+  robot_id?: string
+  t?: number
+  map_sequence?: number
+  pose?: NavPose
+  scan?: LidarScan
+}
+
+/** /topic/mapping — 로봇 원문 relay. 매핑이 끝났다는 뜻. */
+export interface MappingComplete {
+  type: 'EVENT_MAPPING_COMPLETE' | 'MAPPING_COMPLETE'
+  robot_id?: string
+  robotId?: string
+  /** 로봇이 붙인 맵 이름 */
+  name?: string
+  /** FE 가 수신 시각을 붙인다. 서버 필드가 아니다. */
+  _at?: number
+}
+
+/** /topic/mapping — 서버가 정제 도면을 만들어 활성화했다(S15P11E101-518). */
+export interface FloorplanReady {
+  type: 'FLOORPLAN_READY'
+  robotId?: string
+  mapId: string
+  imageUrl: string
+  _at?: number
+}
+
+/** 매핑 진행 단계. MAPPING = 로봇이 돌며 지도를 그리는 중, IDLE = 그렇지 않음. */
+export type MappingPhase = 'MAPPING' | 'IDLE'
+
+/** /topic/mapping — 진행 상태 전환(S15P11E101-744). 시작·중단·완료 모두 이 메시지로 알린다. */
+export interface MappingStatusMessage {
+  type: 'MAPPING_STATUS'
+  phase: MappingPhase
+  robotId?: string
+  /** phase 와 같은 뜻의 불리언. 서버가 둘 다 보낸다 — 어느 쪽이 와도 읽는다. */
+  mapping?: boolean
+  since?: string
+  _at?: number
+}
+
+/**
+ * GET /api/maps/status?robotId= 응답(S15P11E101-744).
+ * 새로고침하거나 매핑 도중에 접속했을 때 상태를 복원하는 유일한 수단이다 —
+ * STOMP 는 붙기 전에 지나간 전환을 다시 주지 않는다.
+ */
+export interface MapStatusResponse {
+  robotId?: string
+  phase: MappingPhase
+  mapping?: boolean
+  since?: string
+}
+
+/** 매핑 토픽으로 오는 세 종류. 도착 자체를 완료로 보면 안 된다(S15P11E101-524). */
+export type MappingMessage = MappingComplete | FloorplanReady | MappingStatusMessage
+
+// ---------------------------------------------------------------- STOMP 발행
+
+/**
+ * 제어 명령. command 값에 따라 필요한 필드가 다르므로 판별 유니온으로 둔다 —
+ * SET_MODE 에 linear 를 실어 보내는 류의 실수를 빌드에서 잡기 위한 것이다.
+ *
+ * destination 은 명령마다 정해져 있다(RobotControlStompController):
+ *   /app/control/drive     DRIVE
+ *   /app/control/mode      SET_MODE · ESTOP
+ *   /app/control/operation NAVIGATE · SAVE_MAP · START_MAPPING
+ */
+export interface DriveCommand {
+  command: 'DRIVE'
+  /** m/s */
+  linear: number
+  /** rad/s */
+  angular: number
+}
+
+export interface SetModeCommand {
+  command: 'SET_MODE'
+  mode: DriveMode
+}
+
+/** fail-safe — active:true 만 유효하다. 해제 명령은 없다. */
+export interface EstopCommand {
+  command: 'ESTOP'
+  active: true
+}
+
+export interface NavigateCommand {
+  command: 'NAVIGATE'
+  /** 미터·map 프레임 */
+  x: number
+  y: number
+  yaw?: number
+}
+
+export interface SaveMapCommand {
+  command: 'SAVE_MAP'
+  name: string
+}
+
+export interface StartMappingCommand {
+  command: 'START_MAPPING'
+}
+
+/**
+ * 카메라 상하 각도(S15P11E101-521).
+ *
+ * **로봇 계약에 없는 잠정 명령이다.** cloud_bridge.handle_command 는 DRIVE·ESTOP 만 알고
+ * BE ControlCommand 에도 카메라 필드가 없다. 이름·단위·범위가 확정되면 여기와
+ * cameraTilt.js 를 함께 고친다.
+ */
+export interface SetCameraTiltCommand {
+  command: 'SET_CAMERA_TILT'
+  /** 도(°). 위가 + */
+  tilt: number
+}
+
+/**
+ * 발행부가 만드는 본문(robot_id 제외). send() 가 robot_id 를 붙여 실제 명령이 된다.
+ * 유니온이라 command 값에 맞지 않는 필드를 실으면 빌드에서 걸린다.
+ */
+export type ControlCommandBody =
+  | DriveCommand
+  | SetModeCommand
+  | EstopCommand
+  | NavigateCommand
+  | SaveMapCommand
+  | StartMappingCommand
+  | SetCameraTiltCommand
+
+/** 실제로 STOMP 로 나가는 형태. */
+export type ControlCommand = ControlCommandBody & { robot_id: string }
+
+// ---------------------------------------------------------------- REST
+
+/**
+ * POST /api/robots/{robotId}/recover/nav2 — Nav2 재기동 하달 결과.
+ * result 는 하달까지의 결과이지 복구의 성패가 아니다(재기동은 수십 초 걸린다).
+ */
+export interface RobotRecoveryResult {
+  result: 'ACCEPTED' | 'IN_PROGRESS' | 'OFFLINE' | 'INVALID'
+  delivered: boolean
+  message: string
+}
+
+/** POST /api/auth/login */
+export interface LoginResponse {
+  tokenType: string
+  accessToken: string
+  /**
+   * access 재발급용. S15P11E101-608 에서 추가됐다 —
+   * 이 필드가 없는 응답(구버전 서버)도 그대로 동작해야 한다.
+   */
+  refreshToken?: string
+  /** 초. 608 이전 24시간(86400) → 이후 1시간(3600). 값을 그대로 쓴다. */
+  expiresIn: number
+  role: Role | string
+}
+
+/** POST /api/auth/refresh 응답 — 로그인 응답과 같은 형태다(refreshToken 도 새로 온다). */
+export interface RefreshResponse {
+  tokenType: string
+  accessToken: string
+  refreshToken?: string
+  expiresIn: number
+  role: Role | string
+}
+
+/** GET /api/events 의 한 건 — EventLog 엔티티 그대로. */
+export interface EventLog {
+  eventId: number
+  type: EventType
+  level?: EventLevel
+  robotId?: string
+  equipmentId?: string
+  x?: number
+  y?: number
+  confidence?: number
+  temperature?: number
+  threshold?: number
+  message?: string
+  timestamp?: string
+  status?: EventStatus
+  /**
+   * 이 이벤트가 찍힌 지도(활성 맵)의 id. 서버가 저장 시점에 붙인다.
+   * x,y 는 그 지도의 map 프레임 좌표라, 다른 지도 위에 그리면 엉뚱한 자리를 가리킨다.
+   * 이 필드가 없는 과거 이력은 소속 지도를 알 수 없다(= 지도에 그리지 않는다).
+   */
+  mapId?: string
+}
+
+/** GET /api/events — Spring Page 를 감싼 응답. */
+export interface EventPage {
+  content: EventLog[]
+  page?: number
+  size?: number
+  totalPages?: number
+  totalElements?: number
+}
+
+/** GET /api/robots — 서버가 판정한 online 을 포함한다. */
+export interface RobotResponse {
+  robotId: string
+  name?: string
+  status?: RobotStatus
+  battery?: number
+  speed?: number
+  estop?: EstopState
+  commLatencyMs?: number
+  inferenceFps?: number
+  lastConnected?: string
+  location?: RobotLocation
+  /** 로봇 WSS 세션이 열려 있는지. 예전 서버는 주지 않을 수 있다. */
+  online?: boolean
+}
+
+/** GET /api/maps 의 한 건. */
+export interface MapSummary {
+  id: string
+  name?: string
+  robotId?: string
+  imageUrl?: string
+  active?: boolean
+  kind?: MapKind
+  createdAt?: string
+  widthPx?: number
+  heightPx?: number
+  resolution?: number
+}
+
+/** GET /api/maps/{id} · /latest · /active */
+export interface MapDetail extends MapSummary {
+  widthPx?: number
+  heightPx?: number
+  /** m/px */
+  resolution?: number
+  /** 맵 원점(미터, ROS map 규약) */
+  originX?: number
+  originY?: number
+  originYaw?: number
+  fileSizeBytes?: number
+  sourceMapId?: string
+}
+
+/** POST/PUT /api/waypoints 의 요청 한 건. x/y 는 미터·map 프레임이다. */
+export interface WaypointRequest {
+  x: number
+  y: number
+  yaw?: number
+  name?: string
+  seq?: number
+}
+
+/** /api/waypoints 응답 한 건. */
+export interface Waypoint {
+  id: string
+  robotId?: string
+  name?: string | null
+  x: number
+  y: number
+  yaw?: number | null
+  seq?: number
+  createdAt?: string
+}
+
+/** POST /api/waypoints/apply — 로봇 미연결이어도 200 이고 delivered 로 갈린다. */
+export interface WaypointApplyResult {
+  status?: string
+  delivered?: boolean
+  count?: number
+}
+
+/** GET/PUT /api/equipments — Equipment 엔티티 그대로. */
+export interface Equipment {
+  equipmentId: string
+  name?: string
+  x?: number
+  y?: number
+  /** 로봇 판정 임계치의 표시용 참고값(authoritative 값은 로봇 보유) */
+  threshold?: number
+  lastTemperature?: number | null
+  lastInspectedAt?: string | null
+  status?: EquipmentStatus
+}
+
+/** GET/PUT /api/settings/drive-speed. delivered 는 수정 시에만 온다(조회 시 null). */
+export interface DriveSpeed {
+  robotId?: string
+  maxLinear: number
+  maxAngular: number
+  delivered?: boolean | null
+  updatedAt?: string | null
+}
+
+/** 인가 실패를 호출부가 상태 코드로 분기할 수 있게 error.status 를 실어 던진다. */
+export interface HttpError extends Error {
+  status?: number
+}
+
+// ---------------------------------------------------------------- FE 내부 파생 형태
+//
+// 서버 계약이 아니라, 위 payload 를 화면이 쓰기 좋게 바꾼 결과다.
+// 계약이 바뀌면 이쪽도 따라 바뀌므로 같은 파일에 둔다.
+
+/** MapSnapshot 을 디코드한 결과(navMap.decodeMapSnapshot). data 는 셀당 한 글자다. */
+export interface DecodedMap {
+  w: number
+  h: number
+  /** m/셀 */
+  res: number
+  ox: number
+  oy: number
+  seq: number
+  /** '#' 벽 · ' ' 자유 · '.' 미탐색 (row-major, 아래→위) */
+  data: string
+  /** patrol_mask 디코드 결과(S15P11E101-869). 셀당 1=찍어도 됨·0=안 됨. 안 왔으면 null. */
+  mask?: Uint8Array | null
+  /**
+   * 지금 들고 있는 마스크의 patrol_mask.revision. 마스크가 바뀌어도 지도 sequence 는
+   * 오르지 않으므로(계약 §6), sequence 만 보고 건너뛰면 마스크가 영영 낡는다.
+   */
+  maskRev?: number | null
+}
+
+/** 활성 도면(floorplan.loadActivePlan). 배치 기하는 DecodedMap 과 같은 규칙이다. */
+export interface PlanLayer {
+  id: string
+  name?: string
+  kind: MapKind | string
+  /** FLOORPLAN 이 파생된 원본 RAW 맵 id. 경보 핀의 지도 소속 판정에 함께 쓴다. */
+  sourceMapId?: string
+  /** 이 도면이 만들어진 시각(ISO). mapId 가 없는 이벤트를 가려내는 폴백 기준선. */
+  createdAt?: string
+  img: HTMLImageElement
+  /** objectURL — 교체·해제 시 revoke 해야 한다 */
+  url: string
+  /** px */
+  w: number
+  h: number
+  /** m/px */
+  res: number
+  ox: number
+  oy: number
+  /**
+   * 원점 회전각(radians, ROS map 규약). 0 이면 축에 나란하다.
+   * 이 값을 무시하면 회전된 맵이 어긋나게 그려지고, 조작자가 보고 찍은 자리가
+   * 실제 월드 좌표와 달라진다(S15P11E101-629).
+   */
+  oyaw?: number
+}
+
+/** 지도에 그릴 배경 하나(navMap.backgroundOf). */
+export interface MapBackground {
+  img: CanvasImageSource
+  w: number
+  h: number
+  res: number
+  ox: number
+  oy: number
+  /** 정제 도면이면 true — 확대 보간 여부가 갈린다 */
+  isPlan: boolean
+}
+
+/** LiveContext 가 ref 로 들고 있는 지도 상태. 리스너가 이 객체를 그대로 받는다. */
+export interface NavState {
+  map: DecodedMap | null
+  mapCanvas: HTMLCanvasElement | null
+  pose: NavPose | null
+  scan: LidarScan | null
+  /** [x, y] 미터 */
+  trail: Array<[number, number]>
+  plan?: PlanLayer | null
+  /** patrolMask 를 구운 오버레이(S15P11E101-869). map 과 같은 그리드 — 없으면 안 왔다는 뜻. */
+  maskCanvas?: HTMLCanvasElement | null
+}
+
+/** 지도 팬·줌 상태(navMap.makeView). */
+export interface MapView {
+  x: number
+  y: number
+  /** 픽셀/미터 */
+  s: number
+  init: boolean
+}
+
+// ---------------------------------------------------------------- 인증·설정 (S15P11E101-570)
+//
+// 서버 계약이 아니라 FE 가 브라우저에 들고 있는 상태다. 여러 파일이 함께 쓰므로 여기에 둔다.
+
+/** 자동 로그아웃 사유. 사용자가 직접 누른 로그아웃(MANUAL)은 안내를 띄우지 않는다. */
+export type LogoutReason = 'idle' | 'expired' | 'manual'
+
+/** mock 저장소의 회원 한 건. 실서버 모드에서는 쓰지 않는다. */
+export interface StoredUser {
+  email: string
+  password: string
+  name?: string
+  phone?: string
+  birth?: string
+  gender?: string
+  role: string
+}
+
+/** 화면에 노출하는 공개 정보 — 비밀번호는 담지 않는다. */
+export interface PublicUser {
+  email: string
+  name?: string
+  /** 서버가 준 원문을 그대로 보관한다. 표시 문구로 바꿔 저장하면 권한 판정을 잃는다. */
+  role: string
+}
+
+/** localStorage `bbiyong.session` — mock 모드 세션. */
+export interface StoredSession {
+  email: string
+}
+
+/** localStorage `bbiyong.token` — 실서버 세션. */
+export interface StoredAuth {
+  accessToken: string
+  user: PublicUser
+  /**
+   * access 재발급용(S15P11E101-613). 서버가 주지 않으면 없다 —
+   * 그때는 예전처럼 절대 만료에 걸려 로그아웃된다.
+   */
+  refreshToken?: string | null
+  /** 로그인 응답 expiresIn 으로 계산한 절대 만료 시각. 없으면 절대 만료를 걸지 않는다. */
+  expiresAt?: number | null
+  /**
+   * 그때 받은 access 수명(초). 선제 갱신 여유를 수명에 맞춰 줄이는 데 쓴다 —
+   * 수명이 여유보다 짧으면 발급 즉시 갱신 조건이 서서 갱신이 반복된다(S15P11E101-613).
+   */
+  expiresIn?: number | null
+}
+
+/** 순찰 지점(설정 탭). 좌표는 미터·map 프레임이다. */
+export interface PatrolPoint {
+  id: string
+  label: string
+  x: number
+  y: number
+}
+
+/** 운영 설정. 주행 상한은 서버가 정답이고 나머지는 이 브라우저에만 저장된다. */
+export interface Settings {
+  /** 선속도 상한 (m/s) */
+  vMax: number
+  /** 각속도 상한 (rad/s) */
+  wMax: number
+  /** 열화상 화면 표시 기준 — 로봇의 과열 판정 기준(Equipment.threshold)과는 다른 값이다 */
+  tempWarn: number
+  tempCritical: number
+  points: PatrolPoint[]
+}
+
+export interface SettingsContextValue {
+  settings: Settings
+  update: (patch: Partial<Settings>) => void
+  reset: () => void
+  /** 서버 주행 상한을 한 번이라도 받았는지 */
+  driveSynced: boolean
+}
+
+export interface AuthContextValue {
+  user: PublicUser | null
+  accessToken: string | null
+  login: (email: string, password: string) => Promise<void>
+  signup: (form: {
+    email: string, password: string, name?: string,
+    phone?: string, birth?: string, gender?: string,
+  }) => Promise<void>
+  logout: (reason?: LogoutReason) => void
+  changePassword: (current: string, next: string) => void
+  updateProfile: (patch: Partial<StoredUser>) => void
+  isAdmin: boolean
+  /**
+   * 조작해도 되는가 — 권한이 있고 잠기지 않았을 때만 true(S15P11E101-653).
+   * `isAdmin` 은 '무엇을 보여 줄지', `canOperate` 는 '무엇을 누르게 할지'에 쓴다.
+   */
+  canOperate: boolean
+  /** 사용자 조작·이벤트 기록을 활동으로 남긴다 */
+  touch: () => void
+  /**
+   * 조작 잠금 상태(S15P11E101-653). 유휴가 지나면 로그아웃하지 않고 여기가 true 가 된다 —
+   * 세션과 화면은 그대로 살아 있고 조작만 막힌다.
+   */
+  locked: boolean
+  /** 비밀번호를 다시 확인해 잠금을 푼다. 틀리면 던지고 잠금은 유지된다. */
+  unlock: (password: string) => Promise<void>
+  /** 자리를 뜨며 직접 잠근다 */
+  lockNow: () => void
+  logoutReason: LogoutReason | null
+  clearLogoutReason: () => void
+  /** 서버가 403 을 줬을 때 서버 판단 role 을 다시 받아 온다(S15P11E101-626) */
+  syncRole: () => Promise<void>
+}
+
+/** LiveProvider 가 공급하는 값 (S15P11E101-576). */
+export interface LiveContextValue {
+  /** live 모드인지 (mock 이면 false) */
+  enabled: boolean
+  connected: boolean
+  lastError: string | null
+  authError: boolean
+  hasToken: boolean
+  dataSource: 'live' | 'mock'
+  setDataSource: (v: 'live' | 'mock') => void
+  toggleDataSource: () => void
+  telemetry: RobotTelemetry | null
+  alerts: LiveAlertMessage[]
+  dismissAlert: (id: number) => void
+  onVideoFrame: (fn: (ch: 'FRONT' | 'THERMAL', frame: any) => void) => () => void
+  onDetections: (fn: (det: DetectionsMessage) => void) => () => void
+  onNavUpdate: (fn: (nav: NavState) => void) => () => void
+  videoSeen: Record<string, boolean>
+  control: {
+    drive: (linear: number, angular: number) => void
+    stop: () => void
+    setMode: (mode: DriveMode) => void
+    estop: () => void
+    navigate: (x: number, y: number, yaw?: number) => void
+    setCameraTilt: (deg: number) => void
+    startMapping: () => void
+    stopMapping: () => void
+    saveMap: (name: string) => void
+  }
+  robotId: string
+  /** 주행 슬라이더 값 (m/s) */
+  speed: number
+  setSpeed: (v: number) => void
+  mappingComplete: any
+  clearMappingComplete: () => void
+  /** 매핑 진행 단계(S15P11E101-744). null 이면 아직 판단할 근거가 없다는 뜻이다. */
+  mappingPhase: MappingPhase | null
+  /** mappingPhase === 'MAPPING' 을 미리 풀어 둔 값 (텔레메트리 status 보조 판정 포함) */
+  mapping: boolean
+  /** 매핑 시작 대기(S15P11E101). START_MAPPING 발행 후 로봇이 매핑에 들어가기 전까지 true. */
+  mappingStarting: boolean
+  /** 새 매핑 진입 시 이전 세션의 map·pose·scan·trail 을 지운다(S15P11E101-763). plan 은 남긴다. */
+  resetMappingView: () => void
+  /** 서버가 판정한 로봇 가동 여부. null = 아직 모름 */
+  robotOnline: boolean | null
+  /** 사용자가 고른 제어 모드 */
+  driveMode: 'patrol' | 'manual'
+  setDriveMode: (m: 'patrol' | 'manual') => void
+  plan: PlanLayer | null
+  planError: string | null
+  /** 조종 점유 현재 상태(S15P11E101-778 · 779 / BE MR !344) */
+  ownership: ControlOwnershipView
+  controlOwnership: {
+    acquire: () => void
+    /** 남의 점유를 강제로 빼앗는다 — 호출 전에 확인 절차를 거칠 것 */
+    takeover: () => void
+    /** 내가 소유자일 때만 실제로 발행된다 */
+    release: () => void
+    requestStatus: () => void
+    clearDenied: () => void
+  }
+  /** 내 STOMP sessionId. 서버가 CONNECTED 에 안 실어 주면 ACQUIRE 성공 시 학습된다. null = 아직 모름 */
+  mySessionId: string | null
+}
+
+/** 화면이 그대로 쓸 수 있게 미리 풀어 둔 조종 점유 상태. */
+export interface ControlOwnershipView {
+  /** /topic/control 을 한 번이라도 받았는가 = 서버가 점유 기능을 갖고 있는가 */
+  supported: boolean
+  /** 소유자 STOMP sessionId. 점유 없으면 null */
+  owner: string | null
+  ownerEmail: string | null
+  event: 'ACQUIRED' | 'RELEASED' | 'TAKEN_OVER' | 'EXPIRED' | 'DISCONNECTED' | 'HEARTBEAT' | 'STATUS' | null
+  claim: 'none' | 'pending' | 'owner' | 'denied'
+  denied: { reason: string, ownerEmail: string | null, at: number } | null
+  /** 내가 조종 중이다 */
+  mine: boolean
+  /** 남이 조종 중이다 — 수동 모드 진입을 막는 조건 */
+  otherOwns: boolean
+  /** 지금 기준 잔여 리스(ms) */
+  leftMs: number
+  /** 하트비트가 끊겨 현재 값을 사실로 단언할 수 없다 */
+  stale: boolean
+}
+
+// ---------------------------------------------------------------- 관제센터 신규 API
+//
+// BE 가이드: docs/FE_CONTROL_CENTER_API_GUIDE.md
+// 컨트롤러: DashboardController · EventController(stats) · NotificationController ·
+//           PatrolScheduleController · RobotController(health-history)
+//
+// 응답 필드는 BE DTO 를 그대로 옮겼다. 가이드 문서에 없지만 DTO 에 있는 것
+// (EventLogResponse.hasVideo, NotificationSettingResponse.id/userId/…)도 포함한다 —
+// 서버가 보내는 것을 타입에서 지워 두면 나중에 쓸 때 캐스트가 필요해진다.
+
+/** GET /api/dashboard/stats — 관제 요약 4종을 한 번에 받는다. */
+export interface DashboardStats {
+  summary: RobotSummary
+  today: TodayStats
+  /** 설비(분전반) 집계. S15P11E101-573 에서 추가됐다 — 예전 서버에는 없다. */
+  equipment?: EquipmentSummary
+  /** 설비 목록. 설정 탭의 /api/equipments 와 같은 형태다. */
+  equipmentStatus?: Equipment[]
+  recentEvents: EventLog[]
+  robotStatus: RobotResponse[]
+}
+
+/** 설비 상태 집계(S15P11E101-630). 필드 이름은 BE EquipmentSummary 그대로다. */
+export interface EquipmentSummary {
+  totalEquipments: number
+  overheatingEquipments: number
+  normalEquipments: number
+  unknownEquipments: number
+}
+
+export interface RobotSummary {
+  totalRobots: number
+  activeRobots: number
+  chargingRobots: number
+  /** 소수점이 붙어 온다 (예: 78.5) */
+  avgBattery: number
+  onlineRobots: number
+}
+
+/** 오늘(서버 기준 자정부터) 집계. 서버가 long 으로 주므로 큰 수가 올 수 있다. */
+export interface TodayStats {
+  eventCount: number
+  criticalEvents: number
+  warningEvents: number
+  resolvedEvents: number
+  unresolvedEvents: number
+}
+
+/** GET /api/events 쿼리 — 모두 선택이고, 빈 값은 아예 보내지 않는다. */
+export interface EventFilters {
+  type?: EventType | null
+  level?: EventLevel | null
+  status?: EventStatus | null
+  robotId?: string | null
+  equipmentId?: string | null
+  /** YYYY-MM-DD */
+  startDate?: string | null
+  endDate?: string | null
+}
+
+/** 통계 묶음 기준. by-robot·by-equipment·by-type 은 시계열이 아니라 timestamp 가 null 이다. */
+export type EventStatsGroup = 'hour' | 'day' | 'robot' | 'equipment' | 'type'
+
+export interface EventStatsPoint {
+  /** 시간별 '10:00' · 일별 'MM/DD' · 그 외에는 로봇/설비/타입 ID */
+  label: string
+  timestamp?: string | null
+  totalCount: number
+  criticalCount: number
+  warningCount: number
+  unresolvedCount: number
+  resolvedCount: number
+}
+
+export interface EventStats {
+  groupBy: EventStatsGroup
+  startTime?: string
+  endTime?: string
+  dataPoints: EventStatsPoint[]
+}
+
+/** GET/PUT /api/notifications/settings — 사용자별 Mattermost 알림 설정. */
+export interface NotificationSetting {
+  id?: number
+  userId?: string
+  mattermostEnabled: boolean
+  mattermostWebhookUrl?: string | null
+  mattermostChannel?: string | null
+  /** CRITICAL = 긴급만 · WARNING = 경고 이상 전부 */
+  minSeverity: EventLevel
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** PUT 본문. 서버가 채우는 id·userId·시각은 보내지 않는다. */
+export interface NotificationSettingRequest {
+  mattermostEnabled: boolean
+  mattermostWebhookUrl?: string
+  mattermostChannel?: string
+  minSeverity: EventLevel
+}
+
+/** GET /api/patrol-schedules — Spring cron(6필드) 으로 도는 자동 순찰 예약. */
+export interface PatrolSchedule {
+  scheduleId: number
+  name: string
+  robotId: string
+  /** 초 분 시 일 월 요일 — Spring 6필드다(표준 5필드가 아니다) */
+  cronExpression: string
+  enabled: boolean
+  lastExecuted?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface PatrolScheduleRequest {
+  name: string
+  robotId: string
+  cronExpression: string
+  enabled: boolean
+}
+
+/** GET /api/robots/{id}/health-history — 차트용 시계열. */
+export interface RobotHealthHistory {
+  robotId: string
+  startTime?: string
+  endTime?: string
+  /** 시간 오름차순 정렬돼 온다 */
+  dataPoints: HealthDataPoint[]
+}
+
+export interface HealthDataPoint {
+  timestamp: string
+  battery?: number
+  speed?: number
+  commLatencyMs?: number
+  inferenceFps?: number
+  status?: string
+  estop?: string
+  online?: boolean
+}
+
+/** health-history 의 period 파라미터. 서버가 받는 값만 넣는다. */
+export type HealthPeriod = '1h' | '6h' | '24h' | '7d' | '30d'
+
+// ---------------------------------------------------------------- 사용자 관리 (S15P11E101-614)
+//
+// BE 계약: AdminUserController · UserSummaryResponse. 관리자 전용이라 비관리자에게는 403 이 온다.
+
+/** GET /api/admin/users 의 한 건. */
+export interface AdminUser {
+  id: number
+  email: string
+  name?: string | null
+  /** ROLE_ADMIN | ROLE_USER — 서버 enum 원문 */
+  role: string
+}
+
+/** PATCH /api/admin/users/role 본문. role 은 표시 문구가 아니라 enum 이름이다. */
+export interface ChangeRoleRequest {
+  email: string
+  role: string
+}
+
+/**
+ * POST /api/patrol-route/start — 경로 하달 + 순찰 시작을 한 번에 한 결과(S15P11E101-625).
+ * 로봇이 꺼져 있어도 200 이고, 무엇이 안 됐는지는 아래 두 불리언으로 갈린다.
+ */
+export interface PatrolStartResult {
+  /** SUCCESS | NO_ROUTE */
+  status: string
+  /** SET_PATROL_ROUTE 가 로봇에 전달됐는가 */
+  routeDelivered: boolean
+  /** SET_MODE autonomy 가 로봇에 전달됐는가 */
+  patrolStarted: boolean
+  count: number
+}
+
+// ---------------------------------------------------------------- 이벤트 상세·영상 (S15P11E101-628)
+//
+// BE 계약: EventLogDetailResponse · VideoResponses. 영상 경로는 인증이 필요해
+// <video src> 로 바로 걸 수 없다 — videos.ts 주석 참고.
+
+/** GET /api/videos 계열의 목록 한 건. */
+export interface VideoSummary {
+  id: string
+  robotId?: string | null
+  eventId?: number | null
+  /** EVENT · FIRE · OVERHEAT · PATROL 등. 서버가 문자열로 준다. */
+  clipType?: string | null
+  durationSec?: number | null
+  /** 서버가 주는 썸네일 경로. 없으면 /api/videos/{id}/thumbnail 을 쓴다. */
+  thumbnailUrl?: string | null
+  startedAt?: string | null
+}
+
+/** GET /api/events/{eventId} — 목록 한 건에 연관 영상이 붙은 형태. */
+export interface EventDetail extends EventLog {
+  videos?: VideoSummary[]
+}
+
+/**
+ * 화면 구획. 시뮬레이션에서는 관제를 지도와 카메라 두 화면으로 나눈다 —
+ * 한 화면에 다 넣으면 어느 것도 크지 않다. 실서버는 'live' 하나로 유지한다.
+ */
+export type Section = 'live' | 'cam' | 'events'
+
+// ---------------------------------------------------------------- 통계 지표 3종 (S15P11E101-768)
+
+/** GET /api/stats/overheat-equipment 한 건. name 은 미등록 설비면 ID 폴백이다. */
+export interface OverheatRankItem {
+  equipmentId: string
+  name: string
+  count: number
+  /** 마지막 발생 시각(ISO-8601 UTC) */
+  lastAt: string
+}
+export interface OverheatRanking {
+  periodDays: number
+  totalCount: number
+  items: OverheatRankItem[]
+}
+
+/** GET /api/stats/alerts-weekly 한 건. 0 건인 날도 0 으로 채워 온다. */
+export interface AlertsWeeklyItem {
+  /** Asia/Seoul 로컬 날짜 'YYYY-MM-DD'. 문자열 정렬로 연말·연초가 깨지지 않는다. */
+  date: string
+  fire: number
+  overheat: number
+  total: number
+}
+export interface AlertsWeekly {
+  periodDays: number
+  items: AlertsWeeklyItem[]
+}
+
+/**
+ * GET /api/stats/battery-estimate.
+ * 충전 중이거나 표본이 모자라면 dischargePerHour·estimatedRemainingMinutes 가 null 이고
+ * battery 만 온다 — 그때 화면은 '—' 로 둔다.
+ */
+export interface BatteryEstimate {
+  robotId: string
+  battery: number | null
+  dischargePerHour: number | null
+  estimatedRemainingMinutes: number | null
+  /** 추정에 쓴 이력 구간(분) */
+  basisMinutes?: number
+}
+
+// ---------------------------------------------------------------- 구역 (S15P11E101-770)
+
+/**
+ * GET /api/zones — 축 정렬 사각형. 좌표는 map 프레임 미터다.
+ * 서버가 x1<=x2, y1<=y2 로 정규화해 준다.
+ *
+ * 지금은 mapId 에 매여 있지 않다(글로벌). 새 매핑으로 좌표계가 크게 달라지면
+ * 기존 구역이 어긋날 수 있고, 그때는 seed-grid?replace=true 로 다시 만든다.
+ * mapId 바인딩은 BE 후속 과제다(2026-08-06 협의).
+ */
+export interface Zone {
+  id: string
+  name: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  createdAt?: string
+}
+
+/** 라벨에 붙일 랜드마크 후보(설비·순찰 지점). 좌표는 map 프레임 미터. */
+export interface ZoneLandmark {
+  type: 'EQUIPMENT' | 'WAYPOINT'
+  id: string
+  name: string
+  x: number
+  y: number
+}
+
+// ---- AprilTag 점검 지점 (S15P11E101-787 / BE 계약 S15P11E101-778) ----
+//
+// 로봇·BE·FE 가 같은 스키마를 나눠 쓴다. 필드를 바꾸려면 먼저 협의해야 한다.
+// 좌표는 전부 미터·map 프레임 — 순찰 지점(Waypoint)과 같은 좌표계다.
+
+/** 태그가 붙은 자리. 벽 위라 로봇이 갈 수 없는 좌표일 수 있다. */
+export interface InspectionTarget {
+  x: number
+  y: number
+  z?: number
+}
+
+/** 태그를 보기 위해 로봇이 서는 자리. yaw 는 바라보는 방향이다. */
+export interface InspectionViewpoint {
+  x: number
+  y: number
+  yaw: number
+}
+
+/** 로봇이 올린 승인 대기 후보. 사람이 승인해야 점검 지점이 된다. */
+export interface InspectionCandidate {
+  schemaVersion: 1
+  kind: 'inspection_candidate'
+  candidateId: string
+  tagId: number
+  confidence: number
+  target: InspectionTarget
+  viewpoint: InspectionViewpoint
+  /** 태그에서 몇 미터 떨어져 서는가 */
+  standOffM: number
+  source: string
+  createdAt?: string
+}
+
+/** 승인이 끝난 점검 지점. sequence 순으로 돈다. */
+export interface InspectionPoint {
+  schemaVersion: 1
+  kind: 'inspection_point'
+  pointId: string
+  tagId: number
+  target: InspectionTarget
+  viewpoint: InspectionViewpoint
+  standOffM: number
+  confidence?: number
+  source?: string
+  name: string
+  sequence: number
+  enabled: boolean
+}
+
+/** /app/control/inspection 으로 보내는 명령. */
+export interface InspectionPointCommand {
+  schemaVersion: 1
+  kind: 'inspection_point_command'
+  command: 'CONFIRM' | 'REJECT' | 'UPDATE' | 'DELETE' | 'PUBLISH'
+  candidateId?: string
+  pointId?: string
+  name?: string
+  sequence?: number
+  enabled?: boolean
+}
