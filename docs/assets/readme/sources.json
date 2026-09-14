@@ -1,0 +1,78 @@
+{
+  "presentation": "15기 공통PJT_부울경_E101_삐용.pptx",
+  "method": "Original embedded media copied without modification",
+  "assets": [
+    {
+      "file": "robot-concept.png",
+      "source": "ppt/media/image1.png",
+      "slides": [
+        1
+      ],
+      "bytes": 271454,
+      "sha256": "5456a3289f5c444f8235a534a63a91928724550134f1e9c1251793cfbd3ba40d"
+    },
+    {
+      "file": "mapping-console.png",
+      "source": "ppt/media/image8.png",
+      "slides": [
+        17
+      ],
+      "bytes": 793434,
+      "sha256": "5365785822fc8174e2b01756aa016f70e3fa1694bdfe4963d1d616aa701e7043"
+    },
+    {
+      "file": "map-3d.png",
+      "source": "ppt/media/image10.png",
+      "slides": [
+        21
+      ],
+      "bytes": 409567,
+      "sha256": "0746be594fac6682aad376e480d8a0d1e0c2b1e77d8e893be2bc431d6aaea800"
+    },
+    {
+      "file": "frontier-exploration.gif",
+      "source": "ppt/media/image16.gif",
+      "slides": [
+        24
+      ],
+      "bytes": 2436352,
+      "sha256": "10bae08401dcebc3fdd89493140815f453461429f3371f9b7acf29ffd393e864"
+    },
+    {
+      "file": "event-log.png",
+      "source": "ppt/media/image23.png",
+      "slides": [
+        31
+      ],
+      "bytes": 1139149,
+      "sha256": "cff942e4efe7404f17fc10c8b048d69e9c9c912857c7666ff5a2e72aca4ef50d"
+    },
+    {
+      "file": "event-detail.png",
+      "source": "ppt/media/image24.png",
+      "slides": [
+        31
+      ],
+      "bytes": 716924,
+      "sha256": "67c8897ce3ebccf6a75eb89c83b81364a34c219fc218bc0f368ea9fa762d40f0"
+    },
+    {
+      "file": "fire-detection.gif",
+      "source": "ppt/media/image43.gif",
+      "slides": [
+        50
+      ],
+      "bytes": 3565466,
+      "sha256": "a969942028ae149d90be80499cdecabea7ee000878fa25ccc9e82b9b199f6d8f"
+    },
+    {
+      "file": "thermal-verification.gif",
+      "source": "ppt/media/image51.gif",
+      "slides": [
+        58
+      ],
+      "bytes": 16569855,
+      "sha256": "bf6f7ad8399d4aaa31d3ea0608aba50f37c0dcc2e6d325e033789c91b556d80d"
+    }
+  ]
+}
