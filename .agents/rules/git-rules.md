@@ -53,7 +53,18 @@
   4. **완료 기준 및 테스트 결과 (Definition of Done)**: 성공한 빌드 및 테스트 결과 요약 (`- [x] ...`)
   5. **리뷰어에게 전달할 특이사항**: 파트원 코드 리뷰 시 주의 깊게 봐야 할 포인트 기술
 
-## 6. 버저닝 및 Git Tag 규칙 (Version Tagging)
+## 6. 파트별 Jenkinsfile 분리 규칙 (Jenkins Pipeline Isolation)
+* **배경**: 과거 루트 `Jenkinsfile`/`Jenkinsfile.ci` 하나를 파트마다 서로 다른 용도로 덮어써서, 파트 브랜치를 `main`으로 병합할 때마다 매번 충돌이 발생했습니다 (S15P11E101, 2026-09-14).
+* **현재 구조**:
+  * 루트 `Jenkinsfile` / `Jenkinsfile.ci`: **`main`(통합 배포) 전용**. 4개 파트를 함께 빌드·배포·검증합니다.
+  * `Jenkinsfile.fe` / `Jenkinsfile.ci.fe`: FE 파트 전용 CD/CI.
+  * `Jenkinsfile.be_system` / `Jenkinsfile.ci.be_system`: BE_system 파트 전용 CD/CI.
+  * `Jenkinsfile.be_robot`: BE_robot 파트 전용 CD (MR 검증용 CI 파일은 아직 없음).
+  * `Jenkinsfile.ai`: AI 파트 전용 CD (MR 검증용 CI 파일은 아직 없음).
+* **작업 규칙**: 파트별 브랜치(`fe/main`, `be_system/main`, `be_robot/main`, `ai/main`)에서 CI/CD 로직을 바꿀 때는 **반드시 자기 파트의 `Jenkinsfile.<part>` 만 수정**하고, 루트 `Jenkinsfile`/`Jenkinsfile.ci`는 건드리지 않습니다. 루트 파일은 `main`으로 통합 릴리스할 때만 수정합니다.
+* **Jenkins Job 설정**: 각 파트 브랜치의 Jenkins Job(Script Path)이 해당 `Jenkinsfile.<part>` 파일을 보도록 Jenkins 쪽 설정이 되어 있어야 합니다 (저장소 밖의 Jenkins UI 설정이라 AI 에이전트가 대신 반영할 수 없음 — 사람이 직접 확인·수정 필요).
+
+## 7. 버저닝 및 Git Tag 규칙 (Version Tagging)
 * **방식**: 버전은 **Git Tag(SemVer `vMAJOR.MINOR.PATCH`)** 로 간단하게 관리합니다. 릴리스 시점에 `scripts/auto_tagger.py` 를 **수동 실행**하면 다음 버전을 자동 계산·태깅·푸시해 줍니다. (별도 CI/스케줄러 불필요)
 * **버전 단계 정의**:
   * **PATCH (마지막 버전)** — 자잘한 수정 단위: `--type patch` (`v1.2.0` ➔ `v1.2.1`)

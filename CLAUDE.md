@@ -89,4 +89,9 @@ Branch: feat/S15P11E101-124-websocket-handler
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
+### 2.1 Jenkinsfile Isolation Rule
+* Root `Jenkinsfile` / `Jenkinsfile.ci` are for **`main`(integrated release) only**.
+* Each part branch owns its own CI/CD file and must not touch the root files: `Jenkinsfile.fe`/`Jenkinsfile.ci.fe` (FE), `Jenkinsfile.be_system`/`Jenkinsfile.ci.be_system` (BE_system), `Jenkinsfile.be_robot` (BE_robot), `Jenkinsfile.ai` (AI).
+* See `.agents/rules/git-rules.md` section 6 for details and rationale (past conflicts from all parts overwriting the same root Jenkinsfile).
+
 For more details on team automation, refer to [AI.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/AI.md).
