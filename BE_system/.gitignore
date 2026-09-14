@@ -40,3 +40,13 @@ out/
 *.db
 *.db-shm
 *.db-wal
+
+### 런타임 산출물 (서버 실행 시 생성) ###
+logs/
+map-store/
+video-store/
+
+### 로컬 AI 도구 작업 폴더 ###
+.jiratmp/
+.claude/
+.junie/
