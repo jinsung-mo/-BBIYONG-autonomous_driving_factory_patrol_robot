@@ -141,7 +141,10 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 <a id="architecture"></a>
 ## 시스템 아키텍처
 
-관제 UI, 관제 서버, 로봇 제어, AI 추론을 나누어 구성했습니다. 상태와 제어 명령은 WebSocket으로 전달하고, 실시간 영상은 별도의 스트리밍 경로로 제공합니다.
+로봇이 현장 정보를 수집하면 서버가 이를 기록하고 관제 웹에 전달합니다. 운영자는 웹에서 상황을 확인하고 로봇에 명령을 보냅니다.
+
+<details>
+<summary><strong>🔎 시스템 연결 구조 보기</strong> — 웹·서버·로봇이 정보를 주고받는 방식</summary>
 
 ```mermaid
 flowchart LR
@@ -158,44 +161,93 @@ flowchart LR
     Stream -->|WebRTC/WHEP · HLS| Web
 ```
 
+</details>
+
 ### 기술 스택
 
-저장소의 의존성·실행 코드·배포 설정을 기준으로 정리했습니다. 버전은 저장소에 명시된 값이며, CUDA·TensorRT는 기록된 Jetson 벤치마크 환경 기준입니다.
+**화면 · 서버와 DB · 영상 · AI · 로봇 · 인프라**가 함께 동작합니다. 궁금한 분야를 클릭하면 사용 기술과 역할을 볼 수 있습니다.
+
+<details>
+<summary><strong>🖥️ 관제 화면</strong> — 사람이 보고 조작하는 웹</summary>
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
 | 웹 UI | **React 18 · TypeScript 5 · HTML · CSS** | 관제 화면, 상태 표시, 사용자 입력 처리 |
 | 웹 빌드 | **Vite 5 · Node.js · npm** | 개발 서버, 의존성 관리, 정적 리소스 빌드 |
 | 지도 시각화 | **Three.js · Canvas** | 3D 지도와 로봇 위치·이동 경로 표현 |
+
+</details>
+
+<details>
+<summary><strong>🗄️ 서버와 데이터베이스</strong> — 사용자·로봇·이벤트 기록 관리</summary>
+
+| 영역 | 기술 | 사용 목적 |
+| --- | --- | --- |
 | 관제 API | **Java 17 · Spring Boot 4.1 · Spring MVC** | 로봇·지도·이벤트·사용자 관리 REST API |
 | 인증·인가 | **Spring Security · JWT (JJWT) · BCrypt** | 토큰 인증, 권한 검사, 비밀번호 해시 |
 | 데이터 접근 | **Spring Data JPA · Hibernate · HikariCP · JDBC** | 엔티티 영속화, DB 연결과 커넥션 풀 관리 |
 | 운영 DB | **MySQL 8.0 · MySQL Connector/J** | Docker Compose 배포 환경의 관계형 데이터 저장 |
 | 로컬 DB | **SQLite · SQLite JDBC** | 별도 DB 서버 없이 로컬 실행·테스트 |
 | 파일 저장 | **로컬 파일시스템 · Docker Bind Mount** | 지도·이벤트 영상 파일 보관과 컨테이너 재생성 시 데이터 유지 |
-| 실시간 통신 | **WebSocket/WSS · STOMP · @stomp/stompjs** | 로봇 상태·경보 구독과 제어 명령 전달 |
-| 영상 전달·재생 | **MediaMTX · WebRTC/WHEP · HLS · hls.js** | 실시간 카메라 영상 전달과 브라우저 재생 |
-| 영상 처리 | **GStreamer · H.264/x264 · FFmpeg** | 로봇 영상 인코딩, HLS 처리, 이벤트 클립 생성 |
 | 서버 이미지 처리 | **OpenCV · JavaCPP · OpenBLAS** | 지도 이미지 정제와 네이티브 영상 처리 연동 |
 | 알림 | **Spring Mail · SMTP · Mattermost Webhook** | 이메일 인증과 이벤트 알림 |
 | API 문서·운영 진단 | **SpringDoc OpenAPI · Swagger UI · Actuator · Logback** | API 문서화, 상태 확인, JSON 로그 출력 |
+
+운영 환경은 **MySQL 8.0**, 로컬 개발 환경은 **SQLite**를 사용합니다. 지도와 영상 파일은 별도 폴더에 저장해 컨테이너를 다시 만들어도 보존합니다.
+
+</details>
+
+<details>
+<summary><strong>📡 실시간 통신과 영상</strong> — 현장 상황을 화면으로 전달</summary>
+
+| 영역 | 기술 | 사용 목적 |
+| --- | --- | --- |
+| 실시간 통신 | **WebSocket/WSS · STOMP · @stomp/stompjs** | 로봇 상태·경보 구독과 제어 명령 전달 |
+| 영상 전달·재생 | **MediaMTX · WebRTC/WHEP · HLS · hls.js** | 실시간 카메라 영상 전달과 브라우저 재생 |
+| 영상 처리 | **GStreamer · H.264/x264 · FFmpeg** | 로봇 영상 인코딩, HLS 처리, 이벤트 클립 생성 |
+
+</details>
+
+<details>
+<summary><strong>🤖 AI와 자율주행</strong> — 화재를 감지하고 길을 찾는 기술</summary>
+
+| 영역 | 기술 | 사용 목적 |
+| --- | --- | --- |
 | AI 학습 | **Python · PyTorch · Ultralytics · YOLO11n** | 불꽃·연기 탐지 모델 학습과 평가 |
 | AI 추론 배포 | **ONNX · TensorRT 10.3 · CUDA 12.6 · JetPack** | Jetson GPU 추론과 FP16 최적화 |
 | 로봇 미들웨어 | **ROS 2 Humble · rclpy · TF2** | 노드 간 통신, 좌표 변환, 센서·제어 연결 |
 | 지도·위치 추정 | **SLAM Toolbox · AMCL · RF2O** | 지도 작성, 저장 지도 기반 위치 추정, LiDAR 오도메트리 구성 |
 | 경로 계획·순찰 | **Nav2 · Frontier Exploration · AprilTag · OpenCV · NumPy** | 이동 목표 실행, 미탐색 영역 선택, 점검 지점 인식·계산 |
+
+</details>
+
+<details>
+<summary><strong>⚙️ 로봇 하드웨어</strong> — 보고 움직이는 실제 장치</summary>
+
+| 영역 | 기술 | 사용 목적 |
+| --- | --- | --- |
 | 로봇 연산·센서 | **Jetson Orin Nano · YDLIDAR X4 Pro · RGB 카메라 · MLX90640** | 온디바이스 연산, 거리·영상·열화상 수집 |
 | 구동·펌웨어 | **ESP32 · MDD10A · 엔코더 · PID · PWM · USB Serial** | 차동구동 모터 속도 제어와 피드백 |
+
+</details>
+
+<details>
+<summary><strong>☁️ 인프라와 개발 도구</strong> — 서비스 배포·운영·품질 관리</summary>
+
+| 영역 | 기술 | 사용 목적 |
+| --- | --- | --- |
 | 클라우드 | **AWS EC2** | 관제 백엔드와 영상 중계 서버 운영 |
 | 컨테이너·웹 서버 | **Docker · Docker Compose · Nginx** | 서비스 패키징, DB·앱 실행, 정적 웹 배포 |
 | CI/CD·빌드 | **Jenkins · Gradle Wrapper · Git** | 파트별 빌드·검증·배포와 버전 관리 |
 | 테스트·검증 | **JUnit Platform · Spring Boot Test · Mockito · Python unittest · pytest · TypeScript tsc** | 서버·로봇·AI 테스트와 웹 타입 검사 |
 | 협업·산출물 관리 | **GitHub · GitLab · Git LFS · Jira** | 코드 리뷰, 대용량 파일 관리, 작업 추적 |
 
-DB의 사용자·이벤트 등 구조화된 데이터와 지도·영상 파일의 저장 경로를 분리합니다. 운영용 Compose는 **MySQL 8.0**, 기본 로컬 설정은 **SQLite**를 사용하며, 파일은 호스트 디렉터리를 마운트해 보존합니다.
+</details>
 
 <details>
-<summary><strong>기술 스택 확인 근거</strong></summary>
+<summary><strong>📎 기술 스택 확인 근거</strong> — 의존성과 설정 파일</summary>
+
+버전은 저장소 설정 기준이며, CUDA·TensorRT는 기록된 Jetson 벤치마크 환경 기준입니다.
 
 - [웹 의존성](FE/bbiyong-react/package.json) · [웹 통신·영상 설정](FE/bbiyong-react/src/live/config.ts)
 - [서버 의존성](BE_system/build.gradle) · [운영 DB·파일 저장 설정](BE_system/compose.yaml) · [로컬 DB 기본 설정](BE_system/src/main/resources/application.properties)
@@ -206,6 +258,11 @@ DB의 사용자·이벤트 등 구조화된 데이터와 지도·영상 파일�
 
 <a id="engineering"></a>
 ## 기술적 성과와 구현 포인트
+
+같은 장치와 정밀도 조건에서 **AI가 초당 처리하는 영상 수를 약 2.12배 높였습니다.** 지도 기반 주행과 실시간 영상 전달을 연결해 관제 화면에서 로봇의 활동을 확인할 수 있습니다.
+
+<details>
+<summary><strong>📊 성능 수치와 구현 과정 보기</strong> — 측정 조건·주행 구조·영상 처리</summary>
 
 ### Jetson에서의 AI 추론 최적화
 
@@ -231,12 +288,15 @@ SLAM Toolbox로 지도를 만들고, 저장된 지도에서 AMCL로 위치를 �
 
 브라우저는 STOMP/WebSocket으로 상태를 구독하고 명령을 보냅니다. 전면 영상은 WebRTC/WHEP 경로와 HLS 재생 경로를 사용합니다. 영상과 탐지 결과가 서로 다른 시점에 도착하는 문제를 고려해 프런트엔드에 시간 보정 설정을 둡니다. [통신·영상 설정](FE/bbiyong-react/src/live/config.ts)
 
+</details>
+
 <a id="getting-started"></a>
 ## 실행 안내
 
-전체 시스템은 관제 서버와 Jetson의 센서·로봇 실행 환경이 필요합니다. 웹 UI 개발은 아래 명령으로 시작할 수 있습니다.
+개발 환경에서 직접 실행하려면 아래 안내를 펼쳐보세요. 전체 기능을 사용하려면 관제 서버와 로봇 장치가 필요합니다.
 
-### 관제 웹
+<details>
+<summary><strong>💻 관제 웹 실행 — 개발 서버와 연결 설정</strong></summary>
 
 Node.js와 npm을 설치한 뒤 실행합니다.
 
@@ -255,7 +315,10 @@ VITE_WS_URL=ws://localhost:8080/ws/control
 
 영상은 별도의 스트리밍 서버 설정이 필요합니다. `VITE_HLS_URL`, `VITE_WHEP_PATH` 등은 [설정 코드](FE/bbiyong-react/src/live/config.ts)를 참고하세요. 환경변수를 생략하면 코드에 지정된 기존 배포 서버 주소를 사용합니다.
 
-### 관제 서버
+</details>
+
+<details>
+<summary><strong>🗄️ 관제 서버 실행 — Java와 데이터베이스 설정</strong></summary>
 
 Java 17과 저장소의 Gradle Wrapper를 사용합니다. 다음 환경변수를 설정한 뒤 `BE_system`에서 실행합니다.
 
@@ -272,7 +335,10 @@ cd BE_system
 
 Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 환경변수는 [서버 설정](BE_system/src/main/resources/application.properties)을 참고하세요.
 
-### 로봇과 AI
+</details>
+
+<details>
+<summary><strong>🤖 로봇·AI 실행 — 장치 설정과 모델 준비</strong></summary>
 
 - **로봇 실행 환경**: [ROS 2 워크스페이스](BE_robot/ros2_ws/README.md), [로봇 실행 도구](BE_robot/tools/README.md)
 - **모델 학습**: [AI 학습 가이드](AI/README.md)
@@ -280,7 +346,12 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 
 학습 데이터와 모델 바이너리는 별도로 준비해야 합니다. 하위 문서에는 초기 차량 설계 기록도 포함되어 있으므로 실제 하드웨어 구성은 [현재 배선 문서](BE_robot/README.md)의 차동구동 구성을 기준으로 확인하세요.
 
+</details>
+
 ## 저장소 구조
+
+<details>
+<summary><strong>📁 폴더별 역할 보기</strong></summary>
 
 ```text
 .
@@ -292,6 +363,8 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 │   └── assets/readme/  # 발표 PPT에서 추출한 README 이미지·GIF
 └── Jenkinsfile.*       # 파트별 CI/CD
 ```
+
+</details>
 
 <a id="team"></a>
 ## 팀원
