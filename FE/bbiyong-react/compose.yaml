@@ -1,0 +1,9 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bbiyong-web
+    ports:
+      - "127.0.0.1:8082:80"
+    restart: unless-stopped

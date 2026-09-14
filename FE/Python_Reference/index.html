@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>삐용 통합 관제 — CCTV · 순찰 로봇</title>
+<style>
+/* ============ 공통 ============ */
+*{box-sizing:border-box; margin:0;}
+:root{
+  --ink:#1c2128; --sub:#68727f; --line:#e3e7ee; --bg:#f2f4f8; --card:#ffffff;
+  --red:#e2483d; --redbg:#fdeceb; --blue:#2f6fd0; --bluebg:#eaf1fb; --green:#1f9d6c;
+  --dk-bg:#0b0d11; --dk-panel:#14171d; --dk-panel2:#1a1e26; --dk-line:#262b34;
+  --dk-ink:#e6e9ef; --dk-sub:#8b93a3; --dk-green:#3ddc97; --dk-amber:#f5a623; --dk-red:#ff5648;
+}
+html,body{height:100%;}
+body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--ink); font-size:13px;}
+button{font:inherit; cursor:pointer;}
+canvas{display:block; width:100%; height:100%;}
+.mono{font-family:Consolas,'Courier New',monospace;}
+:focus-visible{outline:2px solid var(--blue); outline-offset:2px;}
+
+/* ============ 상단 공통 바 ============ */
+#nav{display:flex; align-items:center; gap:14px; padding:10px 18px; background:#101319; color:#e6e9ef;}
+#nav .logo{font-size:16px; font-weight:800; letter-spacing:1px;}
+#nav .logo b{color:#ff6a5f;}
+#nav .tabs{display:flex; gap:6px; margin-left:10px;}
+#nav .tabs button{padding:7px 16px; border-radius:8px; border:1px solid #2a3040; background:transparent; color:#aeb6c4; font-weight:600;}
+#nav .tabs button.on{background:#232a38; color:#fff; border-color:#3a445a;}
+#nav .sp{flex:1;}
+#nav .demo{display:flex; gap:8px; align-items:center;}
+#nav .demo span{font-size:11px; color:#7c8596;}
+#nav .demo button{padding:6px 12px; border-radius:8px; border:1px solid #3a445a; background:#1a2030; color:#dfe4ec; font-size:12px;}
+#nav .demo button.on{background:var(--red); border-color:#ff8078; color:#fff;}
+#nav .demo button.heat.on{background:#c97a10; border-color:#f5a623;}
+#nav .clock{font-size:13px; color:#c6cdd9;}
+.page{display:none; height:calc(100vh - 52px); overflow:auto;}
+.page.on{display:block;}
+
+/* ============ 화면 3 · CCTV 관제 (라이트) ============ */
+#pgA{padding:14px 18px;}
+.a-head{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
+.a-head h1{font-size:16px;}
+.chip{display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); font-weight:600;}
+.chip b{color:var(--blue);}
+.a-head .tgl{margin-left:auto;}
+.tglbtn{padding:7px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); font-weight:600;}
+.tglbtn.on{background:var(--redbg); border-color:#f3b7b2; color:var(--red);}
+
+.cams{display:grid; grid-template-columns:1fr 2fr 1fr; gap:14px; margin-bottom:14px;}
+.cams .cam{grid-column:2;}
+.cam{position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--line); background:#0e1116; aspect-ratio:16/8.2;}
+.cam.alert{border:2px solid var(--red); box-shadow:0 0 0 4px rgba(226,72,61,.15);}
+.cam .tag{position:absolute; left:10px; bottom:10px; padding:4px 10px; border-radius:6px; background:rgba(12,14,18,.72); color:#fff; font-size:12px;}
+.cam .tag em{font-style:normal; color:#ff8f86; font-weight:700;}
+.cam .st{position:absolute; right:10px; top:10px; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700; background:rgba(12,14,18,.72); color:#9fe8c4;}
+.cam.alert .st{color:#ffb0aa;}
+
+.a-grid{display:grid; grid-template-columns:1fr 2fr 1fr; gap:14px; align-items:start;}
+.card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px;}
+.card h3{font-size:13px; margin-bottom:10px; display:flex; align-items:center; gap:6px;}
+.card h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);}
+.stack>*+*{margin-top:12px;}
+
+select,.inp{width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; font:inherit;}
+.cal{width:100%; border-collapse:collapse; text-align:center; font-size:12px;}
+.cal th{color:var(--sub); font-weight:600; padding:4px 0;}
+.cal td{padding:5px 0; border-radius:8px; color:#3a4350;}
+.cal td.dim{color:#c2c9d3;}
+.cal td.today{background:var(--blue); color:#fff; font-weight:700;}
+.cal caption{caption-side:top; font-weight:700; padding-bottom:6px;}
+.acct{display:flex; gap:10px; align-items:center;}
+.avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2f6fd0,#7ea8ea); color:#fff; display:flex;align-items:center;justify-content:center;font-weight:800;}
+.acct .nm{font-weight:700;} .acct .rl{font-size:11px;color:var(--sub);}
+.btn{padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; font-weight:600;}
+.btn.pri{background:var(--blue); border-color:var(--blue); color:#fff;}
+.btn.warn{background:var(--red); border-color:var(--red); color:#fff;}
+.w100{width:100%;}
+
+.detrow{display:grid; grid-template-columns:1fr; gap:10px;}
+.det{border:1px solid var(--line); border-radius:10px; padding:10px;}
+.det.sel{border-color:var(--blue); box-shadow:0 0 0 3px var(--bluebg);}
+.det .cn{font-weight:800; margin-bottom:8px;}
+.det table{width:100%; font-size:12px; border-collapse:collapse;}
+.det td{padding:3px 0; color:var(--sub);}
+.det td.v{text-align:right; color:var(--ink); font-weight:600;}
+.det td.fire{color:var(--red); font-weight:800;}
+.chart{height:150px; border:1px solid var(--line); border-radius:10px; padding:6px; background:#fbfcfe;}
+
+.ptz{display:flex; gap:16px; align-items:center;}
+.pad{display:grid; grid-template-columns:repeat(3,40px); grid-template-rows:repeat(3,40px); gap:5px;}
+.pad button { /* 기존 코드 유지 */ transition: 0.1s; }
+.pad button.active { background: #6ad5ca !important; border-color: #5bbba0; color: #1a2027; font-weight: 900; }
+.pad .c{background:var(--bluebg); border-color:#bcd2f0; color:var(--blue); font-weight:800;}
+.zoom{display:flex; flex-direction:column; gap:6px;}
+.zoom button{width:40px;height:34px;border:1px solid var(--line);background:#fff;border-radius:9px;font-weight:800;}
+.ptz .meta{font-size:12px; color:var(--sub); line-height:1.8;}
+.wasd-desc { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--sub); margin-right: 10px; font-family: Consolas, monospace; }
+.wasd-desc b { color: var(--ink); display: inline-block; width: 14px; }
+
+.bigthumb{border-radius:12px; overflow:hidden; border:1px solid var(--line); aspect-ratio:16/9.6; background:#0e1116; position:relative;}
+.bigthumb .cap{position:absolute; left:10px; top:10px; padding:4px 10px; border-radius:6px; background:rgba(12,14,18,.72); color:#fff; font-size:12px;}
+.livecard{background:#fff6f5; border:1px solid #f3c4bf;}
+.livecard h3{color:var(--red);}
+.live{margin-left:auto; font-size:10px; background:var(--red); color:#fff; padding:2px 8px; border-radius:999px; letter-spacing:1px;}
+.chan{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:6px;}
+.chan div{border:1px solid #f0cdc9; background:#fff; border-radius:10px; padding:8px 4px; text-align:center; font-size:11px; color:#8a4a45;}
+.chan div b{display:block; font-size:15px; margin-bottom:2px;}
+.alist{list-style:none; max-height:180px; overflow:auto;}
+.alist li{padding:8px 2px; border-bottom:1px dashed var(--line); font-size:12px; display:flex; gap:8px;}
+.alist li .t{color:var(--sub); font-family:Consolas,monospace; white-space:nowrap;}
+.alist li.fire b{color:var(--red);} .alist li.heat b{color:#c97a10;} .alist li.ok b{color:var(--green);}
+
+/* ============ 화면 4 · 순찰 로봇 관제 (다크) ============ */
+#pgB{background:var(--dk-bg); color:var(--dk-ink); padding:14px 18px;}
+.b-grid{display:grid; grid-template-columns:290px 1.15fr 1fr; grid-template-rows:minmax(300px,44%) 1fr;
+  grid-template-areas:"status cam thermal" "status control map"; gap:12px; height:100%;}
+.panel{background:var(--dk-panel); border:1px solid var(--dk-line); border-radius:12px; padding:13px; min-height:0; display:flex; flex-direction:column;}
+.panel h3{font-size:12px; letter-spacing:1px; color:var(--dk-sub); margin-bottom:10px; text-transform:uppercase;}
+.panel h3 .k{color:var(--dk-ink); font-size:13px; letter-spacing:0;}
+#pStatus{grid-area:status;} #pCam{grid-area:cam;} #pThermal{grid-area:thermal;}
+#pControl{grid-area:control;} #pMap{grid-area:map;}
+
+.vwrap{position:relative; flex:1; border-radius:9px; overflow:hidden; background:#05070a; border:1px solid var(--dk-line); min-height:0;}
+.vwrap .hud{position:absolute; left:10px; top:8px; font-size:11px; color:#b9e8ff; font-family:Consolas,monospace; text-shadow:0 1px 2px #000;}
+.vwrap .hud2{position:absolute; right:10px; top:8px; font-size:11px; font-family:Consolas,monospace; color:#ffd9a8; text-shadow:0 1px 2px #000;}
+.vwrap .rec{position:absolute; right:10px; bottom:8px; font-size:10px; color:#ff7d74; font-family:Consolas,monospace;}
+
+.stat-card{background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:10px; padding:11px; margin-bottom:10px;}
+.stat-card .rid{display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px;}
+.pillm{margin-left:auto; font-size:11px; font-weight:800; padding:3px 10px; border-radius:999px; background:rgba(61,220,151,.14); color:var(--dk-green); border:1px solid rgba(61,220,151,.4);}
+.pillm.emg{background:rgba(255,86,72,.14); color:var(--dk-red); border-color:rgba(255,86,72,.45);}
+.pillm.man{background:rgba(245,166,35,.14); color:var(--dk-amber); border-color:rgba(245,166,35,.45);}
+.kv{display:flex; justify-content:space-between; font-size:12px; padding:4px 0; color:var(--dk-sub);}
+.kv b{color:var(--dk-ink); font-weight:600;}
+.bar{height:8px; border-radius:5px; background:#232936; overflow:hidden; margin-top:4px;}
+.bar i{display:block; height:100%; background:linear-gradient(90deg,#2fbf82,#3ddc97);}
+.env{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.env div{background:var(--dk-panel2); border:1px solid var(--dk-line); border-radius:10px; padding:9px; text-align:center;}
+.env b{display:block; font-size:16px; font-family:Consolas,monospace;}
+.env span{font-size:10px; color:var(--dk-sub);}
+.elog{flex:1; overflow:auto; margin-top:10px;}
+.elog li{list-style:none; padding:7px 8px; border-radius:8px; background:var(--dk-panel2); border:1px solid var(--dk-line); margin-bottom:6px; font-size:11.5px; display:flex; gap:8px;}
+.elog li .t{color:var(--dk-sub); font-family:Consolas,monospace; white-space:nowrap;}
+.elog li.fire b{color:var(--dk-red);} .elog li.heat b{color:var(--dk-amber);} .elog li.ok b{color:var(--dk-green);}
+
+.ctl{display:grid; grid-template-columns:auto 1fr auto; gap:18px; align-items:center; flex:1;}
+.ctl .col{display:flex; flex-direction:column; gap:8px;}
+.dbtn{padding:9px 13px; border-radius:9px; border:1px solid var(--dk-line); background:var(--dk-panel2); color:var(--dk-ink); font-weight:600; font-size:12px;}
+.dbtn:hover{border-color:#3a4452;}
+.dbtn.stop{background:rgba(255,86,72,.13); border-color:rgba(255,86,72,.5); color:#ff8d85;}
+.dbtn.go{background:rgba(61,220,151,.13); border-color:rgba(61,220,151,.5); color:#7deab8;}
+.dpad {display: grid !important;grid-template-areas:". w .""a s d";gap: 8px;justify-content: center;}
+.dpad button[data-m="0,-1"] { grid-area: w; content: "W"; }
+.dpad button[data-m="-1,0"] { grid-area: a; content: "A"; }
+.dpad button[data-m="0,1"] { grid-area: s; content: "S"; }
+.dpad button[data-m="1,0"] { grid-area: d; content: "D"; }
+/* STOP 버튼은 가운데로 */
+.dpad button.c { grid-area: s; opacity: 0; } /* 기존 STOP은 숨기고 WASD만 노출 */
+.seg{display:flex; border:1px solid var(--dk-line); border-radius:9px; overflow:hidden;}
+.seg button{flex:1; padding:8px 0; background:var(--dk-panel2); color:var(--dk-sub); border:0; font-weight:700; font-size:12px;}
+.seg button.on{background:#24466e; color:#dce9fb;}
+.sw{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--dk-sub); gap:10px;}
+.swb{width:40px; height:22px; border-radius:999px; background:#2a3140; border:1px solid var(--dk-line); position:relative;}
+.swb i{position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#8b93a3; transition:.15s;}
+.swb.on{background:rgba(61,220,151,.25); border-color:rgba(61,220,151,.5);}
+.swb.on i{left:20px; background:var(--dk-green);}
+.gotor{display:flex; gap:8px; margin-top:10px;}
+.gotor select{flex:1; background:var(--dk-panel2); color:var(--dk-ink); border:1px solid var(--dk-line); border-radius:9px; padding:8px 10px;}
+.maplegend{display:flex; gap:12px; font-size:10.5px; color:var(--dk-sub); margin-top:8px; flex-wrap:wrap;}
+.maplegend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
+@media (prefers-reduced-motion: reduce){ .cam.alert{box-shadow:none;} }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="logo">삐<b>용</b> <span style="font-size:11px;color:#7c8596;font-weight:400"> 통합 관제 시스템</span></div>
+  <div class="tabs">
+    <button id="tabA" class="on">CCTV 관제</button>
+    <button id="tabB">순찰 로봇 관제</button>
+  </div>
+  <div class="sp"></div>
+  <div class="demo">
+    <span>이벤트 데모</span>
+    <button id="demoFire">화재 발생</button>
+    <button id="demoHeat" class="heat">분전반 과열</button>
+  </div>
+  <div class="clock mono" id="clock">--:--:--</div>
+</nav>
+
+<!-- ================= 화면 3 · CCTV 관제 ================= -->
+<section id="pgA" class="page on">
+  <div class="a-head">
+    <h1>화재 감지</h1>
+    <span class="chip">장치 <b>8</b></span>
+    <span class="chip mono" id="aDate">2026. 07. 16</span>
+    <div class="tgl"><button id="sndTgl" class="tglbtn on">🔔 경보음 ON</button></div>
+  </div>
+
+  <div class="cams">
+    <div class="cam" id="camBox3"><canvas id="cam3"></canvas><span class="st" id="cam3st">감시 중</span><span class="tag">[공장 CCTV <em>화재감지</em>]</span></div>
+  </div>
+
+  <div class="a-grid">
+    <!-- 좌: 장치/달력/알림/계정 -->
+    <div class="stack">
+      <div class="card">
+        <h3>🎥 장치</h3>
+        <select id="camSel"><option selected>공장 CCTV</option></select>
+      </div>
+      <div class="card">
+        <h3>🗓 날짜</h3>
+        <table class="cal">
+          <caption>7월 2026</caption>
+          <tr><th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th></tr>
+          <tr><td class="dim">28</td><td class="dim">29</td><td class="dim">30</td><td>1</td><td>2</td><td>3</td><td>4</td></tr>
+          <tr><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td></tr>
+          <tr><td>12</td><td>13</td><td>14</td><td>15</td><td class="today">16</td><td>17</td><td>18</td></tr>
+          <tr><td>19</td><td>20</td><td>21</td><td>22</td><td>23</td><td>24</td><td>25</td></tr>
+          <tr><td>26</td><td>27</td><td>28</td><td>29</td><td>30</td><td>31</td><td class="dim">1</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>🔕 알림 설정</h3>
+        <div style="font-size:12px;color:var(--sub);margin-bottom:8px">알림 끄기 종료 시간 <b style="color:var(--ink)">18시 10분</b></div>
+        <button class="btn w100">알림 끄기 해제</button>
+      </div>
+      <div class="card acct">
+        <div class="avatar">E1</div>
+        <div><div class="nm">E101 관리자</div><div class="rl">safety@bbiyong.io · 관제 권한</div></div>
+      </div>
+    </div>
+
+    <!-- 중: 감지 상태 + 신뢰도 + 조작 패널 -->
+    <div class="stack">
+      <div class="card">
+        <h3><span class="dot"></span>화재 감지</h3>
+        <div class="detrow">
+            <div class="det sel" id="det3"><div class="cn">공장 CCTV</div>
+                <table><tr><td>불꽃</td><td class="v" id="c3fs">미발생</td><td class="v mono" id="c3f">0%</td></tr>
+                    <tr><td>연기</td><td class="v" id="c3ss">미발생</td><td class="v mono" id="c3s">0%</td></tr></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>📈 신뢰도 <span style="font-weight:400;color:var(--sub);font-size:11px;margin-left:6px">— 불꽃 · 24시간</span></h3>
+        <div class="chart"><canvas id="conf"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>🕹 CCTV 카메라 조작 패널 <span style="font-weight:400;color:var(--sub);font-size:11px;margin-left:6px" id="ptzTarget">— CAM 3</span></h3>
+        <div class="ptz">
+        <!-- WASD 설명 영역 -->
+        <div class="wasd-desc">
+            <div><b>W</b> - 상</div>
+            <div><b>S</b> - 하</div>
+            <div><b>A</b> - 좌</div>
+            <div><b>D</b> - 우</div>
+        </div>
+        
+        <!-- WASD 조작 패드 -->
+        <div class="pad" style="grid-template-rows: repeat(2, 40px);">
+            <span></span><button id="btnW" data-p="u">W</button><span></span>
+            <button id="btnA" data-p="l">A</button><button id="btnS" data-p="d">S</button><button id="btnD" data-p="r">D</button>
+        </div>
+        
+        <div class="zoom"><button data-z="1">＋</button><button data-z="-1">－</button></div>
+        <div class="meta">팬/틸트: <b class="mono" id="ptv">0, 0</b><br>줌: <b class="mono" id="zv">1.0×</b><br>프리셋: 하역장 게이트</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우: 확대 + 경보 -->
+    <div class="stack">
+      <div class="card">
+        <h3>🔍 화재 의심 카메라 확대</h3>
+        <div class="bigthumb"><canvas id="bigcam"></canvas><span class="cap" id="bigcap">CAM 3 — C구역 하역장</span></div>
+      </div>
+      <div class="card livecard">
+        <h3>🔔 실시간 경보 알림 <span class="live" id="liveB">대기</span></h3>
+        <div class="chan"><div><b>🖥</b>관제 PC</div><div><b>📱</b>모바일</div><div><b>💬</b>알림창</div><div><b>🔊</b>경보음</div></div>
+      </div>
+      <div class="card">
+        <h3>📋 경보 알림</h3>
+        <ul class="alist" id="alistA"></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 화면 4 · 순찰 로봇 관제 ================= -->
+<section id="pgB" class="page">
+  <div class="b-grid">
+    <div class="panel" id="pStatus">
+      <h3>순찰 로봇 상태 <span class="k">ORINCA FLEET</span></h3>
+      <div class="stat-card">
+        <div class="rid">🤖 오린카-01 <span class="pillm" id="modePill">순찰 중</span></div>
+        <div class="kv"><span>배터리</span><b class="mono" id="batv">87%</b></div>
+        <div class="bar"><i id="batbar" style="width:87%"></i></div>
+        <div class="kv"><span>속도</span><b class="mono" id="spdv">0.6 m/s</b></div>
+        <div class="kv"><span>E-STOP</span><b style="color:var(--dk-green)">RELEASED</b></div>
+        <div class="kv"><span>통신 감도</span><b style="color:var(--dk-green)">양호 · 43ms</b></div>
+        <div class="kv"><span>추론 FPS</span><b class="mono">8.0</b></div>
+      </div>
+      <div class="env">
+        <div><b class="mono" id="envT">24.6°C</b><span>주변 온도</span></div>
+        <div><b class="mono" id="envH">41%</b><span>습도</span></div>
+      </div>
+      <h3 style="margin-top:12px">이벤트 로그</h3>
+      <ul class="elog" id="elogB"></ul>
+    </div>
+
+    <div class="panel" id="pCam">
+      <h3>순찰 로봇 카메라 <span class="k">FRONT · YOLOv8</span></h3>
+      <div class="vwrap"><canvas id="rcam"></canvas>
+        <span class="hud" id="rcamHud">MODE PATROL · MAP OK</span>
+        <span class="rec">● REC 00:00</span></div>
+    </div>
+
+    <div class="panel" id="pThermal">
+      <h3>순찰 로봇 열화상 카메라 <span class="k">THERMAL</span></h3>
+      <div class="vwrap"><canvas id="tcam"></canvas>
+        <span class="hud2" id="tMax">MAX 38.4°C</span></div>
+    </div>
+
+    <div class="panel" id="pControl">
+      <h3>순찰 로봇 수동 조작 패널 <span class="k">MANUAL CONTROL</span></h3>
+      <div class="ctl">
+        <div class="col">
+          <div class="sw">로봇 제어 <span class="swb on" id="swPower" role="switch" aria-checked="true" tabindex="0"><i></i></span></div>
+          <button class="dbtn stop" id="btnStop">■ 긴급 정지</button>
+          <button class="dbtn" id="btnReset">↺ 리셋</button>
+          <button class="dbtn go" id="btnReturn">⇤ 순찰 복귀</button>
+        </div>
+        <div>
+            <div class="wasd-desc" style="font-size:12px; color:#aaa; margin-bottom:10px;">WASD 조작: W(전진) S(후진) A(좌회전) D(우회전)</div>
+          <div class="dpad">
+            <span></span><button data-m="0,-1" aria-label="전진">▲</button><span></span>
+            <button data-m="-1,0" aria-label="좌">◀</button><button class="c" id="dpStop">STOP</button><button data-m="1,0" aria-label="우">▶</button>
+            <span></span><button data-m="0,1" aria-label="후진">▼</button><span></span>
+          </div>
+          <div class="seg" style="margin-top:12px">
+            <button id="segPat" class="on">순찰 모드</button>
+            <button id="segMan">수동 모드</button>
+          </div>
+          <div class="gotor">
+            <select id="gotoSel">
+              <option value="4,0">분전반 A</option>
+              <option value="11,4">분전반 B</option>
+              <option value="7,7">전기 판넬 C</option>
+              <option value="8,2">C구역 하역장 (CCTV)</option>
+            </select>
+            <button class="dbtn go" id="btnGoto">지점 이동</button>
+          </div>
+        </div>
+        <div class="col">
+          <div class="sw">전조등 <span class="swb" id="swLight" role="switch" aria-checked="false" tabindex="0"><i></i></span></div>
+          <div class="sw">초음파 <span class="swb on" id="swUltra" role="switch" aria-checked="true" tabindex="0"><i></i></span></div>
+          <div class="sw">경고 방송 <span class="swb" id="swSiren" role="switch" aria-checked="false" tabindex="0"><i></i></span></div>
+          <div class="kv" style="margin-top:6px"><span>볼륨</span><b class="mono">100</b></div>
+          <input type="range" min="0" max="100" value="100" aria-label="볼륨">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="pMap">
+      <h3>2D 맵핑 지도 <span class="k">SLAM · LiDAR</span></h3>
+      <div class="vwrap" style="background:#0a0c10"><canvas id="map2d"></canvas></div>
+      <div class="maplegend">
+        <span><i style="background:#3ddc97"></i>오린카</span>
+        <span><i style="background:#3f8fe0"></i>순찰 경로</span>
+        <span><i style="background:#f5a623"></i>분전반</span>
+        <span><i style="background:#ff5648"></i>화재 지점</span>
+        <span><i style="background:#59637a"></i>장애물(SLAM)</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+
+/* ---------- 탭 ---------- */
+const pgA=$("pgA"), pgB=$("pgB");
+$("tabA").onclick=()=>{pgA.classList.add("on");pgB.classList.remove("on");$("tabA").classList.add("on");$("tabB").classList.remove("on");};
+$("tabB").onclick=()=>{pgB.classList.add("on");pgA.classList.remove("on");$("tabB").classList.add("on");$("tabA").classList.remove("on");};
+
+/* ---------- 공통 상태 ---------- */
+let t=0, fireOn=false, heatOn=false;
+const now=()=>{const d=new Date();return d.toTimeString().slice(0,8);};
+setInterval(()=>{$("clock").textContent=new Date().toLocaleString("ko-KR",{hour12:false});},1000);
+
+function pushLog(kind,msg){
+  const li=`<li class="${kind}" style="cursor:pointer;" onclick="document.getElementById('tabB').click()"><span class="t mono">${now()}</span><b>${msg}</b></li>`;
+  $("alistA").insertAdjacentHTML("afterbegin",li);
+  $("elogB").insertAdjacentHTML("afterbegin",li);
+}
+pushLog("ok","시스템 시작 — 상시 순찰 개시");
+
+/* ---------- 캔버스 리사이즈 ---------- */
+function fit(cv){const r=cv.parentElement.getBoundingClientRect();
+  if(cv.width!==Math.round(r.width)||cv.height!==Math.round(r.height)){cv.width=Math.round(r.width);cv.height=Math.round(r.height);}
+  return cv.getContext("2d");}
+
+/* ---------- CCTV 장면 ---------- */
+const ptz={x:0,y:0,z:1};
+function drawScene(cv,seed,withFire,off){
+  const g=fit(cv),Wc=cv.width,Hc=cv.height;
+  g.save();
+  if(off){g.translate(-off.x*6,-off.y*6);g.translate(Wc/2,Hc/2);g.scale(off.z,off.z);g.translate(-Wc/2,-Hc/2);}
+  // 바닥/벽
+  const sky=g.createLinearGradient(0,0,0,Hc);
+  sky.addColorStop(0,"#1a2027");sky.addColorStop(.55,"#242c35");sky.addColorStop(1,"#39434e");
+  g.fillStyle=sky;g.fillRect(-Wc,-Hc,Wc*3,Hc*3);
+  // 조명 밴드
+  g.fillStyle="rgba(255,245,220,.05)";
+  for(let i=0;i<3;i++)g.fillRect(Wc*.12+i*Wc*.3,0,Wc*.05,Hc);
+  // 설비 실루엣 (시드별 배치)
+  const rng=s=>{s=Math.sin(s)*10000;return s-Math.floor(s);};
+  g.fillStyle="#171c22";
+  for(let i=0;i<5;i++){
+    const x=rng(seed+i)*Wc*.85, w=30+rng(seed+i*7)*70, h=Hc*(.3+rng(seed+i*13)*.35);
+    g.fillRect(x,Hc-h-Hc*.12,w,h);
+    g.fillStyle="#11151a";g.fillRect(x+4,Hc-h-Hc*.12+6,w-8,8);g.fillStyle="#171c22";
+  }
+  // 바닥 라인
+  g.strokeStyle="rgba(255,255,255,.08)";g.lineWidth=1;
+  g.beginPath();g.moveTo(0,Hc*.88);g.lineTo(Wc,Hc*.88);g.stroke();
+  // 화재
+  if(withFire&&fireOn){
+    const fx=Wc*.62,fy=Hc*.8;
+    for(let i=0;i<6;i++){
+      const fl=Math.sin(t*.25+i*1.7)*.5+.5;
+      g.fillStyle=`rgba(${230+i*4},${90+i*22},30,${.5+fl*.4})`;
+      g.beginPath();
+      g.moveTo(fx-14+i*5,fy);
+      g.quadraticCurveTo(fx-6+i*5+Math.sin(t*.3+i)*6,fy-46-fl*26,fx+i*5,fy);
+      g.fill();
+    }
+    // 연기
+    g.fillStyle="rgba(150,150,155,.16)";
+    for(let i=0;i<4;i++){
+      g.beginPath();g.arc(fx+Math.sin(t*.05+i)*14,fy-70-i*24-(t*.4%40),14+i*7,0,7);g.fill();
+    }
+    // YOLO 박스
+    g.strokeStyle="#ff5648";g.lineWidth=2;g.strokeRect(fx-34,fy-84,86,90);
+    g.fillStyle="#ff5648";g.fillRect(fx-34,fy-100,96,16);
+    g.fillStyle="#fff";g.font="700 11px Consolas,monospace";g.fillText("fire 0.62 · smoke 0.31",fx-30,fy-88);
+  }
+  g.restore();
+  // 노이즈 스캔라인
+  g.fillStyle="rgba(255,255,255,.025)";
+  for(let y=(t%4);y<Hc;y+=4)g.fillRect(0,y,Wc,1);
+}
+
+/* ---------- 신뢰도 차트 ---------- */
+const conf=new Array(48).fill(0);
+function drawConf(){
+  const cv=$("conf"),g=fit(cv),Wc=cv.width,Hc=cv.height;
+  g.clearRect(0,0,Wc,Hc);
+  const L=34,B=18,T=8;
+  g.strokeStyle="#e7ebf1";g.lineWidth=1;g.fillStyle="#98a2b0";g.font="10px Consolas,monospace";
+  for(let i=0;i<=5;i++){const y=T+(Hc-T-B)*(1-i/5);
+    g.beginPath();g.moveTo(L,y);g.lineTo(Wc-6,y);g.stroke();
+    g.fillText(String(i*20).padStart(3," "),4,y+3);}
+  for(let i=0;i<=8;i++){const x=L+(Wc-L-10)*i/8;
+    g.fillText((i*3).toString().padStart(2,"0")+":00",x-10,Hc-4);}
+  g.strokeStyle="#e2483d";g.lineWidth=2;g.beginPath();
+  conf.forEach((v,i)=>{
+    const x=L+(Wc-L-10)*i/(conf.length-1), y=T+(Hc-T-B)*(1-v/100);
+    i?g.lineTo(x,y):g.moveTo(x,y);
+  });
+  g.stroke();
+  const li=conf.findIndex(v=>v>5);
+  if(li>=0){const x=L+(Wc-L-10)*li/(conf.length-1),y=T+(Hc-T-B)*(1-conf[li]/100);
+    g.fillStyle="#e2483d";g.beginPath();g.arc(x,y,3.5,0,7);g.fill();}
+}
+
+/* ---------- 로봇 지도 (SLAM 스타일) ---------- */
+const MAP=[[0,0,0,0,0,0,0,0,0,0,0,0],[0,1,1,0,1,1,1,0,1,1,0,0],[0,1,0,0,0,0,1,0,0,1,0,0],[0,0,0,1,1,0,0,0,0,0,0,0],[0,1,0,1,0,0,1,1,0,1,1,0],[0,1,0,0,0,1,1,0,0,0,1,0],[0,0,0,1,0,0,0,0,1,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0]];
+const RS=MAP.length,CSn=MAP[0].length;
+function astar(s,g2){
+  const key=(c,r)=>r*CSn+c,open=[{c:s.c,r:s.r,g:0,f:0,p:null}],gsc={};gsc[key(s.c,s.r)]=0;
+  const H=(c,r)=>Math.abs(c-g2.c)+Math.abs(r-g2.r);
+  while(open.length){open.sort((a,b)=>a.f-b.f);const cur=open.shift();
+    if(cur.c===g2.c&&cur.r===g2.r){const o=[];let n=cur;while(n){o.unshift({c:n.c,r:n.r});n=n.p;}return o;}
+    for(const[dc,dr]of[[1,0],[-1,0],[0,1],[0,-1]]){const nc=cur.c+dc,nr=cur.r+dr;
+      if(nc<0||nr<0||nc>=CSn||nr>=RS||MAP[nr][nc]===1)continue;
+      const ng=cur.g+1,k=key(nc,nr);
+      if(gsc[k]===undefined||ng<gsc[k]){gsc[k]=ng;open.push({c:nc,r:nr,g:ng,f:ng+H(nc,nr),p:cur});}}}
+  return [];
+}
+const loop=(()=>{const w=[{c:0,r:0},{c:11,r:0},{c:11,r:7},{c:0,r:7}];let o=[{...w[0]}];
+  for(let i=1;i<=w.length;i++){const p=astar(w[i-1],w[i%w.length]);for(let j=1;j<p.length;j++)o.push(p[j]);}
+  o.pop();return o;})();
+const PANELS=[{c:4,r:0,n:"A"},{c:11,r:4,n:"B"},{c:7,r:7,n:"C"}];
+const FIREC={c:8,r:2};
+const bot={pos:{c:0,r:0},seg:0,prog:0,mode:"patrol",route:[],rs:0,rp:0};
+const speed={patrol:.02,fast:.05};
+function botStep(){
+  if(bot.mode==="patrol"){
+    const a=loop[bot.seg],b=loop[(bot.seg+1)%loop.length];
+    bot.prog+=speed.patrol;const p=Math.min(1,bot.prog);
+    bot.pos={c:a.c+(b.c-a.c)*p,r:a.r+(b.r-a.r)*p};
+    if(p>=1){bot.prog=0;bot.seg=(bot.seg+1)%loop.length;}
+  }else if(bot.mode==="goto"||bot.mode==="dispatch"){
+    if(bot.route.length<2||bot.rs>=bot.route.length-1){
+      if(bot.mode==="dispatch")return; // 현장 대기
+      return;
+    }
+    const a=bot.route[bot.rs],b=bot.route[bot.rs+1];
+    bot.rp+=speed.fast;const p=Math.min(1,bot.rp);
+    bot.pos={c:a.c+(b.c-a.c)*p,r:a.r+(b.r-a.r)*p};
+    if(p>=1){bot.rp=0;bot.rs++;}
+  }
+}
+function botGoto(cell,mode){
+  const cur={c:Math.round(bot.pos.c),r:Math.round(bot.pos.r)};
+  bot.route=astar(cur,cell);
+  if(mode==="dispatch"&&bot.route.length>1)bot.route=bot.route.slice(0,-1); // 사고 지점 앞에서 정지
+  bot.rs=0;bot.rp=0;bot.mode=mode||"goto";
+}
+function botResume(){
+  let bi=0,bd=1e9;
+  loop.forEach((p,i)=>{const d=Math.abs(p.c-bot.pos.c)+Math.abs(p.r-bot.pos.r);if(d<bd){bd=d;bi=i;}});
+  bot.seg=bi;bot.prog=0;bot.mode="patrol";setMode("순찰 중","");
+}
+function setMode(txt,cls){const p=$("modePill");p.textContent=txt;p.className="pillm "+cls;
+  $("spdv").textContent=(bot.mode==="patrol"?"0.6":(bot.mode==="manual"?"0.0":"1.2"))+" m/s";
+  $("rcamHud").textContent="MODE "+(bot.mode==="patrol"?"PATROL":bot.mode==="dispatch"?"EMERGENCY":bot.mode==="goto"?"GOTO":"MANUAL")+" · MAP OK";}
+
+function drawMap(){
+  const cv=$("map2d"),g=fit(cv),Wc=cv.width,Hc=cv.height;
+  g.fillStyle="#0a0c10";g.fillRect(0,0,Wc,Hc);
+  const m=14,cw=(Wc-m*2)/CSn,ch=(Hc-m*2)/RS;
+  const X=c=>m+c*cw+cw/2, Y=r=>m+r*ch+ch/2;
+  // SLAM 점묘 장애물
+  g.fillStyle="#59637a";
+  for(let r=0;r<RS;r++)for(let c=0;c<CSn;c++)if(MAP[r][c]===1){
+    for(let i=0;i<14;i++){
+      const rx=X(c)-cw/2+((i*37+r*13+c*7)%100)/100*cw, ry=Y(r)-ch/2+((i*61+c*11)%100)/100*ch;
+      g.fillRect(rx,ry,1.6,1.6);
+    }
+    g.strokeStyle="rgba(89,99,122,.35)";g.strokeRect(X(c)-cw/2+2,Y(r)-ch/2+2,cw-4,ch-4);
+  }
+  // 외곽
+  g.strokeStyle="#3a4356";g.lineWidth=1.5;g.strokeRect(m-4,m-4,Wc-m*2+8,Hc-m*2+8);
+  // 순찰 경로
+  g.strokeStyle="rgba(63,143,224,.8)";g.setLineDash([5,4]);g.lineWidth=1.4;g.beginPath();
+  loop.forEach((p,i)=>{i?g.lineTo(X(p.c),Y(p.r)):g.moveTo(X(p.c),Y(p.r));});
+  g.closePath();g.stroke();g.setLineDash([]);
+  // 긴급 경로
+  if((bot.mode==="dispatch"||bot.mode==="goto")&&bot.route.length>1){
+    g.strokeStyle="#22b98a";g.lineWidth=2;g.beginPath();
+    bot.route.forEach((p,i)=>{i?g.lineTo(X(p.c),Y(p.r)):g.moveTo(X(p.c),Y(p.r));});
+    g.stroke();
+  }
+  // 분전반
+  PANELS.forEach(p=>{
+    const hot=heatOn&&p.n==="B";
+    g.fillStyle=hot?"#ff5648":"#f5a623";
+    g.fillRect(X(p.c)-4,Y(p.r)-4,8,8);
+    g.fillStyle=hot?"#ff8d85":"#c9c2ae";g.font="9px Consolas,monospace";
+    g.fillText(p.n+(hot?" 71°C!":""),X(p.c)+6,Y(p.r)+3);
+  });
+  // 화재
+  if(fireOn){
+    const fx=X(FIREC.c),fy=Y(FIREC.r),pu=(Math.sin(t*.15)+1)/2;
+    g.strokeStyle=`rgba(255,86,72,${.4+pu*.5})`;g.lineWidth=2;
+    g.beginPath();g.arc(fx,fy,7+pu*5,0,7);g.stroke();
+    g.fillStyle="#ff5648";g.beginPath();g.arc(fx,fy,3.5,0,7);g.fill();
+  }
+  // 로봇
+  const rx=X(bot.pos.c),ry=Y(bot.pos.r);
+  g.fillStyle="rgba(61,220,151,.18)";g.beginPath();g.arc(rx,ry,10,0,7);g.fill();
+  g.fillStyle="#3ddc97";g.beginPath();g.arc(rx,ry,4.5,0,7);g.fill();
+}
+
+/* ---------- 로봇 전면 카메라 ---------- */
+function drawRcam(){
+  const cv=$("rcam"),g=fit(cv),Wc=cv.width,Hc=cv.height;
+  const grd=g.createLinearGradient(0,0,0,Hc);
+  grd.addColorStop(0,"#12161c");grd.addColorStop(.55,"#1b212a");grd.addColorStop(1,"#2b333e");
+  g.fillStyle=grd;g.fillRect(0,0,Wc,Hc);
+  // 원근 통로
+  const vx=Wc/2,vy=Hc*.52;
+  g.strokeStyle="rgba(255,255,255,.1)";g.lineWidth=1;
+  [[0,Hc],[Wc,Hc],[0,Hc*.8],[Wc,Hc*.8]].forEach(([x,y])=>{g.beginPath();g.moveTo(x,y);g.lineTo(vx,vy);g.stroke();});
+  g.strokeStyle="rgba(255,255,255,.06)";
+  for(let i=1;i<5;i++){const yy=Hc-(Hc-vy)* (1-1/(1+i*.55));g.beginPath();g.moveTo(Wc*.5-(vx)*(1/(1+i*.55)),yy);g.lineTo(Wc*.5+(vx)*(1/(1+i*.55)),yy);g.stroke();}
+  // 우측 벽 분전반
+  g.fillStyle="#39424e";g.fillRect(Wc*.74,Hc*.38,Wc*.11,Hc*.3);
+  g.fillStyle="#f5a623";g.fillRect(Wc*.74,Hc*.38,Wc*.11,5);
+  g.fillStyle="#2b323c";g.fillRect(Wc*.755,Hc*.44,Wc*.08,Hc*.18);
+  // 천장 조명 흐름 (주행감)
+  g.fillStyle="rgba(255,245,215,.10)";
+  for(let i=0;i<3;i++){const p=((t*.006+i/3)%1);const s=1/(0.4+p*2.2);
+    g.fillRect(vx-40*s,vy-30*s- p*8, 80*s, 8*s);}
+  // 화재 원거리(출동 중) 표시
+  if(fireOn&&(bot.mode==="dispatch")){
+    const p=Math.min(1,bot.rs/Math.max(1,bot.route.length-1));
+    const s=.4+p*1.6, fx=vx+Wc*.06*s, fy=vy+Hc*.05*s;
+    for(let i=0;i<4;i++){const fl=Math.sin(t*.3+i)*.5+.5;
+      g.fillStyle=`rgba(235,${110+i*25},30,${.5+fl*.4})`;
+      g.beginPath();g.moveTo(fx-8*s+i*4*s,fy+14*s);
+      g.quadraticCurveTo(fx-3*s+i*4*s,fy-18*s*(1+fl*.5),fx+2*s+i*4*s,fy+14*s);g.fill();}
+    g.strokeStyle="#ff5648";g.lineWidth=2;g.strokeRect(fx-14*s,fy-20*s,34*s,36*s);
+    g.fillStyle="#ff5648";g.font="700 11px Consolas,monospace";
+    g.fillText("fire "+(0.55+p*.35).toFixed(2),fx-14*s,fy-24*s);
+  }
+  g.fillStyle="rgba(255,255,255,.03)";
+  for(let y=t%3;y<Hc;y+=3)g.fillRect(0,y,Wc,1);
+}
+
+/* ---------- 열화상 ---------- */
+let heatT=38.4;
+function drawThermal(){
+  const cv=$("tcam"),g=fit(cv),Wc=cv.width,Hc=cv.height;
+  const base=g.createLinearGradient(0,0,Wc,Hc);
+  base.addColorStop(0,"#0a1c66");base.addColorStop(.45,"#0e5aa0");base.addColorStop(.75,"#1c9a7a");base.addColorStop(1,"#7fb63a");
+  g.fillStyle=base;g.fillRect(0,0,Wc,Hc);
+  // 배관/설비 잔열
+  for(let i=0;i<4;i++){
+    const bx=Wc*(.15+i*.2),by=Hc*(.6+Math.sin(i*2)*.1);
+    const rg=g.createRadialGradient(bx,by,4,bx,by,50);
+    rg.addColorStop(0,"rgba(240,220,60,.55)");rg.addColorStop(1,"rgba(240,220,60,0)");
+    g.fillStyle=rg;g.beginPath();g.arc(bx,by,50,0,7);g.fill();
+  }
+  // 핫스팟(분전반 B)
+  const target=heatOn?71.3:38.4;
+  heatT+=(target-heatT)*.02;
+  const hx=Wc*.66,hy=Hc*.42,pw=(heatT-30)/45;
+  const hg=g.createRadialGradient(hx,hy,2,hx,hy,34+pw*46);
+  hg.addColorStop(0,`rgba(255,${Math.max(30,200-pw*180)},30,.95)`);
+  hg.addColorStop(.5,"rgba(255,140,20,.55)");hg.addColorStop(1,"rgba(255,140,20,0)");
+  g.fillStyle=hg;g.beginPath();g.arc(hx,hy,34+pw*46,0,7);g.fill();
+  // 측정 박스
+  g.strokeStyle="#fff";g.lineWidth=1.4;g.strokeRect(hx-26,hy-22,52,44);
+  g.fillStyle="#fff";g.font="700 12px Consolas,monospace";
+  g.fillText(heatT.toFixed(1)+"°C",hx-24,hy-28);
+  const mx=$("tMax");
+  mx.textContent="MAX "+heatT.toFixed(1)+"°C"+(heatT>60?" ⚠ 임계 초과":"");
+  mx.style.color=heatT>60?"#ff8d85":(heatT>52?"#ffd9a8":"#b9ffe0");
+  // 팔레트 바
+  const pb=g.createLinearGradient(0,0,0,Hc*.5);
+  pb.addColorStop(0,"#ff3018");pb.addColorStop(.5,"#ffd52e");pb.addColorStop(1,"#0a1c66");
+  g.fillStyle=pb;g.fillRect(Wc-16,Hc*.25,8,Hc*.5);
+}
+
+/* ---------- 확대 화면 ---------- */
+function drawBig(){
+  const cv=$("bigcam"),g=fit(cv);
+  const src=$("cam3");
+  if(src.width>0)g.drawImage(src,0,0,cv.width,cv.height);
+}
+
+/* ---------- 이벤트 데모 ---------- */
+function setFire(on){
+  fireOn=on;
+  $("demoFire").classList.toggle("on",on);
+  $("demoFire").textContent=on?"화재 종료(조치 완료)":"화재 발생";
+  $("camBox3").classList.toggle("alert",on);
+  $("cam3st").textContent=on?"⚠ 화재 감지":"감시 중";
+  $("liveB").textContent=on?"LIVE":"대기";
+  $("c3fs").textContent=on?"발생":"미발생";$("c3fs").className=on?"v fire":"v";
+  $("c3f").textContent=on?"62.5%":"0%";$("c3f").className=on?"v mono fire":"v mono";
+  $("c3ss").textContent=on?"발생":"미발생";$("c3s").textContent=on?"31.2%":"0%";
+  const h=new Date().getHours()*2+(new Date().getMinutes()>=30?1:0);
+  if(on){conf.fill(0);conf[h]=62.5;
+    pushLog("fire","CAM3 화재 탐지 (불꽃 62.5%) — 오린카 긴급 출동 지시");
+    botGoto(FIREC,"dispatch");setMode("긴급 출동","emg");
+  }else{
+    pushLog("ok","화재 조치 완료 — 오린카 순찰 복귀");
+    botResume();
+  }
+}
+function setHeat(on){
+  heatOn=on;
+  $("demoHeat").classList.toggle("on",on);
+  $("demoHeat").textContent=on?"과열 해제(조치 완료)":"분전반 과열";
+  if(on)pushLog("heat","분전반 B 표면온도 임계 초과 (71.3°C > 60°C) — 과열 자동 경보");
+  else pushLog("ok","분전반 B 온도 정상 복귀 — 경보 해제");
+}
+$("demoFire").onclick=()=>setFire(!fireOn);
+$("demoHeat").onclick=()=>setHeat(!heatOn);
+
+/* ---------- 화면 3 컨트롤 ---------- */
+$("sndTgl").onclick=e=>{const b=e.currentTarget,on=b.classList.toggle("on");b.textContent=on?"🔔 경보음 ON":"🔕 경보음 OFF";};
+document.querySelectorAll(".pad button").forEach(b=>b.onclick=()=>{
+  const p=b.dataset.p;
+  if(p==="c"){ptz.x=0;ptz.y=0;ptz.z=1;}
+  if(p==="u")ptz.y-=1; if(p==="d")ptz.y+=1; if(p==="l")ptz.x-=1; if(p==="r")ptz.x+=1;
+  $("ptv").textContent=ptz.x+", "+ptz.y;$("zv").textContent=ptz.z.toFixed(1)+"×";
+});
+document.querySelectorAll(".zoom button").forEach(b=>b.onclick=()=>{
+  ptz.z=Math.min(2.4,Math.max(1,ptz.z+ .2*Number(b.dataset.z)));
+  $("zv").textContent=ptz.z.toFixed(1)+"×";
+});
+
+/* ---------- 화면 4 컨트롤 ---------- */
+function segSet(man){
+  $("segMan").classList.toggle("on",man);$("segPat").classList.toggle("on",!man);
+  if(man){bot.mode="manual";setMode("수동 조작","man");}
+  else botResume();
+}
+$("segMan").onclick=()=>segSet(true);
+$("segPat").onclick=()=>segSet(false);
+document.querySelectorAll(".dpad button[data-m]").forEach(b=>b.onclick=()=>{
+  if(bot.mode!=="manual")segSet(true);
+  const [dc,dr]=b.dataset.m.split(",").map(Number);
+  const nc=Math.round(bot.pos.c)+dc,nr=Math.round(bot.pos.r)+dr;
+  if(nc>=0&&nr>=0&&nc<CSn&&nr<RS&&MAP[nr][nc]===0)bot.pos={c:nc,r:nr};
+});
+$("dpStop").onclick=()=>segSet(true);
+$("btnStop").onclick=()=>{bot.mode="manual";setMode("긴급 정지","emg");pushLog("heat","수동 긴급 정지 (E-STOP)");};
+$("btnReset").onclick=()=>{segSet(true);pushLog("ok","제어 리셋");};
+$("btnReturn").onclick=()=>{botResume();pushLog("ok","순찰 복귀 명령");};
+$("btnGoto").onclick=()=>{
+  const [c,r]=$("gotoSel").value.split(",").map(Number);
+  botGoto({c,r},"goto");setMode("지점 이동","man");
+  pushLog("ok","지점 이동: "+$("gotoSel").selectedOptions[0].textContent);
+};
+document.querySelectorAll(".swb").forEach(s=>{
+  const tg=()=>{const on=s.classList.toggle("on");s.setAttribute("aria-checked",on);};
+  s.onclick=tg; s.onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();tg();}};
+});
+
+/* ---------- WASD 키보드 이벤트 ---------- */
+window.addEventListener('keydown', (e) => {
+  const key = e.key.toLowerCase();
+  const isCCTV = document.getElementById("pgA").classList.contains("on");
+  let targetBtn = null;
+
+  if (isCCTV) {
+    // CCTV 조작 매핑
+    const cctvMap = {'w':'btnW','a':'btnA','s':'btnS','d':'btnD'};
+    targetBtn = document.getElementById(cctvMap[key]);
+  } else {
+    // 로봇 조작 매핑 (data-m 속성으로 버튼 찾기)
+    const robotMap = {'w':'0,-1', 'a':'-1,0', 's':'0,1', 'd':'1,0'};
+    targetBtn = document.querySelector(`button[data-m="${robotMap[key]}"]`);
+  }
+
+  if (targetBtn && !targetBtn.classList.contains('active')) {
+    targetBtn.classList.add('active');
+    targetBtn.click(); // 기존 동작 실행
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  const key = e.key.toLowerCase();
+  const isCCTV = document.getElementById("pgA").classList.contains("on");
+  let targetBtn = null;
+
+  if (isCCTV) {
+    const cctvMap = {'w':'btnW','a':'btnA','s':'btnS','d':'btnD'};
+    targetBtn = document.getElementById(cctvMap[key]);
+  } else {
+    const robotMap = {'w':'0,-1', 'a':'-1,0', 's':'0,1', 'd':'1,0'};
+    targetBtn = document.querySelector(`button[data-m="${robotMap[key]}"]`);
+  }
+
+  if (targetBtn) targetBtn.classList.remove('active');
+});
+
+/* ---------- 메인 루프 ---------- */
+let batt=87, bt=0;
+function tick(){
+  t++;
+  botStep();
+  // 환경값 미세 변동
+  if(t%40===0){
+    $("envT").textContent=(24.6+Math.sin(t*.001)*0.4).toFixed(1)+"°C";
+    $("envH").textContent=Math.round(41+Math.sin(t*.0013)*2)+"%";
+    bt++; if(bt%20===0&&batt>20){batt--; $("batv").textContent=batt+"%"; $("batbar").style.width=batt+"%";}
+  }
+  if(pgA.classList.contains("on")){
+  drawScene($("cam3"),17,true,ptz);
+  drawBig(); drawConf();
+    }else{
+    drawRcam(); drawThermal(); drawMap();
+  }
+  requestAnimationFrame(tick);
+}
+tick();
+})();
+window.addEventListener('DOMContentLoaded', () => {
+    // 기존 화살표 버튼의 텍스트를 WASD로 교체합니다.
+    const btnMap = {
+        'data-m="0,-1"': "W", // 전진
+        'data-m="-1,0"': "A", // 좌[cite: 1]
+        'data-m="0,1"': "S",  // 후진[cite: 1]
+        'data-m="1,0"': "D"   // 우[cite: 1]
+    };
+
+    for (const [attr, text] of Object.entries(btnMap)) {
+        const btn = document.querySelector(`button[${attr}]`);
+        if (btn) btn.textContent = text;
+    }
+});
+</script>
+</body>
+</html>

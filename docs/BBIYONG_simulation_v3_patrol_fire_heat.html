@@ -66,8 +66,8 @@
 <div id="vsplit" class="overlay"></div>
 <div id="hsplit" class="overlay"></div>
 <div id="vlabL" class="overlay vlab">관제 전체 뷰</div>
-<div id="vlabR" class="overlay vlab">오린카 추적 뷰</div>
-<div id="vlabP" class="overlay vlab">오린카 시점 뷰 (탑재 카메라)</div>
+<div id="vlabR" class="overlay vlab">삐용 순찰로봇 추적 뷰</div>
+<div id="vlabP" class="overlay vlab">삐용 순찰로봇 시점 뷰 (탑재 카메라)</div>
 
 <div id="topbar" class="overlay">
   <div class="brand">삐용 <small>· 상시 순찰 — 화재·과열 탐지</small></div>
@@ -85,11 +85,11 @@
 <div id="cap" class="overlay">① 지도 기반 자율주행 상시 순찰 — 화재·과열 감시 중</div>
 
 <div id="legend" class="overlay">
-  <span class="k"><span class="cir" style="background:#E0A93B"></span>고정 AI-CCTV (1차 발견자 · 확장)</span>
-  <span class="k"><span class="sw" style="background:#37c08e"></span>오린카 (상시 순찰 · 2차 확인자)</span>
+  <span class="k"><span class="cir" style="background:#E0A93B"></span>고정 CCTV (상시 감시 · 사각지대 존재)</span>
+  <span class="k"><span class="sw" style="background:#37c08e"></span>삐용 순찰로봇 (상시 순찰 · 사각지대 직접 발견·대응)</span>
   <span class="k"><span class="dash"></span>상시 순찰 경로</span>
   <span class="k"><span class="cir" style="background:#22b98a"></span>긴급 출동 최단 경로</span>
-  <span class="k"><span class="sw" style="background:#e24b4a"></span>화재 (CCTV 구역)</span>
+  <span class="k"><span class="sw" style="background:#e24b4a"></span>화재 (CCTV 사각지대 발생)</span>
   <span class="k"><span class="sw" style="background:#7d8695"></span>전기 분전반·판넬 (과열 감시 대상)</span>
   <span class="k"><span class="sw" style="background:#e08c14"></span>열화상 점검 스캔</span>
 </div>
@@ -131,7 +131,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   ];
   const ROWS = MAP.length, COLS = MAP[0].length, CELL = 4;
   const W = COLS*CELL, D = ROWS*CELL;
-  const FIRE = {c:8, r:2};
+  const FIRE = {c:2, r:6}; // CCTV(우상단 코너) 반대편 좌하단 — 카메라 사각지대
   const PATROL_WPS = [{c:0,r:0},{c:11,r:0},{c:11,r:7},{c:0,r:7}];
 
   function cx(c){ return (c - (COLS-1)/2) * CELL; }
@@ -154,7 +154,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   let route=[], seg=0, prog=0, patrolCells=[];
   let t=0, phaseT=0, patrolT=0, incT=0, autoStage=0, resumeIdx=0;
   let scanning=null;                    // 현재 점검 중 분전반
-  const SPEED_PATROL=0.055, SPEED_EMG=0.13;
+  const SPEED_PATROL=0.022, SPEED_EMG=0.06; // 발표용 저속 (순찰·전수 탐색·긴급 출동 모두 느리게)
   const $ = id => document.getElementById(id);
 
   // ---------- A* ----------
@@ -185,6 +185,30 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       for(let j=1;j<p.length;j++) out.push(p[j]);
     }
     out.pop(); return out;
+  }
+  // 웨이포인트들을 A* 로 이어붙여 단위 스텝(인접 셀) 경로로 만든다.
+  function chainPath(wps){
+    let out=[{c:wps[0].c,r:wps[0].r}];
+    for(let i=1;i<wps.length;i++){
+      const p=astar(out[out.length-1], wps[i]);
+      for(let j=1;j<p.length;j++) out.push(p[j]);
+    }
+    return out;
+  }
+  // 상시 순찰 경로 — 두 단계를 순환 반복한다:
+  //   ① 외곽 벽을 따라 한 바퀴 (분전반 A·B·C 가 이 벽면에 부착돼 자연히 점검됨)
+  //   ② 모든 자유 셀을 지그재그(보스트로페돈)로 훑는 사각지대 전수 탐색
+  // 이 배열 하나를 cyclic 하게 반복하면 [외곽 순찰 → 전수 탐색 → 외곽 순찰 → …] 이 무한 반복된다.
+  function buildPatrolRoute(){
+    const perimeter=[{c:0,r:0},{c:COLS-1,r:0},{c:COLS-1,r:ROWS-1},{c:0,r:ROWS-1},{c:0,r:0}];
+    const sweep=[];
+    for(let r=0;r<ROWS;r++){
+      if(r%2===0){ for(let c=0;c<COLS;c++) if(MAP[r][c]===0) sweep.push({c,r}); }
+      else { for(let c=COLS-1;c>=0;c--) if(MAP[r][c]===0) sweep.push({c,r}); }
+    }
+    const cells=chainPath([...perimeter, ...sweep, {c:0,r:0}]);
+    cells.pop(); // 끝의 (0,0) 제거 — 순환 시 첫 셀 (0,0) 과 자연히 이어진다
+    return cells;
   }
   function nearestCell(pos){
     let c=Math.round(pos.x/CELL + (COLS-1)/2), r=Math.round(pos.z/CELL + (ROWS-1)/2);
@@ -353,7 +377,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     // 분전반 3기
     PANELS.forEach(buildPanel);
 
-    // 오린카
+    // 삐용 순찰로봇
     robot=new THREE.Group();
     const chassis=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.9,3),
       new THREE.MeshStandardMaterial({color:COL.robotBody, roughness:0.4, metalness:0.3}));
@@ -374,7 +398,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     scene.add(robot);
 
     // 순찰 루프
-    patrolCells=chainLoop(PATROL_WPS);
+    patrolCells=buildPatrolRoute();
     const ppts=patrolCells.map(p=>new THREE.Vector3(cx(p.c),0.15,cz(p.r)));
     ppts.push(ppts[0].clone());
     patrolLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(ppts),
@@ -427,16 +451,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     patrol:{n:"순찰",c:""}, scan:{n:"열화상 점검",c:"onsite"},
     heatDetect:{n:"과열 탐지",c:"heat"}, heatAlarm:{n:"과열 경보",c:"heat"}, heatVerify:{n:"근접 확인",c:"onsite"},
     detect:{n:"탐지",c:"det"}, command:{n:"지시",c:"det"}, dispatch:{n:"긴급 출동",c:"dispatch"},
-    verify:{n:"근접 확인",c:"onsite"}, resume:{n:"복귀",c:"respond"}
+    verify:{n:"근접 확인",c:"onsite"}, resume:{n:"복귀",c:"respond"},
+    visionDetect:{n:"화재 발견",c:"det"}, alertSend:{n:"경보 전송",c:"dispatch"}
   };
-  const CAP_PATROL="① 지도 기반 자율주행 상시 순찰 — 화재·과열 감시 중";
+  const CAP_PATROL="① 지도 기반 자율주행 상시 순찰 — CCTV 사각지대까지 전 구역 감시 중";
   function setState(s, capText){
     state=s; phaseT=0;
     const p=PILL[s]; const pill=$("state");
     pill.textContent=p.n; pill.className="pill "+p.c;
     if(capText) $("cap").textContent=capText;
-    robot.userData.beacon.visible=(s==="dispatch"||s==="verify"||s==="resume"||s==="heatAlarm"||s==="heatVerify");
-    const fireAlarm=(s==="detect"||s==="command"||s==="dispatch"||s==="verify");
+    robot.userData.beacon.visible=(s==="dispatch"||s==="verify"||s==="resume"||s==="heatAlarm"||s==="heatVerify"||s==="visionDetect"||s==="alertSend");
+    const fireAlarm=(s==="detect"||s==="command"||s==="dispatch"||s==="verify"||s==="visionDetect"||s==="alertSend");
     const heatAlarm=(s==="heatDetect"||s==="heatAlarm"||s==="heatVerify");
     const al=$("alarm");
     al.classList.toggle("on", fireAlarm||heatAlarm);
@@ -450,7 +475,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if(state!=="patrol"||scenario) return;
     scenario="fire"; patrolT=0; incT=0;
     fireGroup.visible=true; ringFire.visible=true;
-    $("cap").textContent="② CCTV 구역에서 화재 발생";
+    $("cap").textContent="① 화재 발생 — 순찰 로봇이 전수 탐색 중 자체 탐지 예정";
     $("btnFire").disabled=true; $("btnHeat").disabled=true;
   }
   function loopIdxOfCell(cell){
@@ -527,8 +552,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       patrolT++;
       // 화재: 잠시 후 CCTV 1차 탐지
       if(scenario==="fire"){
-        incT++;
-        if(incT>80){ setState("detect","③ CCTV 1차 탐지 — 화재·연기 발견, 관제 서버로 경보 (발견자)"); detectLine.visible=true; }
+        // 로봇이 전수 탐색(순찰) 중 화재를 스스로 발견 — AI 비전 카메라 근접 인식
+        const dFire=Math.hypot(robot.position.x-cx(FIRE.c), robot.position.z-cz(FIRE.r));
+        if(dFire < CELL*3.0){
+          robot.rotation.y=Math.atan2(cx(FIRE.c)-robot.position.x, cz(FIRE.r)-robot.position.z);
+          detectLine.visible=false;
+          setState("visionDetect","② 로봇 AI 비전 카메라 화재 의심 포착 — 순찰 중 자체 발견");
+        }
       } else if(scenario===null){
         if(autoStage===0 && patrolT>520){ startFire(); autoStage=1; }
         else if(autoStage===1 && patrolT>520){ startHeat(); autoStage=0; }
@@ -580,29 +610,30 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         patrolT=0;
       }
     }
-    else if(state==="detect"){
-      detectLine.material.opacity=0.4+Math.abs(Math.sin(t*0.2))*0.6;
-      if(phaseT>=110){ setState("command","④ 관제: 우선순위 규칙 적용 — 순찰 중단, 긴급 출동 지시"); }
-    }
-    else if(state==="command"){
-      if(phaseT>=90){
+    else if(state==="visionDetect"){
+      // 로봇 자체 1차 발견 → 근접 정밀 확인 위해 접근
+      if(phaseT>=150){
         beginDispatch(FIRE, true);
-        detectLine.visible=false;
-        setState("dispatch","⑤ 긴급 모드 — 최단 회피 경로로 사고 지점 급파");
+        setState("dispatch","③ 접근 — 근접 정밀 확인 위해 최단 경로로 이동");
       }
     }
     else if(state==="dispatch"){
       const done=moveRoute(SPEED_EMG);
       if(done){
         robot.rotation.y=Math.atan2(cx(FIRE.c)-robot.position.x, cz(FIRE.r)-robot.position.z);
-        setState("verify","⑥ 근접 확인 — 비전 AI × 열화상 이중 판정 (오탐 차단)");
+        setState("verify","④ 근접 확인 — AI 비전 × 열화상 카메라 이중 탐지 (오탐 차단)");
       }
     }
     else if(state==="verify"){
-      if(phaseT>=170){
+      if(phaseT>=220){
+        setState("alertSend","⑤ 이중 탐지 확정 — 관제 서버로 화재 경보 전송");
+      }
+    }
+    else if(state==="alertSend"){
+      if(phaseT>=180){
         fireGroup.visible=false; ringFire.visible=false; scenario=null;
         beginResume();
-        setState("resume","⑦ 스마트 복귀 — 가장 가까운 순찰 지점 합류, 순찰 자동 재개");
+        setState("resume","⑥ 복귀 — 가장 가까운 순찰 지점 합류, 순찰 자동 재개");
       }
     }
     else if(state==="resume"){
@@ -626,7 +657,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     const lookT=robot.position.clone().addScaledVector(fwd,4.5); lookT.y=1.2;
     followLook.lerp(lookT,0.12);
     camR.lookAt(followLook);
-    // 시점 뷰 — 오린카 탑재 카메라
+    // 시점 뷰 — 삐용 순찰로봇 탑재 카메라
     const pPos=robot.position.clone().addScaledVector(fwd,1.4); pPos.y=1.55;
     camP.position.copy(pPos);
     const pTgt=robot.position.clone().addScaledVector(fwd,12); pTgt.y=1.0;

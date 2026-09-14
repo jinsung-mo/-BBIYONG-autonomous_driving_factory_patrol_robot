@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>BBIYONG Web Control STOMP Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; }
+        .card { background: #1e293b; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-width: 700px; margin: auto; }
+        h2 { color: #38bdf8; margin-top: 0; }
+        .log-box { background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 12px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #4ade80; }
+        button { background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-right: 8px; }
+        button:hover { background: #0369a1; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>🤖 삐용(BBIYONG) 웹 관제 STOMP 실시간 수신 테스트</h2>
+        <p>상태: <span id="status" style="color: #f59e0b; font-weight: bold;">연결 중...</span></p>
+        <div>
+            <button onclick="sendDriveCommand('FORWARD')">⬆️ 전진 (W)</button>
+            <button onclick="sendDriveCommand('BACKWARD')">⬇️ 후진 (S)</button>
+            <button onclick="sendDriveCommand('LEFT')">⬅️ 좌회전 (A)</button>
+            <button onclick="sendDriveCommand('RIGHT')">➡️ 우회전 (D)</button>
+            <button onclick="sendDriveCommand('STOP')">🛑 정지 (SPACE)</button>
+        </div>
+        <br>
+        <div class="log-box" id="logBox"></div>
+    </div>
+
+    <script>
+        const logBox = document.getElementById('logBox');
+        const statusEl = document.getElementById('status');
+        let stompClient = null;
+
+        function log(msg) {
+            const time = new Date().toLocaleTimeString();
+            logBox.innerHTML += `[${time}] ${msg}<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function connect() {
+            // Spring STOMP SockJS Endpoint
+            const socket = new SockJS('http://localhost:8080/ws/control');
+            stompClient = Stomp.over(socket);
+
+            stompClient.connect({}, function (frame) {
+                statusEl.innerText = "연결 완료 (STOMP Active)";
+                statusEl.style.color = "#4ade80";
+                log("✅ STOMP 웹소켓 연결 성공! /topic/telemetry 채널 구독 시작...");
+
+                stompClient.subscribe('/topic/telemetry', function (message) {
+                    log("📡 [텔레메트리 수신]: " + message.body);
+                });
+
+                stompClient.subscribe('/topic/events/fire', function (message) {
+                    log("🔥 [화재 경보 수신]: " + message.body);
+                });
+            }, function (error) {
+                statusEl.innerText = "연결 실패";
+                statusEl.style.color = "#ef4444";
+                log("❌ STOMP 연결 에러: " + error);
+            });
+        }
+
+        function sendDriveCommand(direction) {
+            if (!stompClient || !stompClient.connected) {
+                alert("STOMP 소켓이 연결되지 않았습니다.");
+                return;
+            }
+            let linear = 0.0, angular = 0.0;
+            if (direction === 'FORWARD') linear = 0.5;
+            if (direction === 'BACKWARD') linear = -0.5;
+            if (direction === 'LEFT') angular = 0.5;
+            if (direction === 'RIGHT') angular = -0.5;
+
+            const payload = {
+                robot_id: "orinka_01",
+                command: "DRIVE",
+                linear: linear,
+                angular: angular
+            };
+            stompClient.send("/app/control/drive", {}, JSON.stringify(payload));
+            log("🎮 [WASD 수동 조종 전송]: " + JSON.stringify(payload));
+        }
+
+        connect();
+    </script>
+</body>
+</html>
