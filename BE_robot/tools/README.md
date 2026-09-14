@@ -10,13 +10,18 @@
 |---|---|---|
 | `tools/diff_drive/esp32_base_node.py` | `~/calib/` | `/cmd_vel` → ESP32, `/odom` + TF. **시리얼 포트 단독 소유자** |
 | `tools/diff_drive/patrol.py` | `~/calib/` | 라이다 + 카메라 융합 순찰 |
-| `tools/diff_drive/teleop_node.py` | `~/calib/` | 수동 조종 브리지 (명령 파일 경유, 안전 4중) |
+| `tools/diff_drive/teleop_node.py` | 배포 금지 | 퇴역 안내 전용; 영속 `bbiyong_manual_drive_bridge` 사용 |
 | `tools/diff_drive/explore.py` | `~/calib/` | 프런티어 탐사 |
 | `tools/diff_drive/roam.py` · `roam_ros.py` | `~/calib/` | 라이다 단독 주행기 (patrol 이전 세대) |
 | `tools/diff_drive/bench.py` | `~/calib/` | 실험 하네스 (step/sweep/tune/trace) |
 | `tools/diff_drive/odom_check.py` | `~/calib/` | 오도메트리 vs 라이다 교차검증 |
 | `tools/diff_drive/map_snapshot.py` | `~/calib/` | `/map` → PGM 저장 |
 | `tools/diff_drive/straight_test.py` · `deadband.py` | `~/calib/` | 직진성·데드밴드 측정 |
+| `tools/diff_drive/openloop_test.py` | `~/calib/` | **오픈루프 단독 구동 시험** — PID 를 우회해 모터+드라이버만 본다. 교차 배선까지 판정 |
+| `tools/diff_drive/drive_diag.py` | `~/calib/` | **주행로그(`trace.csv`) 분석** — 바퀴별 부호일치·duty 포화·추종비로 원인 후보 제시 |
+| `tools/diff_drive/counts.sh` | `~/calib/` | 엔코더 카운트만 관측 (모터 무동작 — 손으로 돌려도 읽힌다) |
+| `tools/diff_drive/node_stop.sh` | `~/calib/` | `esp32_base_node`·`teleop_node` 만 내려 **시리얼 반환** (라이다·SLAM 은 유지) |
+| `tools/diff_drive/base_relog.sh` | `~/calib/` | `esp32_base_node` 를 **주행로그 켠 채로** 재기동 |
 | `tools/diff_drive/slam_params.yaml` | `~/calib/` | slam_toolbox 설정 (단독 실행용) |
 | `tools/calibration/stack_up.sh` · `stop_all.sh` | `~/calib/` | 스택 기동 · 전부 정지 |
 | `tools/calibration/*.py` | `~/calib/` | 벽거리 · 라이다 오프셋 · 요각 · 엔코더 측정 |

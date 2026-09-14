@@ -41,7 +41,7 @@ def sendMattermostNotification(boolean success, String jiraStatus = '') {
         script: 'git log -1 --pretty=%s 2>/dev/null || true',
         returnStdout: true
     ).trim() ?: '커밋 메시지 정보 없음'
-    def statusText = success ? '[CD] System 배포 성공' : '[CD] System 배포 실패'
+    def statusText = success ? '[CD] 배포 성공' : '[CD] 배포 실패'
     def iconEmoji = success ? ':jenkins1:' : ':angry_jenkins:'
     def text = "## ${iconEmoji} ${statusText}\n" +
         "**대상 브랜치:** `${branch}`\n" +
@@ -78,6 +78,10 @@ pipeline {
     stages {
         stage('Test') {
             steps {
+                dir('FE/bbiyong-react') {
+                    sh 'npm ci'
+                    sh 'npm run build'
+                }
                 dir('BE_system') {
                     sh '''
                         export TEST_DB_PORT=3307
@@ -100,6 +104,7 @@ pipeline {
 
         stage('Deploy') {
             steps {
+                sh 'docker compose -f FE/bbiyong-react/compose.yaml up -d --build'
                 dir('BE_system') {
                     withCredentials([
                         string(
@@ -126,6 +131,15 @@ pipeline {
             steps {
                 sh '''
                     for i in $(seq 1 30); do
+                        if curl -fsS http://127.0.0.1:8082/; then
+                            exit 0
+                        fi
+                        sleep 2
+                    done
+                    exit 1
+                '''
+                sh '''
+                    for i in $(seq 1 30); do
                         if curl -fsS http://127.0.0.1:8081/actuator/health/deployment; then
                             exit 0
                         fi
@@ -145,6 +159,7 @@ pipeline {
             }
         }
         failure {
+            sh 'docker compose -f FE/bbiyong-react/compose.yaml logs --tail=100 || true'
             sh 'docker logs --tail=100 bbiyong-server || true'
             script {
                 sendMattermostNotification(false)

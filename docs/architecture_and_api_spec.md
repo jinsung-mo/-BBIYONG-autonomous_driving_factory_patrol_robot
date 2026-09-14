@@ -110,7 +110,8 @@ flowchart LR
    * 웹 정적 아티팩트(React), 백엔드 REST API(`/api/*`), 웹 관제 웹소켓(`/ws-관제`), 로봇 WSS(`/ws/robot`) 요청을 적절한 내부 포트로 리버스 프록시 라우팅합니다.
 3. **메인 백엔드 (Spring Boot / AWS EC2)**:
    * **로봇 WSS 핸들러 내장**: Nginx로부터 전달받은 WSS 소켓 연결(`/ws/robot`)을 수신하고 명령 및 상태 데이터를 실시간 양방향 송수신합니다.
-   * **자율 경보 수신 및 푸시**: 로봇이 교차검증으로 확정한 화재 이벤트(`EVENT_FIRE`)를 수신하면 즉시 SQLite에 이력을 저장하고 STOMP `/topic/alerts` 로 관제 대시보드에 경보를 브로드캐스트합니다.
+   * **자율 경보 수신 및 푸시**: 로봇이 확정한 화재(`EVENT_FIRE`)·분전반 과열(`EVENT_OVERHEAT`) 이벤트를 수신하면 SQLite에 이력 저장(열화상 이미지 제외) 후 STOMP `/topic/alerts` 로 표준 경보(`AlertMessage`, 과열은 열화상 중계 포함)를 브로드캐스트합니다.
+   * **분전반 점검 상태 관리**: 로봇의 정상 점검(`INSPECTION`)·과열(`EVENT_OVERHEAT`) 리포트로 설비(분전반) 최근 점검 상태(`NORMAL`/`OVER`)·온도를 갱신합니다. (임계 판정은 로봇이 수행, 임계치는 로봇 보유)
    * **제어 명령 중계**: 웹 대시보드가 STOMP `/app/control/*` 로 보낸 제어(`DRIVE`/`SET_MODE`/`ESTOP`/`SAVE_MAP`/`NAVIGATE`)를 검증(`validate`) 후 로봇 WSS 세션으로 중계합니다.
    * **듀얼 영상 중계**: 로봇의 `VIDEO_FRAME`(RGB/열화상)을 STOMP `/topic/video/{robotId}` 로 중계합니다.
    * **상태 캐싱 및 실시간 푸시**: 로봇의 실시간 상태를 자바 내장 메모리(**ConcurrentHashMap**)에 캐싱하여 관리 효율을 높이고, 실시간 데이터와 상태를 웹소켓(STOMP)으로 대시보드에 브로드캐스팅합니다.
@@ -185,6 +186,12 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 {"source": "robot", "type": "EVENT_FIRE", "robot_id": "orinka_01", "confidence": 0.94, "temperature": 58.4, "location": {"x": 15.0, "y": 8.2}, "timestamp": 1781778200}
 ```
 
+#### [MVP] 2-1) 온디맨드 매핑 완료 이벤트 (Robot $\rightarrow$ Spring Boot) — S15P11E101-482
+* **설명**: 관제의 `START_MAPPING`으로 시작한 자율탐색 매핑을 로봇이 끝내면 전송한다. 서버는 수신 원문을 STOMP `/topic/mapping` 으로 relay 한다.
+```json
+{"source": "robot", "type": "EVENT_MAPPING_COMPLETE", "robot_id": "orinka_01", "name": "factory_01", "timestamp": 1781778400}
+```
+
 #### [미확정/Deferred] 3) 2D 도면 매핑 점유 격자 스트리밍 (Robot $\rightarrow$ Spring Boot)
 * ⚠️ **로봇 프로토콜 미지원 항목**: 현재 로봇 명령 계약에는 맵 스트리밍이 없고 `SAVE_MAP`(맵 저장)만 존재한다. 아래 `MAP_UPDATE` occupancy grid 실시간 스트리밍은 **로봇의 맵 상향 스트리밍 능력이 확인된 뒤** 확정한다(현재는 미확정). 확정 시 백엔드가 STOMP `/topic/map` 으로 중계한다.
 ```json
@@ -216,7 +223,16 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 {"command": "DRIVE", "linear": 0.5, "angular": -0.1}
 ```
 
-##### [후속/Deferred] 6) 그 외 로봇 지원 명령 (Spring Boot $\rightarrow$ Robot)
+##### [MVP] 6) 온디맨드 매핑·임계값 명령 (Spring Boot $\rightarrow$ Robot) — S15P11E101-495·482·499
+| command | 페이로드 | 설명 |
+| :--- | :--- | :--- |
+| `START_MAPPING` | `{"command": "START_MAPPING"}` | 자율주행하며 2D 맵 생성 시작(맵 모델링) |
+| `STOP_MAPPING` | `{"command": "STOP_MAPPING"}` | 진행 중인 자율탐색 매핑 중단 |
+| `SET_THRESHOLD` | `{"equipmentId": "panel_A", "threshold": 55.0}` | 설비 과열 임계값을 로봇에 반영(`PUT /api/equipments/{id}` 수정 시 서버가 중계) |
+| `SET_PATROL_ROUTE` | `{"waypoints": [{"seq":0,"x":8.5,"y":3.1,"yaw":0.0,"name":"panel_A"}]}` | 순찰 경로(waypoint 배열) 하달(`POST /api/waypoints/apply` 시 서버가 중계) (S15P11E101-509) |
+| `SET_MAX_SPEED` | `{"maxLinear": 0.5, "maxAngular": 0.5}` | 주행 속도 상한 반영(`PUT /api/settings/drive-speed` 수정 시 서버가 중계) (S15P11E101-512) |
+
+##### [후속/Deferred] 7) 그 외 로봇 지원 명령 (Spring Boot $\rightarrow$ Robot)
 * 로봇 프로토콜에 정의되어 있으나 관제 UI 연결은 MVP 이후.
 
 | command | 페이로드 | 설명 |
@@ -238,10 +254,23 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 | MVP | **POST** | `/api/auth/signup` | 관리자 회원가입 (이메일 기반) | `{"email": "safety@bbiyong.io", "password": "...", "name": "..."}` | `{"status": "SUCCESS", "email": "safety@bbiyong.io"}` |
 | MVP | **POST** | `/api/auth/login` | 관리자 로그인 (이메일 기반) | `{"email": "safety@bbiyong.io", "password": "..."}` | `{"tokenType": "Bearer", "accessToken": "JWT", "role": "ROLE_ADMIN"}` |
 | MVP | **GET** | `/api/robots` | 로봇 목록/상태 요약 조회 | None | `[{"robotId": "orinka_01", "status": "AUTO_PATROL", "battery": 71}]` |
-| MVP | **GET** | `/api/events` | 이상 탐지 이벤트 이력 조회 (SQLite) | `?page=0&size=10` | `{"content": [{"eventId": 1, "type": "FIRE", ...}]}` |
-| 후속 | **PUT** | `/api/equipments/{id}` | 설비(분전반) 경보 임계 온도 설정 | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
+| MVP | **GET** | `/api/events` | 이상 탐지 이벤트 이력 조회 (SQLite) | `?page=0&size=10&type=FIRE` | `{"content": [{"eventId": 1, "type": "FIRE", ...}], "totalElements": 1}` |
+| MVP | **GET** | `/api/equipments` | 분전반 목록·최근 점검 상태 조회 (임계치는 로봇 보유·표시용) | None | `[{"equipmentId": "panel_A", "status": "NORMAL", "lastTemperature": 41.5, "threshold": 55.0}]` |
+| MVP | **POST** | `/api/videos` | 영상 클립 메타데이터 등록 (녹화 주체 내부 호출) | `{"robotId":"...","clipType":"EVENT","storageType":"FILESYSTEM","filePath":"...","startedAt":"..."}` | `{"id":"<uuid>","status":"REGISTERED"}` |
+| MVP | **GET** | `/api/videos` | 영상 아카이브 목록 조회 (필터·페이징, 최근순) | `?robotId=&clipType=&from=&to=&page=0&size=10` | `{"content":[{"id":"<uuid>","clipType":"EVENT","thumbnailUrl":"..."}],"totalElements":1}` |
+| MVP | **GET** | `/api/videos/{id}` | 영상 클립 상세 + 재생 URL | None | `{"id":"<uuid>","playbackUrl":"...","startedAt":"..."}` |
+| MVP | **GET** | `/api/events/{eventId}/video` | 이벤트 연관 클립 목록 | None | `[{"id":"<uuid>","clipType":"EVENT"}]` |
+| MVP | **PUT** | `/api/equipments/{id}` | 설비 임계 온도 수정. 없는 설비는 404, `threshold`는 양수 필수. 수정 시 로봇으로 `SET_THRESHOLD` 중계(S15P11E101-499) | `{"threshold": 55.0}` | `{"status": "SUCCESS"}` |
+| MVP | **PATCH** | `/api/events/{eventId}` | 이벤트 상태 전이 (`UNRESOLVED`→`RESOLVED`) | `{"status": "RESOLVED"}` | `{"status": "SUCCESS"}` |
+| MVP | **POST** | `/api/maps/upload` | 2D SLAM 맵 이미지 업로드(로봇/게이트웨이) | multipart: `file`, `robotId`, `name`, `resolution`, `originX/Y/Yaw` | `{"id":"<uuid>","status":"REGISTERED"}` |
+| MVP | **GET** | `/api/maps` · `/api/maps/latest` · `/api/maps/{id}` | 맵 목록 / 최신 / 상세 (메타 + `imageUrl` + `active`) | `?robotId=` | `{"id":"<uuid>","imageUrl":"...","resolution":0.05,"originX":-10.0,"active":true}` |
+| MVP | **GET** | `/api/maps/{id}/image` | 맵 이미지 바이트 서빙 | None | (image/*) |
+| MVP | **GET/PUT** | `/api/maps/active` · `/api/maps/{id}/active` | 활성 맵 조회 / 지정(단일 활성) (S15P11E101-482) | None | `{"id":"<uuid>","active":true}` |
+| MVP | **DELETE** | `/api/events/{eventId}` | 이벤트(경보) 삭제 — 테스트/더미 정리. 없으면 404 (S15P11E101-511) | None | 204 |
+| MVP | **GET/PUT/POST/DELETE** | `/api/patrol-route` (`/points`, `/points/{id}`, `/apply`) | **순찰 경로(=순서 있는 지점)** 조회/교체 + 지점 추가/삭제 + 로봇 하달(`apply`→`SET_PATROL_ROUTE`). 좌표는 미터/월드. `/api/waypoints`(509)는 동일 데이터 호환 (S15P11E101-509·520) | `{"waypoints":[{"x":8.5,"y":3.1,"yaw":0.0,"name":"panel_A"}]}` | `{"robotId":"orinka_01","count":1,"waypoints":[{"id":"<uuid>","x":8.5,"y":3.1,"seq":0}]}` |
+| MVP | **GET/PUT** | `/api/settings/drive-speed` | 주행 속도 상한 조회/설정(→`SET_MAX_SPEED` 중계) (S15P11E101-512) | `{"maxLinear":0.5,"maxAngular":0.5}` | `{"maxLinear":0.5,"maxAngular":0.5,"delivered":true}` |
 
-> **인증 주의**: 회원가입/로그인은 이메일 기반이며, 로그인 성공 시 JWT를 발급합니다. (인가 필터 적용은 후속 — 현재는 엔드포인트 오픈)
+> **인증**: 회원가입/로그인은 이메일 기반. **JWT 인증·인가 필터 적용됨(S15P11E101-401)** — `/api/auth/**` 공개, 그 외 `/api/**`는 `Authorization: Bearer <JWT>` 필수(미인증 401). STOMP CONNECT도 JWT 필수(S15P11E101-418).
 
 ---
 
@@ -250,8 +279,10 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
 * **엔드포인트**: `/ws-관제`(및 `/ws/control`, SockJS 지원), app prefix `/app`, broker prefix `/topic`
 * **구독 토픽 (Sub, `/topic`)**:
   * `/topic/robots`: 실시간 로봇 텔레메트리(위치, `status`, 배터리, 속도, E-STOP, 통신 지연, 추론 FPS) 갱신
-  * `/topic/alerts`: 로봇이 교차검증으로 확정한 화재 경보 실시간 푸시(`source: ROBOT`)
+  * `/topic/alerts`: 로봇이 확정한 **화재(FIRE)·분전반 과열(OVERHEAT)** 경보 통합 푸시(표준 `AlertMessage`, `source: ROBOT`). 과열은 `equipmentId`/`threshold`/`thermalImage`(열화상 base64, 중계만·미저장) 포함
   * `/topic/video/{robotId}`: 로봇 듀얼 카메라 프레임 중계 — `channel`(`FRONT`/`THERMAL`)로 구분되는 base64 JPEG 프레임
+  * `/topic/mapping`: 온디맨드 매핑 완료(`EVENT_MAPPING_COMPLETE`) relay (S15P11E101-482)
+  * `/topic/nav/{robotId}`: 로봇 `MAP`(2D 점유격자 RLE)·`NAV_LIVE`(pose·scan) 원문 중계 (로봇 지원 시)
   * `/topic/map` *(미확정/후속)*: 로봇 맵 스트리밍 능력 확인 시 2D 점유 격자 중계
 * **발행 목적지 (Pub, `/app/control/*`)** — 백엔드가 payload를 검증(`validate`) 후 로봇 WSS 명령으로 중계. `robot_id` 는 payload에 포함(기본 `orinka_01`):
   * `/app/control/drive` → `DRIVE` (수동 주행, `manual` 모드에서 유효)
@@ -262,7 +293,7 @@ AWS 인프라 환경 및 실제 공장/네트워크 보안 요구사항을 반�
     ```json
     {"robot_id": "orinka_01", "command": "SET_MODE", "mode": "autonomy"}
     ```
-  * `/app/control/operation` → `SAVE_MAP`(`name`) 또는 `NAVIGATE`(`x`,`y`,`yaw`) *(후속)*
+  * `/app/control/operation` → `START_MAPPING` / `STOP_MAPPING` / `SAVE_MAP`(`name`) / `NAVIGATE`(`x`,`y`,`yaw`)
 
 ---
 

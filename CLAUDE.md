@@ -26,12 +26,67 @@ When performing work in this repository, you MUST follow these specific conventi
   ```
 * **Configuration**: Read `.ai_jira_config.json` or `.gemini_jira_config.json` in the root folder for URL, email, api token, and project key.
 
+### 1-1. Ticket-First Workflow (No Ticket, No Work)
+
+**⚠️ CRITICAL RULE**: Before writing ANY code or starting ANY work, you MUST create Jira tickets first.
+
+**Workflow:**
+1. **User requests a feature/task** → Analyze requirements
+2. **Check if matching Story exists**:
+   - If NO matching Story exists → **Create Story first** (parent = Epic)
+   - If Story exists → Proceed to step 3
+3. **Create Task** (linked to Story via "Relates to")
+4. **Report Jira ticket key to user** (e.g., "Created S15P11E101-XXX")
+5. **Create Git branch** `[prefix]/[JiraTicketId]-[task-name]`
+6. **Start coding**
+
+**Example:**
+```
+User: "로봇 제어 WebSocket 기능 구현해줘"
+
+AI checks: Is there a "로봇 제어" Story?
+- NO → Create Story first:
+  - Story: "[Feat][BE] 로봇 제어" (parent = Epic)
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to Story)
+- YES → Create Task only:
+  - Task: "[Feat][BE] WebSocket 핸들러 구현" (Relates to existing Story)
+
+Report: "Created S15P11E101-123 (Story) and S15P11E101-124 (Task)"
+Branch: feat/S15P11E101-124-websocket-handler
+```
+
+**Never start coding without a Jira ticket ID!**
+
 ### 2. Git & Branching Conventions
 * **Development Target Branches**: `fe/main`, `be_system/main`, `be_robot/main`, `ai/main`
 * **Production Release Branch**: `main`
 * **Branch Names**: `[prefix]/[JiraTicketId]-[task-name]` (e.g. `feat/S15P11E101-144-login`)
 * **Commit Messages**: `[JiraTicketId] [prefix]: [Module] commit message` (e.g. `[S15P11E101-144] feat: [BE] 회원가입 API 구현`)
 * **MR flow**: Always target the part main branch (e.g. `be_system/main`) rather than release `main`.
-* **Mandatory MR Description Output**: Whenever pushing code or guiding MR creation, the AI agent MUST automatically generate and output a fully populated MR description markdown block (with Jira Ticket URL, Context, To-Do items, Definition of Done, and Reviewer Notes) in the final response.
+* **Branch Cleanup Rule**: After MR is merged, always delete the feature branch locally (`git branch -D [branch-name]`) and remotely (GitLab UI or `git push origin --delete [branch-name]`).
+* **Mandatory MR Description Output**: Whenever pushing code or guiding MR creation, the AI agent MUST automatically generate and output a fully populated MR description markdown block in the following format:
+
+```markdown
+## 관련 Jira 티켓
+[S15P11E101-XXX](https://ssafy.atlassian.net/browse/S15P11E101-XXX)
+
+## 개요 (Context)
+- ...
+
+## 작업 상세 내용 (To-Do)
+- [ ] ...
+- [ ] ...
+
+## 완료 기준 (Definition of Done)
+- [ ] ...
+- [ ] ...
+
+## Reviewer Notes
+- ...
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
 
 For more details on team automation, refer to [AI.md](file:///C:/Users/SSAFY/Desktop/PRODUCE_E101/S15P11E101/AI.md).

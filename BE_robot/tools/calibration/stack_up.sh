@@ -30,7 +30,8 @@ sleep 3
 
 # Use the versioned project configuration deployed to ~/calib. The vendor
 # install YAML previously restored clockwise (mirrored) LaserScan angles on
-# every restart.
+# every restart. The backward physical mounting is represented by laser_yaw in
+# esp32_base_node.py, not by changing these scan-order parameters.
 PARAMS="$HOME/calib/ydlidar.yaml"
 up ydlidar ros2 run ydlidar_ros2_driver ydlidar_ros2_driver_node \
     --ros-args --params-file "$PARAMS" -r scan:=/scan_raw

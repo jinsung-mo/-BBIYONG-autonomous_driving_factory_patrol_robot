@@ -1,0 +1,69 @@
+{
+  "after": {
+    "metrics/mAP50(B)": 0.7624,
+    "metrics/mAP50-95(B)": 0.43454,
+    "metrics/precision(B)": 0.77882,
+    "metrics/recall(B)": 0.69985,
+    "test/box_loss": 1.40803,
+    "test/cls_loss": 1.03909,
+    "test/dfl_loss": 0.01631
+  },
+  "after_definition": "best.pt evaluated on the same test split; checkpoint selected using validation data",
+  "after_fitness": 0.43454,
+  "before": {
+    "metrics/mAP50(B)": 0.00235,
+    "metrics/mAP50-95(B)": 0.00085,
+    "metrics/precision(B)": 0.00104,
+    "metrics/recall(B)": 0.31513,
+    "test/box_loss": 1.8532,
+    "test/cls_loss": 68.97952,
+    "test/dfl_loss": 0.02386
+  },
+  "before_definition": "Pretrained weights loaded into the initialized two-class smoke/fire model, evaluated on test before the first optimizer step",
+  "best_epoch": 76,
+  "comparison": [
+    {
+      "after": 1.40803,
+      "before": 1.8532,
+      "delta": -0.44517000000000007,
+      "metric": "test/box_loss"
+    },
+    {
+      "after": 1.03909,
+      "before": 68.97952,
+      "delta": -67.94042999999999,
+      "metric": "test/cls_loss"
+    },
+    {
+      "after": 0.01631,
+      "before": 0.02386,
+      "delta": -0.007549999999999998,
+      "metric": "test/dfl_loss"
+    },
+    {
+      "after": 0.77882,
+      "before": 0.00104,
+      "delta": 0.7777799999999999,
+      "metric": "metrics/precision(B)"
+    },
+    {
+      "after": 0.69985,
+      "before": 0.31513,
+      "delta": 0.38471999999999995,
+      "metric": "metrics/recall(B)"
+    },
+    {
+      "after": 0.7624,
+      "before": 0.00235,
+      "delta": 0.76005,
+      "metric": "metrics/mAP50(B)"
+    },
+    {
+      "after": 0.43454,
+      "before": 0.00085,
+      "delta": 0.43368999999999996,
+      "metric": "metrics/mAP50-95(B)"
+    }
+  ],
+  "comparison_split": "test"
+}

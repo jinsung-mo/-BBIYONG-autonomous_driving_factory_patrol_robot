@@ -29,9 +29,11 @@ from nav_protocol import (
     classify_cells,
     encode_patch,
     encode_runs,
+    robot_view,
 )
 
 SCAN_STRIDE = 4
+POSE_STALE_S = 0.5
 
 
 def atomic_json(path, payload):
@@ -127,6 +129,12 @@ class NavBridge(Node):
             except Exception:
                 continue
             rotation = transform.transform.rotation
+            stamp = (
+                float(transform.header.stamp.sec)
+                + float(transform.header.stamp.nanosec) / 1_000_000_000
+            )
+            now = self.get_clock().now().nanoseconds / 1_000_000_000
+            age = max(0.0, now - stamp) if stamp > 0 else None
             return {
                 "frame": parent,
                 "x": transform.transform.translation.x,
@@ -135,15 +143,20 @@ class NavBridge(Node):
                     2 * (rotation.w * rotation.z),
                     1 - 2 * (rotation.z * rotation.z),
                 ),
+                "stamp": stamp or None,
+                "age": age,
+                "stale": age is None or age > POSE_STALE_S,
             }
         return None
 
     def dump_live(self):
+        pose = self.pose()
         payload = {
             "schema_version": SCHEMA_VERSION,
             "t": time.time(),
             "map_sequence": self.map_sequence,
-            "pose": self.pose(),
+            "pose": pose,
+            "view": robot_view(pose),
             "scan": None,
         }
         if self.scan_msg is not None:

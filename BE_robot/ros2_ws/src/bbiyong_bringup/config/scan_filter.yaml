@@ -13,10 +13,11 @@ scan_to_scan_filter_chain:
         upper_replacement_value: .inf
 
     # The 2026-07-27 stationary profile found only 21% valid returns and
-    # 367 mm variation in this fixed sector. In-place filtering preserves
-    # LaserScan indexing and timing.
+    # 367 mm variation in this sensor-fixed sector. Its angles remain unchanged
+    # when the complete LiDAR is mounted backward; the TF rotates the scan into
+    # base_link. In-place filtering preserves LaserScan indexing and timing.
     filter2:
-      name: unstable_rear_left_sector
+      name: unstable_sensor_sector
       type: laser_filters/LaserScanAngularBoundsFilterInPlace
       params:
         lower_angle: -1.832596  # -105 degrees

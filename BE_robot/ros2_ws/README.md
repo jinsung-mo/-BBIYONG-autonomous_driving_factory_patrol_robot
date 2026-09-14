@@ -213,11 +213,56 @@ ros2 topic pub --once /bbiyong/estop std_msgs/msg/Bool "{data: true}"
 실차 wheel odom, 측정 차량 설정, 생성 Nav2 설정, 실제 motor adapter가 모두 준비된 뒤 실행한다.
 
 ```bash
-ros2 launch bbiyong_bringup exploration.launch.py \
-  vehicle_config:=/home/e101/bbiyong_ros2_ws/config/vehicle.yaml \
-  nav2_params:=/home/e101/bbiyong_ros2_ws/generated/nav2.yaml \
-  odom_source:=wheel \
-  map_output:=/home/e101/maps/auto_factory
+bbiyong mapping-runtime /home/e101/bbiyong_ros2_ws/generated/nav2.yaml
+```
+
+This persistent runtime owns Nav2, Collision Monitor, exactly one command mux,
+the control-state authority, and the guarded manual-drive bridge. Do not run the
+retired `tools/teleop_node.py` beside it; publishing directly to final
+`/cmd_vel` is forbidden.
+
+Manual cloud commands are file-backed and enter only `/cmd_vel/manual`. The
+bridge applies finite-value checks, speed limits, acceleration ramps, a command
+deadman, and a directional LiDAR stop before the mux. The runtime starts in
+`disabled` with e-stop engaged; arming is always explicit.
+
+Backend ownership changes use an observable zero-command boundary. The cloud
+orchestrator atomically disarms the manual drive file, selects `disabled`,
+cancels the previous mission, waits 0.15 seconds, and only then grants manual or
+autonomy control. Override the settling interval only for commissioning with
+`ORINCAR_CONTROL_HANDOFF_SETTLE_SECONDS` (valid range: 0 to 2 seconds).
+
+For saved-map scouting, stop the mapping session through its owner and run:
+
+```bash
+bbiyong scouting-runtime /home/e101/maps/factory.yaml
+```
+
+This starts map-server and AMCL without duplicating the externally owned
+sensors/odometry stack. The scouting guard keeps motion stopped until exactly
+one `/map` publisher, one `map -> odom` authority, active lifecycle nodes, a
+valid `/amcl_pose`, and `map -> base_link` TF are present. It never kills
+`slam_toolbox`; the operator must stop that mapping session first.
+
+Before hardware rollout, follow
+[`docs/PHASE7_COMMISSIONING.md`](docs/PHASE7_COMMISSIONING.md). The `bbiyong
+commission-check`, `bbiyong collect-evidence`, and `bbiyong release` commands
+support non-moving checks, redacted evidence, immutable deployment, and atomic
+rollback. Actual movement remains an attended post-rebuild activity.
+
+With the scouting runtime healthy, `bbiyong patrol <route.json>` starts the short-lived
+`FollowWaypoints` mission. It never publishes velocity directly. It waits for
+`autonomy`, pauses/cancels on manual, disabled, e-stop, or SIGTERM, retains the
+last unfinished waypoint for resume, reports missed indexes, and optionally
+loops. Route replacement cancels the active goal and starts the validated new
+route. `bbiyong navigate-goal <x> <y> [yaw]` preempts patrol through the
+navigation orchestrator and uses `NavigateToPose`.
+
+Keep that terminal running. In another terminal, start the short-lived mission:
+
+```bash
+bbiyong explore /home/e101/maps/auto_factory
+bbiyong arm-autonomy
 ```
 
 동작 순서:

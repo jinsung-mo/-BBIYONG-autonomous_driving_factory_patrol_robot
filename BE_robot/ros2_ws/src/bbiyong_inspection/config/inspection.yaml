@@ -1,0 +1,56 @@
+bbiyong_apriltag_detector:
+  ros__parameters:
+    dashboard_file: /tmp/orincar_cam.json
+    camera_frame: camera_optical_frame
+    detections_topic: /apriltag/detections
+    tag_family: tag36h11
+    tag_size_m: 0.12
+    poll_hz: 2.0
+    max_frame_age_sec: 1.5
+    # Same current estimate used by camera_node.py; replace after FOV calibration.
+    camera_hfov_deg: 48.0
+    min_stable_frames: 3
+    stability_timeout_sec: 1.25
+    max_center_jump_px: 24.0
+
+bbiyong_wall_ping_projector:
+  ros__parameters:
+    detections_topic: /apriltag/detections
+    manual_target_topic: /inspection/manual_target
+    candidate_topic: /inspection/candidates
+    map_topic: /map
+    map_frame: map
+    base_frame: base_link
+    map_id: active-map
+    max_ray_range_m: 8.0
+    occupied_threshold: 65
+    stand_off_m: 0.6
+    robot_clearance_m: 0.32
+    lateral_search_m: 0.8
+    manual_snap_radius_m: 0.30
+    tf_timeout_sec: 0.20
+
+bbiyong_inspection_point_manager:
+  ros__parameters:
+    map_id: active-map
+    storage_file: ~/.local/state/bbiyong/inspection_points.json
+    # Candidate confirmation is explicit by default. This prevents an
+    # uncalibrated camera or map from silently creating patrol destinations.
+    auto_confirm_apriltag: false
+    auto_confirm_manual: false
+    max_points: 500
+    max_pending: 100
+
+bbiyong_inspection_patrol:
+  ros__parameters:
+    map_frame: map
+    map_id: active-map
+    loop_route: false
+    goal_timeout_sec: 180.0
+    cancel_timeout_sec: 3.0
+    inspection_wait_sec: 2.0
+    # The camera inspector is a later node. Until then, arrival plus the
+    # viewpoint yaw and this bounded dwell completes a point.
+    require_inspection_result: false
+    skip_failed_points: true
+    max_consecutive_failures: 3

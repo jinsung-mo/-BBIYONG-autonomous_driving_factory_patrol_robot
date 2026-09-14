@@ -1,8 +1,10 @@
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
@@ -10,6 +12,7 @@ def generate_launch_description():
     nav2_share = get_package_share_directory("nav2_bringup")
     return LaunchDescription([
         DeclareLaunchArgument("map", description="absolute path to saved map YAML"),
+        DeclareLaunchArgument("start_sensors", default_value="true"),
         DeclareLaunchArgument("vehicle_config", default_value=f"{share}/config/vehicle.example.yaml"),
         DeclareLaunchArgument("ydlidar_params", default_value=f"{share}/config/ydlidar.yaml"),
         DeclareLaunchArgument("scan_filter_params", default_value=f"{share}/config/scan_filter.yaml"),
@@ -20,8 +23,13 @@ def generate_launch_description():
         DeclareLaunchArgument("publish_scan_compat", default_value="true"),
         DeclareLaunchArgument("publish_laser_tf", default_value="true"),
         DeclareLaunchArgument("allow_unmeasured_lidar", default_value="false"),
+        DeclareLaunchArgument(
+            "scouting_state_file",
+            default_value="/tmp/bbiyong_scouting_session.json",
+        ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(f"{share}/launch/sensors_odom.launch.py"),
+            condition=IfCondition(LaunchConfiguration("start_sensors")),
             launch_arguments={
                 "vehicle_config": LaunchConfiguration("vehicle_config"),
                 "ydlidar_params": LaunchConfiguration("ydlidar_params"),
@@ -43,5 +51,21 @@ def generate_launch_description():
                 "use_composition": "False",
                 "autostart": "true",
             }.items(),
+        ),
+        # The readiness guard belongs to the localization session rather than
+        # to the boot script.  map_mode.sh tears this whole provider unit down
+        # when it switches to mapping, so the guard cannot survive into a
+        # mapping run and e-stop it -- its _fail path publishes estop_request.
+        # No on_exit=Shutdown here: a guard that gives up must not take
+        # localization down with it.
+        Node(
+            package="bbiyong_bringup",
+            executable="scouting_guard",
+            name="bbiyong_scouting_guard",
+            output="screen",
+            parameters=[{
+                "map_file": LaunchConfiguration("map"),
+                "state_file": LaunchConfiguration("scouting_state_file"),
+            }],
         ),
     ])

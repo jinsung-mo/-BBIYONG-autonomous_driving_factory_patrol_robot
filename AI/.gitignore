@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# D-Fire archives, prepared datasets, and generated dataset metadata
+data/*
+!data/.gitkeep
+!data/README.md
+
+# Downloaded weights and training/export outputs
+*.pt
+*.onnx
+*.engine
+artifacts/
+runs/
+wandb/
