@@ -3,6 +3,12 @@
   "method": "Original embedded images copied; selected animations and video resized and encoded for README. Transformations recorded per asset.",
   "assets": [
     {
+      "file": "hero.svg",
+      "source": "Created for this repository README",
+      "bytes": 4468,
+      "sha256": "f49e948c88f3c76328b615947ee88efe83d198e782e22b63c6752e63ea791ee5"
+    },
+    {
       "file": "robot-concept.png",
       "source": "ppt/media/image1.png",
       "slides": [

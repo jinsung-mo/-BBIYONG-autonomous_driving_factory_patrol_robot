@@ -1,0 +1,73 @@
+<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">BBIYONG autonomous fire patrol robot</title>
+  <desc id="desc">A dark navy cover with a minimal patrol robot, a map route, and the BBIYONG project title.</desc>
+  <defs>
+    <linearGradient id="bg" x1="42" y1="18" x2="1139" y2="404" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#12152B"/>
+      <stop offset="0.52" stop-color="#242752"/>
+      <stop offset="1" stop-color="#343369"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="760" y1="83" x2="1040" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8EE9FF"/>
+      <stop offset="1" stop-color="#A69CFF"/>
+    </linearGradient>
+    <linearGradient id="body" x1="824" y1="151" x2="982" y2="293" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E8EBFF"/>
+    </linearGradient>
+    <filter id="shadow" x="748" y="116" width="322" height="250" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#080A1C" flood-opacity="0.45"/>
+    </filter>
+    <filter id="glow" x="760" y="12" width="374" height="374" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="38"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="420" rx="28" fill="url(#bg)"/>
+  <circle cx="947" cy="199" r="112" fill="#756DF0" fill-opacity="0.20" filter="url(#glow)"/>
+  <circle cx="1130" cy="54" r="120" fill="#62D7F2" fill-opacity="0.08"/>
+  <circle cx="56" cy="390" r="122" fill="#8D7CFF" fill-opacity="0.07"/>
+
+  <g opacity="0.26" stroke="#B9BFFF" stroke-width="2">
+    <path d="M682 80H744V126H706V176H762"/>
+    <path d="M1080 120H1138V180H1094V232H1158"/>
+    <path d="M704 340H758V314H792"/>
+  </g>
+  <g fill="#B9BFFF">
+    <circle cx="682" cy="80" r="5" fill-opacity="0.50"/>
+    <circle cx="762" cy="176" r="5" fill-opacity="0.50"/>
+    <circle cx="1080" cy="120" r="5" fill-opacity="0.50"/>
+    <circle cx="1158" cy="232" r="5" fill-opacity="0.50"/>
+    <circle cx="704" cy="340" r="5" fill-opacity="0.50"/>
+  </g>
+
+  <text x="78" y="94" fill="#9DA6D8" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" letter-spacing="3.5">AUTONOMOUS SAFETY PATROL</text>
+  <text x="74" y="194" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="800" letter-spacing="-2">BBIYONG</text>
+  <rect x="78" y="224" width="64" height="5" rx="2.5" fill="url(#accent)"/>
+  <text x="78" y="272" fill="#D7DAF5" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="500">Factory fire detection and control center</text>
+  <text x="78" y="315" fill="#969CC8" font-family="Arial, Helvetica, sans-serif" font-size="18">ROS 2  ·  Edge AI  ·  Real-time monitoring</text>
+
+  <g filter="url(#shadow)">
+    <ellipse cx="921" cy="308" rx="118" ry="27" fill="#090B20" fill-opacity="0.48"/>
+    <path d="M804 193C804 169.804 822.804 151 846 151H978C1001.2 151 1020 169.804 1020 193V269C1020 292.196 1001.2 311 978 311H846C822.804 311 804 292.196 804 269V193Z" fill="url(#body)"/>
+    <path d="M804 211H1020V269C1020 292.196 1001.2 311 978 311H846C822.804 311 804 292.196 804 269V211Z" fill="#D9DCF2"/>
+    <rect x="823" y="187" width="68" height="51" rx="15" fill="#252A4D"/>
+    <circle cx="842" cy="212" r="9" fill="#8EE9FF"/>
+    <circle cx="872" cy="212" r="9" fill="#A69CFF"/>
+    <rect x="924" y="177" width="78" height="43" rx="13" fill="#252A4D"/>
+    <rect x="938" y="190" width="50" height="8" rx="4" fill="#8EE9FF" fill-opacity="0.76"/>
+    <rect x="938" y="203" width="34" height="5" rx="2.5" fill="#A69CFF" fill-opacity="0.68"/>
+    <path d="M876 151V124H952V151" fill="#D9DCF2"/>
+    <ellipse cx="914" cy="124" rx="43" ry="13" fill="#24294A"/>
+    <ellipse cx="914" cy="119" rx="30" ry="9" fill="#68709F"/>
+    <circle cx="836" cy="297" r="28" fill="#191D38"/>
+    <circle cx="836" cy="297" r="14" fill="#515879"/>
+    <circle cx="988" cy="297" r="28" fill="#191D38"/>
+    <circle cx="988" cy="297" r="14" fill="#515879"/>
+    <rect x="896" y="266" width="32" height="7" rx="3.5" fill="#8E94BB"/>
+  </g>
+
+  <path d="M763 318C708 292 709 233 751 216C777 205 797 217 811 233" stroke="url(#accent)" stroke-width="4" stroke-linecap="round" stroke-dasharray="7 11"/>
+  <circle cx="763" cy="318" r="8" fill="#A69CFF"/>
+  <circle cx="751" cy="216" r="8" fill="#8EE9FF"/>
+</svg>
