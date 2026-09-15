@@ -38,14 +38,9 @@
 
 **삐용은 로봇의 자율 순찰부터 화재 징후 감지, 웹 관제와 이벤트 기록까지 연결한 시스템입니다.** 사람이 상주하지 않는 공장에서 고정된 카메라만으로 확인하기 어려운 공간과 설비 주변을 살펴보기 위해 만들었습니다.
 
-> **01 · 탐색과 순찰**<br/>
-> LiDAR로 공간을 파악하고, 등록된 점검 지점과 아직 살펴보지 않은 구역을 순찰합니다.
-
-> **02 · 화재 징후 확인**<br/>
-> RGB 영상에서 불꽃과 연기를 탐지하고, 열화상 정보를 함께 확인합니다.
-
-> **03 · 관제와 대응**<br/>
-> 운영자는 웹에서 로봇의 위치·영상·경보를 보고 수동 제어와 이벤트 확인을 수행합니다.
+- **탐색과 순찰** - LiDAR로 지도를 만들고 점검 지점과 미탐색 구역을 순찰합니다.
+- **화재 감지** - RGB 영상에서 불꽃과 연기를 찾고 열화상으로 한 번 더 확인합니다.
+- **관제와 대응** - 웹에서 로봇 위치, 영상, 경보를 확인하고 필요하면 직접 조종합니다.
 
 ### 핵심 결과
 
@@ -53,7 +48,7 @@
 | :--- | :--- | :--- |
 | 실내 장애물 환경에서 이동 시연 | 지도·영상·제어·이벤트 이력 연결 | **33.37 → 70.60 FPS · 2.12배** |
 
-AI 수치는 동일 장치·FP16 정밀도에서 측정한 영상 처리 파이프라인 기준입니다. 웹 영상의 재생 속도를 의미하지 않습니다. [측정 조건과 결과](AI/deployment/fire_smoke/README.md#verified-jetson-result-2026-08-03)
+성능 수치는 같은 장치와 FP16 조건에서 측정한 AI 파이프라인 결과입니다. [측정 조건](AI/deployment/fire_smoke/README.md#verified-jetson-result-2026-08-03)
 
 <a id="demo"></a>
 ## 실제로 움직이는 삐용
@@ -67,9 +62,9 @@ AI 수치는 동일 장치·FP16 정밀도에서 측정한 영상 처리 파이�
   <sub>이미지를 누르면 20초 MP4 영상을 볼 수 있습니다 · 약 0.5 MB</sub>
 </p>
 
-## 로봇과 현장을 잇는 관제 화면
+## 관제 화면
 
-운영자는 생성된 지도를 확인하고, 화재 경보가 발생하면 이벤트 상세 화면에서 관련 기록과 영상을 살펴봅니다.
+생성된 지도에서 로봇 위치를 확인하고, 화재 경보가 발생하면 관련 기록과 영상을 조회할 수 있습니다.
 
 <table>
   <tr>
@@ -86,7 +81,7 @@ AI 수치는 동일 장치·FP16 정밀도에서 측정한 영상 처리 파이�
   </tr>
 </table>
 
-<sub>관제 화면과 아래 GIF는 팀 최종 발표 자료입니다. 지도와 이벤트 값은 발표 당시 데모 데이터입니다.</sub>
+<sub>관제 화면과 GIF는 최종 발표 자료를 사용했습니다. 화면의 지도와 이벤트 값은 발표 당시 데모 데이터입니다.</sub>
 
 ### 더 많은 기능과 시연
 
@@ -157,7 +152,7 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 
 #### 이벤트 이력과 상세 확인
 
-발생한 이벤트를 목록에서 조회하고, 상세 화면에서 관련 기록과 영상을 확인합니다. 발표 자료의 이벤트 목록 개요와 후속 목록 상태를 함께 담았습니다.
+발생한 이벤트를 목록에서 조회하고 상세 화면에서 기록과 영상을 확인합니다.
 
 ![이벤트 이력 전체 목록을 보여주는 관제 화면](docs/assets/readme/event-log-overview.png)
 
@@ -178,7 +173,7 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 <a id="team"></a>
 ## 팀 구성
 
-관제 웹, 서버, 로봇·AI, 인프라를 나누어 개발한 6인 팀 프로젝트입니다.
+관제 웹, 서버, 로봇·AI, 인프라를 나누어 개발했습니다.
 
 | 이름 | 담당 |
 | --- | --- |
@@ -194,14 +189,14 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 <a id="engineering"></a>
 ## 설계와 기술적 성과
 
-| 구현 과제 | 적용한 방법 | 확인할 수 있는 결과 |
+| 구현 과제 | 적용한 방법 | 결과 |
 | --- | --- | --- |
 | 로봇 안에서 빠르게 화재 영상을 분석하기 | 학습 모델을 ONNX로 변환하고 TensorRT FP16으로 실행 | 동일 FP16 기준 파이프라인 처리량 약 2.12배 |
 | 지도를 만들고 점검 지점까지 이동하기 | 지도 생성·위치 추정·경로 주행을 ROS 2와 Nav2로 연결 | 지도 기반 탐색과 점검 지점 순찰 |
 | 영상과 탐지 정보를 함께 보여주기 | 영상 전송과 상태·제어 통신을 분리하고 시간 보정 설정 적용 | 영상과 탐지 결과의 도착 시간 차이를 처리하는 구조 |
 
 <details>
-<summary><strong>성능 수치와 구현 과정 보기</strong> — 측정 조건·주행 구조·영상 처리</summary>
+<summary><strong>성능 수치와 구현 과정</strong> - 측정 조건, 주행 구조, 영상 처리</summary>
 
 ### Jetson에서의 AI 추론 최적화
 
@@ -213,7 +208,7 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 | PyTorch FP16 | 24.744 ms | 29.970 ms | 33.37 FPS |
 | TensorRT FP16 | **10.510 ms** | **14.170 ms** | **70.60 FPS** |
 
-측정 기준: 2026-08-03, Jetson Orin, CUDA 12.6, TensorRT 10.3.0, 입력 640×640, batch 1. 같은 JPEG 40장을 5회 반복한 200프레임 기준입니다. 이 값은 **AI 추론 파이프라인 성능**이며 웹 영상의 송출 FPS나 전체 관제 지연을 의미하지 않습니다. [벤치마크 기록과 재현 방법](AI/deployment/fire_smoke/README.md#verified-jetson-result-2026-08-03)
+측정 환경은 Jetson Orin, CUDA 12.6, TensorRT 10.3.0이며 입력 크기는 640×640, batch는 1입니다. JPEG 40장을 5회 반복해 총 200프레임을 측정했습니다. 표의 FPS는 AI 추론 파이프라인 성능입니다. [벤치마크 재현 방법](AI/deployment/fire_smoke/README.md#verified-jetson-result-2026-08-03)
 
 ### 지도·위치 추정·주행의 연결
 
@@ -235,7 +230,7 @@ SLAM Toolbox로 지도를 만들고, 저장된 지도에서 AMCL로 위치를 �
 로봇이 현장 정보를 수집하면 서버가 이를 기록하고 관제 웹에 전달합니다. 운영자는 웹에서 상황을 확인하고 로봇에 명령을 보냅니다.
 
 <details>
-<summary><strong>시스템 연결 구조 보기</strong> — 웹·서버·로봇이 정보를 주고받는 방식</summary>
+<summary><strong>시스템 연결 구조</strong> - 웹, 서버, 로봇 간 통신</summary>
 
 ```mermaid
 flowchart LR
@@ -256,10 +251,10 @@ flowchart LR
 
 ### 기술 스택
 
-**화면 · 서버와 DB · 영상 · AI · 로봇 · 인프라**가 함께 동작합니다. 궁금한 분야를 클릭하면 사용 기술과 역할을 볼 수 있습니다.
+분야별 세부 기술은 아래 항목을 열어 확인할 수 있습니다.
 
 <details>
-<summary><strong>관제 화면</strong> — 사람이 보고 조작하는 웹</summary>
+<summary><strong>관제 화면</strong> - 웹 UI와 지도 시각화</summary>
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
@@ -270,7 +265,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><strong>서버와 데이터베이스</strong> — 사용자·로봇·이벤트 기록 관리</summary>
+<summary><strong>서버와 데이터베이스</strong> - API, 인증, 데이터 저장</summary>
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
@@ -289,7 +284,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><strong>실시간 통신과 영상</strong> — 현장 상황을 화면으로 전달</summary>
+<summary><strong>실시간 통신과 영상</strong> - 상태, 제어 명령, 카메라 영상</summary>
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
@@ -300,7 +295,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><strong>AI와 자율주행</strong> — 화재를 감지하고 길을 찾는 기술</summary>
+<summary><strong>AI와 자율주행</strong> - 화재 감지, 지도 작성, 경로 주행</summary>
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
@@ -313,7 +308,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><strong>로봇 하드웨어</strong> — 보고 움직이는 실제 장치</summary>
+<summary><strong>로봇 하드웨어</strong> - 연산 장치, 센서, 구동부</summary>
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
@@ -323,7 +318,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><strong>인프라와 개발 도구</strong> — 서비스 배포·운영·품질 관리</summary>
+<summary><strong>인프라와 개발 도구</strong> - 배포, 빌드, 테스트</summary>
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
@@ -336,9 +331,9 @@ flowchart LR
 </details>
 
 <details>
-<summary><strong>기술 스택 확인 근거</strong> — 의존성과 설정 파일</summary>
+<summary><strong>기술 스택 확인 근거</strong> - 의존성과 설정 파일</summary>
 
-버전은 저장소 설정 기준이며, CUDA·TensorRT는 기록된 Jetson 벤치마크 환경 기준입니다.
+버전은 저장소 설정을 기준으로 적었습니다. CUDA와 TensorRT 버전은 Jetson 벤치마크 환경 기준입니다.
 
 - [웹 의존성](FE/bbiyong-react/package.json) · [웹 통신·영상 설정](FE/bbiyong-react/src/live/config.ts)
 - [서버 의존성](BE_system/build.gradle) · [운영 DB·파일 저장 설정](BE_system/compose.yaml) · [로컬 DB 기본 설정](BE_system/src/main/resources/application.properties)
@@ -353,7 +348,7 @@ flowchart LR
 개발 환경에서 직접 실행하려면 아래 안내를 펼쳐보세요. 전체 기능을 사용하려면 관제 서버와 로봇 장치가 필요합니다.
 
 <details>
-<summary><strong>관제 웹 실행 — 개발 서버와 연결 설정</strong></summary>
+<summary><strong>관제 웹 실행</strong> - 개발 서버와 연결 설정</summary>
 
 Node.js와 npm을 설치한 뒤 실행합니다.
 
@@ -375,7 +370,7 @@ VITE_WS_URL=ws://localhost:8080/ws/control
 </details>
 
 <details>
-<summary><strong>관제 서버 실행 — Java와 데이터베이스 설정</strong></summary>
+<summary><strong>관제 서버 실행</strong> - Java와 데이터베이스 설정</summary>
 
 Java 17과 저장소의 Gradle Wrapper를 사용합니다. 다음 환경변수를 설정한 뒤 `BE_system`에서 실행합니다.
 
@@ -395,7 +390,7 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 </details>
 
 <details>
-<summary><strong>로봇·AI 실행 — 장치 설정과 모델 준비</strong></summary>
+<summary><strong>로봇·AI 실행</strong> - 장치 설정과 모델 준비</summary>
 
 - **로봇 실행 환경**: [ROS 2 워크스페이스](BE_robot/ros2_ws/README.md), [로봇 실행 도구](BE_robot/tools/README.md)
 - **모델 학습**: [AI 학습 가이드](AI/README.md)
@@ -423,19 +418,9 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 
 </details>
 
-## 더 알아보기
+## 문서
 
 - [시스템 아키텍처와 통신 명세](docs/architecture_and_api_spec.md)
 - [백엔드 API 명세](docs/backend_api_specification.md)
 - [프런트엔드·백엔드 연동 가이드](docs/fe_backend_integration_guide.md)
 - [시각 자료 출처](docs/assets/readme/README.md)
-
-
-<details>
-<summary><strong>로봇 디자인 콘셉트</strong></summary>
-
-<img src="docs/assets/readme/robot-concept.png" alt="발표 자료에 사용한 삐용 로봇 디자인 콘셉트" width="400" />
-
-발표 자료의 디자인 콘셉트 이미지입니다. 실제 장치의 주행 모습은 문서 상단 시연에서 확인할 수 있습니다.
-
-</details>
