@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/readme/hero.svg" alt="BBIYONG 자율주행 화재 감시 로봇 프로젝트" width="100%" />
+  <img src="docs/assets/readme/robot-concept.png" alt="발표 자료 첫 페이지의 삐용 로봇 디자인" width="620" />
 </p>
 
 <h1 align="center">삐용 · BBIYONG</h1>
@@ -7,6 +7,22 @@
 <p align="center">
   <strong>공장의 야간 안전을 위한 자율주행 화재 감시 로봇</strong><br/>
   <sub>SSAFY 15기 공통 프로젝트 · 부울경 E101 · 6인 팀</sub>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" alt="React 18" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5" />
+  <img src="https://img.shields.io/badge/Spring_Boot-4-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot 4" />
+  <img src="https://img.shields.io/badge/ROS_2-Humble-22314E?logo=ros&logoColor=white" alt="ROS 2 Humble" />
+  <img src="https://img.shields.io/badge/AI-YOLO11n-7356BF" alt="YOLO11n" />
+  <img src="https://img.shields.io/badge/NVIDIA-Jetson_Orin_Nano-76B900?logo=nvidia&logoColor=white" alt="NVIDIA Jetson Orin Nano" />
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white" alt="MySQL 8.0" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Jenkins-D24939?logo=jenkins&logoColor=white" alt="Jenkins" />
+  <img src="https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white" alt="Nginx" />
 </p>
 
 <p align="center">
