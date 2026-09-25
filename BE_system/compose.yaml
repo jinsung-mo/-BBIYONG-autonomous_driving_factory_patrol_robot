@@ -14,8 +14,9 @@ services:
       - /var/www/hls:/hls:ro
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/bbiyong
-      - SPRING_DATASOURCE_USERNAME=user
-      - SPRING_DATASOURCE_PASSWORD=password
+      # DB 계정도 필수 시크릿이다. 값은 저장소가 아니라 배포 환경(Jenkins credentials·.env)에서 주입한다.
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:?MYSQL_USER 환경변수가 필요합니다}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD 환경변수가 필요합니다}
       - SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver
       - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQLDialect
       # MySQL 은 동시 커넥션을 지원하므로 풀을 확장(SQLite 기본 1 대신)
@@ -40,14 +41,15 @@ services:
     container_name: bbiyong-mysql
     environment:
       MYSQL_DATABASE: bbiyong
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER 환경변수가 필요합니다}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD 환경변수가 필요합니다}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 환경변수가 필요합니다}
     volumes:
       - /opt/bbiyong/mysql_data:/var/lib/mysql
     # app 이 DB 준비 전 기동해 실패하지 않도록 헬스체크로 순서 보장
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpassword"]
+      # 비밀번호를 파일에 적지 않고 컨테이너 환경변수에서 읽는다($$ 는 compose 치환을 막아 컨테이너 셸이 해석하게 한다).
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
       timeout: 5s
       retries: 10

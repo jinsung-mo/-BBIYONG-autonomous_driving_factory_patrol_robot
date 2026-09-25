@@ -515,6 +515,8 @@ cd BE_system
 ./gradlew bootRun
 ```
 
+Docker Compose로 MySQL과 함께 띄울 때는 `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`도 필요합니다. 값이 없으면 compose가 시작되지 않습니다.
+
 Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 환경변수는 [서버 설정](BE_system/src/main/resources/application.properties)을 참고하세요.
 
 </details>
