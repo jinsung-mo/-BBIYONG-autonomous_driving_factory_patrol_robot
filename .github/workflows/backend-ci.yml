@@ -1,0 +1,91 @@
+name: backend-ci
+
+# 관제 서버(BE_system) 테스트를 운영과 같은 MySQL 8 위에서 실행한다.
+# 팀 프로젝트 기간에는 Jenkins가 같은 역할을 했고, 이 워크플로는 개인 저장소에서 결과를 공개로 확인하기 위해 추가했다.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "BE_system/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "BE_system/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: bbiyong_test
+          MYSQL_USER: test
+          MYSQL_PASSWORD: test
+          MYSQL_ROOT_PASSWORD: ci-root-password
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -pci-root-password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    defaults:
+      run:
+        working-directory: BE_system
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test (MySQL 8)
+        env:
+          TEST_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3307/bbiyong_test
+          TEST_DATASOURCE_USERNAME: test
+          TEST_DATASOURCE_PASSWORD: test
+        run: ./gradlew test --no-daemon
+
+      - name: Summarize results
+        if: always()
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          total = failures = errors = skipped = 0
+          lines = []
+          for path in glob.glob("build/test-results/test/*.xml"):
+              suite = ET.parse(path).getroot()
+              total += int(suite.get("tests", 0))
+              failures += int(suite.get("failures", 0))
+              errors += int(suite.get("errors", 0))
+              skipped += int(suite.get("skipped", 0))
+              out = suite.findtext("system-out") or ""
+              lines += [l for l in out.splitlines() if l.startswith("[idempotency/")]
+          print("## Backend tests (MySQL 8)")
+          print(f"- total: {total}, failures: {failures}, errors: {errors}, skipped: {skipped}")
+          if lines:
+              print("\n## Idempotency concurrency check")
+              for l in lines:
+                  print(f"- `{l}`")
+          EOF
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-report
+          path: BE_system/build/reports/tests/test
+          retention-days: 14
