@@ -397,7 +397,7 @@ SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 �
   <img src="docs/erd/bbiyong-erd.png" alt="users, event_logs, video_clips, notification_deliveries 등 테이블 11개와 UNIQUE 제약, 복합 인덱스, 논리 참조 관계를 표시한 ERD" width="860" />
 </a>
 
-경보 중복을 막는 제약은 `event_logs.message_id` UNIQUE와 알림의 `(event_id, recipient_user_id)` 복합 UNIQUE입니다. 테이블 사이 관계는 점선으로 그렸습니다. 초기 SQLite 환경에서 시작한 스키마라 DB 외래키 없이 애플리케이션이 id로 참조하고 있고, 사용자 참조 컬럼의 타입(BIGINT와 VARCHAR)도 맞지 않습니다. 외래키 추가와 타입 통일, 마이그레이션 도구 도입을 다음 개선 과제로 두고 있습니다.
+경보 중복을 막는 제약은 `event_logs.message_id` UNIQUE와 알림의 `(event_id, recipient_user_id)` 복합 UNIQUE입니다. 테이블 사이 관계는 점선으로 그렸습니다. 초기 SQLite 환경에서 시작한 스키마라 DB 외래키 없이 애플리케이션이 id로 참조합니다. 알림 테이블의 `user_id`, `recipient_user_id` 컬럼에는 이름과 달리 사용자 id가 아니라 로그인 이메일(`users.email`)이 들어갑니다. 외래키 추가와 마이그레이션 도구 도입을 다음 개선 과제로 두고 있습니다.
 
 <sub>다이어그램 원본: [system.architecture.json](docs/architecture/system.architecture.json) · [fire-alert.sequence.json](docs/architecture/fire-alert.sequence.json) · [bbiyong-erd.puml](docs/erd/bbiyong-erd.puml) (PlantUML)</sub>
 
