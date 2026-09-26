@@ -4,7 +4,6 @@ import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
@@ -33,7 +32,7 @@ public class OpenApiConfig {
                 .description("Local Development Server");
 
         Server productionServer = new Server()
-                .url("https://k11e101.p.ssafy.io")
+                .url("https://i15e101.p.ssafy.io")
                 .description("Production Server");
 
         // API 메타데이터
@@ -56,19 +55,16 @@ public class OpenApiConfig {
                         - `/api/auth/login` 으로 토큰 발급 후 `Authorization: Bearer <token>` 헤더 사용
 
                         ### 실시간 통신
-                        - **WebSocket (STOMP)**: `/ws-관제` 엔드포인트
+                        - **WebSocket (STOMP)**: `/ws/control` (별칭 `/ws-관제`) 엔드포인트
                         - **구독 토픽**: `/topic/robots`, `/topic/alerts`, `/topic/video/{robotId}`, `/topic/nav`
                         - **제어 발행**: `/app/control/drive`, `/app/control/mode`, `/app/control/operation`
 
                         ### 개발팀
-                        SSAFY 11기 자율 프로젝트 E101팀
+                        SSAFY 15기 공통 프로젝트(AIoT) 부울경 E101팀
                         """)
                 .contact(new Contact()
                         .name("SSAFY E101 Team")
-                        .email("bbiyong@ssafy.io"))
-                .license(new License()
-                        .name("MIT License")
-                        .url("https://opensource.org/licenses/MIT"));
+                        .url("https://github.com/jinsung-mo/-BBIYONG-autonomous_driving_factory_patrol_robot"));
 
         // JWT 보안 스킴
         SecurityScheme securityScheme = new SecurityScheme()

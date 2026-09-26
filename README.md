@@ -25,6 +25,9 @@
   <img src="https://img.shields.io/badge/Jenkins-D24939?logo=jenkins&logoColor=white" alt="Jenkins" />
   <img src="https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white" alt="Nginx" />
 </p>
+<p align="center">
+  <a href="https://github.com/jinsung-mo/-BBIYONG-autonomous_driving_factory_patrol_robot/actions/workflows/backend-ci.yml"><img src="https://github.com/jinsung-mo/-BBIYONG-autonomous_driving_factory_patrol_robot/actions/workflows/backend-ci.yml/badge.svg" alt="backend-ci" /></a>
+</p>
 
 <p align="center">
   <a href="#overview">프로젝트 소개</a>&nbsp;&nbsp;·&nbsp;&nbsp;
@@ -32,8 +35,16 @@
   <a href="#engineering">설계와 성과</a>&nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="#architecture">기술 스택</a>&nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="#team">팀 구성</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="#my-role">내가 맡은 일</a>
+  <a href="#my-role">내가 맡은 일</a>&nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="#post-project">프로젝트 이후 개선</a>
 </p>
+
+<details>
+<summary><strong>English summary</strong></summary>
+
+BBIYONG is an autonomous patrol robot for unattended factories. It maps the site with LiDAR, patrols inspection points, and confirms fire only when a YOLO detection and a thermal reading agree, then reports to a web control center. I led the six-person team and built the Spring Boot control server: a dedicated WebSocket channel for the robot and STOMP for operators, idempotent alert storage backed by a MySQL UNIQUE constraint, and ordered asynchronous persistence. After the project I added Flyway migrations, indexes that cut a 24-hour stats query from 55.9 ms to 4.9 ms on 200k rows, foreign keys, and a concurrency test showing 100 duplicate alerts leave exactly one row. The team won the Excellence Award (1st place in class) at Samsung SW·AI Academy for Youth.
+
+</details>
 
 <a id="overview"></a>
 ## 프로젝트 한눈에 보기
@@ -212,7 +223,7 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 | 항목 | 내용 |
 | --- | --- |
 | 관제 백엔드 | 관제 서버 주 개발. 관제 백엔드 에픽 이슈 132건 중 94건 담당 |
-| 테스트 | 담당 기능의 테스트 작성. 서버 테스트 약 210건이 MR마다 CI에서 실행 |
+| 테스트 | 담당 기능의 테스트 작성. 서버 테스트 220건이 MySQL 8 위에서 CI로 실행(팀 기간 Jenkins, 현재 GitHub Actions) |
 | 통합 | 파트별 dev → main 승격과 최종 릴리스 통합 담당 |
 
 <sub>이슈 수는 팀이 사용한 Jira 기준입니다. 이 저장소는 결과물을 옮겨 온 사본이라 커밋 이력이 하나로 합쳐져 있습니다.</sub>
@@ -372,6 +383,35 @@ SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 �
 
 - 회의 내용은 AI로 요약해 노션 회의록 템플릿(회의 목적·시간, 회의 내용)에 옮겼습니다. 팀원마다 작업 기록을 남기고 AI가 그 기록을 읽어 맥락을 이어받는 방식도 7월 15일 회의에서 정했습니다.
 
+<a id="post-project"></a>
+## 프로젝트 이후 개선 (개인 작업)
+
+> 팀 프로젝트가 끝난 뒤 이 저장소에서만 진행한 작업입니다. 팀 GitLab 저장소와 배포 서버에는 반영하지 않았습니다. 자세한 기록은 [docs/post-project](docs/post-project/README.md)에 있습니다.
+
+ERD를 그려 보니 시간 범위 조회에 인덱스가 없고 테이블 사이에 외래키가 하나도 없었습니다. 경보 중복 방지도 코드로만 설명하고 있었지 동시 요청을 실제로 막는지 확인한 테스트는 없었습니다.
+
+| 작업 | 결과 |
+| --- | --- |
+| 경보 멱등성 동시성 테스트 | 같은 `messageId` 경보 100건을 32개 스레드에서 동시에 저장하면 1건만 남고 99건은 UNIQUE 제약에 막힘. 실제 수신 경로로 100번 동시 발행해도 1건 |
+| `event_logs` 인덱스 2개 | 20만 건 기준 최근 24시간 통계 55.9ms → 4.9ms, 로봇별 조회 62.7ms → 1.3ms. 목록 첫 페이지는 정렬 작업이 사라짐 |
+| 외래키 5개 | 이벤트와 알림·영상, 사용자와 알림 설정을 DB가 직접 연결. 경보 테이블의 설비·지도 참조는 경보를 잃지 않도록 일부러 걸지 않음 |
+| Flyway 도입 | 종료 시점 스키마를 V1로 고정하고 변경은 V2로 기록. 테스트 220건을 마이그레이션으로 만든 스키마 위에서 실행 |
+| GitHub Actions CI | MySQL 8 컨테이너에서 서버 테스트를 돌리고 결과를 배지로 표시 |
+
+외래키를 켜자 없는 이벤트 id로 영상을 등록해도 받아 주던 API가 드러났고 400으로 거절하도록 고쳤습니다.
+
+<a id="git-history"></a>
+### 커밋 이력으로 본 6주
+
+팀 GitLab 저장소의 커밋 이력을 Gource로 재생한 영상입니다. 네 파트의 폴더가 동시에 자라는 모습과 발표 직전 커밋이 몰리는 구간이 보입니다. 팀원 이름은 가렸습니다.
+
+<p align="center">
+  <a href="docs/assets/readme/git-history.mp4">
+    <img src="docs/assets/readme/git-history.gif" alt="Gource로 재생한 팀 GitLab 커밋 이력. 네 파트의 폴더가 자라는 모습" width="640" />
+  </a><br/>
+  <sub>이미지를 누르면 46초 전체 영상(MP4, 약 3.4MB)을 볼 수 있습니다</sub>
+</p>
+
 <a id="architecture"></a>
 ## 시스템 구성과 기술 스택
 
@@ -397,7 +437,7 @@ SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 �
   <img src="docs/erd/bbiyong-erd.png" alt="users, event_logs, video_clips, notification_deliveries 등 테이블 11개와 UNIQUE 제약, 복합 인덱스, 논리 참조 관계를 표시한 ERD" width="860" />
 </a>
 
-경보 중복을 막는 제약은 `event_logs.message_id` UNIQUE와 알림의 `(event_id, recipient_user_id)` 복합 UNIQUE입니다. 테이블 사이 관계는 점선으로 그렸습니다. 초기 SQLite 환경에서 시작한 스키마라 DB 외래키 없이 애플리케이션이 id로 참조합니다. 알림 테이블의 `user_id`, `recipient_user_id` 컬럼에는 이름과 달리 사용자 id가 아니라 로그인 이메일(`users.email`)이 들어갑니다. 외래키 추가와 마이그레이션 도구 도입을 다음 개선 과제로 두고 있습니다.
+경보 중복을 막는 제약은 `event_logs.message_id` UNIQUE와 알림의 `(event_id, recipient_user_id)` 복합 UNIQUE입니다. 테이블 사이 관계는 점선으로 그렸습니다. 초기 SQLite 환경에서 시작한 스키마라 DB 외래키 없이 애플리케이션이 id로 참조합니다. 알림 테이블의 `user_id`, `recipient_user_id` 컬럼에는 이름과 달리 사용자 id가 아니라 로그인 이메일(`users.email`)이 들어갑니다. 위 그림은 프로젝트 종료 시점 기준이고, 이후 외래키와 인덱스를 추가한 결과는 [프로젝트 이후 개선](#post-project)에 있습니다.
 
 <sub>다이어그램 원본: [system.architecture.json](docs/architecture/system.architecture.json) · [fire-alert.sequence.json](docs/architecture/fire-alert.sequence.json) · [bbiyong-erd.puml](docs/erd/bbiyong-erd.puml) (PlantUML)</sub>
 
@@ -515,10 +555,49 @@ flowchart LR
 
 </details>
 
+<a id="retrospective"></a>
+## 돌아보며
+
+**잘한 점**
+- 방화벽을 실제로 확인하고 3일 만에 통신 방식을 바꾼 것처럼, 막히면 바로 확인하고 결정했습니다.
+- 경보 저장의 순서와 중복 문제를 DB 제약과 단일 스레드 처리로 풀어 경보를 한 번만 남기는 구조를 만들었습니다.
+
+**아쉬운 점**
+- 지연이나 처리량을 개발 중에 재 두지 않아서 개선 효과를 설정값으로만 설명한 부분이 있습니다.
+- 기능 브랜치를 5~11분 만에 합치다 보니 리뷰가 약했고 그 대가가 main 통합 때 충돌로 돌아왔습니다.
+- 파트 사이의 메시지 형식을 문서로만 맞추다가 헤더 크기가 40바이트와 49바이트로 어긋나는 일을 겪었습니다.
+
+**다음에는**
+- 메시지 형식은 스키마 한 곳에서 정의하고 양쪽 코드가 그걸 따르게 하겠습니다.
+- 측정 지점(지연, 처리량, DB 조회 시간)을 먼저 만들고 기능을 올리겠습니다.
+- 스키마는 처음부터 마이그레이션 도구로 관리하겠습니다.
+
 <a id="getting-started"></a>
 ## 실행 안내
 
 개발 환경에서 직접 실행하려면 아래 안내를 펼쳐보세요. 전체 기능을 사용하려면 관제 서버와 로봇 장치가 필요합니다.
+
+<details>
+<summary><strong>로봇 없이 관제 화면 둘러보기</strong> - 가짜 백엔드로 5분 데모</summary>
+
+로봇과 서버 없이 관제 웹을 띄워 볼 수 있습니다. 가짜 백엔드가 로그인, 이벤트, 대시보드 REST 응답과 텔레메트리, SLAM 지도, 경보 STOMP 메시지를 계속 보내 줍니다. Node.js만 있으면 됩니다.
+
+```bash
+cd FE/bbiyong-react
+npm ci
+
+# 터미널 1: 가짜 백엔드 (REST :8099, STOMP ws://localhost:8099/ws/control)
+node tools/verify/serve-fake-backend.mjs
+
+# 터미널 2: 관제 웹
+VITE_REST_BASE_URL=http://localhost:8099 \
+VITE_WS_URL=ws://localhost:8099/ws/control \
+npm run dev
+```
+
+`http://localhost:5173`에서 아무 이메일과 비밀번호로 로그인하면 됩니다. 이메일에 `viewer`가 들어가면 일반 사용자 권한으로 들어갑니다. 실제 영상은 나오지 않습니다.
+
+</details>
 
 <details>
 <summary><strong>관제 웹 실행</strong> - 개발 서버와 연결 설정</summary>
@@ -601,4 +680,7 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 - [브랜치 전략](docs/git_branch_guide.md) · [Jira 운영 규칙](docs/jira_convention.md)
 - [이벤트 클립 설계 기록](docs/설계_2026-08-13_이벤트클립_HLS절단.md)
 - [인터랙티브 아키텍처 다이어그램](docs/architecture/) (Archify)
+- [설계 결정 기록 (ADR)](docs/adr/README.md)
+- [REST API 문서](https://jinsung-mo.github.io/-BBIYONG-autonomous_driving_factory_patrol_robot/docs/api/) (Redoc, 71개 API) · [OpenAPI 명세](docs/api/openapi.json)
+- [프로젝트 이후 개선 기록](docs/post-project/README.md)
 - [시각 자료 출처](docs/assets/readme/README.md)
