@@ -21,6 +21,8 @@
 | `fire-alert-console.gif` | 28 | 관제 화면의 화재 경보 |
 | `navigation-recovery.gif` | 47 | 3D 지도에서의 주행 복구 시연 |
 | `award-certificate.jpg` | - | 공통 프로젝트 우수상 상장 촬영본(상장 부분만 잘라 축소) |
+| `architecture-system.png` | - | Archify로 만든 시스템 구조도(`docs/architecture/system.html`) 화면 캡처 |
+| `architecture-fire-alert.png` | - | Archify로 만든 화재 경보 시퀀스(`docs/architecture/fire-alert.html`) 화면 캡처 |
 
 반복 등장하는 동일 화면과 장식용 노트북 프레임은 중복 추가하지 않았습니다. 관제 화면과 시연 데이터는 발표 당시 자료이며 현재 실행 화면과 차이가 있을 수 있습니다.
 

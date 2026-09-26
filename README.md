@@ -377,6 +377,22 @@ SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 �
 
 로봇이 현장 정보를 수집하면 서버가 이를 기록하고 관제 웹에 전달합니다. 운영자는 웹에서 상황을 확인하고 로봇에 명령을 보냅니다.
 
+아래 두 다이어그램은 실제 코드를 기준으로 [Archify](https://github.com/tt-a1i/archify)로 그렸습니다. 이미지를 누르면 노드를 눌러 설명을 보고 경로를 따라갈 수 있는 인터랙티브 버전이 열립니다. 노드에 붙은 `SRC` 표시는 해당 코드 파일로 연결됩니다.
+
+**시스템 구조**: 로봇, 관제 서버, 관제 웹, 영상 경로
+
+<a href="https://jinsung-mo.github.io/-BBIYONG-autonomous_driving_factory_patrol_robot/docs/architecture/system.html">
+  <img src="docs/assets/readme/architecture-system.png" alt="로봇 브리지, Nginx, Spring Boot, MySQL, 관제 웹, MediaMTX로 이어지는 삐용 시스템 구조도" width="860" />
+</a>
+
+**화재 경보 처리 흐름**: 수신, 저장과 중복 판정, 전달
+
+<a href="https://jinsung-mo.github.io/-BBIYONG-autonomous_driving_factory_patrol_robot/docs/architecture/fire-alert.html">
+  <img src="docs/assets/readme/architecture-fire-alert.png" alt="로봇 브리지가 보낸 EVENT_FIRE가 중복 판정과 저장을 거쳐 관제 웹과 Mattermost로 전달되는 시퀀스 다이어그램" width="860" />
+</a>
+
+<sub>다이어그램 원본: [system.architecture.json](docs/architecture/system.architecture.json) · [fire-alert.sequence.json](docs/architecture/fire-alert.sequence.json)</sub>
+
 <details>
 <summary><strong>시스템 연결 구조</strong> - 웹, 서버, 로봇 간 통신</summary>
 
@@ -576,4 +592,5 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 - [프런트엔드·백엔드 연동 가이드](docs/fe_backend_integration_guide.md)
 - [브랜치 전략](docs/git_branch_guide.md) · [Jira 운영 규칙](docs/jira_convention.md)
 - [이벤트 클립 설계 기록](docs/설계_2026-08-13_이벤트클립_HLS절단.md)
+- [인터랙티브 아키텍처 다이어그램](docs/architecture/) (Archify)
 - [시각 자료 출처](docs/assets/readme/README.md)

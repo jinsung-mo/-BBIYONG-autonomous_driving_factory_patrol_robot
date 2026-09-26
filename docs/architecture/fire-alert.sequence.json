@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "화재 경보 처리 흐름",
+    "output": "fire-alert.html",
+    "viewBox": [
+      1060,
+      580
+    ],
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "receive",
+        "label": "수신",
+        "focus": [
+          "robot",
+          "wss",
+          "event"
+        ],
+        "note": "WSS 수신 스레드는 경보 저장을 넘기고 바로 다음 메시지를 받습니다."
+      },
+      {
+        "id": "persist",
+        "label": "저장과 중복 판정",
+        "focus": [
+          "event",
+          "db"
+        ],
+        "note": "멱등 키 조회 뒤 UNIQUE 제약으로 동시 요청까지 한 건만 남깁니다."
+      },
+      {
+        "id": "deliver",
+        "label": "전달",
+        "focus": [
+          "event",
+          "robot",
+          "web",
+          "notify",
+          "mm"
+        ],
+        "note": "저장이 확정된 경보만 로봇 회신, 화면 방송, 알림 큐로 나갑니다."
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "robot",
+      "type": "backend",
+      "label": "로봇 브리지",
+      "sublabel": "cloud_bridge.py"
+    },
+    {
+      "id": "wss",
+      "type": "backend",
+      "label": "WSS 핸들러",
+      "sublabel": "/ws/robot"
+    },
+    {
+      "id": "event",
+      "type": "backend",
+      "label": "EventLogService",
+      "sublabel": "@Async 단일 스레드"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "MySQL",
+      "sublabel": "UNIQUE message_id"
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "관제 웹",
+      "sublabel": "STOMP 구독"
+    },
+    {
+      "id": "notify",
+      "type": "messagebus",
+      "label": "알림 워커",
+      "sublabel": "5초 주기"
+    },
+    {
+      "id": "mm",
+      "type": "external",
+      "label": "Mattermost",
+      "sublabel": "관리자 알림"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 232,
+      "label": "수신"
+    },
+    {
+      "from": 240,
+      "to": 350,
+      "label": "저장·중복 판정"
+    },
+    {
+      "from": 358,
+      "to": 480,
+      "label": "전달"
+    }
+  ],
+  "messages": [
+    {
+      "id": "event-fire",
+      "from": "robot",
+      "to": "wss",
+      "y": 165,
+      "label": "EVENT_FIRE + messageId",
+      "variant": "emphasis",
+      "note": "YOLO·열화상 교차검증으로 확정된 경보만 전송"
+    },
+    {
+      "id": "hand-off",
+      "from": "wss",
+      "to": "event",
+      "y": 200,
+      "label": "저장 작업 넘김",
+      "variant": "dashed",
+      "note": "수신 스레드는 바로 반환, 대기열 200건"
+    },
+    {
+      "id": "find-key",
+      "from": "event",
+      "to": "db",
+      "y": 252,
+      "label": "findByMessageId",
+      "variant": "default"
+    },
+    {
+      "id": "not-found",
+      "from": "db",
+      "to": "event",
+      "y": 280,
+      "label": "없음",
+      "variant": "return"
+    },
+    {
+      "id": "save",
+      "from": "event",
+      "to": "db",
+      "y": 310,
+      "label": "saveAndFlush",
+      "variant": "emphasis",
+      "note": "UNIQUE 위반은 이미 처리된 요청으로 흡수"
+    },
+    {
+      "id": "saved-id",
+      "from": "db",
+      "to": "event",
+      "y": 338,
+      "label": "eventId",
+      "variant": "return"
+    },
+    {
+      "id": "event-saved",
+      "from": "event",
+      "to": "robot",
+      "y": 372,
+      "label": "EVENT_SAVED(eventId)",
+      "variant": "dashed"
+    },
+    {
+      "id": "broadcast",
+      "from": "event",
+      "to": "web",
+      "y": 402,
+      "label": "/topic/alerts 방송",
+      "variant": "emphasis"
+    },
+    {
+      "id": "enqueue",
+      "from": "event",
+      "to": "notify",
+      "y": 432,
+      "label": "PENDING 적재",
+      "variant": "dashed"
+    },
+    {
+      "id": "send",
+      "from": "notify",
+      "to": "mm",
+      "y": 462,
+      "label": "전송 · 최대 3회 재시도",
+      "variant": "default"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "wss",
+      "from": 160,
+      "to": 206,
+      "type": "backend"
+    },
+    {
+      "participant": "event",
+      "from": 195,
+      "to": 438,
+      "type": "backend"
+    },
+    {
+      "participant": "db",
+      "from": 247,
+      "to": 344,
+      "type": "database"
+    },
+    {
+      "participant": "notify",
+      "from": 427,
+      "to": 468,
+      "type": "messagebus"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "수신과 저장 분리",
+      "items": [
+        "WSS 수신 스레드에서 DB 쓰기를 떼어 냄",
+        "단일 스레드라 경보 순서와 중복 판정 순서가 유지됨"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "한 번만 저장",
+      "items": [
+        "재전송해도 바뀌지 않는 messageId로 먼저 조회",
+        "동시 요청은 DB UNIQUE 제약이 최종 판단"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "저장 후 전달",
+      "items": [
+        "저장이 확정된 경보만 회신·방송·알림",
+        "알림은 DB에 먼저 적재한 뒤 워커가 재시도하며 전송"
+      ]
+    }
+  ]
+}

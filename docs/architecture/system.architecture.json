@@ -1,0 +1,375 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "삐용 BBIYONG 시스템 구조",
+    "output": "system.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/jinsung-mo/-BBIYONG-autonomous_driving_factory_patrol_robot",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "270b5684b2373fb1e5315d68a379f506bd1f42cb"
+    },
+    "views": [
+      {
+        "id": "alert-path",
+        "label": "경보·상태 경로",
+        "focus": [
+          "camera",
+          "bridge",
+          "nginx",
+          "spring",
+          "mysql",
+          "web"
+        ],
+        "note": "로봇이 확정한 경보와 텔레메트리가 관제 화면까지 가는 길입니다."
+      },
+      {
+        "id": "video-path",
+        "label": "영상 경로",
+        "focus": [
+          "camera",
+          "mediamtx",
+          "web"
+        ],
+        "note": "영상은 서버를 거치지 않고 MediaMTX에서 WebRTC로 바로 전달됩니다."
+      },
+      {
+        "id": "control-path",
+        "label": "제어 명령 경로",
+        "focus": [
+          "operator",
+          "web",
+          "nginx",
+          "spring",
+          "bridge",
+          "ros"
+        ],
+        "note": "운영자 명령은 STOMP로 들어와 검증을 거친 뒤 로봇 WSS 세션으로 중계됩니다."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "camera",
+      "type": "backend",
+      "label": "Camera · YOLO11n",
+      "sublabel": "TensorRT FP16",
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "BE_robot/tools/perception/camera_node.py",
+          "line": 93,
+          "label": "CameraNode"
+        }
+      ]
+    },
+    {
+      "id": "ros",
+      "type": "backend",
+      "label": "ROS 2 Humble",
+      "sublabel": "SLAM · Nav2",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "BE_robot/ros2_ws/src/bbiyong_bringup/launch/navigation_runtime.launch.py",
+          "label": "launch"
+        }
+      ]
+    },
+    {
+      "id": "bridge",
+      "type": "backend",
+      "label": "cloud_bridge.py",
+      "sublabel": "WSS 클라이언트",
+      "pos": [
+        270,
+        200
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "BE_robot/orin_dashboard/cloud_bridge.py",
+          "line": 850,
+          "label": "sender"
+        }
+      ]
+    },
+    {
+      "id": "nginx",
+      "type": "security",
+      "label": "Nginx",
+      "sublabel": ":443 TLS",
+      "pos": [
+        520,
+        200
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "spring",
+      "type": "backend",
+      "label": "Spring Boot 4.1",
+      "sublabel": "WSS · STOMP · REST",
+      "pos": [
+        520,
+        400
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "tag": "Java 17",
+      "sources": [
+        {
+          "path": "BE_system/src/main/java/com/bbiyong/server/wss/RobotWebSocketHandler.java",
+          "line": 30,
+          "label": "로봇 WSS"
+        },
+        {
+          "path": "BE_system/src/main/java/com/bbiyong/server/stomp/StompWebSocketConfig.java",
+          "label": "STOMP"
+        }
+      ]
+    },
+    {
+      "id": "mysql",
+      "type": "database",
+      "label": "MySQL 8",
+      "sublabel": "이벤트 · 이력",
+      "pos": [
+        520,
+        566
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "BE_system/compose.yaml",
+          "label": "compose"
+        }
+      ]
+    },
+    {
+      "id": "mattermost",
+      "type": "external",
+      "label": "Mattermost",
+      "sublabel": "경보 알림",
+      "pos": [
+        790,
+        400
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "BE_system/src/main/java/com/bbiyong/server/notification/service/NotificationDispatchService.java",
+          "label": "재시도 워커"
+        }
+      ]
+    },
+    {
+      "id": "mediamtx",
+      "type": "cloud",
+      "label": "MediaMTX",
+      "sublabel": "SRT → WebRTC",
+      "pos": [
+        790,
+        60
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "관제 웹",
+      "sublabel": "React · Three.js",
+      "pos": [
+        790,
+        200
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "FE/bbiyong-react/src/live/useWhep.ts",
+          "line": 30,
+          "label": "WHEP"
+        }
+      ]
+    },
+    {
+      "id": "operator",
+      "type": "external",
+      "label": "운영자",
+      "sublabel": "관리자 · 관제사",
+      "pos": [
+        1030,
+        200
+      ],
+      "size": [
+        130,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "로봇 · Jetson Orin Nano",
+      "wraps": [
+        "camera",
+        "ros",
+        "bridge"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "AWS EC2 · Docker Compose",
+      "wraps": [
+        "nginx",
+        "spring",
+        "mysql"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "camera-bridge",
+      "from": "camera",
+      "to": "bridge",
+      "label": "탐지 결과",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "ros-bridge",
+      "from": "ros",
+      "to": "bridge",
+      "label": "자세 · 지도",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "bridge-nginx",
+      "from": "bridge",
+      "to": "nginx",
+      "label": "WSS /ws/robot",
+      "variant": "emphasis"
+    },
+    {
+      "id": "nginx-spring",
+      "from": "nginx",
+      "to": "spring",
+      "label": "proxy",
+      "labelAt": [
+        590,
+        332
+      ]
+    },
+    {
+      "id": "spring-mysql",
+      "from": "spring",
+      "to": "mysql",
+      "label": "JPA",
+      "labelAt": [
+        590,
+        515
+      ]
+    },
+    {
+      "id": "spring-mattermost",
+      "from": "spring",
+      "to": "mattermost",
+      "label": "알림",
+      "variant": "dashed"
+    },
+    {
+      "id": "web-nginx",
+      "from": "web",
+      "to": "nginx",
+      "label": "REST · STOMP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "operator-web",
+      "from": "operator",
+      "to": "web"
+    },
+    {
+      "id": "camera-mediamtx",
+      "from": "camera",
+      "to": "mediamtx",
+      "label": "H.264 · SRT",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "mediamtx-web",
+      "from": "mediamtx",
+      "to": "web",
+      "label": "WHEP",
+      "labelAt": [
+        860,
+        162
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "로봇",
+      "items": [
+        "YOLO와 열화상 교차검증으로 확정한 화재만 EVENT_FIRE로 전송",
+        "브리지가 ROS 상태를 서버 계약 메시지로 바꿔 WSS로 송신"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "관제 서버",
+      "items": [
+        "로봇 WSS와 웹 STOMP 채널을 분리",
+        "경보는 멱등 키와 UNIQUE 제약으로 한 번만 저장",
+        "저장은 단일 스레드 비동기로 순서 보장"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "영상",
+      "items": [
+        "영상은 Spring을 거치지 않음",
+        "MediaMTX가 WebRTC(WHEP)로 브라우저에 전달"
+      ]
+    }
+  ]
+}
