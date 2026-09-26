@@ -400,18 +400,6 @@ ERD를 그려 보니 시간 범위 조회에 인덱스가 없고 테이블 사�
 
 외래키를 켜자 없는 이벤트 id로 영상을 등록해도 받아 주던 API가 드러났고 400으로 거절하도록 고쳤습니다.
 
-<a id="git-history"></a>
-### 커밋 이력으로 본 6주
-
-팀 GitLab 저장소의 커밋 이력을 Gource로 재생한 영상입니다. 네 파트의 폴더가 동시에 자라는 모습과 발표 직전 커밋이 몰리는 구간이 보입니다. 팀원 이름은 가렸습니다.
-
-<p align="center">
-  <a href="docs/assets/readme/git-history.mp4">
-    <img src="docs/assets/readme/git-history.gif" alt="Gource로 재생한 팀 GitLab 커밋 이력. 네 파트의 폴더가 자라는 모습" width="640" />
-  </a><br/>
-  <sub>이미지를 누르면 46초 전체 영상(MP4, 약 3.4MB)을 볼 수 있습니다</sub>
-</p>
-
 <a id="architecture"></a>
 ## 시스템 구성과 기술 스택
 

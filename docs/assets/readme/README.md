@@ -23,7 +23,6 @@
 | `award-certificate.jpg` | - | 공통 프로젝트 우수상 상장 촬영본(상장 부분만 잘라 축소) |
 | `architecture-system.png` | - | Archify로 만든 시스템 구조도(`docs/architecture/system.html`) 화면 캡처 |
 | `architecture-fire-alert.png` | - | Archify로 만든 화재 경보 시퀀스(`docs/architecture/fire-alert.html`) 화면 캡처 |
-| `git-history.mp4` / `git-history.gif` | - | 팀 GitLab 커밋 이력을 Gource로 재생(46초). 사용자 이름은 `--hide usernames`로 가림. GIF는 8~18초 구간 발췌 |
 
 반복 등장하는 동일 화면과 장식용 노트북 프레임은 중복 추가하지 않았습니다. 관제 화면과 시연 데이터는 발표 당시 자료이며 현재 실행 화면과 차이가 있을 수 있습니다.
 
