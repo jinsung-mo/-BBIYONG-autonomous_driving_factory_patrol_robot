@@ -21,6 +21,9 @@ services:
       - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQLDialect
       # MySQL 은 동시 커넥션을 지원하므로 풀을 확장(SQLite 기본 1 대신)
       - DB_POOL_SIZE=10
+      # 스키마는 Flyway 마이그레이션으로 만들고, Hibernate는 엔티티와 일치하는지만 검증한다.
+      - FLYWAY_ENABLED=true
+      - JPA_DDL_AUTO=validate
       # 🔴 영상 저장 경로를 **바인드 마운트 안으로** 옮긴다. 기본값(video-store)은 컨테이너
       #    내부 경로라 컨테이너를 다시 만들면 클립이 전부 사라진다 — DB 에는 video_clips 행이
       #    남고 파일만 없어져 관제에서 재생만 실패하는, 가장 알아채기 어려운 형태가 된다.

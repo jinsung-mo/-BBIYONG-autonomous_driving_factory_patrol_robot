@@ -9,7 +9,11 @@ import java.time.Instant;
 @Data
 @NoArgsConstructor
 @Entity
-@Table(name = "event_logs")
+@Table(name = "event_logs", indexes = {
+        // 통계·이력 목록·로봇별 통계가 모두 timestamp 범위로 조회한다(V2 마이그레이션과 동일).
+        @Index(name = "idx_event_logs_timestamp", columnList = "timestamp"),
+        @Index(name = "idx_event_logs_robot_timestamp", columnList = "robotId,timestamp")
+})
 public class EventLog {
 
     @Id

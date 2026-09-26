@@ -19,6 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.driver-class-name=org.sqlite.JDBC",
         "spring.jpa.database-platform=org.hibernate.community.dialect.SQLiteDialect",
         "spring.jpa.hibernate.ddl-auto=create-drop",
+        // MySQL 전용 Flyway 마이그레이션은 SQLite 메모리 DB에 적용하지 않는다.
+        "spring.flyway.enabled=false",
         "spring.datasource.hikari.maximum-pool-size=1",
         "management.endpoint.health.group.deployment.include=db,diskSpace",
         "management.endpoint.health.group.deployment.show-details=never",

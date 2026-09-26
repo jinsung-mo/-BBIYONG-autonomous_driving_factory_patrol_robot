@@ -37,6 +37,10 @@ dependencies {
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	runtimeOnly 'org.xerial:sqlite-jdbc:3.53.1.0'
 
+	// 스키마 마이그레이션(프로젝트 종료 후 추가). MySQL 운영·테스트에서만 켜고, 로컬 SQLite는 기존처럼 ddl-auto로 둔다.
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	runtimeOnly 'org.flywaydb:flyway-mysql'
+
 	// 인증/인가(MVP): Spring Security 필터 체인 + BCrypt 해시 + JWT 발급/검증
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'

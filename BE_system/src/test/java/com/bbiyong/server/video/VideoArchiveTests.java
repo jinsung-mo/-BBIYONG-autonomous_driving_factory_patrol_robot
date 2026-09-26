@@ -1,6 +1,8 @@
 package com.bbiyong.server.video;
 
 import com.bbiyong.server.auth.jwt.JwtTokenProvider;
+import com.bbiyong.server.event.domain.EventLog;
+import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.video.dto.VideoResponses;
 import com.bbiyong.server.video.repository.VideoClipRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
 
 import java.net.URI;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,6 +35,20 @@ class VideoArchiveTests {
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private EventLogRepository eventLogRepository;
+
+    private Long savedEventId() {
+        EventLog e = new EventLog();
+        e.setType("FIRE");
+        e.setLevel("CRITICAL");
+        e.setRobotId("orinka_01");
+        e.setMessage("영상 연결 테스트용 경보");
+        e.setTimestamp(Instant.parse("2026-07-27T10:30:00Z"));
+        e.setStatus("UNRESOLVED");
+        return eventLogRepository.save(e).getEventId();
+    }
 
     @BeforeEach
     void clean() {
@@ -53,11 +70,12 @@ class VideoArchiveTests {
 
     @Test
     void registerThenListDetailAndByEvent() {
+        Long eventId = savedEventId();
         register("""
-                {"robotId":"orinka_01","eventId":1,"clipType":"EVENT","storageType":"FILESYSTEM",
+                {"robotId":"orinka_01","eventId":%d,"clipType":"EVENT","storageType":"FILESYSTEM",
                  "filePath":"/data/videos/evt_1.mp4","thumbnailPath":"/data/videos/evt_1.jpg",
                  "durationSec":30,"fileSizeBytes":5242880,"startedAt":"2026-07-27T10:30:00Z","endedAt":"2026-07-27T10:30:30Z"}
-                """);
+                """.formatted(eventId));
         VideoResponses.RegisterResult patrol = register("""
                 {"robotId":"orinka_01","clipType":"PATROL","storageType":"FILESYSTEM",
                  "filePath":"/data/videos/patrol_1.mp4","startedAt":"2026-07-27T09:00:00Z"}
@@ -78,7 +96,7 @@ class VideoArchiveTests {
 
         // 이벤트별 조회
         ResponseEntity<VideoResponses.Summary[]> byEvent =
-                restTemplate.getForEntity("/api/events/1/video", VideoResponses.Summary[].class);
+                restTemplate.getForEntity("/api/events/" + eventId + "/video", VideoResponses.Summary[].class);
         assertThat(byEvent.getBody()).hasSize(1);
         assertThat(byEvent.getBody()[0].clipType()).isEqualTo("EVENT");
     }
@@ -108,6 +126,17 @@ class VideoArchiveTests {
         assertThat(detail.getStatusCode().is2xxSuccessful()).isTrue();
         // S3/외부 저장분은 저장된 URL 을 그대로 반환한다.
         assertThat(detail.getBody().playbackUrl()).isEqualTo("https://cdn.example.com/videos/s3_1.mp4");
+    }
+
+    @Test
+    void registerRejectsUnknownEventWith400() {
+        RequestEntity<String> req = RequestEntity.post(URI.create("/api/videos"))
+                .contentType(MediaType.APPLICATION_JSON).body("""
+                        {"robotId":"orinka_01","eventId":987654321,"clipType":"EVENT","storageType":"FILESYSTEM",
+                         "filePath":"/data/videos/none.mp4","startedAt":"2026-07-27T10:30:00Z"}
+                        """);
+        ResponseEntity<String> resp = restTemplate.exchange(req, String.class);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     @Test

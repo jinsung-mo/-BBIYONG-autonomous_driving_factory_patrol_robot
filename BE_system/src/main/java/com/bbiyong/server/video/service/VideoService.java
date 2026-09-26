@@ -1,5 +1,6 @@
 package com.bbiyong.server.video.service;
 
+import com.bbiyong.server.event.repository.EventLogRepository;
 import com.bbiyong.server.video.domain.VideoClip;
 import com.bbiyong.server.video.dto.VideoRegisterRequest;
 import com.bbiyong.server.video.dto.VideoResponses;
@@ -25,15 +26,29 @@ public class VideoService {
 
     private final VideoClipRepository videoClipRepository;
     private final VideoStorageService storageService;
+    private final EventLogRepository eventLogRepository;
 
-    public VideoService(VideoClipRepository videoClipRepository, VideoStorageService storageService) {
+    public VideoService(VideoClipRepository videoClipRepository, VideoStorageService storageService,
+                        EventLogRepository eventLogRepository) {
         this.videoClipRepository = videoClipRepository;
         this.storageService = storageService;
+        this.eventLogRepository = eventLogRepository;
+    }
+
+    /**
+     * 클립이 가리키는 이벤트가 실제로 있는지 확인한다. video_clips.event_id 에는 외래키가 있어서
+     * (V2 마이그레이션) 없는 이벤트를 가리키면 DB가 거절하는데, 그 경우 500 대신 400으로 알려 준다.
+     */
+    private void requireExistingEvent(Long eventId) {
+        if (eventId != null && !eventLogRepository.existsById(eventId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "존재하지 않는 이벤트입니다: " + eventId);
+        }
     }
 
     /** 외부(로봇/게이트웨이/S3)가 이미 저장을 마친 클립의 메타데이터만 등록한다. */
     @Transactional
     public VideoResponses.RegisterResult register(VideoRegisterRequest req) {
+        requireExistingEvent(req.eventId());
         VideoClip clip = new VideoClip();
         clip.setRobotId(req.robotId());
         clip.setEventId(req.eventId());
@@ -52,6 +67,7 @@ public class VideoService {
     /** 영상 파일 바이트를 서버 파일시스템에 저장하고 메타데이터를 함께 등록한다. */
     @Transactional
     public VideoResponses.RegisterResult registerUpload(VideoUploadRequest meta, MultipartFile file, MultipartFile thumbnail) {
+        requireExistingEvent(meta.eventId());
         String storedPath = storageService.store(file, meta.robotId());
         String thumbnailPath = (thumbnail != null && !thumbnail.isEmpty())
                 ? storageService.store(thumbnail, meta.robotId())
