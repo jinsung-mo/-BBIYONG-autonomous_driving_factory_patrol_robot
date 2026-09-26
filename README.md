@@ -377,7 +377,7 @@ SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 �
 
 로봇이 현장 정보를 수집하면 서버가 이를 기록하고 관제 웹에 전달합니다. 운영자는 웹에서 상황을 확인하고 로봇에 명령을 보냅니다.
 
-아래 두 다이어그램은 실제 코드를 기준으로 [Archify](https://github.com/tt-a1i/archify)로 그렸습니다. 이미지를 누르면 노드를 눌러 설명을 보고 경로를 따라갈 수 있는 인터랙티브 버전이 열립니다. 노드에 붙은 `SRC` 표시는 해당 코드 파일로 연결됩니다.
+아래 구조도와 시퀀스는 실제 코드를 기준으로 [Archify](https://github.com/tt-a1i/archify)로 그렸습니다. 이미지를 누르면 노드를 눌러 설명을 보고 경로를 따라갈 수 있는 인터랙티브 버전이 열립니다. 노드에 붙은 `SRC` 표시는 해당 코드 파일로 연결됩니다.
 
 **시스템 구조**: 로봇, 관제 서버, 관제 웹, 영상 경로
 
@@ -391,7 +391,15 @@ SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 �
   <img src="docs/assets/readme/architecture-fire-alert.png" alt="로봇 브리지가 보낸 EVENT_FIRE가 중복 판정과 저장을 거쳐 관제 웹과 Mattermost로 전달되는 시퀀스 다이어그램" width="860" />
 </a>
 
-<sub>다이어그램 원본: [system.architecture.json](docs/architecture/system.architecture.json) · [fire-alert.sequence.json](docs/architecture/fire-alert.sequence.json)</sub>
+**데이터베이스 ERD**: JPA 엔티티 11개, MySQL 8 기준
+
+<a href="docs/erd/bbiyong-erd.svg">
+  <img src="docs/erd/bbiyong-erd.png" alt="users, event_logs, video_clips, notification_deliveries 등 테이블 11개와 UNIQUE 제약, 복합 인덱스, 논리 참조 관계를 표시한 ERD" width="860" />
+</a>
+
+경보 중복을 막는 제약은 `event_logs.message_id` UNIQUE와 알림의 `(event_id, recipient_user_id)` 복합 UNIQUE입니다. 테이블 사이 관계는 점선으로 그렸습니다. 초기 SQLite 환경에서 시작한 스키마라 DB 외래키 없이 애플리케이션이 id로 참조하고 있고, 사용자 참조 컬럼의 타입(BIGINT와 VARCHAR)도 맞지 않습니다. 외래키 추가와 타입 통일, 마이그레이션 도구 도입을 다음 개선 과제로 두고 있습니다.
+
+<sub>다이어그램 원본: [system.architecture.json](docs/architecture/system.architecture.json) · [fire-alert.sequence.json](docs/architecture/fire-alert.sequence.json) · [bbiyong-erd.puml](docs/erd/bbiyong-erd.puml) (PlantUML)</sub>
 
 <details>
 <summary><strong>시스템 연결 구조</strong> - 웹, 서버, 로봇 간 통신</summary>
