@@ -114,6 +114,35 @@ BBIYONG is an autonomous patrol robot for unattended factories. It maps the site
 
 <sub>관제 화면과 GIF는 최종 발표 자료를 사용했습니다. 화면의 지도와 이벤트 값은 발표 당시 데모 데이터입니다.</sub>
 
+### 매핑부터 관제 경보까지
+
+발표 자료의 매핑·순찰·경보 시연과 위치 추정 설명 애니메이션을 짧은 MP4로 제공합니다. 아래 미리보기를 누르면 영상을 열 수 있습니다. 재생 속도를 유지했으며, 웹 화면과 지도 값은 발표 당시 시연 자료입니다.
+
+| 지도 생성 · 약 10초 | 위치 추정 설명 · 약 10초 |
+| :---: | :---: |
+| [![탐색에 따라 벽과 통로가 드러나는 지도 생성](docs/assets/demos/mapping-progress.jpg)](docs/assets/demos/mapping-progress.mp4) | [![지도에서 로봇 위치와 이동 경로를 확인하는 위치 추정](docs/assets/demos/localization.jpg)](docs/assets/demos/localization.mp4) |
+| LiDAR 관측이 쌓이며 2D 점유 지도가 형성됩니다. | 이동 정보와 센서 관측으로 위치를 보정하는 원리를 설명한 애니메이션입니다. |
+
+| 우선 지점 순찰 · 12초 | 웹 관제의 화재·과열 경보 · 약 9초 |
+| :---: | :---: |
+| [![지정한 순찰 지점을 따라 이동하는 시연](docs/assets/demos/priority-patrol.jpg)](docs/assets/demos/priority-patrol.mp4) | [![화재·과열 알림과 이벤트 기록을 표시하는 관제](docs/assets/demos/fire-alert.jpg)](docs/assets/demos/fire-alert.mp4) |
+| 지정한 지점을 연결한 경로와 로봇의 이동을 보여줍니다. | 경보 위치와 이벤트 로그를 함께 확인합니다. |
+
+#### 매핑 결과를 웹 화면으로 연결하는 서버 흐름
+
+로봇에서 지도를 생성하는 기능과 웹에 결과를 전달하는 서버 기능을 나눴습니다. 로봇은 SLAM Toolbox로 지도를 만들고, 서버는 업로드된 지도와 진행 상태를 웹에 제공합니다.
+
+1. 운영자의 매핑 시작·중단 명령에 따라 서버가 로봇별 진행 상태를 갱신하고 STOMP `/topic/mapping`에 `MAPPING_STATUS`를 발행합니다.
+2. 웹에 늦게 접속하거나 새로고침한 사용자는 `GET /api/maps/status`로 현재 상태를 조회합니다. 구독을 시작하기 전에 발생한 알림을 놓쳐도 현재 진행 상태를 복원하기 위한 구조입니다.
+3. 로봇의 지도 업로드 후 매핑 완료 이벤트를 받으면 서버가 도면 생성을 시도하고, 생성에 성공하면 `FLOORPLAN_READY`로 지도 ID와 이미지 URL을 알립니다.
+4. 도면 생성에 실패한 경우에는 최신 RAW 지도를 활성화하는 보완 경로를 둡니다.
+
+관련 구현: [매핑 상태·구독 알림](BE_system/src/main/java/com/bbiyong/server/map/service/MappingStatusService.java) · [상태 조회·지도 업로드 API](BE_system/src/main/java/com/bbiyong/server/map/controller/MapController.java) · [완료 이벤트와 도면 준비 알림](BE_system/src/main/java/com/bbiyong/server/map/MappingCompleteFloorPlanListener.java) · [웹 매핑 제어](FE/bbiyong-react/src/live/useMappingControl.ts)
+
+진행 상태는 서버 메모리에 보관합니다. 위 조회는 브라우저 재접속을 위한 기능이며, 서버 재시작 후 상태를 복구하는 영속화 기능은 아닙니다. 로봇 탐색·위치 추정과 프런트엔드 화면은 팀 구현이며, 이 흐름은 서버 연동과 함께 이해하기 위한 설명입니다.
+
+[시연 자료의 출처·구간·가공 정보](docs/assets/demos/README.md)
+
 ### 더 많은 기능과 시연
 
 <details>

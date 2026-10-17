@@ -1,0 +1,50 @@
+[
+  {
+    "file": "mapping-progress.mp4",
+    "source": "ppt/media/image9.gif",
+    "slide": 20,
+    "source_seconds": 9.83,
+    "start": 0,
+    "duration_seconds": 9.83,
+    "speed": 1,
+    "audio": false,
+    "sha256": "d2cd56287263c46b2705a536d271bccc3a7b6bb4bd65e9c20186782c6c861e25",
+    "bytes": 542041
+  },
+  {
+    "file": "localization.mp4",
+    "source": "ppt/media/image32.gif",
+    "slide": 38,
+    "source_seconds": 10.2,
+    "start": 0,
+    "duration_seconds": 10.2,
+    "speed": 1,
+    "audio": false,
+    "sha256": "0d4b22c494e8a1026a7f6e34a75d9c2a15cf44bcca8bcf2b9b336e8c2d54f737",
+    "bytes": 217179
+  },
+  {
+    "file": "priority-patrol.mp4",
+    "source": "ppt/media/image17.gif",
+    "slide": 25,
+    "source_seconds": 15.08,
+    "start": 0,
+    "duration_seconds": 12,
+    "speed": 1,
+    "audio": false,
+    "sha256": "65000dac657a9c5f3c2f3e834b40f1f65277936b76c75321bd1e3d30fc7205c3",
+    "bytes": 559590
+  },
+  {
+    "file": "fire-alert.mp4",
+    "source": "ppt/media/image20.gif",
+    "slide": 28,
+    "source_seconds": 8.9,
+    "start": 0,
+    "duration_seconds": 8.9,
+    "speed": 1,
+    "audio": false,
+    "sha256": "a132c1e5e7331a6422633023871013fc276c2669dc752ce6314e783b7a1eb6b5",
+    "bytes": 782507
+  }
+]
