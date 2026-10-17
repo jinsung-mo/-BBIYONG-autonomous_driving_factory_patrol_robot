@@ -116,17 +116,19 @@ BBIYONG is an autonomous patrol robot for unattended factories. It maps the site
 
 ### 매핑부터 관제 경보까지
 
-발표 자료의 매핑·순찰·경보 시연과 위치 추정 설명 애니메이션을 짧은 MP4로 제공합니다. 아래 미리보기를 누르면 영상을 열 수 있습니다. 재생 속도를 유지했으며, 웹 화면과 지도 값은 발표 당시 시연 자료입니다.
+발표 자료의 매핑·순찰·경보 시연과 위치 추정 설명 애니메이션을 움직이는 GIF로 바로 보여줍니다. 미리보기를 누르면 고화질 MP4를 열 수 있습니다. 재생 속도를 유지했으며, 웹 화면과 지도 값은 발표 당시 시연 자료입니다.
 
 | 지도 생성 · 약 10초 | 위치 추정 설명 · 약 10초 |
 | :---: | :---: |
-| [![탐색에 따라 벽과 통로가 드러나는 지도 생성](docs/assets/demos/mapping-progress.jpg)](docs/assets/demos/mapping-progress.mp4) | [![지도에서 로봇 위치와 이동 경로를 확인하는 위치 추정](docs/assets/demos/localization.jpg)](docs/assets/demos/localization.mp4) |
+| [![탐색에 따라 벽과 통로가 드러나는 지도 생성](docs/assets/demos/mapping-progress.gif)](docs/assets/demos/mapping-progress.mp4) | [![지도에서 로봇 위치와 이동 경로를 확인하는 위치 추정](docs/assets/demos/localization.gif)](docs/assets/demos/localization.mp4) |
 | LiDAR 관측이 쌓이며 2D 점유 지도가 형성됩니다. | 이동 정보와 센서 관측으로 위치를 보정하는 원리를 설명한 애니메이션입니다. |
 
 | 우선 지점 순찰 · 12초 | 웹 관제의 화재·과열 경보 · 약 9초 |
 | :---: | :---: |
-| [![지정한 순찰 지점을 따라 이동하는 시연](docs/assets/demos/priority-patrol.jpg)](docs/assets/demos/priority-patrol.mp4) | [![화재·과열 알림과 이벤트 기록을 표시하는 관제](docs/assets/demos/fire-alert.jpg)](docs/assets/demos/fire-alert.mp4) |
+| [![지정한 순찰 지점을 따라 이동하는 시연](docs/assets/demos/priority-patrol.gif)](docs/assets/demos/priority-patrol.mp4) | [![화재·과열 알림과 이벤트 기록을 표시하는 관제](docs/assets/demos/fire-alert.gif)](docs/assets/demos/fire-alert.mp4) |
 | 지정한 지점을 연결한 경로와 로봇의 이동을 보여줍니다. | 경보 위치와 이벤트 로그를 함께 확인합니다. |
+
+고화질 MP4: [지도 생성](docs/assets/demos/mapping-progress.mp4) · [위치 추정 설명](docs/assets/demos/localization.mp4) · [우선 지점 순찰](docs/assets/demos/priority-patrol.mp4) · [화재·과열 경보](docs/assets/demos/fire-alert.mp4)
 
 #### 매핑 결과를 웹 화면으로 연결하는 서버 흐름
 
