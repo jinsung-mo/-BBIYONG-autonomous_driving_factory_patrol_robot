@@ -2,12 +2,12 @@
   <img src="docs/assets/readme/robot-concept.png" alt="발표 자료 첫 페이지의 삐용 로봇 디자인" width="620" />
 </p>
 
-<h1 align="center">삐용 · BBIYONG</h1>
+<h1 align="center">삐용 (BBIYONG)</h1>
 
 <p align="center">
   <strong>공장의 야간 안전을 위한 자율주행 화재 감시 로봇</strong><br/>
-  <sub>SSAFY 15기 공통 프로젝트 · 부울경 E101 · 6인 팀 · 2026.07.06 ~ 2026.08.10 (6주)</sub><br/>
-  <sub>공통 프로젝트 우수상 · 부울경 1반 1등</sub>
+  <sub>SSAFY 15기 공통 프로젝트, 부울경 E101, 6인 팀, 2026.07.06 ~ 2026.08.10 (6주)</sub><br/>
+  <sub>공통 프로젝트 우수상, 부울경 1반 1등</sub>
 </p>
 
 <p align="center">
@@ -30,12 +30,12 @@
 </p>
 
 <p align="center">
-  <a href="#overview">프로젝트 소개</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="#demo">화면과 시연</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="#engineering">설계와 성과</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="#architecture">기술 스택</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="#team">팀 구성</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="#my-role">내가 맡은 일</a>&nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="#overview">프로젝트 소개</a>&nbsp;&nbsp; / &nbsp;&nbsp;
+  <a href="#demo">화면과 시연</a>&nbsp;&nbsp; / &nbsp;&nbsp;
+  <a href="#engineering">설계와 성과</a>&nbsp;&nbsp; / &nbsp;&nbsp;
+  <a href="#architecture">기술 스택</a>&nbsp;&nbsp; / &nbsp;&nbsp;
+  <a href="#team">팀 구성</a>&nbsp;&nbsp; / &nbsp;&nbsp;
+  <a href="#my-role">내가 맡은 일</a>&nbsp;&nbsp; / &nbsp;&nbsp;
   <a href="#post-project">프로젝트 이후 개선</a>
 </p>
 
@@ -53,11 +53,11 @@ BBIYONG is an autonomous patrol robot for unattended factories. It maps the site
 
 ### 왜 만들었나
 
-프로젝트를 시작하면서 가장 먼저 본 문제는 **사람이 없는 시간에 경보가 울려도 현장 상황을 바로 확인하기 어렵다는 점**이었습니다. 야간에는 상주 인력이 적고, 고정형 CCTV는 카메라가 향한 곳만 볼 수 있습니다. 연기나 빛 반사처럼 화재와 비슷한 장면 때문에 경보가 발생하면 실제 화재인지 판단하기도 어렵습니다.
+**사람이 없는 시간에는 경보가 울려도 현장 상황을 바로 확인하기 어려웠습니다.** 야간에는 상주 인력이 적고, 고정형 CCTV는 카메라가 향한 곳만 볼 수 있습니다. 연기나 빛 반사처럼 화재와 비슷한 장면 때문에 경보가 발생하면 실제 화재인지 판단하기도 어렵습니다.
 
 카메라를 더 설치하는 대신, 카메라와 열화상 센서를 싣고 직접 이동하는 로봇을 만들기로 했습니다. 평소에는 설비 주변과 미탐색 구역을 순찰하고, 화재 징후를 발견하면 가까이 이동해 RGB 영상과 열화상을 함께 확인합니다. 확인한 결과와 현장 영상은 관제 웹으로 보내 운영자가 한 화면에서 상황을 판단할 수 있도록 구성했습니다.
 
-기획할 때 정한 기준은 단순했습니다. **사람이 없는 시간에도 현장을 돌아다니며 직접 확인할 수 있어야 한다.** 이 기준을 중심으로 자율주행, 화재 감지, 관제 기능을 하나의 흐름으로 연결했습니다.
+**사람이 없는 시간에도 현장을 돌아다니며 직접 확인할 수 있어야 한다**는 기준으로 기획했습니다. 이를 위해 자율주행과 화재 감지 기능을 관제에 연결했습니다.
 
 ### 주요 기능
 
@@ -69,7 +69,7 @@ BBIYONG is an autonomous patrol robot for unattended factories. It maps the site
 
 | 실제 장치 주행 | 관제 웹 연동 | AI 처리량 개선 |
 | :--- | :--- | :--- |
-| 실내 장애물 환경에서 이동 시연 | 지도·영상·제어·이벤트 이력 연결 | **33.37 → 70.60 FPS · 2.12배** |
+| 실내 장애물 환경에서 이동 시연 | 지도, 영상, 제어, 이벤트 이력 연결 | **33.37 → 70.60 FPS, 2.12배** |
 
 성능 수치는 같은 장치와 FP16 조건에서 측정한 AI 파이프라인 결과입니다. [측정 조건](AI/deployment/fire_smoke/README.md#verified-jetson-result-2026-08-03)
 
@@ -90,7 +90,7 @@ BBIYONG is an autonomous patrol robot for unattended factories. It maps the site
   <a href="docs/assets/readme/autonomous-driving.mp4">
     <img src="docs/assets/readme/autonomous-driving.gif" alt="박스 장애물 사이를 이동하는 실제 삐용 로봇의 20초 주행 시연" width="820" />
   </a><br/>
-  <sub>이미지를 누르면 20초 MP4 영상을 볼 수 있습니다 · 약 0.5 MB</sub>
+  <sub>이미지를 누르면 20초 MP4 영상을 볼 수 있습니다, 약 0.5 MB</sub>
 </p>
 
 ## 관제 화면
@@ -116,34 +116,35 @@ BBIYONG is an autonomous patrol robot for unattended factories. It maps the site
 
 ### 매핑부터 관제 경보까지
 
-발표 자료의 매핑·순찰·경보 시연과 위치 추정 설명 애니메이션을 움직이는 GIF로 바로 보여줍니다. 미리보기를 누르면 고화질 MP4를 열 수 있습니다. 재생 속도를 유지했으며, 웹 화면과 지도 값은 발표 당시 시연 자료입니다.
+발표 자료에서 지도 생성과 순찰, 경보 시연을 골랐습니다. 아래 GIF에서 움직이는 모습을 볼 수 있습니다. 미리보기를 누르면 고화질 MP4를 열 수 있습니다. 재생 속도를 유지했으며, 웹 화면과 지도 값은 발표 당시 시연 자료입니다.
 
-| 지도 생성 · 약 10초 | 위치 추정 설명 · 약 10초 |
+| 지도 생성 (약 10초) | 우선 지점 순찰 (12초) |
 | :---: | :---: |
-| [![탐색에 따라 벽과 통로가 드러나는 지도 생성](docs/assets/demos/mapping-progress.gif)](docs/assets/demos/mapping-progress.mp4) | [![지도에서 로봇 위치와 이동 경로를 확인하는 위치 추정](docs/assets/demos/localization.gif)](docs/assets/demos/localization.mp4) |
-| LiDAR 관측이 쌓이며 2D 점유 지도가 형성됩니다. | 이동 정보와 센서 관측으로 위치를 보정하는 원리를 설명한 애니메이션입니다. |
+| [![탐색에 따라 벽과 통로가 드러나는 지도 생성](docs/assets/demos/mapping-progress.gif)](docs/assets/demos/mapping-progress.mp4) | [![지정한 순찰 지점을 따라 이동하는 시연](docs/assets/demos/priority-patrol.gif)](docs/assets/demos/priority-patrol.mp4) |
+| LiDAR 관측이 쌓이며 2D 점유 지도가 형성됩니다. | 지정한 지점을 연결한 경로와 로봇의 이동을 보여줍니다. |
 
-| 우선 지점 순찰 · 12초 | 웹 관제의 화재·과열 경보 · 약 9초 |
-| :---: | :---: |
-| [![지정한 순찰 지점을 따라 이동하는 시연](docs/assets/demos/priority-patrol.gif)](docs/assets/demos/priority-patrol.mp4) | [![화재·과열 알림과 이벤트 기록을 표시하는 관제](docs/assets/demos/fire-alert.gif)](docs/assets/demos/fire-alert.mp4) |
-| 지정한 지점을 연결한 경로와 로봇의 이동을 보여줍니다. | 경보 위치와 이벤트 로그를 함께 확인합니다. |
+#### 웹 관제의 화재 경보와 과열 경보 (약 9초)
 
-고화질 MP4: [지도 생성](docs/assets/demos/mapping-progress.mp4) · [위치 추정 설명](docs/assets/demos/localization.mp4) · [우선 지점 순찰](docs/assets/demos/priority-patrol.mp4) · [화재·과열 경보](docs/assets/demos/fire-alert.mp4)
+[![화재 경보와 과열 알림, 이벤트 기록을 표시하는 관제](docs/assets/demos/fire-alert.gif)](docs/assets/demos/fire-alert.mp4)
+
+경보가 발생한 위치와 이벤트 로그를 함께 확인합니다.
+
+고화질 MP4: [지도 생성](docs/assets/demos/mapping-progress.mp4), [우선 지점 순찰](docs/assets/demos/priority-patrol.mp4), [화재 경보와 과열 경보](docs/assets/demos/fire-alert.mp4)
 
 #### 매핑 결과를 웹 화면으로 연결하는 서버 흐름
 
 로봇에서 지도를 생성하는 기능과 웹에 결과를 전달하는 서버 기능을 나눴습니다. 로봇은 SLAM Toolbox로 지도를 만들고, 서버는 업로드된 지도와 진행 상태를 웹에 제공합니다.
 
-1. 운영자의 매핑 시작·중단 명령에 따라 서버가 로봇별 진행 상태를 갱신하고 STOMP `/topic/mapping`에 `MAPPING_STATUS`를 발행합니다.
+1. 운영자의 매핑 시작과 중단 명령에 따라 서버가 로봇별 진행 상태를 갱신하고 STOMP `/topic/mapping`에 `MAPPING_STATUS`를 발행합니다.
 2. 웹에 늦게 접속하거나 새로고침한 사용자는 `GET /api/maps/status`로 현재 상태를 조회합니다. 구독을 시작하기 전에 발생한 알림을 놓쳐도 현재 진행 상태를 복원하기 위한 구조입니다.
 3. 로봇의 지도 업로드 후 매핑 완료 이벤트를 받으면 서버가 도면 생성을 시도하고, 생성에 성공하면 `FLOORPLAN_READY`로 지도 ID와 이미지 URL을 알립니다.
 4. 도면 생성에 실패한 경우에는 최신 RAW 지도를 활성화하는 보완 경로를 둡니다.
 
-관련 구현: [매핑 상태·구독 알림](BE_system/src/main/java/com/bbiyong/server/map/service/MappingStatusService.java) · [상태 조회·지도 업로드 API](BE_system/src/main/java/com/bbiyong/server/map/controller/MapController.java) · [완료 이벤트와 도면 준비 알림](BE_system/src/main/java/com/bbiyong/server/map/MappingCompleteFloorPlanListener.java) · [웹 매핑 제어](FE/bbiyong-react/src/live/useMappingControl.ts)
+관련 구현: [매핑 상태, 구독 알림](BE_system/src/main/java/com/bbiyong/server/map/service/MappingStatusService.java), [상태 조회, 지도 업로드 API](BE_system/src/main/java/com/bbiyong/server/map/controller/MapController.java), [완료 이벤트와 도면 준비 알림](BE_system/src/main/java/com/bbiyong/server/map/MappingCompleteFloorPlanListener.java), [웹 매핑 제어](FE/bbiyong-react/src/live/useMappingControl.ts)
 
-진행 상태는 서버 메모리에 보관합니다. 위 조회는 브라우저 재접속을 위한 기능이며, 서버 재시작 후 상태를 복구하는 영속화 기능은 아닙니다. 로봇 탐색·위치 추정과 프런트엔드 화면은 팀 구현이며, 이 흐름은 서버 연동과 함께 이해하기 위한 설명입니다.
+진행 상태는 서버 메모리에 보관합니다. 브라우저에 다시 접속하면 현재 상태를 조회할 수 있지만, 서버를 재시작하면 메모리의 상태는 사라집니다. 로봇 탐색과 위치 추정, 프런트엔드 화면은 팀이 나누어 구현했습니다. 위 설명은 이 기능들이 서버와 어떻게 연결되는지 보여줍니다.
 
-[시연 자료의 출처·구간·가공 정보](docs/assets/demos/README.md)
+[시연 자료의 출처, 구간, 가공 정보](docs/assets/demos/README.md)
 
 ### 더 많은 기능과 시연
 
@@ -166,7 +167,7 @@ BBIYONG is an autonomous patrol robot for unattended factories. It maps the site
 
 #### 미탐색 공간 탐색
 
-Frontier 기반으로 알려진 공간과 미탐색 공간의 경계에서 다음 목표를 선택합니다. 지도 위의 로봇 이동과 탐색 영역 변화를 확인할 수 있습니다.
+이미 파악한 공간과 아직 탐색하지 않은 공간의 경계를 Frontier라고 합니다. 이 경계에서 다음 이동 목표를 선택합니다. 지도 위의 로봇 이동과 탐색 영역 변화를 확인할 수 있습니다.
 
 <p align="center">
   <img src="docs/assets/readme/frontier-exploration.gif" alt="지도 위에서 미탐색 영역을 탐색하는 로봇의 이동 시연" width="640" />
@@ -224,7 +225,7 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 
 #### 주행 복구 동작
 
-발표 자료에서 설명한 막힌 경로의 복구 동작입니다. 로봇이 회전·후진한 뒤 탐색을 재개하는 모습을 3D 지도에서 보여줍니다.
+발표 자료에서 설명한 막힌 경로의 복구 동작입니다. 로봇이 회전과 후진한 뒤 탐색을 재개하는 모습을 3D 지도에서 보여줍니다.
 
 <p align="center">
   <img src="docs/assets/readme/navigation-recovery.gif" alt="3D 지도에서 로봇의 경로 복구 동작을 보여주는 발표 시연" width="720" />
@@ -235,21 +236,21 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 <a id="team"></a>
 ## 팀 구성
 
-관제 웹, 서버, 로봇·AI, 인프라를 나누어 개발했습니다.
+관제 웹, 서버, 로봇과 AI, 인프라를 나누어 개발했습니다.
 
 | 이름 | 담당 |
 | --- | --- |
-| 모진성 | 팀장 · Backend |
-| 장효준 | Hardware · AI |
-| 고지혁 | Hardware · AI |
-| 박재현 | CI/CD · Infra |
-| 이승현 | Frontend · VP |
-| 이예승 | Frontend · IP |
+| 모진성 | 팀장, 백엔드 |
+| 장효준 | Hardware, AI |
+| 고지혁 | Hardware, AI |
+| 박재현 | CI/CD, Infra |
+| 이승현 | Frontend, VP |
+| 이예승 | Frontend, IP |
 
 <a id="my-role"></a>
-## 내가 맡은 일 · 모진성 (팀장 · Backend)
+## 제가 맡은 역할
 
-팀장을 맡으면서 관제 서버를 만들었습니다. 로봇이 보낸 상태와 경보를 받아 기록하고, 관제 웹에 전달하고, 운영자의 명령을 다시 로봇에 보내는 서버입니다. 팀이 같은 규칙으로 일할 수 있도록 브랜치 전략과 Jira 운영 방식도 정했습니다.
+저는 6인 팀에서 팀장과 백엔드 개발을 맡아 Spring Boot 관제 서버를 만들었습니다. 서버는 로봇이 보낸 상태와 경보를 기록해 관제 웹에 전달하고, 운영자가 웹에서 내린 명령을 로봇으로 보냅니다. 팀이 함께 작업할 수 있도록 브랜치 전략과 Jira 운영 방식도 정했습니다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -261,11 +262,11 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 
 **주요 작업**
 
-- **로봇·서버·웹 실시간 통신**: 로봇 전용 WebSocket(`/ws/robot`)과 관제 웹용 STOMP 채널을 나눠 설계했습니다. 처음에는 TCP 9000번 포트로 구현했는데 서버 방화벽이 9000번을 막고 443 같은 표준 포트만 열어 두고 있었습니다. 그래서 Nginx를 거치는 WSS(443)로 바꿨고, 메시지 형식은 그대로 두고 전송 방식만 바꿔 다른 파트가 고칠 범위를 줄였습니다.
-- **경보 저장과 실시간 수신 분리**: 경보 저장을 단일 스레드 비동기 처리로 옮겨 순서를 지키면서도 실시간 수신은 멈추지 않습니다. 재접속 순서 문제, 중복 판정용 맵이 계속 커지던 문제 등 점검에서 찾은 결함 8건도 함께 고쳤습니다.
+- **로봇과 서버, 웹 실시간 통신**: 로봇 전용 WebSocket(`/ws/robot`)과 관제 웹용 STOMP 채널을 나눠 설계했습니다. 처음에는 TCP 9000번 포트로 구현했는데 서버 방화벽이 9000번을 막고 443 같은 표준 포트만 열어 두고 있었습니다. 그래서 Nginx를 거치는 WSS(443)로 바꿨고, 메시지 형식은 그대로 두고 전송 방식만 바꿔 다른 파트가 고칠 범위를 줄였습니다.
+- **경보 저장과 실시간 수신 분리**: 경보 저장은 별도의 스레드 하나에서 순서대로 처리하도록 바꿨습니다. 저장이 진행되는 동안에도 실시간 데이터 수신을 계속할 수 있습니다. 재접속 순서 문제, 중복 판정용 맵이 계속 커지던 문제 등 점검에서 찾은 결함 8건도 함께 고쳤습니다.
 - **인증과 보안**: 관리자는 JWT로, 로봇은 연결 시 토큰으로 인증합니다. 서명 키가 없거나 32바이트보다 짧으면 서버가 아예 뜨지 않으므로 기본값으로 운영되는 일을 막았습니다.
 - **관제 기능 API**: 이벤트 이력과 상태 처리, 통계, 순찰 경로, 설비 임계 온도, 로봇 상태 이력을 구현했습니다. 로봇이 만든 저해상도 SLAM 지도(예: 73×59)는 OpenCV로 보정해 관리자가 읽을 수 있는 도면으로 바꿉니다.
-- **로봇 연동 브리지**: 서버를 배포하고 보니 텔레메트리가 한 건도 들어오지 않았습니다. 확인해 보니 로봇에 서버와 연결하는 코드가 없었습니다. 로봇 쪽 WebSocket 브리지(`cloud_bridge.py`)를 직접 작성해 로봇, 서버, 웹을 처음으로 끝까지 연결했습니다.
+- **로봇 연동 브리지**: 서버를 배포한 뒤에도 로봇이 보내는 위치와 온도 같은 상태 데이터(텔레메트리)가 한 건도 들어오지 않았습니다. 확인해 보니 로봇에 서버와 연결하는 코드가 없었습니다. 로봇 쪽 WebSocket 브리지(`cloud_bridge.py`)를 직접 작성해 로봇, 서버, 웹을 처음으로 끝까지 연결했습니다.
 - **협업 체계**: 4단계 브랜치 전략과 Jira 3계층 이슈 체계를 정했고 팀원마다 다른 AI 도구가 같은 규칙을 따르도록 규칙 파일도 작성했습니다.
 
 ---
@@ -276,10 +277,10 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 | 구현 과제 | 적용한 방법 | 결과 |
 | --- | --- | --- |
 | 로봇 안에서 빠르게 화재 영상을 분석하기 | 학습 모델을 ONNX로 변환하고 TensorRT FP16으로 실행 | 동일 FP16 기준 파이프라인 처리량 약 2.12배 |
-| 지도를 만들고 점검 지점까지 이동하기 | 지도 생성·위치 추정·경로 주행을 ROS 2와 Nav2로 연결 | 지도 기반 탐색과 점검 지점 순찰 |
-| 영상과 탐지 정보를 함께 보여주기 | 영상 전송과 상태·제어 통신을 분리하고 시간 보정 설정 적용 | 영상과 탐지 결과의 도착 시간 차이를 처리하는 구조 |
+| 지도를 만들고 점검 지점까지 이동하기 | 지도 생성, 위치 추정, 경로 주행을 ROS 2와 Nav2로 연결 | 지도 기반 탐색과 점검 지점 순찰 |
+| 영상과 탐지 정보를 함께 보여주기 | 영상 전송을 상태 및 제어 통신과 분리하고 시간 보정 설정 적용 | 영상과 탐지 결과의 도착 시간 차이를 처리하는 구조 |
 | 방화벽 안에서 로봇과 서버 연결하기 | TCP 9000번 대신 Nginx를 거치는 WSS(443), 로봇용 채널과 웹용 STOMP 채널 분리 | 방화벽 설정을 바꾸지 않고 연결, 메시지 형식은 그대로 유지 |
-| 같은 경보를 한 번만 기록하기 | 멱등 키와 DB 유니크 제약, 단일 스레드 비동기 저장 | 재전송·동시 요청에도 한 건만 저장, 저장 중에도 실시간 수신 유지 |
+| 같은 경보를 한 번만 기록하기 | 멱등 키와 DB 유니크 제약, 단일 스레드 비동기 저장 | 재전송, 동시 요청에도 한 건만 저장, 저장 중에도 실시간 수신 유지 |
 
 <details>
 <summary><strong>성능 수치와 구현 과정</strong> - 측정 조건, 주행 구조, 영상 처리</summary>
@@ -296,17 +297,17 @@ YOLO11n으로 불꽃과 연기를 탐지합니다. 아래 GIF는 발표에서 �
 
 측정 환경은 Jetson Orin, CUDA 12.6, TensorRT 10.3.0이며 입력 크기는 640×640, batch는 1입니다. JPEG 40장을 5회 반복해 총 200프레임을 측정했습니다. 표의 FPS는 AI 추론 파이프라인 성능입니다. [벤치마크 재현 방법](AI/deployment/fire_smoke/README.md#verified-jetson-result-2026-08-03)
 
-### 지도·위치 추정·주행의 연결
+### 지도, 위치 추정, 주행의 연결
 
-SLAM Toolbox로 지도를 만들고, 저장된 지도에서 AMCL로 위치를 추정합니다. Frontier 탐색과 점검 지점 순찰을 Nav2 이동 목표로 연결합니다. 실제 구동부는 ESP32의 엔코더 피드백·PID 제어를 사용하는 차동구동 구조입니다.
+SLAM Toolbox로 지도를 만들고, 저장된 지도에서 AMCL로 위치를 추정합니다. Frontier 탐색과 점검 지점 순찰을 Nav2 이동 목표로 연결합니다. 실제 구동부는 ESP32의 엔코더 피드백과 PID 제어를 사용하는 차동구동 구조입니다.
 
 - [Frontier 탐색 구현](BE_robot/ros2_ws/src/bbiyong_explorer/README.md)
 - [점검 지점 관리와 순찰](BE_robot/ros2_ws/src/bbiyong_inspection/README.md)
-- [모터·센서 배선 및 구동 구조](BE_robot/README.md)
+- [모터와 센서 배선 및 구동 구조](BE_robot/README.md)
 
 ### 영상과 제어 데이터의 분리
 
-브라우저는 STOMP/WebSocket으로 상태를 구독하고 명령을 보냅니다. 전면 영상은 WebRTC/WHEP 경로와 HLS 재생 경로를 사용합니다. 영상과 탐지 결과가 서로 다른 시점에 도착하는 문제를 고려해 프런트엔드에 시간 보정 설정을 둡니다. [통신·영상 설정](FE/bbiyong-react/src/live/config.ts)
+브라우저는 STOMP/WebSocket으로 상태를 구독하고 명령을 보냅니다. 전면 영상은 WebRTC/WHEP 경로와 HLS 재생 경로를 사용합니다. 영상과 탐지 결과가 서로 다른 시점에 도착하는 문제를 고려해 프런트엔드에 시간 보정 설정을 둡니다. [통신, 영상 설정](FE/bbiyong-react/src/live/config.ts)
 
 </details>
 
@@ -342,14 +343,14 @@ SLAM Toolbox로 지도를 만들고, 저장된 지도에서 AMCL로 위치를 �
 
 같은 점검에서 심각도 높은 결함 3건과 중간 5건을 찾아 함께 고쳤습니다. 경보 좌표가 (0, 0)으로 고정돼 있던 문제, 공개된 기본 시크릿, 중복 판정용 맵이 계속 커지던 문제, 잘못된 영상 범위 요청에 500을 돌려주던 문제 등입니다.
 
-[EventLogService.java](BE_system/src/main/java/com/bbiyong/server/event/service/EventLogService.java) · [AsyncConfig.java](BE_system/src/main/java/com/bbiyong/server/common/config/AsyncConfig.java)
+[EventLogService.java](BE_system/src/main/java/com/bbiyong/server/event/service/EventLogService.java), [AsyncConfig.java](BE_system/src/main/java/com/bbiyong/server/common/config/AsyncConfig.java)
 
 </details>
 
 <details>
 <summary><strong>같은 경보가 두 번 저장될 수 있던 문제</strong> - 멱등 키와 유니크 제약</summary>
 
-무선 환경이라 로봇이 같은 경보를 다시 보내는 일이 생깁니다. 경보마다 재전송해도 바뀌지 않는 `messageId`를 붙이고 서버는 먼저 조회해서 이미 있으면 무시합니다. 조회와 저장 사이에 같은 요청이 동시에 들어오는 경우는 DB 유니크 제약으로 막고, 제약 위반은 "이미 처리된 요청"으로 보고 넘깁니다. 메모리에만 기록하면 서버를 다시 켤 때 사라지기 때문에 최종 판단은 DB에 맡겼습니다.
+무선 환경이라 로봇이 같은 경보를 다시 보내는 일이 생깁니다. 경보마다 재전송해도 바뀌지 않는 `messageId`를 붙이고, 서버는 이미 처리한 경보인지 먼저 조회합니다. 같은 경보가 있으면 다시 저장하지 않습니다. 조회와 저장 사이에 같은 요청이 동시에 들어오는 경우는 DB 유니크 제약으로 막고, 제약 위반은 "이미 처리된 요청"으로 보고 넘깁니다. 메모리에만 기록하면 서버를 다시 켤 때 사라지기 때문에 최종 판단은 DB에 맡겼습니다.
 
 이 방식은 DB가 UNIQUE 제약을 실제로 지켜야 동작합니다. 초기 DB였던 SQLite에서는 그렇지 않았고, 이것이 MySQL로 옮긴 이유 중 하나입니다(바로 아래 항목).
 
@@ -360,15 +361,15 @@ SLAM Toolbox로 지도를 만들고, 저장된 지도에서 AMCL로 위치를 �
 
 처음 서버는 라즈베리파이 5에 올릴 계획이었습니다. 작은 장비에서 DB 서버를 따로 띄우지 않아도 되고, 팀원 여섯 명이 설치 없이 바로 실행할 수 있어서 SQLite로 시작했습니다. 당시 DB에 넣을 데이터는 경보 이력 정도였고, 자주 바뀌는 로봇 상태는 메모리에 두었으니 쓰기가 많지 않을 거라고 봤습니다.
 
-SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 동시에 쓰면 `database is locked` 오류가 나기 때문에 처음부터 커넥션 풀을 1로 묶어 두었습니다. 잠금 오류는 사라졌지만 모든 조회와 쓰기가 커넥션 하나를 기다리게 됐습니다. 경보 저장이 WebSocket 수신 스레드에서 실행되던 구조와 겹쳐, 저장이 밀리면 텔레메트리와 영상 수신까지 같이 멈출 수 있었습니다. 오류를 없앤 대신 대기가 애플리케이션 스레드로 옮겨 온 셈입니다.
+SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 동시에 쓰면 `database is locked` 오류가 나기 때문에 처음부터 커넥션 풀을 1로 묶어 두었습니다. 잠금 오류는 사라졌지만 모든 조회와 쓰기가 커넥션 하나를 기다리게 됐습니다. 경보 저장이 WebSocket 수신 스레드에서 실행되던 구조와 겹쳐, 저장이 밀리면 텔레메트리와 영상 수신까지 같이 멈출 수 있었습니다. 잠금 오류는 없어졌지만 애플리케이션 스레드가 차례를 기다리는 문제는 남았습니다.
 
-문제는 이것만이 아니었습니다. SQLite용 Hibernate 방언이 FK·UNIQUE·Index를 오류 없이 무시했고, 일부 엔티티에서는 자동 증가 ID가 깨져 엔티티 4개를 UUID 기본키로 우회해야 했습니다. 서버를 EC2로 옮기면서 메모리 여유(15GB 중 13GB)도 생겨 팀에서 MySQL 8로 옮기기로 했습니다.
+문제는 이것만이 아니었습니다. SQLite용 Hibernate 방언이 FK, UNIQUE, Index를 오류 없이 무시했고, 일부 엔티티에서는 자동 증가 ID가 깨져 엔티티 4개를 UUID 기본키로 우회해야 했습니다. 서버를 EC2로 옮기면서 메모리 여유(15GB 중 13GB)도 생겨 팀에서 MySQL 8로 옮기기로 했습니다.
 
 저는 전환 마무리를 맡았습니다. SQLite 때문에 1로 고정돼 MySQL에도 그대로 적용되던 커넥션 풀을 환경변수로 바꿔 운영에서는 10으로 늘렸습니다. MySQL healthcheck를 붙여 DB가 준비되기 전에는 서버가 뜨지 않게 했습니다. 로컬과 테스트는 SQLite를 그대로 쓸 수 있게 두었고, 전체 전환은 기능 개발과 함께 4일 걸렸습니다. 개발 환경에서는 여전히 커넥션이 하나이므로, 이후 경보 저장을 수신 스레드에서 떼어 내 같은 막힘이 다시 생기지 않게 했습니다.
 
-남은 과제도 있습니다. UUID 문자열 기본키는 MySQL 인덱스에서 삽입 비용이 커서 순차 ID로 되돌리는 편이 낫고, 스키마 변경 이력을 남기려면 `ddl-auto` 대신 마이그레이션 도구가 필요합니다.
+UUID 문자열 기본키는 MySQL 인덱스에서 삽입 비용이 커서 순차 ID로 되돌리는 편이 낫습니다. 스키마 변경 이력을 남기려면 `ddl-auto` 대신 마이그레이션 도구도 필요합니다.
 
-[application.properties](BE_system/src/main/resources/application.properties) · [compose.yaml](BE_system/compose.yaml)
+[application.properties](BE_system/src/main/resources/application.properties), [compose.yaml](BE_system/compose.yaml)
 
 </details>
 
@@ -401,7 +402,7 @@ SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 �
 
 **Jira**
 
-- **티켓 일괄 생성과 재배치**: Jira REST API로 에픽 아래 스토리와 태스크를 한 번에 등록하고, 담당자를 지정하고, 잘못 연결된 티켓을 기존 에픽으로 옮깁니다. 처음에 서브태스크로 만들었던 118개를 에픽·스토리·태스크 구조로 옮길 때도 이 스크립트를 썼습니다. [scripts/jira](scripts/jira)
+- **티켓 일괄 생성과 재배치**: Jira REST API로 에픽 아래 스토리와 태스크를 한 번에 등록하고, 담당자를 지정하고, 잘못 연결된 티켓을 기존 에픽으로 옮깁니다. 처음에 서브태스크로 만들었던 118개를 에픽, 스토리, 태스크 구조로 옮길 때도 이 스크립트를 썼습니다. [scripts/jira](scripts/jira)
 - **AI 에이전트의 Jira 연동**: 개인 Jira 토큰을 로컬 설정 파일에 두면 MCP 설정에 자동으로 넣어 주는 스크립트를 작성했습니다([setup-mcp.sh](setup-mcp.sh)). 규칙 파일에는 "티켓부터 만들고 작업한다"는 순서를 적어 두어, 작업을 요청받은 AI가 스토리와 태스크를 먼저 등록하고 티켓 키가 들어간 브랜치를 땁니다.
 
 **Git**
@@ -412,7 +413,7 @@ SQLite는 쓰기 잠금을 DB 파일 전체에 겁니다. 여러 커넥션이 �
 
 **회의록**
 
-- 회의 내용은 AI로 요약해 노션 회의록 템플릿(회의 목적·시간, 회의 내용)에 옮겼습니다. 팀원마다 작업 기록을 남기고 AI가 그 기록을 읽어 맥락을 이어받는 방식도 7월 15일 회의에서 정했습니다.
+- 회의 내용은 AI로 요약해 노션 회의록 템플릿(회의 목적과 시간, 회의 내용)에 옮겼습니다. 팀원마다 작업 기록을 남기고 AI가 그 기록을 읽어 맥락을 이어받는 방식도 7월 15일 회의에서 정했습니다.
 
 <a id="post-project"></a>
 ## 프로젝트 이후 개선 (개인 작업)
@@ -425,7 +426,7 @@ ERD를 그려 보니 시간 범위 조회에 인덱스가 없고 테이블 사�
 | --- | --- |
 | 경보 멱등성 동시성 테스트 | 같은 `messageId` 경보 100건을 32개 스레드에서 동시에 저장하면 1건만 남고 99건은 UNIQUE 제약에 막힘. 실제 수신 경로로 100번 동시 발행해도 1건 |
 | `event_logs` 인덱스 2개 | 20만 건 기준 최근 24시간 통계 55.9ms → 4.9ms, 로봇별 조회 62.7ms → 1.3ms. 목록 첫 페이지는 정렬 작업이 사라짐 |
-| 외래키 5개 | 이벤트와 알림·영상, 사용자와 알림 설정을 DB가 직접 연결. 경보 테이블의 설비·지도 참조는 경보를 잃지 않도록 일부러 걸지 않음 |
+| 외래키 5개 | 이벤트와 알림, 영상, 사용자와 알림 설정을 DB가 직접 연결. 경보 테이블의 설비, 지도 참조는 경보를 잃지 않도록 일부러 걸지 않음 |
 | Flyway 도입 | 종료 시점 스키마를 V1로 고정하고 변경은 V2로 기록. 테스트 220건을 마이그레이션으로 만든 스키마 위에서 실행 |
 | GitHub Actions CI | MySQL 8 컨테이너에서 서버 테스트를 돌리고 결과를 배지로 표시 |
 
@@ -434,9 +435,9 @@ ERD를 그려 보니 시간 범위 조회에 인덱스가 없고 테이블 사�
 <a id="architecture"></a>
 ## 시스템 구성과 기술 스택
 
-로봇이 현장 정보를 수집하면 서버가 이를 기록하고 관제 웹에 전달합니다. 운영자는 웹에서 상황을 확인하고 로봇에 명령을 보냅니다.
+로봇이 현장 정보를 수집하면 서버가 기록하고 관제 웹에 전달합니다. 운영자는 웹에서 상황을 확인하고 로봇에 명령을 보냅니다.
 
-아래 구조도와 시퀀스는 실제 코드를 기준으로 [Archify](https://github.com/tt-a1i/archify)로 그렸습니다. 이미지를 누르면 노드를 눌러 설명을 보고 경로를 따라갈 수 있는 인터랙티브 버전이 열립니다. 노드에 붙은 `SRC` 표시는 해당 코드 파일로 연결됩니다.
+아래 구조도와 시퀀스는 실제 코드를 기준으로 [Archify](https://github.com/tt-a1i/archify)로 그렸습니다. 시퀀스는 구성 요소 사이에서 요청이 오가는 순서를 보여줍니다. 이미지를 누르면 각 노드의 설명과 연결 경로를 살펴볼 수 있는 페이지가 열립니다. 노드에 붙은 `SRC` 표시는 해당 코드 파일로 연결됩니다.
 
 **시스템 구조**: 로봇, 관제 서버, 관제 웹, 영상 경로
 
@@ -458,7 +459,7 @@ ERD를 그려 보니 시간 범위 조회에 인덱스가 없고 테이블 사�
 
 경보 중복을 막는 제약은 `event_logs.message_id` UNIQUE와 알림의 `(event_id, recipient_user_id)` 복합 UNIQUE입니다. 테이블 사이 관계는 점선으로 그렸습니다. 초기 SQLite 환경에서 시작한 스키마라 DB 외래키 없이 애플리케이션이 id로 참조합니다. 알림 테이블의 `user_id`, `recipient_user_id` 컬럼에는 이름과 달리 사용자 id가 아니라 로그인 이메일(`users.email`)이 들어갑니다. 위 그림은 프로젝트 종료 시점 기준이고, 이후 외래키와 인덱스를 추가한 결과는 [프로젝트 이후 개선](#post-project)에 있습니다.
 
-<sub>다이어그램 원본: [system.architecture.json](docs/architecture/system.architecture.json) · [fire-alert.sequence.json](docs/architecture/fire-alert.sequence.json) · [bbiyong-erd.puml](docs/erd/bbiyong-erd.puml) (PlantUML)</sub>
+<sub>다이어그램 원본: [system.architecture.json](docs/architecture/system.architecture.json), [fire-alert.sequence.json](docs/architecture/fire-alert.sequence.json), [bbiyong-erd.puml](docs/erd/bbiyong-erd.puml) (PlantUML)</sub>
 
 <details>
 <summary><strong>시스템 연결 구조</strong> - 웹, 서버, 로봇 간 통신</summary>
@@ -490,9 +491,9 @@ flowchart LR
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
-| 웹 UI | **React 18 · TypeScript 5 · HTML · CSS** | 관제 화면, 상태 표시, 사용자 입력 처리 |
-| 웹 빌드 | **Vite 5 · Node.js · npm** | 개발 서버, 의존성 관리, 정적 리소스 빌드 |
-| 지도 시각화 | **Three.js · Canvas** | 3D 지도와 로봇 위치·이동 경로 표현 |
+| 웹 UI | **React 18, TypeScript 5, HTML, CSS** | 관제 화면, 상태 표시, 사용자 입력 처리 |
+| 웹 빌드 | **Vite 5, Node.js, npm** | 개발 서버, 의존성 관리, 정적 리소스 빌드 |
+| 지도 시각화 | **Three.js, Canvas** | 3D 지도와 로봇 위치, 이동 경로 표현 |
 
 </details>
 
@@ -501,15 +502,15 @@ flowchart LR
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
-| 관제 API | **Java 17 · Spring Boot 4.1 · Spring MVC** | 로봇·지도·이벤트·사용자 관리 REST API |
-| 인증·인가 | **Spring Security · JWT (JJWT) · BCrypt** | 토큰 인증, 권한 검사, 비밀번호 해시 |
-| 데이터 접근 | **Spring Data JPA · Hibernate · HikariCP · JDBC** | 엔티티 영속화, DB 연결과 커넥션 풀 관리 |
-| 운영 DB | **MySQL 8.0 · MySQL Connector/J** | Docker Compose 배포 환경의 관계형 데이터 저장 |
-| 로컬 DB | **SQLite · SQLite JDBC** | 별도 DB 서버 없이 로컬 실행·테스트 |
-| 파일 저장 | **로컬 파일시스템 · Docker Bind Mount** | 지도·이벤트 영상 파일 보관과 컨테이너 재생성 시 데이터 유지 |
-| 서버 이미지 처리 | **OpenCV · JavaCPP · OpenBLAS** | 지도 이미지 정제와 네이티브 영상 처리 연동 |
-| 알림 | **Spring Mail · SMTP · Mattermost Webhook** | 이메일 인증과 이벤트 알림 |
-| API 문서·운영 진단 | **SpringDoc OpenAPI · Swagger UI · Actuator · Logback** | API 문서화, 상태 확인, JSON 로그 출력 |
+| 관제 API | **Java 17, Spring Boot 4.1, Spring MVC** | 로봇, 지도, 이벤트, 사용자 관리 REST API |
+| 인증, 인가 | **Spring Security, JWT (JJWT), BCrypt** | 토큰 인증, 권한 검사, 비밀번호 해시 |
+| 데이터 접근 | **Spring Data JPA, Hibernate, HikariCP, JDBC** | 엔티티 영속화, DB 연결과 커넥션 풀 관리 |
+| 운영 DB | **MySQL 8.0, MySQL Connector/J** | Docker Compose 배포 환경의 관계형 데이터 저장 |
+| 로컬 DB | **SQLite, SQLite JDBC** | 별도 DB 서버 없이 로컬 실행, 테스트 |
+| 파일 저장 | **로컬 파일시스템, Docker Bind Mount** | 지도, 이벤트 영상 파일 보관과 컨테이너 재생성 시 데이터 유지 |
+| 서버 이미지 처리 | **OpenCV, JavaCPP, OpenBLAS** | 지도 이미지 정제와 네이티브 영상 처리 연동 |
+| 알림 | **Spring Mail, SMTP, Mattermost Webhook** | 이메일 인증과 이벤트 알림 |
+| API 문서, 운영 진단 | **SpringDoc OpenAPI, Swagger UI, Actuator, Logback** | API 문서화, 상태 확인, JSON 로그 출력 |
 
 운영 환경은 **MySQL 8.0**, 로컬 개발 환경은 **SQLite**를 사용합니다. 지도와 영상 파일은 별도 폴더에 저장해 컨테이너를 다시 만들어도 보존합니다.
 
@@ -520,9 +521,9 @@ flowchart LR
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
-| 실시간 통신 | **WebSocket/WSS · STOMP · @stomp/stompjs** | 로봇 상태·경보 구독과 제어 명령 전달 |
-| 영상 전달·재생 | **MediaMTX · WebRTC/WHEP · HLS · hls.js** | 실시간 카메라 영상 전달과 브라우저 재생 |
-| 영상 처리 | **GStreamer · H.264/x264 · FFmpeg** | 로봇 영상 인코딩, HLS 처리, 이벤트 클립 생성 |
+| 실시간 통신 | **WebSocket/WSS, STOMP, @stomp/stompjs** | 로봇 상태와 경보 구독과 제어 명령 전달 |
+| 영상 전달, 재생 | **MediaMTX, WebRTC/WHEP, HLS, hls.js** | 실시간 카메라 영상 전달과 브라우저 재생 |
+| 영상 처리 | **GStreamer, H.264/x264, FFmpeg** | 로봇 영상 인코딩, HLS 처리, 이벤트 클립 생성 |
 
 </details>
 
@@ -531,11 +532,11 @@ flowchart LR
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
-| AI 학습 | **Python · PyTorch · Ultralytics · YOLO11n** | 불꽃·연기 탐지 모델 학습과 평가 |
-| AI 추론 배포 | **ONNX · TensorRT 10.3 · CUDA 12.6 · JetPack** | Jetson GPU 추론과 FP16 최적화 |
-| 로봇 미들웨어 | **ROS 2 Humble · rclpy · TF2** | 노드 간 통신, 좌표 변환, 센서·제어 연결 |
-| 지도·위치 추정 | **SLAM Toolbox · AMCL · RF2O** | 지도 작성, 저장 지도 기반 위치 추정, LiDAR 오도메트리 구성 |
-| 경로 계획·순찰 | **Nav2 · Frontier Exploration · AprilTag · OpenCV · NumPy** | 이동 목표 실행, 미탐색 영역 선택, 점검 지점 인식·계산 |
+| AI 학습 | **Python, PyTorch, Ultralytics, YOLO11n** | 불꽃과 연기 탐지 모델 학습과 평가 |
+| AI 추론 배포 | **ONNX, TensorRT 10.3, CUDA 12.6, JetPack** | Jetson GPU 추론과 FP16 최적화 |
+| 로봇 미들웨어 | **ROS 2 Humble, rclpy, TF2** | 노드 간 통신, 좌표 변환, 센서, 제어 연결 |
+| 지도, 위치 추정 | **SLAM Toolbox, AMCL, RF2O** | 지도 작성, 저장 지도 기반 위치 추정, LiDAR 오도메트리 구성 |
+| 경로 계획, 순찰 | **Nav2, Frontier Exploration, AprilTag, OpenCV, NumPy** | 이동 목표 실행, 미탐색 영역 선택, 점검 지점 인식, 계산 |
 
 </details>
 
@@ -544,8 +545,8 @@ flowchart LR
 
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
-| 로봇 연산·센서 | **Jetson Orin Nano · YDLIDAR X4 Pro · RGB 카메라 · MLX90640** | 온디바이스 연산, 거리·영상·열화상 수집 |
-| 구동·펌웨어 | **ESP32 · MDD10A · 엔코더 · PID · PWM · USB Serial** | 차동구동 모터 속도 제어와 피드백 |
+| 로봇 연산, 센서 | **Jetson Orin Nano, YDLIDAR X4 Pro, RGB 카메라, MLX90640** | 온디바이스 연산, 거리, 영상, 열화상 수집 |
+| 구동, 펌웨어 | **ESP32, MDD10A, 엔코더, PID, PWM, USB Serial** | 차동구동 모터 속도 제어와 피드백 |
 
 </details>
 
@@ -555,10 +556,10 @@ flowchart LR
 | 영역 | 기술 | 사용 목적 |
 | --- | --- | --- |
 | 클라우드 | **AWS EC2** | 관제 백엔드와 영상 중계 서버 운영 |
-| 컨테이너·웹 서버 | **Docker · Docker Compose · Nginx** | 서비스 패키징, DB·앱 실행, 정적 웹 배포 |
-| CI/CD·빌드 | **Jenkins · Gradle Wrapper · Git** | 파트별 빌드·검증·배포와 버전 관리 |
-| 테스트·검증 | **JUnit Platform · Spring Boot Test · Mockito · Python unittest · pytest · TypeScript tsc** | 서버·로봇·AI 테스트와 웹 타입 검사 |
-| 협업·산출물 관리 | **GitHub · GitLab · Git LFS · Jira** | 코드 리뷰, 대용량 파일 관리, 작업 추적 |
+| 컨테이너, 웹 서버 | **Docker, Docker Compose, Nginx** | 서비스 패키징, DB, 앱 실행, 정적 웹 배포 |
+| CI/CD, 빌드 | **Jenkins, Gradle Wrapper, Git** | 파트별 빌드, 검증, 배포와 버전 관리 |
+| 테스트, 검증 | **JUnit Platform, Spring Boot Test, Mockito, Python unittest, pytest, TypeScript tsc** | 서버, 로봇과 AI 테스트와 웹 타입 검사 |
+| 협업, 산출물 관리 | **GitHub, GitLab, Git LFS, Jira** | 코드 리뷰, 대용량 파일 관리, 작업 추적 |
 
 </details>
 
@@ -567,10 +568,10 @@ flowchart LR
 
 버전은 저장소 설정을 기준으로 적었습니다. CUDA와 TensorRT 버전은 Jetson 벤치마크 환경 기준입니다.
 
-- [웹 의존성](FE/bbiyong-react/package.json) · [웹 통신·영상 설정](FE/bbiyong-react/src/live/config.ts)
-- [서버 의존성](BE_system/build.gradle) · [운영 DB·파일 저장 설정](BE_system/compose.yaml) · [로컬 DB 기본 설정](BE_system/src/main/resources/application.properties)
-- [AI 의존성](AI/requirements.txt) · [Jetson 추론 환경](AI/deployment/fire_smoke/README.md)
-- [ROS 2 패키지 구성](BE_robot/ros2_ws/src/bbiyong_bringup/package.xml) · [로봇 영상 파이프라인](BE_robot/orin_dashboard/README.md) · [하드웨어 구성](BE_robot/README.md)
+- [웹 의존성](FE/bbiyong-react/package.json), [웹 통신, 영상 설정](FE/bbiyong-react/src/live/config.ts)
+- [서버 의존성](BE_system/build.gradle), [운영 DB, 파일 저장 설정](BE_system/compose.yaml), [로컬 DB 기본 설정](BE_system/src/main/resources/application.properties)
+- [AI 의존성](AI/requirements.txt), [Jetson 추론 환경](AI/deployment/fire_smoke/README.md)
+- [ROS 2 패키지 구성](BE_robot/ros2_ws/src/bbiyong_bringup/package.xml), [로봇 영상 파이프라인](BE_robot/orin_dashboard/README.md), [하드웨어 구성](BE_robot/README.md)
 
 </details>
 
@@ -578,12 +579,12 @@ flowchart LR
 ## 돌아보며
 
 **잘한 점**
-- 방화벽을 실제로 확인하고 3일 만에 통신 방식을 바꾼 것처럼, 막히면 바로 확인하고 결정했습니다.
+- 서버 방화벽을 확인한 뒤 3일 만에 통신 방식을 바꿨습니다. 연결이 안 되는 원인을 확인하고 그에 맞춰 결정했습니다.
 - 경보 저장의 순서와 중복 문제를 DB 제약과 단일 스레드 처리로 풀어 경보를 한 번만 남기는 구조를 만들었습니다.
 
 **아쉬운 점**
 - 지연이나 처리량을 개발 중에 재 두지 않아서 개선 효과를 설정값으로만 설명한 부분이 있습니다.
-- 기능 브랜치를 5~11분 만에 합치다 보니 리뷰가 약했고 그 대가가 main 통합 때 충돌로 돌아왔습니다.
+- 기능 브랜치를 5~11분 만에 합치다 보니 리뷰가 부족했습니다. 이후 main에 통합할 때 충돌을 정리하느라 어려움을 겪었습니다.
 - 파트 사이의 메시지 형식을 문서로만 맞추다가 헤더 크기가 40바이트와 49바이트로 어긋나는 일을 겪었습니다.
 
 **다음에는**
@@ -648,8 +649,8 @@ Java 17과 저장소의 Gradle Wrapper를 사용합니다. 다음 환경변수�
 | 환경변수 | 설명 |
 | --- | --- |
 | `BBIYONG_JWT_SECRET` | JWT 서명 키. 32바이트 이상 필수 |
-| `BBIYONG_ROBOT_UPLOAD_TOKEN` | 로봇 연결·업로드 인증 토큰. 필수 |
-| `SPRING_DATASOURCE_URL` | 생략하면 로컬 SQLite 사용. 외부 DB 사용 시 드라이버·방언도 함께 설정 |
+| `BBIYONG_ROBOT_UPLOAD_TOKEN` | 로봇 연결, 업로드 인증 토큰. 필수 |
+| `SPRING_DATASOURCE_URL` | 생략하면 로컬 SQLite 사용. 외부 DB 사용 시 드라이버, 방언도 함께 설정 |
 
 ```bash
 cd BE_system
@@ -663,11 +664,11 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 </details>
 
 <details>
-<summary><strong>로봇·AI 실행</strong> - 장치 설정과 모델 준비</summary>
+<summary><strong>로봇과 AI 실행</strong> - 장치 설정과 모델 준비</summary>
 
 - **로봇 실행 환경**: [ROS 2 워크스페이스](BE_robot/ros2_ws/README.md), [로봇 실행 도구](BE_robot/tools/README.md)
 - **모델 학습**: [AI 학습 가이드](AI/README.md)
-- **Jetson 배포**: [ONNX 변환·TensorRT 빌드·벤치마크](AI/deployment/fire_smoke/README.md)
+- **Jetson 배포**: [ONNX 변환, TensorRT 빌드, 벤치마크](AI/deployment/fire_smoke/README.md)
 
 학습 데이터와 모델 바이너리는 별도로 준비해야 합니다. 하위 문서에는 초기 차량 설계 기록도 포함되어 있으므로 실제 하드웨어 구성은 [현재 배선 문서](BE_robot/README.md)의 차동구동 구성을 기준으로 확인하세요.
 
@@ -695,11 +696,11 @@ Windows PowerShell에서는 `./gradlew.bat bootRun`을 사용합니다. 추가 �
 
 - [시스템 아키텍처와 통신 명세](docs/architecture_and_api_spec.md)
 - [백엔드 API 명세](docs/backend_api_specification.md)
-- [프런트엔드·백엔드 연동 가이드](docs/fe_backend_integration_guide.md)
-- [브랜치 전략](docs/git_branch_guide.md) · [Jira 운영 규칙](docs/jira_convention.md)
+- [프런트엔드와 백엔드 연동 가이드](docs/fe_backend_integration_guide.md)
+- [브랜치 전략](docs/git_branch_guide.md), [Jira 운영 규칙](docs/jira_convention.md)
 - [이벤트 클립 설계 기록](docs/설계_2026-08-13_이벤트클립_HLS절단.md)
 - [인터랙티브 아키텍처 다이어그램](docs/architecture/) (Archify)
 - [설계 결정 기록 (ADR)](docs/adr/README.md)
-- [REST API 문서](https://jinsung-mo.github.io/-BBIYONG-autonomous_driving_factory_patrol_robot/docs/api/) (Redoc, 71개 API) · [OpenAPI 명세](docs/api/openapi.json)
+- [REST API 문서](https://jinsung-mo.github.io/-BBIYONG-autonomous_driving_factory_patrol_robot/docs/api/) (Redoc, 71개 API), [OpenAPI 명세](docs/api/openapi.json)
 - [프로젝트 이후 개선 기록](docs/post-project/README.md)
 - [시각 자료 출처](docs/assets/readme/README.md)
