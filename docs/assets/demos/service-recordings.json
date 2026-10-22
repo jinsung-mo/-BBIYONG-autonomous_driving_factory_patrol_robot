@@ -1,0 +1,31 @@
+{
+  "description": "Team-provided BBIYONG service recordings, exported for the portfolio and GitHub README.",
+  "sources": [
+    {"filename": "매핑영상음소거8.13.mp4", "bytes": 26971750, "sha256": "ee0f39eb945cf8f7ad9205b2e3d14273feb3a62147a8f83d8c070d51f3ed85c6"},
+    {"filename": "시연영상최종 (1).mp4", "bytes": 251289241, "sha256": "a9f8c5e014bf892577d45da4ff7e9055ea2cd338e2a42d6b369d6b2b0bb31797"}
+  ],
+  "exports": {
+    "bbiyong-mapping-live.mp4": {"source": "매핑영상음소거8.13.mp4", "selection": "complete video", "bytes": 1881693, "sha256": "33cbf6526fb38c63d5a6a1c75c219b33193d7280569645175136e72c8511d214"},
+    "bbiyong-service-full.mp4": {"source": "시연영상최종 (1).mp4", "selection": "complete video", "bytes": 13803014, "sha256": "f8bfa19c9f113f37c28ad4897e63940d04a87c2dc18b44716a01a94338882c30"},
+    "bbiyong-service-highlight.mp4": {
+      "source": "시연영상최종 (1).mp4",
+      "duration_seconds": 58,
+      "bytes": 5462182,
+      "sha256": "a7f36394fd0d82832c66fdfcc3d0cd613e66f9586482d03369e2611be8aa2158",
+      "segments": [
+        {"output_start": 0, "source_start": 4, "source_end": 20, "label": "순찰 경로 설정과 시작"},
+        {"output_start": 16, "source_start": 30, "source_end": 38, "label": "3D 지도와 실제 순찰"},
+        {"output_start": 24, "source_start": 49, "source_end": 57, "label": "카메라와 열화상 확인"},
+        {"output_start": 32, "source_start": 96, "source_end": 110, "label": "과열과 화재 경보"},
+        {"output_start": 46, "source_start": 124, "source_end": 130, "label": "이벤트 영상 저장"},
+        {"output_start": 52, "source_start": 140, "source_end": 146, "label": "이벤트 상세 조회"}
+      ]
+    }
+  },
+  "encoding": {"video": "H.264", "pixel_format": "yuv420p", "resolution": "1920x1080", "fps": 30, "crf": 25, "faststart": true, "audio": false, "speed_multiplier": 1, "source_subtitles": "preserved"},
+  "readme_previews": {
+    "bbiyong-mapping-live.gif": {"video": "bbiyong-mapping-live.mp4", "selection": "complete video", "width": 480, "fps": 5, "loop": true, "sha256": "ec6127101424333b3bf4cd31c62590b88a41354e807ff03c25c12cbed09e7962"},
+    "bbiyong-service-highlight.gif": {"video": "bbiyong-service-highlight.mp4", "start": 32, "duration_seconds": 14, "width": 640, "fps": 5, "loop": true, "sha256": "b756a84c0db5a7b6070112f358fa19f98926b2ac7f7c034f62f58bf4bd065c5b"}
+  },
+  "scope": "Indoor team demonstration, not production factory footage. No synthesized events, extra speed-up, labels or detections were added. Audio was omitted."
+}

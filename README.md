@@ -5,7 +5,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 기간·인원 | 2026.07.06 ~ 2026.08.10 · SSAFY 15기 6인 팀 |
-| 수상 | 공통 프로젝트 우수상 · 부울경 1반 1등 |
+| 수상 | 공통 프로젝트 우수상 |
 | 제 담당 | 팀장, Spring Boot 관제 서버, 로봇·웹 통신, 경보 저장과 인증, 릴리스 통합 |
 | 사용 기술 | Java 17, Spring Boot, WebSocket, STOMP, MySQL 8, Docker |
 
@@ -20,6 +20,38 @@
 로봇 주행과 AI 모델 최적화, 관제 화면과 인프라는 팀원들이 나누어 개발했습니다. 아래 DB 인덱스·Flyway·추가 동시성 검증은 **팀 프로젝트가 끝난 뒤 개인 저장소에서 진행한 작업**입니다.
 
 ## 실제 시연
+
+두 녹화 영상으로 지도 생성부터 순찰, 경보, 이벤트 확인까지의 흐름을 볼 수 있습니다. 실내 테스트 공간에서 촬영한 팀 시연이며, 실제 운영 공장의 영상은 아닙니다.
+
+### 순찰부터 경보와 기록 확인까지 / 핵심 58초
+
+[![관제 화면에서 과열과 화재 경보가 표시되는 실제 서비스 시연](docs/assets/demos/bbiyong-service-highlight.gif)](https://jinsung-mo.github.io/#bbiyong-service-demo)
+
+GIF는 핵심 시연 중 경보 구간 14초의 반복 미리보기입니다. [포트폴리오에서 영상 재생](https://jinsung-mo.github.io/#bbiyong-service-demo), [58초 MP4](docs/assets/demos/bbiyong-service-highlight.mp4), [전체 시연 MP4 / 2분 36초](docs/assets/demos/bbiyong-service-full.mp4)로 볼 수 있습니다.
+
+| 핵심 시연 위치 | 확인할 장면 |
+| --- | --- |
+| 00:00 | 순찰 경로 설정과 시작 |
+| 00:16 | 3D 지도와 실제 순찰 |
+| 00:24 | 카메라와 열화상 확인 |
+| 00:32 | 과열과 화재 경보 |
+| 00:46 | 이벤트 영상 저장 |
+| 00:52 | 이벤트 상세 조회 |
+
+화면 자막은 원본 그대로입니다. 2분 36초 녹화본에서 여섯 구간을 골라 배속 없이 연결했고 소리는 제외했습니다. 전체 영상은 구간을 자르지 않은 무음 압축본입니다.
+
+### 관제 화면의 지도 생성 / 17초
+
+[![관제 웹에 지도가 만들어지는 과정과 실제 로봇을 함께 보여주는 영상](docs/assets/demos/bbiyong-mapping-live.gif)](docs/assets/demos/bbiyong-mapping-live.mp4)
+
+관제 웹에서 지도가 만들어지는 과정과 실제 로봇의 모습을 함께 확인합니다. 제공된 17초 영상 전체를 추가 배속 없이 사용했습니다. [지도 생성 MP4](docs/assets/demos/bbiyong-mapping-live.mp4)
+
+**제 담당 범위:** 로봇과 웹의 통신, 경보 수신과 저장, 관련 API를 구현했습니다. 관제 화면, 로봇 주행과 AI 모델은 팀원들이 맡았습니다. 영상 전체를 제 개인 구현물로 설명하지 않습니다.
+
+[원본 파일과 편집 구간](docs/assets/demos/service-recordings.json), [영상 자료 안내](docs/assets/demos/README.md)
+
+<details>
+<summary>이전 주행 영상과 발표 시연 자료</summary>
 
 박스로 장애물을 구성한 실내 공간에서 실제 로봇이 이동하는 20초 영상입니다. 원래 속도를 유지했습니다.
 
@@ -36,6 +68,8 @@
 ![삐용 웹 관제의 3D 지도와 로봇 위치](docs/assets/readme/map-3d.png)
 
 [우선 지점 순찰 영상](docs/assets/demos/priority-patrol.mp4) · [시연 자료 출처](docs/assets/demos/README.md) · [수상 상장](docs/assets/readme/award-certificate.jpg)
+
+</details>
 
 ## 문제 해결
 
